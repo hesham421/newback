@@ -1,6 +1,7 @@
 package com.erp.sec;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
@@ -10,6 +11,7 @@ import com.erp.tenant.TenantConstants;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +27,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * freshly provisioned tenant per test (so the templates seeded by V11 for PLATFORM are proven to reach
  * new tenants). NOTIF's {@link NotificationDispatchApi} is a spy: the raw verification / reset token
  * travels only in the dispatched e-mail, so the tests read it from the captured {@link DispatchCommand}
- * — and assert the NOTIF_LOG row the dispatch wrote (no SMTP server listens in tests, so it is FAILED).
+ * — and assert the NOTIF_LOG row the dispatch wrote. Since erp-core step 08 delivery is asynchronous: the
+ * row is written (QUEUED) synchronously by the dispatch, then the delivery worker retries the send and,
+ * because no SMTP server listens in tests, ends it FAILED after 5 attempts — awaited, never slept.
  */
 class CustomerRealmIntegrationTest extends AbstractIntegrationTest {
 
@@ -66,6 +70,7 @@ class CustomerRealmIntegrationTest extends AbstractIntegrationTest {
 
         // the verification e-mail went through NOTIF: one NOTIF_LOG row of CUSTOMER_VERIFY_EMAIL in the tenant
         assertThat(notifLogRows(customerId, "CUSTOMER_VERIFY_EMAIL")).isEqualTo(1);
+        awaitNotifLogFailedAfterRetries(customerId, "CUSTOMER_VERIFY_EMAIL");
         String verifyToken = capturedToken(customerId, "CUSTOMER_VERIFY_EMAIL");
 
         HttpResponse<String> beforeVerify = http.customerLogin(tenantCode, email, CUSTOMER_PASSWORD);
@@ -193,6 +198,7 @@ class CustomerRealmIntegrationTest extends AbstractIntegrationTest {
             "{\"email\":\"" + email + "\"}");
         assertThat(requested.statusCode()).isEqualTo(200);
         assertThat(notifLogRows(customerId, "CUSTOMER_PASSWORD_RESET")).isEqualTo(1);
+        awaitNotifLogFailedAfterRetries(customerId, "CUSTOMER_PASSWORD_RESET");
         String resetToken = capturedToken(customerId, "CUSTOMER_PASSWORD_RESET");
 
         // the staff completion endpoint refuses a customer's token
@@ -264,6 +270,25 @@ class CustomerRealmIntegrationTest extends AbstractIntegrationTest {
         assertThat(command.channelHint()).containsExactly("EMAIL");
         assertThat(command.variables().get("actionLink")).contains("token=");
         return command.variables().get("token");
+    }
+
+    /**
+     * erp-core step 08 — the row's asynchronous outcome: the EMAIL provider exists (the test profile
+     * configures a mail host) but nothing listens on localhost:2525, so every attempt fails and the
+     * row ends FAILED with 5 attempts and its variables (which carry the token) cleared.
+     */
+    private void awaitNotifLogFailedAfterRetries(long recipientId, String templateCode) {
+        String sql = "select l.notification_status_id from notif_log l join notif_template t on t.id = l.template_fk"
+            + " where l.tenant_id = ? and l.recipient_id = ? and t.template_code = ?";
+        await().atMost(Duration.ofSeconds(30)).until(() -> "FAILED".equals(
+            jdbcTemplate.queryForObject(sql, String.class, tenantId, recipientId, templateCode)));
+        java.util.Map<String, Object> row = jdbcTemplate.queryForMap("select l.attempts, l.variables_json,"
+                + " l.channel_type_id from notif_log l join notif_template t on t.id = l.template_fk"
+                + " where l.tenant_id = ? and l.recipient_id = ? and t.template_code = ?",
+            tenantId, recipientId, templateCode);
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(5);
+        assertThat(row.get("variables_json")).isNull();
+        assertThat(row.get("channel_type_id")).isEqualTo("EMAIL");
     }
 
     private int notifLogRows(long recipientId, String templateCode) {

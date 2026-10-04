@@ -290,6 +290,102 @@ Failed attempts on the way (fixed):
   its tenant administrator 'ntf-admin' (existing assertion untouched).
 ```
 
+### Rebase onto 06
+
+This branch was rebased onto `main` at `842841f`, which contains the step 06 merge `3016338`.
+
+**Conflicts and resolutions** (both steps' behaviour kept):
+- `docs/DEVIATIONS.md`, `i18n/messages.properties`, `i18n/messages_ar.properties`,
+  `db/migration/core/README.md`: kept both sides, step 06 first, then step 08 (V11 row, then V13).
+- `CrossModuleBoundaryArchTest`: kept step 06's `com.erp.sec.permission` public package and step 08's
+  `com.erp.notif.channel`; the `events` module stays appended.
+- `TenantSchemaIntegrationTest`: 20 tenant-scoped tables and 20 entities (19 after step 06, +
+  `NOTIF_INBOX`); unique constraints stay at 14.
+- `ReferenceApplicationSmokeTest`: Flyway versions `2..11, 13, 1000`.
+- `SecRecipientDirectory`, `UserService`, `PasswordResetService`, `SignupRequestService`,
+  `TenantService` and `FileService` merged without conflicts. Step 06's rule that
+  `PENDING_VERIFICATION` customers count as active recipients (`UserDomain.canReceiveNotifications`
+  via `toContact`) is unchanged, so the verification mail is queued and delivered.
+
+**Integration changes made after the rebase:**
+- `UserService.findCurrentUserId()` is now realm-aware. A CUSTOMER token (`AuthRealm` details)
+  resolves to the CUSTOMER row with that username. A STAFF token, or an authentication without realm
+  details, resolves to the STAFF row.
+- The inbox is reachable on both realm chains: staff use `/api/v1/notif/inbox`, customers use
+  `/api/v1/customers/me/inbox`. Step 06's realm enforcement returns 403 `REALM_MISMATCH` for a token
+  of the other realm. The inbox needs no permission, so no `NotifPermissions` entry was added; its
+  `@PreAuthorize` stays `isAuthenticated()`, the same as dispatch.
+- Step 06's `CustomerAccountService` now publishes `CustomerRegisteredEvent` on register and
+  `CustomerVerifiedEvent` on verify (actor = the customer, realm CUSTOMER).
+- My NOTIF test fixtures now set `SEC_USER.REALM`, because V11 drops its default.
+
+**Changes to step 06's tests:**
+- `CustomerRealmIntegrationTest.register_verify_login_me_happyPath` and
+  `customerPasswordReset_requestThenComplete_thenLoginWithTheNewPassword`:
+  - Before: `notifLogRows(...) == 1`. The row was written and sent synchronously; the class javadoc
+    said it was FAILED, but no test asserted the status.
+  - After: the same count assertion (the row is written synchronously, now `QUEUED`), plus
+    `awaitNotifLogFailedAfterRetries`. It uses Awaitility to wait for the asynchronous final status
+    `FAILED` (no SMTP server listens), then checks attempts = 5, channel EMAIL, and that
+    `VARIABLES_JSON` is cleared.
+  - The verify and reset token is still read from the captured `DispatchCommand`, and the template and
+    recipient filters are unchanged. Nothing the test proved before was dropped.
+- No other step 06 test referenced NOTIF statuses.
+
+**New tests:**
+- `NotificationInboxApiIntegrationTest.customerToken_readsAndMarksItsOwnInbox_onTheCustomerChain`:
+  a customer reads and marks its own item; a staff user with the same name sees nothing; each realm
+  gets 403 on the other realm's path.
+- `DomainEventBusIntegrationTest.customerRegistration_publishesCustomerRegisteredEvent`.
+
+**Verification after the rebase:** `rm -rf target erp-core/target erp-app-reference/target; mvn -o -q verify`
+returned EXIT=0 in 185 s on the EMBEDDED backend. Dispatch durations in ms, sorted:
+`[7, 8, 9, 9, 10, 13, 13]`. `grep -rn "Thread.sleep" erp-core/src/main` finds nothing.
+
+```
+== erp-core
+com.erp.architecture.CrossModuleBoundaryArchTest                    4 0 0 0
+com.erp.autoconfigure.DownloadTokenStoreAutoConfigurationTest       2 0 0 0
+com.erp.autoconfigure.ErpCoreAutoConfigurationTest                 10 0 0 0
+com.erp.autoconfigure.ErpCoreEventsAndNotifAutoConfigurationTest    3 0 0 0
+com.erp.autoconfigure.ErpCoreFlywayAutoConfigurationTest            3 0 0 0
+com.erp.autoconfigure.MigrationNamingTest                           2 0 0 0
+com.erp.events.DomainEventBusIntegrationTest                        4 0 0 0
+com.erp.events.DomainEventTest                                      3 0 0 0
+com.erp.events.support.TenantAndSecurityContextTaskDecoratorTest    2 0 0 0
+com.erp.file.service.InMemoryDownloadTokenStoreTest                 3 0 0 0
+com.erp.notif.NotificationAsyncDeliveryIntegrationTest              7 0 0 0
+com.erp.notif.NotificationInboxApiIntegrationTest                   4 0 0 0
+com.erp.notif.channel.EmailChannelProviderTest                      3 0 0 0
+com.erp.notif.domain.NotificationDomainsTest                        3 0 0 0
+com.erp.notif.service.ChannelProviderRegistryTest                   2 0 0 0
+com.erp.sec.BootstrapAdminPasswordIntegrationTest                   4 0 0 0
+com.erp.sec.CustomerRealmIntegrationTest                            9 0 0 0
+com.erp.sec.MenuServiceGatewayIntegrationTest                       2 0 0 0
+com.erp.sec.PermissionCatalogIntegrationTest                        4 0 0 0
+com.erp.sec.SecCoverageIntegrationTest                              6 0 0 0
+com.erp.sec.SecFrontendGapIntegrationTest                           5 0 0 0
+com.erp.sec.SecLogoutIntegrationTest                                3 0 0 0
+com.erp.sec.SecReadOneIntegrationTest                               6 0 0 0
+com.erp.sec.SecSearchFilterIntegrationTest                         10 0 0 0
+com.erp.sec.TenantScopedQueryIntegrationTest                        3 0 0 0
+com.erp.sec.UserRolesInResponseIntegrationTest                      8 0 0 0
+com.erp.sec.domain.CustomerDomainRulesTest                          4 0 0 0
+com.erp.sec.permission.PermissionDefTest                            4 0 0 0
+com.erp.sec.security.LoginRateLimiterTest                           3 0 0 0
+com.erp.tenant.PlatformTenantApiIntegrationTest                     8 0 0 0
+com.erp.tenant.TenantContextIntegrationTest                         1 0 0 0
+com.erp.tenant.TenantContextTest                                    4 0 0 0
+com.erp.tenant.TenantIsolationIntegrationTest                       6 0 0 0
+com.erp.tenant.TenantSchemaIntegrationTest                          4 0 0 0
+com.erp.tenant.domain.TenantDomainTest                             16 0 0 0
+com.erp.testsupport.TestProfileWiringIntegrationTest                2 0 0 0
+erp-core tests=167 failures=0 errors=0 skipped=0
+== erp-app-reference
+com.erp.app.ReferenceApplicationSmokeTest                           8 0 0 0
+erp-app-reference tests=8 failures=0 errors=0 skipped=0
+```
+
 ## Skills checked
 
 - **`build-create-entity`: `NotificationInboxItem` is compliant except named items.**
@@ -349,20 +445,11 @@ Failed attempts on the way (fixed):
   - `TenantCreatedEvent`: tenant create; its tenantId is the new tenant;
   - `FileDocumentPublishedEvent`: upload, `PRIVATE`;
   - `NotificationRequestedEvent` / `NotificationDispatchedEvent` / `NotificationFailedEvent`: NOTIF.
-- **Events to publish when steps 06 and 07 merge:**
-  - `CustomerRegisteredEvent` / `CustomerVerifiedEvent` are defined but not published. Step 06
-    publishes them, using the `(tenantId, actor, ...)` constructors on public endpoints.
-  - Step 07 should publish `FileDocumentPublishedEvent(..., VISIBILITY_PUBLIC)` when a document is
-    made public.
-- **Merge with step 06 (realms):**
-  - make `UserService.findCurrentUserId()` realm-aware, since usernames become unique per tenant and
-    realm;
-  - decide whether `SecRecipientDirectory.isActive` treats `PENDING_VERIFICATION` customers as active
-    for the verification mail (today they would be skipped as inactive);
-  - add a customer-token inbox test;
-  - `DomainEvent` derives `CUSTOMER` from the `ROLE_CUSTOMER` authority;
-  - update `PlatformTenantApiIntegrationTest`'s template count for V11's templates. That is step 06's
-    own concern, but note that V13 seeds no templates.
+- **Customer events:** `CustomerRegisteredEvent` and `CustomerVerifiedEvent` are published by
+  `CustomerAccountService` (added during the rebase onto 06).
+- **Step 07 still to do:** publish `FileDocumentPublishedEvent(..., VISIBILITY_PUBLIC)` when a document is made public.
+- **Realms:** `findCurrentUserId` is realm-aware. The inbox is served at `/api/v1/notif/inbox` (staff)
+  and at `/api/v1/customers/me/inbox` (customers). Customer-token tests exist.
 - **Channel SPI.** An application adds SMS/PUSH (or replaces EMAIL/IN_APP) by defining a
   `ChannelProvider` bean.
   - `send` runs on the event executor, with the message's tenant set and no transaction open.

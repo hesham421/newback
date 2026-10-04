@@ -107,6 +107,56 @@ class NotificationInboxApiIntegrationTest extends AbstractAsyncIntegrationTest {
         assertThat((List<?>) JsonPath.read(all.body(), "$.data.content")).hasSize(1);
     }
 
+    /**
+     * The customer realm (erp-core step 06): a customer token resolves to the customer's own
+     * {@code SEC_USER} id and reads/marks its in-app items on the customer chain
+     * ({@code /api/v1/customers/me/inbox}); a staff user with the same e-mail sees none of them, and each
+     * realm's token is refused on the other realm's inbox path (403 {@code REALM_MISMATCH}).
+     */
+    @Test
+    void customerToken_readsAndMarksItsOwnInbox_onTheCustomerChain() {
+        String email = NotifTestFixtures.unique("shopper-") + "@notif.test";
+        long customer = fixtures.activeCustomer(PLATFORM, email);
+        // a staff account with the same e-mail-shaped username in the same tenant: a different SEC_USER row
+        long staff = fixtures.activeUser(PLATFORM, email);
+        assertThat(staff).isNotEqualTo(customer);
+
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("inbox-dispatcher", null, List.of()));
+        long logId = dispatchApi.dispatch(new DispatchCommand(customer, "ACCOUNT_ACTIVATION", List.of("IN_APP"),
+            "TEST", null, null, Map.of("actionLink", "https://shop.example.test/a", "expiresAt", "soon"))).get(0);
+        SecurityContextHolder.clearContext();
+        await().atMost(ASYNC_TIMEOUT).until(() -> NotificationLogDomain.STATUS_SENT.equals(
+            jdbc.queryForObject("SELECT NOTIFICATION_STATUS_ID FROM NOTIF_LOG WHERE ID = ?", String.class, logId)));
+
+        String customerToken = fixtures.customerToken(NotifTestFixtures.PLATFORM, email);
+        String staffToken = fixtures.token(NotifTestFixtures.PLATFORM, email);
+
+        HttpResponse<String> list = fixtures.get(customerToken, "/api/v1/customers/me/inbox");
+        assertThat(list.statusCode()).as(list.body()).isEqualTo(200);
+        List<Integer> ids = JsonPath.read(list.body(), "$.data.content[*].id");
+        assertThat(ids).hasSize(1);
+        assertThat(((Number) JsonPath.read(list.body(), "$.data.content[0].recipientUserId")).longValue())
+            .isEqualTo(customer);
+
+        HttpResponse<String> mark = fixtures.patch(customerToken, "/api/v1/customers/me/inbox/" + ids.get(0) + "/read");
+        assertThat(mark.statusCode()).as(mark.body()).isEqualTo(200);
+        assertThat((Boolean) JsonPath.read(mark.body(), "$.data.read")).isTrue();
+
+        // the staff namesake owns nothing of it
+        HttpResponse<String> staffList = fixtures.get(staffToken, "/api/v1/notif/inbox");
+        assertThat(staffList.statusCode()).isEqualTo(200);
+        assertThat((List<?>) JsonPath.read(staffList.body(), "$.data.content")).isEmpty();
+
+        // realms stay on their own chain
+        HttpResponse<String> customerOnStaffPath = fixtures.get(customerToken, "/api/v1/notif/inbox");
+        assertThat(customerOnStaffPath.statusCode()).isEqualTo(403);
+        assertThat(NotifTestFixtures.errorCode(customerOnStaffPath)).isEqualTo("REALM_MISMATCH");
+        HttpResponse<String> staffOnCustomerPath = fixtures.get(staffToken, "/api/v1/customers/me/inbox");
+        assertThat(staffOnCustomerPath.statusCode()).isEqualTo(403);
+        assertThat(NotifTestFixtures.errorCode(staffOnCustomerPath)).isEqualTo("REALM_MISMATCH");
+    }
+
     @Test
     void unknownItem_is404_andNoToken_is401() {
         String name = NotifTestFixtures.unique("inbox-carol-");

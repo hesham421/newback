@@ -7,9 +7,16 @@ import com.erp.tenant.TenantContext;
 import com.erp.testsupport.AbstractAsyncIntegrationTest;
 import com.erp.testsupport.DomainEventProbe;
 import com.erp.testsupport.ProbeEvent;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -31,6 +38,8 @@ class DomainEventBusIntegrationTest extends AbstractAsyncIntegrationTest {
     private PlatformTransactionManager transactionManager;
     @Autowired
     private List<TaskExecutor> defaultTaskExecutors;
+    @Value("${local.server.port}")
+    private int port;
 
     @Test
     void eventPublishedInATransaction_isDeliveredOnlyAfterCommit_andNeverOnRollback() {
@@ -75,6 +84,33 @@ class DomainEventBusIntegrationTest extends AbstractAsyncIntegrationTest {
         assertThat(received.event().getActor()).isEqualTo("event-tester");
         assertThat(received.event().getRealm()).isEqualTo(DomainEvent.REALM_STAFF);
         assertThat(received.threadName()).startsWith("erp-event-");
+    }
+
+    /**
+     * Step 06 + 08: a customer's self-registration (anonymous public endpoint) publishes
+     * {@link CustomerRegisteredEvent} in the CUSTOMER realm, actor = the customer itself, after commit.
+     */
+    @Test
+    void customerRegistration_publishesCustomerRegisteredEvent() throws Exception {
+        String email = "evt." + UUID.randomUUID().toString().substring(0, 8) + "@shop.test";
+        HttpResponse<String> registered = HttpClient.newHttpClient().send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/public/customers/register"))
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-Code", "PLATFORM")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"email\":\"" + email
+                    + "\",\"password\":\"Cust0mer-Passw0rd!\",\"fullName\":\"Event Shopper\"}",
+                    StandardCharsets.UTF_8))
+                .build(),
+            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        assertThat(registered.statusCode()).as(registered.body()).isEqualTo(201);
+
+        DomainEventProbe.Received received = await().atMost(ASYNC_TIMEOUT)
+            .until(() -> probe.find(CustomerRegisteredEvent.class, e -> email.equals(e.getEmail())).orElse(null),
+                r -> r != null);
+        assertThat(received.event().getRealm()).isEqualTo(DomainEvent.REALM_CUSTOMER);
+        assertThat(received.event().getTenantId()).isEqualTo(1L);
+        assertThat(received.event().getActor()).isEqualTo(email);
+        assertThat(((CustomerRegisteredEvent) received.event()).getUserId()).isNotNull();
     }
 
     @Test

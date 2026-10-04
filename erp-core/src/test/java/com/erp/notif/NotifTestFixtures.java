@@ -42,14 +42,38 @@ final class NotifTestFixtures {
         return prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toLowerCase();
     }
 
-    /** An ACTIVE account without roles in {@code tenantId}; returns its {@code SEC_USER} id. */
+    /** An ACTIVE STAFF account without roles in {@code tenantId}; returns its {@code SEC_USER} id. */
     long activeUser(long tenantId, String username) {
-        jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
+        return insertUser(tenantId, "STAFF", username, username + "@notif.test");
+    }
+
+    /**
+     * An ACTIVE (already verified) CUSTOMER account in {@code tenantId} — its username is its e-mail, as
+     * for a self-registered customer (step 06); returns its {@code SEC_USER} id.
+     */
+    long activeCustomer(long tenantId, String email) {
+        return insertUser(tenantId, "CUSTOMER", email, email);
+    }
+
+    private long insertUser(long tenantId, String realm, String username, String email) {
+        jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, REALM, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
                 + " FULL_NAME_EN, STATUS_CODE, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
-                + " VALUES (nextval('SEQ_SEC_USER'), ?, ?, ?, ?, 'مستخدم', 'Notif test user', 'ACTIVE', TRUE, 'test', now())",
-            tenantId, username, username + "@notif.test", encoder.encode(PASSWORD));
-        return jdbc.queryForObject("SELECT USER_PK FROM SEC_USER WHERE TENANT_ID = ? AND USERNAME = ?",
-            Long.class, tenantId, username);
+                + " VALUES (nextval('SEQ_SEC_USER'), ?, ?, ?, ?, ?, 'مستخدم', 'Notif test user', 'ACTIVE', TRUE, 'test', now())",
+            tenantId, realm, username, email, encoder.encode(PASSWORD));
+        return jdbc.queryForObject("SELECT USER_PK FROM SEC_USER WHERE TENANT_ID = ? AND REALM = ? AND USERNAME = ?",
+            Long.class, tenantId, realm, username);
+    }
+
+    /** A CUSTOMER-realm access token ({@code POST /api/v1/public/customers/login}). */
+    String customerToken(String tenantCode, String email) {
+        HttpResponse<String> response = send(json("/api/v1/public/customers/login")
+            .header("X-Tenant-Code", tenantCode)
+            .POST(body("{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD + "\"}")));
+        if (response.statusCode() != 200) {
+            throw new AssertionError("customer login " + tenantCode + "/" + email + " -> " + response.statusCode()
+                + " " + response.body());
+        }
+        return JsonPath.read(response.body(), "$.data.accessToken");
     }
 
     /** An ACTIVE PLATFORM account holding PLATFORM's SYS_ADMIN (and so PLATFORM_TENANT_MANAGE). */
@@ -59,7 +83,7 @@ final class NotifTestFixtures {
         jdbc.update("INSERT INTO SEC_USER_ROLE (USER_ROLE_PK, TENANT_ID, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT)"
                 + " SELECT nextval('SEQ_SEC_USER_ROLE'), 1, u.USER_PK, r.ROLE_PK, 'test', now()"
                 + " FROM SEC_USER u JOIN SEC_ROLE r ON r.TENANT_ID = 1 AND r.CODE = 'SYS_ADMIN'"
-                + " WHERE u.TENANT_ID = 1 AND u.USERNAME = ?",
+                + " WHERE u.TENANT_ID = 1 AND u.REALM = 'STAFF' AND u.USERNAME = ?",
             username);
         return username;
     }

@@ -206,7 +206,7 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
         long tenantId = fixtures.provisionTenant(
             fixtures.token(NotifTestFixtures.PLATFORM, fixtures.platformOperator()), code);
         long tenantAdmin = jdbc.queryForObject(
-            "SELECT USER_PK FROM SEC_USER WHERE TENANT_ID = ? AND USERNAME = ?", Long.class, tenantId,
+            "SELECT USER_PK FROM SEC_USER WHERE TENANT_ID = ? AND REALM = 'STAFF' AND USERNAME = ?", Long.class, tenantId,
             NotifTestFixtures.TENANT_ADMIN);
 
         long id = TenantContext.callAs(tenantId, () -> dispatchApi.dispatch(new DispatchCommand(tenantAdmin,

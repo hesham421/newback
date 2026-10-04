@@ -31,6 +31,7 @@ import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.RoleActionGrantRepository;
 import com.erp.sec.repository.UserRepository;
+import com.erp.sec.security.AuthRealm;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -245,16 +247,23 @@ public class UserService {
     /**
      * erp-core step 08 — the {@code SEC_USER} id of the authenticated caller, reached only through
      * {@code SecUserDirectoryApi.findCurrentUserId} (NOTIF's in-app inbox). Resolved by the principal
-     * name within the current tenant; empty when the principal is not a user account (e.g. a
-     * synthetic internal caller). The customer realm of erp-core step 06 must keep this realm-aware.
+     * name within the current tenant <em>and the caller's realm</em> (usernames are unique per tenant
+     * and realm since step 06): a CUSTOMER token ({@link AuthRealm} details) resolves to the
+     * customer's row, a STAFF token — or an authentication without realm details, such as an
+     * in-process caller — to the staff row. Empty when the principal is not a user account of that
+     * realm (e.g. a synthetic internal caller).
      */
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
     public ServiceResult<Optional<Long>> findCurrentUserId() {
         String username = SecurityContextHelper.getCurrentUsername();
-        log.debug("Resolving the user id of the current principal: {}", username);
+        String realm = AuthRealm.of(SecurityContextHolder.getContext().getAuthentication());
+        log.debug("Resolving the user id of the current principal: {} (realm {})", username, realm);
 
-        return ServiceResult.success(repository.findByUsername(username).map(User::getUserPk));
+        Optional<User> user = User.REALM_CUSTOMER.equals(realm)
+            ? repository.findByUsernameAndRealm(username, User.REALM_CUSTOMER)
+            : repository.findByUsername(username);
+        return ServiceResult.success(user.map(User::getUserPk));
     }
 
     /**
