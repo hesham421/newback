@@ -514,16 +514,16 @@
       "parallel_group": "A",
       "migrations": [],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-11",
       "attempts": 2,
       "implementer_agent": "ad181b74b69a9957b",
       "reviewer_agent": "abe882887d5047d52",
       "review": {
         "verdict": "PASS",
-        "round": 1,
-        "evidence": "core 197/app 9 (pre-rebase base); live: 4 definitions, BOM+AR header bytes verified, tenant isolation 3 reports, per-report authz, formula-injection guard, cap 422",
-        "checked_at": "2026-10-04"
+        "round": 2,
+        "evidence": "post-rebase: core 336/app 10; live: 4 definitions, single AUDIT module row, audit report tenant-isolated, CHANGES not exposed, permissions distinct; earlier assertions not weakened",
+        "checked_at": "2026-10-05"
       },
       "merged_commit": null,
       "report": "docs/steps/11-report.md",
@@ -952,6 +952,12 @@
       "step": "11",
       "event": "reported",
       "note": "final rebase onto 08-10 at aca5376; audit report moved to com.erp.audit; core 336/app 10; post-rebase re-verify requested"
+    },
+    {
+      "at": "2026-10-04T20:22:30Z",
+      "step": "11",
+      "event": "review",
+      "note": "PASS post-rebase re-verification"
     }
   ]
 }
