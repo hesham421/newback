@@ -471,7 +471,7 @@
         "V15__audit_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-10",
       "attempts": 1,
       "implementer_agent": "a4485201235fdf72f",
@@ -917,6 +917,12 @@
       "step": "10",
       "event": "reported",
       "note": "implementer report 6e4eff2 (2/2; core 237/app 9); pre-review rebase onto main (09 merged) requested"
+    },
+    {
+      "at": "2026-10-04T19:47:40Z",
+      "step": "10",
+      "event": "reported",
+      "note": "rebased onto 09 at 50205b4 (NumberSeries audited ignoring nextValue; platform settings audited under acting tenant); core 316/app 9"
     }
   ]
 }
