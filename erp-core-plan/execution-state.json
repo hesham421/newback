@@ -229,15 +229,31 @@
         "V10__tenant_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-05",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a68c8acdd2201dd84",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/05-report.md",
+      "deviations": [
+        "resolver returns sentinel -1 before context refresh",
+        "TENANT_REQUIRED only on non-exempt public paths",
+        "tenant filter after JWT; header upper-cased; unknown 404; suspended token 403; erp.core.tenant.exempt-paths",
+        "extra codes TENANT_CODE_DUPLICATE, TENANT_PLATFORM_PROTECTED, CONCURRENT_MODIFICATION",
+        "PERM_PLATFORM_TENANTS_VIEW seeded; platform paths require PLATFORM tenant",
+        "first tenant admin in create request; TenantProvisioningContributor SPI via JDBC",
+        "no login rate limiter existed",
+        "bootstrap runner runAs PLATFORM, not @Transactional",
+        "8 SEC tables got audit columns; *_pk and type diffs kept",
+        "V10 sanctioned non-additive ops; composite uniques on link tables",
+        "GlobalAuditableEntity superclass of AuditableEntity",
+        "PlatformTenantController shape",
+        "isolation via users/search; spec test in com.erp.sec",
+        "ArchUnit tenant module bounded",
+        "tests run as PLATFORM via listener; JWT filter restores previous tenant"
+      ],
       "verification": [
         "mvn -q verify",
         "grep -rn \"nativeQuery = true\\|JdbcTemplate\" erp-core/src/main || echo OK-no-raw-sql"
@@ -618,6 +634,12 @@
       "step": "05",
       "event": "dispatched",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-04T17:03:04Z",
+      "step": "05",
+      "event": "reported",
+      "note": "implementer report c405302, 4/4; core 111, app 7"
     }
   ]
 }
