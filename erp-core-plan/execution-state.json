@@ -64,8 +64,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-02",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "afafc31b4d228f756",
       "reviewer_agent": "a844cd25bcba0cbd3",
@@ -75,7 +75,7 @@
         "evidence": "51/51 tests on embedded PG16; single-test run green; native PG untouched (pg_stat_activity); greps clean; no assertions weakened; prod Redis wiring unchanged",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "d1434032d8abe627d58c196c1560e56f4d691e3c",
       "report": "docs/steps/02-report.md",
       "deviations": [
         "No Docker: Testcontainers primary + zonky embedded PG16 fallback (erp.test.db=auto|testcontainers|embedded); verify green on embedded only",
@@ -506,6 +506,12 @@
       "step": "02",
       "event": "review",
       "note": "PASS round 1"
+    },
+    {
+      "at": "2026-10-04T14:41:46Z",
+      "step": "02",
+      "event": "merged",
+      "note": "merged d143403; 51/51 on branch+main (main needed stale target/ cleared); pushed"
     }
   ]
 }
