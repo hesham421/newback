@@ -1,26 +1,28 @@
 # ============================================
+# Build from the REPOSITORY ROOT (the build needs the root pom and erp-core):
+#   docker build -f erp-app-reference/Dockerfile -t erp-app-reference .
+# ============================================
 # Stage 1: Build
 # ============================================
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copy the single consolidated POM (cache dependencies) — see
-# governance/project-artifacts/INTERFACE-VS-REST-AND-POM-STRUCTURE-RECOMMENDATION.md
+# Copy the POMs first (dependency layer cache): root aggregator + both modules
 COPY pom.xml ./pom.xml
-
-# Download dependencies (cached layer)
-RUN mvn dependency:go-offline -B
+COPY erp-core/pom.xml ./erp-core/pom.xml
+COPY erp-app-reference/pom.xml ./erp-app-reference/pom.xml
 
 # Copy source code
-COPY src ./src
+COPY erp-core/src ./erp-core/src
+COPY erp-app-reference/src ./erp-app-reference/src
 
-# Build (skip tests — run tests in CI, not in Docker build)
-RUN mvn clean package -DskipTests -B
+# Build the reference app and the library it depends on (skip tests — run tests in CI, not in Docker build)
+RUN mvn clean package -DskipTests -B -pl erp-app-reference -am
 
 # ============================================
 # Stage 2: Runtime
 # ============================================
-FROM eclipse-temurin:25-jre-alpine AS runtime
+FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
 # Security: run as non-root
@@ -31,7 +33,7 @@ RUN apk add --no-cache wget && \
 	chown -R appuser:appgroup /app
 
 # Copy JAR from build stage
-COPY --from=build /app/target/erp-system-*.jar app.jar
+COPY --from=build /app/erp-app-reference/target/erp-app-reference-*.jar app.jar
 
 # Set ownership
 RUN chown appuser:appgroup app.jar

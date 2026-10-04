@@ -37,7 +37,7 @@ public class CrossModuleBoundaryArchTest {
     /**
      * One entry per business module: its own package prefix, and its designated public
      * {@code crossmodule} sub-package. Add an entry the moment a new business module gets its
-     * first class. {@code common} (shared foundation) and {@code main} (composition root) are
+     * first class. {@code common} (shared foundation) and {@code autoconfigure} (composition root) are
      * deliberately not module-bounded and are not listed here.
      */
     private static final List<Module> MODULES = List.of(
@@ -59,17 +59,18 @@ public class CrossModuleBoundaryArchTest {
      * ANY external dependency on that module's internals fails the rule until a
      * {@code crossmodule} package is deliberately introduced.
      *
-     * <p>{@code com.erp.main} is exempt: it is the Spring composition root, and wiring a
-     * concrete security filter class (e.g. {@code SecurityConfig} constructing the
-     * {@code SecurityFilterChain} bean from {@code sec.security.JwtAuthenticationFilter}) is
-     * bootstrap wiring, not a business module reaching into another module's internals. A
-     * business module doing the same thing would still be caught.
+     * <p>{@code com.erp.autoconfigure} is exempt: it is the library's composition root (step 03
+     * replaced the application's {@code com.erp.main} with it), and wiring a concrete class
+     * (e.g. {@code ErpCoreSecurityAutoConfiguration} building the {@code SecurityFilterChain} from
+     * {@code sec.security.JwtAuthenticationFilter}, or {@code DownloadTokenStoreAutoConfiguration}
+     * importing the FILE token stores) is bootstrap wiring, not a business module reaching into
+     * another module's internals. A business module doing the same thing would still be caught.
      */
     @ArchTest
     static void modules_only_expose_their_crossmodule_package_to_outsiders(JavaClasses classes) {
         for (Module module : MODULES) {
             ArchRule rule = noClasses().that().resideOutsideOfPackage(module.packagePrefix() + "..")
-                    .and().resideOutsideOfPackage("com.erp.main..")
+                    .and().resideOutsideOfPackage("com.erp.autoconfigure..")
                     .should().dependOnClassesThat(
                             JavaClass.Predicates.resideInAPackage(module.packagePrefix() + "..")
                                     .and(DescribedPredicate.not(

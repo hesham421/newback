@@ -1,0 +1,66 @@
+# =====================================================================
+# erp-app-reference — dev-style configuration.
+# Required environment: DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, FILE_TOKEN_SECRET.
+# Redis and SMTP are optional and NOT configured here: without Redis, FILE download
+# tokens use the in-memory store; without spring.mail.host, EMAIL notifications are
+# recorded as FAILED (NO_MAIL_SENDER). Add spring-boot-starter-data-redis /
+# spring-boot-starter-mail plus spring.data.redis.* / spring.mail.* to enable them.
+# =====================================================================
+spring:
+  application:
+    name: erp-app-reference
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  flyway:
+    # The application's own scripts (V1000+). erp-core prepends classpath:db/migration/core.
+    locations: classpath:db/migration
+  cache:
+    type: simple
+  servlet:
+    multipart:
+      # Generously above erp.core.files.* so the domain size check (413, FILE error code)
+      # rejects oversize files rather than Spring's MaxUploadSizeExceededException.
+      max-file-size: 15MB
+      max-request-size: 25MB
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  port: ${SERVER_PORT:7272}
+  shutdown: graceful
+
+erp:
+  core:
+    security:
+      jwt:
+        secret: ${JWT_SECRET}
+    files:
+      access-token-secret: ${FILE_TOKEN_SECRET}
+    frontend:
+      base-url: ${FRONTEND_URL:http://localhost:4200}
+      password-reset-path: ${PASSWORD_RESET_PATH:/password-reset/complete}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method

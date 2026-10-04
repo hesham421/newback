@@ -15,14 +15,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * on a conditional bean rather than on a static field of {@link AbstractIntegrationTest} because
  * Boot resolves field-level {@code @ServiceConnection} unconditionally (it requires a non-null
  * container and asks Docker for its image name), which would make Docker mandatory.
+ *
+ * <p>Public, and shipped in erp-core's test-jar together with {@link TestPostgres}, so other modules'
+ * tests (erp-app-reference) use the same backend selection.
  */
 @TestConfiguration(proxyBeanMethods = false)
 @Conditional(TestPostgres.TestcontainersSelected.class)
-class TestcontainersPostgresConfiguration {
+public class TestcontainersPostgresConfiguration {
 
     @Bean
     @ServiceConnection
-    PostgreSQLContainer postgresContainer() {
+    public PostgreSQLContainer postgresContainer() {
         return TestPostgres.container();
     }
 }

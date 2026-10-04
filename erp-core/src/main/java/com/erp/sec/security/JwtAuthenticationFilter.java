@@ -20,7 +20,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -29,8 +28,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * set lookup. An absent or rejected token leaves the context anonymous — the authorization layer,
  * not this filter, decides what that means. See
  * governance/project-artifacts/sec-implementation-notes.md for the authority model.
+ *
+ * <p>Not a {@code @Component}: exposed as a bean by
+ * {@code com.erp.autoconfigure.ErpCoreSecurityAutoConfiguration}, which also places it in the core
+ * security filter chain.
  */
-@Component
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 

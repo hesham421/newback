@@ -1,8 +1,11 @@
-# Flyway migrations — `classpath:db/migration`
+# Flyway migrations — `classpath:db/migration/core`
 
 Spring Boot's `FlywayAutoConfiguration` runs every `V{n}__{description}.sql`
 file in this folder, in order, against the configured datasource at
-application startup (`spring.flyway.locations=classpath:db/migration`).
+application startup. Since erp-core step 03 this folder ships inside the
+erp-core library jar, and `com.erp.autoconfigure.ErpCoreFlywayAutoConfiguration`
+prepends `classpath:db/migration/core` to whatever `spring.flyway.locations`
+the consuming application configures for its own scripts.
 
 ## The chain (cleaned in erp-core step 01)
 

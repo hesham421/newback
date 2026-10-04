@@ -1,4 +1,4 @@
-package com.erp.file.config;
+package com.erp.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

@@ -21,7 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
  * integrity). Single-use enforcement (a consumed-nonce store) is an SVC-API concern, not here.
  * The AES key is derived (SHA-256) from a secret passed in as a plain argument via the static
  * factory — no Spring/JPA annotations, no persistence access. The consuming @Service supplies the
- * secret from configuration ({@code file.access-token.secret}).
+ * secret from configuration ({@code erp.core.files.access-token-secret}).
  */
 public final class FileAccessTokenDomainService {
 
@@ -45,7 +45,7 @@ public final class FileAccessTokenDomainService {
     /** Derives a 256-bit AES key from the configured secret (SHA-256). */
     public static FileAccessTokenDomainService create(String secret) {
         if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("file.access-token.secret must be configured");
+            throw new IllegalStateException("erp.core.files.access-token-secret must be configured");
         }
         try {
             byte[] keyBytes = MessageDigest.getInstance("SHA-256")

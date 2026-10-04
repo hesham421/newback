@@ -95,13 +95,29 @@ public final class TestPostgres {
      * Registers {@code spring.datasource.*} for the embedded backend. For Testcontainers nothing is
      * registered here: the {@code @ServiceConnection} bean supplies the connection details.
      */
-    static void registerDataSource(DynamicPropertyRegistry registry) {
+    public static void registerDataSource(DynamicPropertyRegistry registry) {
         if (backend() != Backend.EMBEDDED) {
             return;
         }
         registry.add("spring.datasource.url", () -> embedded().getJdbcUrl("postgres", "postgres"));
         registry.add("spring.datasource.username", () -> "postgres");
         registry.add("spring.datasource.password", () -> "postgres");
+    }
+
+    /** JDBC URL of the shared database, whichever backend is selected (for tests that build their own context). */
+    public static String jdbcUrl() {
+        return backend() == Backend.TESTCONTAINERS
+            ? container().getJdbcUrl() : embedded().getJdbcUrl("postgres", "postgres");
+    }
+
+    /** User name of the shared database. */
+    public static String username() {
+        return backend() == Backend.TESTCONTAINERS ? container().getUsername() : "postgres";
+    }
+
+    /** Password of the shared database. */
+    public static String password() {
+        return backend() == Backend.TESTCONTAINERS ? container().getPassword() : "postgres";
     }
 
     private static Backend resolveBackend() {
@@ -143,7 +159,7 @@ public final class TestPostgres {
     }
 
     /** Spring condition: true when this JVM uses the Testcontainers backend. */
-    static final class TestcontainersSelected implements Condition {
+    public static final class TestcontainersSelected implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
             return backend() == Backend.TESTCONTAINERS;

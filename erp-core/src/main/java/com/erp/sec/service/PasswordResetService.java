@@ -1,5 +1,6 @@
 package com.erp.sec.service;
 
+import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
@@ -32,7 +33,6 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,17 +82,13 @@ public class PasswordResetService {
     private final NotificationDispatchApi notificationDispatchApi;
 
     /**
-     * Base of the UI that hosts the reset screen, and the route the mailed button opens on it.
-     * Both are configuration rather than constants because api_doc_gaps #13 records that no SEC
-     * artifact specifies a frontend password-reset URL — the route below is the human decision that
-     * closed that gap (2026-09-18), and a deployment with a different route changes the property,
-     * not this class.
+     * The base of the UI that hosts the reset screen ({@code erp.core.frontend.base-url}) and the
+     * route the mailed button opens on it ({@code erp.core.frontend.password-reset-path}) are read
+     * from {@link ErpCoreProperties}. Both are configuration rather than constants because
+     * api_doc_gaps #13 records that no SEC artifact specifies a frontend password-reset URL — a
+     * deployment with a different route changes the property, not this class.
      */
-    @Value("${app.frontend-url:}")
-    private String frontendUrl;
-
-    @Value("${app.password-reset-path:/reset-password}")
-    private String passwordResetPath;
+    private final ErpCoreProperties erpCoreProperties;
 
     /**
      * API-SEC-003 — the same generic confirmation is returned whether or not the email resolves to
@@ -241,9 +237,11 @@ public class PasswordResetService {
      * plain-text alternative, so the recipient never types a token by hand.
      */
     private String buildActionLink(String rawToken) {
+        String frontendUrl = erpCoreProperties.getFrontend().getBaseUrl();
+        String passwordResetPath = erpCoreProperties.getFrontend().getPasswordResetPath();
         String base = frontendUrl == null ? "" : frontendUrl.trim();
         if (base.isBlank()) {
-            log.warn("app.frontend-url is not set — the password-reset mail will carry a relative "
+            log.warn("erp.core.frontend.base-url is not set — the password-reset mail will carry a relative "
                 + "link that no mail client can open. Set FRONTEND_URL for this environment.");
         }
         while (base.endsWith("/")) {

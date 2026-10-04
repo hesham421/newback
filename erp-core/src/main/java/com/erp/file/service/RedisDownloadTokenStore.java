@@ -3,6 +3,7 @@ package com.erp.file.service;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
@@ -10,11 +11,14 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * and single-use is enforced by {@code DEL} returning true only for the first consumer. Shared by
  * every application instance pointing at the same Redis.
  *
- * <p>Not a {@code @Component}: registered by {@link com.erp.file.config.DownloadTokenStoreAutoConfiguration}
+ * <p>Not a {@code @Component}: registered by {@link com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration}
  * (an auto-configuration ordered after Boot's Redis auto-configuration), so the
  * {@code @ConditionalOnBean} below sees the {@code StringRedisTemplate} bean when one exists.
- * This is the only class that touches Redis directly.
+ * This is the only class that touches Redis directly. Redis is an optional dependency of erp-core:
+ * {@code @ConditionalOnClass} (read from class metadata, without loading this class) keeps it out
+ * when spring-data-redis is not on the application's classpath.
  */
+@ConditionalOnClass(StringRedisTemplate.class)
 @ConditionalOnBean(StringRedisTemplate.class)
 @RequiredArgsConstructor
 public class RedisDownloadTokenStore implements DownloadTokenStore {

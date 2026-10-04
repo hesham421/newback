@@ -1,4 +1,4 @@
-package com.erp.sec.controller;
+package com.erp.app.dev;
 
 import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
@@ -19,8 +19,12 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Dev-profile test fixture, not part of the SEC contract — it carries no API-SEC id and must never
  * acquire one. {@code @Profile("dev")} means the bean, and therefore the path, does not exist in
- * any other profile; the caller must still be authenticated, since SecurityConfig's permitAll list
- * names only the four pre-authentication endpoints.
+ * any other profile; the caller must still be authenticated, since the core security chain's
+ * public paths name only the pre-authentication endpoints.
+ *
+ * <p>Lives in the reference application, not in erp-core (step 03): a library must not ship a
+ * dev-only endpoint. The {@code @Profile("dev")} {@code DevPasswordResetSupportService} it calls
+ * stays in erp-core.
  */
 @RestController
 @RequestMapping("/api/v1/sec/dev")

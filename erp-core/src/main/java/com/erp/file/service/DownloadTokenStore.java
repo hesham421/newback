@@ -7,7 +7,7 @@ import java.time.Duration;
  * binds each issued token (by its hashed key) to the issuing username for the token TTL and
  * atomically consumes it on the first successful download.
  *
- * <p>Two implementations, selected by {@link com.erp.file.config.DownloadTokenStoreAutoConfiguration}:
+ * <p>Two implementations, selected by {@link com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration}:
  * {@link RedisDownloadTokenStore} when a Redis template bean exists (shared across
  * instances), otherwise {@link InMemoryDownloadTokenStore} (single JVM — tests and Redis-less runs).
  */

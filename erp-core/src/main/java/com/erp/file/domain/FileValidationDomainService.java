@@ -29,9 +29,18 @@ public final class FileValidationDomainService {
      * otherwise {@link #DEFAULT_MAX_CONTENT_BYTES}.
      */
     public static void assertContentSizeAllowed(long contentSizeBytes, Long categoryMaxSizeBytes) {
+        assertContentSizeAllowed(contentSizeBytes, categoryMaxSizeBytes, DEFAULT_MAX_CONTENT_BYTES);
+    }
+
+    /**
+     * RULE-FILE-001 — content size guard with a configured default ({@code erp.core.files.max-content-bytes}).
+     * Effective limit is the category override when present, otherwise {@code defaultMaxContentBytes}.
+     */
+    public static void assertContentSizeAllowed(long contentSizeBytes, Long categoryMaxSizeBytes,
+                                                long defaultMaxContentBytes) {
         long effectiveLimit = (categoryMaxSizeBytes != null && categoryMaxSizeBytes > 0)
             ? categoryMaxSizeBytes
-            : DEFAULT_MAX_CONTENT_BYTES;
+            : defaultMaxContentBytes;
         if (contentSizeBytes > effectiveLimit) {
             throw new LocalizedException(Status.PAYLOAD_TOO_LARGE,
                 FileErrorCodes.FILE_DOCUMENT_SIZE_EXCEEDED, contentSizeBytes, effectiveLimit);
@@ -40,9 +49,14 @@ public final class FileValidationDomainService {
 
     /** RULE-FILE-001 — whole-request size guard (fixed 10 MB ceiling). */
     public static void assertRequestSizeAllowed(long requestSizeBytes) {
-        if (requestSizeBytes > MAX_REQUEST_BYTES) {
+        assertRequestSizeAllowed(requestSizeBytes, MAX_REQUEST_BYTES);
+    }
+
+    /** RULE-FILE-001 — whole-request size guard with a configured ceiling ({@code erp.core.files.max-request-bytes}). */
+    public static void assertRequestSizeAllowed(long requestSizeBytes, long maxRequestBytes) {
+        if (requestSizeBytes > maxRequestBytes) {
             throw new LocalizedException(Status.PAYLOAD_TOO_LARGE,
-                FileErrorCodes.FILE_DOCUMENT_SIZE_EXCEEDED, requestSizeBytes, MAX_REQUEST_BYTES);
+                FileErrorCodes.FILE_DOCUMENT_SIZE_EXCEEDED, requestSizeBytes, maxRequestBytes);
         }
     }
 

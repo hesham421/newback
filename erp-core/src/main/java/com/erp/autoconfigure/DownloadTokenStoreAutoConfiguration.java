@@ -1,4 +1,4 @@
-package com.erp.file.config;
+package com.erp.autoconfigure;
 
 import com.erp.file.service.DownloadTokenStore;
 import com.erp.file.service.InMemoryDownloadTokenStore;

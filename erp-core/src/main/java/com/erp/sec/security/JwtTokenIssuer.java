@@ -1,5 +1,6 @@
 package com.erp.sec.security;
 
+import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.sec.entity.User;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
@@ -7,7 +8,6 @@ import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,10 +21,11 @@ public class JwtTokenIssuer {
     private final SecretKey signingKey;
     private final long expirationMs;
 
-    public JwtTokenIssuer(@Value("${app.jwt.secret}") String secret,
-                          @Value("${app.jwt.expiration-ms}") long expirationMs) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+    /** Key and lifetime from {@code erp.core.security.jwt.secret} / {@code erp.core.security.jwt.expiration-ms}. */
+    public JwtTokenIssuer(ErpCoreProperties properties) {
+        this.signingKey = Keys.hmacShaKeyFor(
+            properties.getSecurity().getJwt().getSecret().getBytes(StandardCharsets.UTF_8));
+        this.expirationMs = properties.getSecurity().getJwt().getExpirationMs();
     }
 
     public String issue(User user, String tokenRef, Instant issuedAt) {
@@ -38,7 +39,7 @@ public class JwtTokenIssuer {
             .compact();
     }
 
-    /** {@code LoginResponse.expiresIn} is seconds, while {@code app.jwt.expiration-ms} is millis. */
+    /** {@code LoginResponse.expiresIn} is seconds, while {@code erp.core.security.jwt.expiration-ms} is millis. */
     public long getExpiresInSeconds() {
         return expirationMs / 1000L;
     }

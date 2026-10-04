@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
  * treated as absent and purged lazily on access and on every {@link #put}. Tokens are not shared
  * between JVMs — a multi-instance deployment must provide Redis.
  *
- * <p>Not a {@code @Component}: registered by {@link com.erp.file.config.DownloadTokenStoreAutoConfiguration}
+ * <p>Not a {@code @Component}: registered by {@link com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration}
  * after {@link RedisDownloadTokenStore}, so it only applies when no other store was defined.
  */
 @ConditionalOnMissingBean(DownloadTokenStore.class)

@@ -1,5 +1,6 @@
 package com.erp.file.service;
 
+import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.CommonErrorCodes;
@@ -61,6 +62,8 @@ public class FileService {
     private final FileMapper mapper;
     private final FileAccessTokenDomainService accessTokenService;
     private final DownloadTokenStore tokenStore;
+    /** Upload size limits ({@code erp.core.files.max-content-bytes} / {@code max-request-bytes}). */
+    private final ErpCoreProperties erpCoreProperties;
 
     /** Owner-list sort whitelist (entity property names) per API-FILE-005. */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("fileName", "createdAt", "fileSize");
@@ -103,8 +106,10 @@ public class FileService {
         FileValidationDomainService.assertContentTypeAllowed(verifiedType, contentType, categoryAllowedTypes);
 
         // RULE-FILE-001 — content size (category override) then whole-request ceiling.
-        FileValidationDomainService.assertContentSizeAllowed(size, categoryMaxSize);
-        FileValidationDomainService.assertRequestSizeAllowed(size);
+        FileValidationDomainService.assertContentSizeAllowed(size, categoryMaxSize,
+            erpCoreProperties.getFiles().getMaxContentBytes());
+        FileValidationDomainService.assertRequestSizeAllowed(size,
+            erpCoreProperties.getFiles().getMaxRequestBytes());
 
         FileDocument entity = mapper.toEntity(request, safeFileName(originalName), contentType, size,
             content, deriveFileType(contentType), FileDocumentDomain.STATUS_ACTIVE, category);
