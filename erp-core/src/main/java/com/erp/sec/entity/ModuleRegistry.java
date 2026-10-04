@@ -1,6 +1,6 @@
 package com.erp.sec.entity;
 
-import com.erp.common.domain.AuditableEntity;
+import com.erp.common.domain.GlobalAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -33,7 +33,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class ModuleRegistry extends AuditableEntity {
+public class ModuleRegistry extends GlobalAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_module_reg_seq")

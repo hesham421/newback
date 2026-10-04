@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -20,8 +21,7 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-013 — SignupRequest (SEC_SIGNUP_REQUEST). Source: db-script-sec.md §1 DBF-SEC-097..104
- * / §3 BLOCK 2, DATA-DOM-TRANSACTIONAL.md ENT-SEC-013. Does not extend AuditableEntity — see
- * governance/project-artifacts/sec-implementation-notes.md. STATE MACHINE: {@code statusCode}
+ * / §3 BLOCK 2, DATA-DOM-TRANSACTIONAL.md ENT-SEC-013. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). STATE MACHINE: {@code statusCode}
  * over SIGNUP_STATUS — PENDING → APPROVED or REJECTED, both terminal.
  */
 @Entity
@@ -32,7 +32,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class SignupRequest {
+public class SignupRequest extends AuditableEntity {
 
     /** SIGNUP_STATUS codes (A6 closed set, CHK_SEC_SIGNUP_REQUEST_STATUS). */
     private static final String STATUS_PENDING = "PENDING";

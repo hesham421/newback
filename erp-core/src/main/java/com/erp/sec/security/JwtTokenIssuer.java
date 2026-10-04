@@ -2,6 +2,7 @@ package com.erp.sec.security;
 
 import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.sec.entity.User;
+import com.erp.tenant.TenantConstants;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Component;
 /**
  * Issues the API-SEC-001 access token. Issuance only — request-time validation, the filter chain
  * and the REQ-SEC-033 gateway belong to the SEC-BE phase. The token's {@code jti} is the session's
- * opaque {@code tokenRef} (DBF-SEC-077), so no raw token or hash is ever persisted.
+ * opaque {@code tokenRef} (DBF-SEC-077), so no raw token or hash is ever persisted. Since erp-core
+ * step 05 the token also carries {@code tid}, the user's tenant: {@code JwtAuthenticationFilter}
+ * makes it the request's tenant before it looks the user up (usernames are unique per tenant only).
  */
 @Component
 public class JwtTokenIssuer {
@@ -33,6 +36,7 @@ public class JwtTokenIssuer {
             .subject(user.getUsername())
             .id(tokenRef)
             .claim("uid", user.getUserPk())
+            .claim(TenantConstants.TENANT_ID_CLAIM, user.getTenantId())
             .issuedAt(Date.from(issuedAt))
             .expiration(Date.from(issuedAt.plusMillis(expirationMs)))
             .signWith(signingKey)

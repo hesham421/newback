@@ -179,8 +179,10 @@ class ErpCoreAutoConfigurationTest {
     }
 
     @Test
-    void corePackages_areTheSixCoreModules() {
+    void corePackages_areTheSevenCoreModules() {
+        // erp-core step 05 appended com.erp.tenant
         assertThat(ErpCoreAutoConfiguration.CORE_PACKAGES).containsExactly(
-            "com.erp.common", "com.erp.cu", "com.erp.mdl", "com.erp.sec", "com.erp.file", "com.erp.notif");
+            "com.erp.common", "com.erp.cu", "com.erp.mdl", "com.erp.sec", "com.erp.file", "com.erp.notif",
+            "com.erp.tenant");
     }
 }

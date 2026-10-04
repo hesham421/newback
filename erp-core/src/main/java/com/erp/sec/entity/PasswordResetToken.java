@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -25,8 +26,7 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-012 — PasswordResetToken (SEC_PWD_RESET_TOKEN). Source: db-script-sec.md §1
- * DBF-SEC-091..096 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-012. Does not extend
- * AuditableEntity — see governance/project-artifacts/sec-implementation-notes.md. Whether the
+ * DBF-SEC-091..096 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-012. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). Whether the
  * token may still be used (RULE-SEC-006) is decided by {@code PasswordResetTokenDomain}.
  */
 @Entity
@@ -36,7 +36,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class PasswordResetToken {
+public class PasswordResetToken extends AuditableEntity {
 
     /**
      * A7 DEFAULT window: {@code expiresAt = requestedAt + 30 minutes} — stated by

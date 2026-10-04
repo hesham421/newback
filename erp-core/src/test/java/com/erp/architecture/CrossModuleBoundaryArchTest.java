@@ -45,10 +45,19 @@ public class CrossModuleBoundaryArchTest {
             new Module("com.erp.notif", "com.erp.notif.crossmodule"),
             new Module("com.erp.file", "com.erp.file.crossmodule"),
             new Module("com.erp.cu", "com.erp.cu.crossmodule"),
-            new Module("com.erp.mdl", "com.erp.mdl.crossmodule")
+            new Module("com.erp.mdl", "com.erp.mdl.crossmodule"),
+            // erp-core step 05: the tenant module's public surface is its ROOT package only —
+            // TenantContext, TenantConstants and the provisioning SPI (TenantProvisioning,
+            // TenantProvisioningContributor), which every module may use. Its entity, repository,
+            // service, controller and filter stay internal (com.erp.autoconfigure wires the filter).
+            new Module("com.erp.tenant", "com.erp.tenant.crossmodule", "com.erp.tenant")
     );
 
-    private record Module(String packagePrefix, String crossModulePackage) {
+    /**
+     * @param exactPublicPackages packages (exact match, sub-packages NOT included) that are public in
+     *                            addition to {@code crossModulePackage}
+     */
+    private record Module(String packagePrefix, String crossModulePackage, String... exactPublicPackages) {
     }
 
     /**
@@ -69,12 +78,16 @@ public class CrossModuleBoundaryArchTest {
     @ArchTest
     static void modules_only_expose_their_crossmodule_package_to_outsiders(JavaClasses classes) {
         for (Module module : MODULES) {
+            DescribedPredicate<JavaClass> publicSurface =
+                    JavaClass.Predicates.resideInAPackage(module.crossModulePackage() + "..");
+            for (String exact : module.exactPublicPackages()) {
+                publicSurface = publicSurface.or(JavaClass.Predicates.resideInAPackage(exact));
+            }
             ArchRule rule = noClasses().that().resideOutsideOfPackage(module.packagePrefix() + "..")
                     .and().resideOutsideOfPackage("com.erp.autoconfigure..")
                     .should().dependOnClassesThat(
                             JavaClass.Predicates.resideInAPackage(module.packagePrefix() + "..")
-                                    .and(DescribedPredicate.not(
-                                            JavaClass.Predicates.resideInAPackage(module.crossModulePackage() + "..")))
+                                    .and(DescribedPredicate.not(publicSurface))
                     )
                     .as("classes outside " + module.packagePrefix()
                             + " must only depend on its " + module.crossModulePackage() + " surface");

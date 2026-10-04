@@ -2,7 +2,9 @@ package com.erp.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.erp.tenant.TenantConstants;
 import com.erp.testsupport.TestPostgres;
+import com.jayway.jsonpath.JsonPath;
 import com.erp.testsupport.TestcontainersPostgresConfiguration;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +28,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * ({@link TestPostgres}: Testcontainers when Docker is available, otherwise embedded). It also sets
  * the optional {@code ERP_BOOTSTRAP_ADMIN_PASSWORD}, which erp-core's bootstrap runner gives to the
  * seeded {@code admin} account (shipped without a usable password since erp-core step 04).
+ *
+ * <p>Since erp-core step 05 every login names its tenant with {@code X-Tenant-Code}: the bootstrap
+ * admin belongs to the {@code PLATFORM} tenant. The admin provisions a second tenant through the
+ * platform endpoint, and that tenant's first administrator logs in with its own code.
  */
 @SpringBootTest(classes = ReferenceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -56,8 +62,8 @@ class ReferenceApplicationSmokeTest {
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V9 (V1 is reserved and not shipped), then the application's own V1000
-        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "1000");
+        // core V2..V10 (V1 is reserved and not shipped; V10 = tenant schema), then the application's own V1000
+        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "1000");
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from flyway_schema_history where not success", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("select to_regclass('public.app_smoke')::text", String.class))
@@ -86,13 +92,51 @@ class ReferenceApplicationSmokeTest {
     }
 
     private HttpResponse<String> login(String password) throws Exception {
-        return http.send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/sec/auth/login"))
+        return login(TenantConstants.PLATFORM_TENANT_CODE, "admin", password);
+    }
+
+    private HttpResponse<String> login(String tenantCode, String username, String password) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/sec/auth/login"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(
+                "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"));
+        if (tenantCode != null) {
+            request.header(TenantConstants.TENANT_CODE_HEADER, tenantCode);
+        }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void loginWithoutXTenantCode_isRejectedWith400TenantRequired() throws Exception {
+        HttpResponse<String> response = login(null, "admin", BOOTSTRAP_ADMIN_PASSWORD);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("\"code\":\"TENANT_REQUIRED\"");
+    }
+
+    @Test
+    void bootstrapAdminProvisionsASecondTenant_whoseAdministratorLogsInWithXTenantCode() throws Exception {
+        String platformToken = JsonPath.read(login(BOOTSTRAP_ADMIN_PASSWORD).body(), "$.data.accessToken");
+
+        HttpResponse<String> created = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/platform/tenants"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(
-                    "{\"username\":\"admin\",\"password\":\"" + password + "\"}"))
+                .header("Authorization", "Bearer " + platformToken)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"SMOKE_TENANT\",\"nameAr\":\"مستأجر\","
+                    + "\"nameEn\":\"Smoke tenant\",\"adminUsername\":\"admin\",\"adminEmail\":\"admin@smoke.test\","
+                    + "\"adminPassword\":\"Smoke-Tenant-Passw0rd!\",\"adminFullNameAr\":\"مدير\","
+                    + "\"adminFullNameEn\":\"Smoke admin\"}", java.nio.charset.StandardCharsets.UTF_8))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
+        assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+        long tenantId = ((Number) JsonPath.read(created.body(), "$.data.id")).longValue();
+        assertThat(tenantId).isGreaterThan(TenantConstants.PLATFORM_TENANT_ID);
+
+        HttpResponse<String> tenantLogin = login("SMOKE_TENANT", "admin", "Smoke-Tenant-Passw0rd!");
+        assertThat(tenantLogin.statusCode()).isEqualTo(200);
+        assertThat(tenantLogin.body()).containsPattern("\"accessToken\":\"[\\w-]+\\.[\\w-]+\\.[\\w-]+\"");
+        // the same "admin" username in the PLATFORM tenant keeps its own password
+        assertThat(login(TenantConstants.PLATFORM_TENANT_CODE, "admin", "Smoke-Tenant-Passw0rd!").statusCode())
+            .isEqualTo(401);
     }
 
     @Test

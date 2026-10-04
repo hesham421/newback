@@ -35,6 +35,25 @@ No core script renames or drops a table or column, changes a column type, or edi
 existing script (Flyway checksums applied scripts). A mistake is fixed forward by a new script.
 Each plan step reserves its version numbers (e.g. step 05 = `V10`, step 06 = `V11`, ...).
 
+The only exceptions ever made are the two the step-05 plan itself sanctions inside
+`V10__tenant_schema.sql`: dropping the temporary `DEFAULT 1` of every `TENANT_ID` after the backfill,
+and replacing each unique constraint of a tenant-scoped table by its composite `(TENANT_ID, ...)` form
+(same constraint name).
+
+## Tenant columns (since V10)
+
+Every core table is tenant-scoped except `CORE_TENANT` and the permission catalog
+(`SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG`). A new tenant-scoped table must have:
+
+- `TENANT_ID BIGINT NOT NULL` (no default) with `FK_<TABLE>_TENANT` → `CORE_TENANT (ID)` and
+  `IDX_<TABLE>_TENANT`; every unique constraint starts with `TENANT_ID`;
+- `VERSION BIGINT NOT NULL DEFAULT 0` and the audit columns `CREATED_BY`, `CREATED_AT`, `UPDATED_BY`,
+  `UPDATED_AT`;
+- an entity extending `com.erp.common.domain.AuditableEntity` (Hibernate `@TenantId` fills `TENANT_ID`).
+
+A global table (only when a plan step names it global) has no `TENANT_ID`, and its entity extends
+`GlobalAuditableEntity`. Seed rows for tenant-scoped tables name `TENANT_ID` explicitly (`1` = PLATFORM).
+
 ## The chain
 
 | Version | Script | Content |
@@ -48,6 +67,7 @@ Each plan step reserves its version numbers (e.g. step 05 = `V10`, step 06 = `V1
 | V7 | `V7__sec_seed.sql` | module/screen/action registry of SEC, MDL, NOTIF, FILE, CU; roles; grants; bootstrap `admin` (no usable password) |
 | V8 | `V8__mdl_seed.sql` | lookup types/values `NOTIF_CHANNEL`, `NOTIF_STATUS`, `FILE_FILE_STATUS`, `FILE_FILE_TYPE` |
 | V9 | `V9__notif_seed.sql` | `EMAIL` channel config; `PASSWORD_RESET` / `ACCOUNT_ACTIVATION` templates |
+| V10 | `V10__tenant_schema.sql` | `CORE_TENANT` + PLATFORM tenant (ID 1); `TENANT_ID`/`VERSION` on every tenant-scoped table (backfilled to PLATFORM), `VERSION` on the catalog, audit columns on 8 SEC tables, composite uniques; `PLATFORM` module/screen, `PERM_PLATFORM_TENANTS_VIEW` + `PLATFORM_TENANT_MANAGE` granted to PLATFORM's `SYS_ADMIN` |
 
 ## Bootstrap admin
 
@@ -56,4 +76,5 @@ placeholder instead of a password hash, so it cannot log in. Set
 `erp.core.security.bootstrap-admin-password` (the reference app maps it to the optional
 environment variable `ERP_BOOTSTRAP_ADMIN_PASSWORD`) and, on the first start,
 `com.erp.sec.security.BootstrapAdminPasswordRunner` hashes it into the account and activates it.
-Once the account is initialised the property is ignored.
+Once the account is initialised the property is ignored. The account belongs to the PLATFORM tenant:
+log in with `X-Tenant-Code: PLATFORM`.

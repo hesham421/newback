@@ -28,7 +28,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "SEC_ROLE",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_SEC_ROLE_CODE", columnNames = {"CODE"})
+        @UniqueConstraint(name = "UQ_SEC_ROLE_CODE", columnNames = {"TENANT_ID", "CODE"})
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder

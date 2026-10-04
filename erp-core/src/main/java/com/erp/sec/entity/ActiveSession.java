@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -25,8 +26,7 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-010 — ActiveSession (SEC_ACTIVE_SESSION). Source: db-script-sec.md §1 DBF-SEC-075..082
- * / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-010. Does not extend AuditableEntity — see
- * governance/project-artifacts/sec-implementation-notes.md. STATE: {@code terminatedAt IS NULL}
+ * / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-010. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). STATE: {@code terminatedAt IS NULL}
  * = active; there is no {@code is_active_fl} column.
  */
 @Entity
@@ -37,7 +37,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class ActiveSession {
+public class ActiveSession extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_active_session_seq")

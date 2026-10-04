@@ -31,7 +31,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "NOTIF_TEMPLATE",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_NOTIF_TEMPLATE_CODE", columnNames = {"TEMPLATE_CODE"})
+        @UniqueConstraint(name = "UQ_NOTIF_TEMPLATE_CODE", columnNames = {"TENANT_ID", "TEMPLATE_CODE"})
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder

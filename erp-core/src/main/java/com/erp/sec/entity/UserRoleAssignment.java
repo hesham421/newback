@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -26,14 +27,13 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-003 — UserRoleAssignment (SEC_USER_ROLE). Source: db-script-sec.md §1 DBF-SEC-025..029
- * / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-003. Does not extend AuditableEntity — see
- * governance/project-artifacts/sec-implementation-notes.md. RULE-SEC-005 (SoD) is decided by
+ * / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-003. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). RULE-SEC-005 (SoD) is decided by
  * {@code UserRoleAssignmentDomain}; an assignment is created or deleted, never flag-toggled.
  */
 @Entity
 @Table(name = "SEC_USER_ROLE",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_SEC_USER_ROLE_USER_ROLE", columnNames = {"USER_ID", "ROLE_ID"})
+        @UniqueConstraint(name = "UQ_SEC_USER_ROLE_USER_ROLE", columnNames = {"TENANT_ID", "USER_ID", "ROLE_ID"})
     },
     indexes = {
         @Index(name = "IDX_SEC_USER_ROLE_USER", columnList = "USER_ID"),
@@ -41,7 +41,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class UserRoleAssignment {
+public class UserRoleAssignment extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_user_role_seq")

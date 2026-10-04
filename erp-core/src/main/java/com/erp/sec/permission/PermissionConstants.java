@@ -173,4 +173,12 @@ public final class PermissionConstants {
 
     /** API-FILE-006 with action=DELETE — screen FILE_BROWSER; FileService.softDelete() gates on it. */
     public static final String PERM_FILE_BROWSER_DELETE = "PERM_FILE_BROWSER_DELETE";
+
+    /**
+     * erp-core step 05 — every {@code /api/v1/platform/tenants} operation (TenantService) — screen
+     * PLATFORM_TENANTS, module PLATFORM. The code is the step file's literal (not
+     * {@code PERM_<PAGE>_<ACTION>}), like CU's {@code CONFIG_*}. Seeded by {@code V10__tenant_schema.sql}
+     * to the PLATFORM tenant's SYS_ADMIN only; tenant provisioning never copies it to a new tenant.
+     */
+    public static final String PLATFORM_TENANT_MANAGE = "PLATFORM_TENANT_MANAGE";
 }

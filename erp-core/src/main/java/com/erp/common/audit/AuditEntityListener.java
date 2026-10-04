@@ -1,15 +1,16 @@
 package com.erp.common.audit;
 
-import com.erp.common.domain.AuditableEntity;
+import com.erp.common.domain.GlobalAuditableEntity;
 import com.erp.common.util.SecurityContextHelper;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import java.time.Instant;
 
+/** Fills the audit columns of every {@link GlobalAuditableEntity} (and so of every tenant-aware entity). */
 public class AuditEntityListener {
 
     @PrePersist
-    public void prePersist(AuditableEntity entity) {
+    public void prePersist(GlobalAuditableEntity entity) {
         String currentUser = SecurityContextHelper.getCurrentUsername();
         Instant now = Instant.now();
         entity.setCreatedBy(currentUser);
@@ -19,7 +20,7 @@ public class AuditEntityListener {
     }
 
     @PreUpdate
-    public void preUpdate(AuditableEntity entity) {
+    public void preUpdate(GlobalAuditableEntity entity) {
         entity.setUpdatedBy(SecurityContextHelper.getCurrentUsername());
         entity.setUpdatedAt(Instant.now());
     }

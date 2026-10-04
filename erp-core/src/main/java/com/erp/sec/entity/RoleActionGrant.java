@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -26,15 +27,14 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-009 — RoleActionGrant (SEC_ROLE_ACTION_GRANT). Source: db-script-sec.md §1
- * DBF-SEC-070..074 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-009. Does not extend
- * AuditableEntity — see governance/project-artifacts/sec-implementation-notes.md. RULE-SEC-002 /
+ * DBF-SEC-070..074 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-009. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). RULE-SEC-002 /
  * -005 / -007 are decided by {@code RoleActionGrantDomain}; a grant is created or deleted.
  */
 @Entity
 @Table(name = "SEC_ROLE_ACTION_GRANT",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_SEC_ROLE_ACTION_GRANT_ROLE_ACTION",
-            columnNames = {"ROLE_ID", "ACTION_ID"})
+            columnNames = {"TENANT_ID", "ROLE_ID", "ACTION_ID"})
     },
     indexes = {
         @Index(name = "IDX_SEC_ROLE_ACTION_GRANT_ROLE", columnList = "ROLE_ID"),
@@ -42,7 +42,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class RoleActionGrant {
+public class RoleActionGrant extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_role_action_grant_seq")

@@ -10,6 +10,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -143,6 +144,17 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.builder()
             .code(CommonErrorCodes.DATA_INTEGRITY_VIOLATION)
             .message(resolveMessage(CommonErrorCodes.DATA_INTEGRITY_VIOLATION, null))
+            .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    /** A stale update rejected by the {@code VERSION} optimistic lock (erp-core step 05). */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException ex) {
+        log.warn("Optimistic-lock conflict: {}", ex.getMessage());
+        ApiError error = ApiError.builder()
+            .code(CommonErrorCodes.CONCURRENT_MODIFICATION)
+            .message(resolveMessage(CommonErrorCodes.CONCURRENT_MODIFICATION, null))
             .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
     }

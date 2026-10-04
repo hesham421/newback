@@ -25,4 +25,8 @@ public final class CommonErrorCodes {
 
     /** Same slot and same rules, for a supported field combined with an operator it cannot honour. */
     public static final String UNSUPPORTED_FILTER_OPERATOR = "UNSUPPORTED_FILTER_OPERATOR";
+
+    // Added by erp-core step 05 with the VERSION column (@Version on every entity): a stale update
+    // fails Hibernate's optimistic-lock check; answered 409 instead of the catch-all 500.
+    public static final String CONCURRENT_MODIFICATION = "CONCURRENT_MODIFICATION";
 }
