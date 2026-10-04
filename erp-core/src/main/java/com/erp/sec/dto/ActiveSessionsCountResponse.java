@@ -14,6 +14,6 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Active sessions widget - عنصر الجلسات النشطة")
 public class ActiveSessionsCountResponse {
 
-    @Schema(description = "Sessions with terminatedAt IS NULL - عدد الجلسات غير المنتهية", example = "14")
+    @Schema(description = "Staff (STAFF realm) sessions with terminatedAt IS NULL - عدد جلسات الموظفين غير المنتهية", example = "14")
     private Long count;
 }

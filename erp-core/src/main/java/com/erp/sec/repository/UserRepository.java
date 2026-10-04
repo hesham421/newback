@@ -63,11 +63,24 @@ public interface UserRepository
     /** erp-core step 06 — customer registration: e-mail uniqueness per (tenant, realm). */
     boolean existsByEmailAndRealm(String email, String realm);
 
-    /** QR-SEC-022 — the dashboard's users-overview total (A.2.7: an explicit JPQL COUNT). */
-    @Query("SELECT COUNT(u) FROM User u")
+    /**
+     * erp-core step 14 — the staff user-management by-id lookup (get, update, role assignment,
+     * deactivate, reactivate): a STAFF-realm row only. A CUSTOMER id is therefore indistinguishable
+     * from an unknown one (404 {@code SEC-404-USER}); customers manage themselves through
+     * {@code /api/v1/customers/me}. Cross-module contact resolution keeps the realm-neutral
+     * {@code findById}: customers receive notifications too.
+     */
+    @Query("SELECT u FROM User u WHERE u.userPk = :userPk AND u.realm = 'STAFF'")
+    Optional<User> findStaffById(@Param("userPk") Long userPk);
+
+    /**
+     * QR-SEC-022 — the dashboard's users-overview total (A.2.7: an explicit JPQL COUNT). STAFF realm
+     * only since erp-core step 14: the security dashboard describes staff accounts, never customers.
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.realm = 'STAFF'")
     long countAllUsers();
 
-    /** QR-SEC-022 — the users-overview ACTIVE / DISABLED sub-counts, one USER_STATUS code each. */
-    @Query("SELECT COUNT(u) FROM User u WHERE u.statusCode = :statusCode")
+    /** QR-SEC-022 — the users-overview ACTIVE / DISABLED sub-counts, one USER_STATUS code each, STAFF realm (step 14). */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.statusCode = :statusCode AND u.realm = 'STAFF'")
     long countByStatus(@Param("statusCode") String statusCode);
 }

@@ -14,13 +14,13 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Users overview widget - عنصر نظرة عامة على المستخدمين")
 public class UsersOverviewResponse {
 
-    @Schema(description = "Total users - إجمالي المستخدمين", example = "120")
+    @Schema(description = "Total staff (STAFF realm) users; customers are not counted - إجمالي المستخدمين الموظفين (دون العملاء)", example = "120")
     private Long total;
 
-    @Schema(description = "Users with statusCode ACTIVE - المستخدمون النشطون", example = "100")
+    @Schema(description = "Staff users with statusCode ACTIVE - الموظفون النشطون", example = "100")
     private Long active;
 
-    @Schema(description = "Users with statusCode DISABLED - المستخدمون المعطَّلون", example = "20")
+    @Schema(description = "Staff users with statusCode DISABLED - الموظفون المعطَّلون", example = "20")
     private Long disabled;
 
     @Schema(description = "Sign-up requests still PENDING - طلبات التسجيل المعلّقة", example = "3")

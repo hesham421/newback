@@ -34,7 +34,19 @@ public interface ActiveSessionRepository
      */
     Optional<ActiveSession> findByTokenRef(String tokenRef);
 
-    /** QR-SEC-022 — the active-sessions widget count; same {@code terminatedAt IS NULL} state test. */
-    @Query("SELECT COUNT(s) FROM ActiveSession s WHERE s.terminatedAt IS NULL")
+    /**
+     * QR-SEC-022 — the active-sessions widget count; same {@code terminatedAt IS NULL} state test.
+     * STAFF-realm sessions only since erp-core step 14 (customer logins open sessions too).
+     */
+    @Query("SELECT COUNT(s) FROM ActiveSession s WHERE s.terminatedAt IS NULL AND s.user.realm = 'STAFF'")
     long countNonTerminated();
+
+    /**
+     * erp-core step 14 — API-SEC-026's lookup: a session of a STAFF account only, so the staff
+     * session API can neither see nor terminate a customer's session (404 {@code SEC-404-SESSION},
+     * indistinguishable from an unknown id).
+     */
+    @Query("SELECT s FROM ActiveSession s JOIN FETCH s.user u "
+        + "WHERE s.activeSessionPk = :id AND u.realm = 'STAFF'")
+    Optional<ActiveSession> findStaffSessionById(@Param("id") Long id);
 }

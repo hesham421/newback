@@ -26,7 +26,8 @@ public class DashboardController {
     private final OperationCode operationCode;
 
     @GetMapping
-    @Operation(summary = "Get the dashboard summary", description = "عرض أرقام لوحة تحكم الأمان محسوبة حيًا")
+    @Operation(summary = "Get the dashboard summary", description = "User and session counts cover STAFF accounts"
+        + " only - عرض أرقام لوحة تحكم الأمان محسوبة حيًا (أعداد المستخدمين والجلسات للموظفين فقط)")
     public ResponseEntity<ApiResponse<DashboardResponse>> summary() {
         return operationCode.craftResponse(service.summary());
     }

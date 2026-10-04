@@ -57,13 +57,17 @@ public class UserRoleService {
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
 
-    /** API-SEC-008 — check RULE-SEC-005, replace the assignment set, audit each add and removal. */
+    /**
+     * API-SEC-008 — check RULE-SEC-005, replace the assignment set, audit each add and removal. The
+     * user must be a STAFF account (erp-core step 14): customers hold no roles, so a CUSTOMER id
+     * answers 404 {@code SEC-404-USER} like an unknown one.
+     */
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<UserResponse> assign(Long userId, UserRoleAssignmentRequest request) {
         log.info("Assigning roles to User ID: {}", userId);
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findStaffById(userId)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, SecErrorCodes.SEC_404_USER, userId));
 

@@ -98,6 +98,14 @@ final class RealmHttp {
         return send(headers(json(path), token, tenantCode).method("PATCH", body(jsonBody)));
     }
 
+    HttpResponse<String> put(String token, String tenantCode, String path, String jsonBody) {
+        return send(headers(json(path), token, tenantCode).PUT(body(jsonBody)));
+    }
+
+    HttpResponse<String> delete(String token, String tenantCode, String path) {
+        return send(headers(json(path), token, tenantCode).DELETE());
+    }
+
     /** A claim of an access token (payload decoded without verification — test only). */
     static Object claim(String token, String name) {
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);
