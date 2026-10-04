@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "05",
+  "current_step": "06-08",
   "max_parallel": 3,
   "steps": [
     {
@@ -283,8 +283,8 @@
         "V11__sec_realms.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-06",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -315,8 +315,8 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-07",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -346,8 +346,8 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-08",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -657,6 +657,24 @@
       "step": "05",
       "event": "merged",
       "note": "merged eea2528 (pure replay); core 111/app 7 on branch+main; pushed"
+    },
+    {
+      "at": "2026-10-04T17:18:07Z",
+      "step": "06",
+      "event": "dispatched",
+      "note": "parallel batch A1 (06,07,08) dispatched"
+    },
+    {
+      "at": "2026-10-04T17:18:08Z",
+      "step": "07",
+      "event": "dispatched",
+      "note": "parallel batch A1 (06,07,08) dispatched"
+    },
+    {
+      "at": "2026-10-04T17:18:09Z",
+      "step": "08",
+      "event": "dispatched",
+      "note": "parallel batch A1 (06,07,08) dispatched"
     }
   ]
 }
