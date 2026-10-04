@@ -2494,7 +2494,12 @@ def test_notif_006_failing_provider_retried(ctx):
     if not ids:
         raise Blocked("no log id")
     lid = ids[0]
-    early = poll(lambda: get_log(ctx.T_A, lid), lambda x: (x.data or {}).get("attempts", 0) >= 1, timeout=5, interval=0.1)
+    # The first attempt is counted (prepare() commits attempts+1) BEFORE the SMTP connect; lastError and
+    # nextAttemptAt are written only when its outcome is recorded. Wait for the recorded outcome, not the count.
+    early = poll(lambda: get_log(ctx.T_A, lid),
+                 lambda x: (x.data or {}).get("attempts", 0) >= 1 and bool((x.data or {}).get("lastError"))
+                 and ((x.data or {}).get("nextAttemptAt") or (x.data or {}).get("notificationStatusId") == "FAILED"),
+                 timeout=15, interval=0.1)
     d = early.data or {}
     eq(d.get("notificationStatusId"), "QUEUED", "early notificationStatusId")
     check((d.get("attempts") or 0) >= 1, "early attempts ≥ 1", ">=1", d.get("attempts"))

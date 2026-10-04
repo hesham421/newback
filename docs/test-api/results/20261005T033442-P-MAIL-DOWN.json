@@ -2,8 +2,8 @@
  "meta": {
   "profile": "P-MAIL-DOWN",
   "base": "http://localhost:7295",
-  "run": "26100503100C",
-  "started": "2026-10-05T03:10:47",
+  "run": "26100503346B",
+  "started": "2026-10-05T03:34:42",
   "cap": null,
   "local_root": null,
   "setup": [
@@ -28,7 +28,7 @@
     "code": null
    }
   ],
-  "finished": "2026-10-05T03:11:19",
+  "finished": "2026-10-05T03:35:14",
   "plan_notes": []
  },
  "results": {
@@ -39,10 +39,10 @@
    "checks": [
     {
      "ok": true,
-     "what": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 8, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}",
+     "what": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 7, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}",
      "expected": "200",
-     "observed": "200 · {\"data\":{\"logIds\":[7]},\"success\":true,\"timestamp\":\"2026-10-04T23:10:48.675202200Z\"}",
-     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 8, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}"
+     "observed": "200 · {\"data\":{\"logIds\":[3]},\"success\":true,\"timestamp\":\"2026-10-04T23:34:43.471202800Z\"}",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 7, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}"
     },
     {
      "ok": true,
@@ -62,7 +62,7 @@
      "ok": true,
      "what": "early nextAttemptAt set",
      "expected": "set",
-     "observed": "2026-10-04T23:10:50.890Z",
+     "observed": "2026-10-04T23:34:45.615Z",
      "request": ""
     },
     {
@@ -118,20 +118,20 @@
      "ok": true,
      "what": "POST /api/v1/notifications/logs/search [token] {\"filters\": [{\"field\": \"notificationStatusId\", \"operator\": \"EQUALS\", \"value\": \"FAILED\"}], \"size\": 200}",
      "expected": "200",
-     "observed": "200 · {\"data\":{\"content\":[{\"id\":7,\"recipientId\":8,\"channelTypeId\":\"EMAIL\",\"notificationStatusId\":\"FAILED\",\"moduleCode\":\"TEST\",\"referenceId\":1,\"referenceType\":\"TC_REF\",\"retryCount\":4,\"errorMessage\":\"Mail server connection failed. Failed messages: org.eclipse.angus.mail.util.MailConnectException: Couldn't c",
+     "observed": "200 · {\"data\":{\"content\":[{\"id\":3,\"recipientId\":7,\"channelTypeId\":\"EMAIL\",\"notificationStatusId\":\"FAILED\",\"moduleCode\":\"TEST\",\"referenceId\":1,\"referenceType\":\"TC_REF\",\"retryCount\":4,\"errorMessage\":\"Mail server connection failed. Failed messages: org.eclipse.angus.mail.util.MailConnectException: Couldn't c",
      "request": "POST /api/v1/notifications/logs/search [token] {\"filters\": [{\"field\": \"notificationStatusId\", \"operator\": \"EQUALS\", \"value\": \"FAILED\"}], \"size\": 200}"
     },
     {
      "ok": true,
      "what": "search contains the log id",
-     "expected": "7",
-     "observed": "[7]",
+     "expected": "3",
+     "observed": "[3]",
      "request": ""
     }
    ],
    "result": "PASS",
    "note": "",
-   "seconds": 31.05
+   "seconds": 30.97
   }
  }
 }

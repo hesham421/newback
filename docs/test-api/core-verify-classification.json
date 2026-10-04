@@ -16,16 +16,52 @@
     "SEC-032 identifies the customer's session without reading the database: session ids come from one sequence (`SEQ_SEC_ACTIVE_SESSION`, allocation size 1) and the profile instance serves only this script, so the id allocated between two staff logins that the staff list does not show is the customer login's. Each such id answers 404 `SEC-404-SESSION`, and the customer's token still works afterwards.",
     "P-MAIL token handling: SEC-026 changes c2's password; the script logs c2 in again with the new password (`Cust0mer!New`) to keep a verified-customer `T_CUST` for the remaining P-MAIL cases. TENANT-026 runs last because it suspends (and re-activates) the run's tenant A.",
     "Profile variant: the plan's P-MAIL/P-MAIL-DOWN `spring-boot-starter-mail` build was made as a local, uncommitted pom edit (reverted with `git checkout`); P-CAP, P-LOCAL and the 7272 instance used the unmodified jar.",
-    "REPORT-013 is merged from its two P-CAP parts and counts as PASS only when both the cap=2 and the cap=3 parts ran and passed (`core_verify_report.py` `REQUIRED_PARTS`; a missing part makes it BLOCKED)."
+    "REPORT-013 is merged from its two P-CAP parts and counts as PASS only when both the cap=2 and the cap=3 parts ran and passed (`core_verify_report.py` `REQUIRED_PARTS`; a missing part makes it BLOCKED).",
+    "NOTIF-006 (P-MAIL-DOWN): 3/3 consecutive runs PASS after the race fix (review round 1: the early read keyed only on `attempts`, which prepare() commits before the SMTP connect; it now waits for the recorded outcome, `lastError` + `nextAttemptAt`). Each run on its own restart of the mail-variant instance (port 7295, scratch DB, mail on closed port 2525): RUN `2610050332E2` PASS, RUN `26100503339B` PASS, RUN `26100503346B` PASS; the committed result file is the third."
   ],
   "junit_evidence": {
     "intro": "Agreed item 4: the five JUnit classes behind the plan's §9 step-09 rows, run at the fix commit `9068779` (`mvn -o -q -pl erp-core test -Dtest=<the five> -Djacoco.skip=true`, embedded PostgreSQL 16, JDK 21), surefire counts copied from `erp-core/target/surefire-reports/*.txt`. The same five classes, with the same counts, also passed inside the clean root `mvn -o -q verify` at that commit (target/ deleted first): erp-core 358 tests, erp-app-reference 10, 0 failures, 0 errors, 0 skipped.",
     "rows": [
-      {"class": "NumberSeriesConcurrencyIntegrationTest", "tests": 1, "failures": 0, "errors": 0, "skipped": 0, "source": "surefire, 9068779"},
-      {"class": "NumberSeriesIntegrationTest", "tests": 6, "failures": 0, "errors": 0, "skipped": 0, "source": "surefire, 9068779"},
-      {"class": "SettingsIntegrationTest", "tests": 6, "failures": 0, "errors": 0, "skipped": 0, "source": "surefire, 9068779"},
-      {"class": "SettingsCacheTest", "tests": 4, "failures": 0, "errors": 0, "skipped": 0, "source": "surefire, 9068779"},
-      {"class": "ConfigurationScopeApiIntegrationTest", "tests": 3, "failures": 0, "errors": 0, "skipped": 0, "source": "surefire, 9068779"}
+      {
+        "class": "NumberSeriesConcurrencyIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "NumberSeriesIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "SettingsIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "SettingsCacheTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "ConfigurationScopeApiIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      }
     ],
     "notes": [
       "CI run id: not available yet. This branch is local (never pushed, per the task rules), so no GitHub Actions run exists for the fix; the orchestrator cites the main CI run id once the fix is merged and main CI is green."
