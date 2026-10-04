@@ -14,6 +14,7 @@ import com.erp.sec.exception.SecErrorCodes;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.BootstrapAdminPasswordRunner;
 import com.erp.sec.service.AuthService;
+import com.erp.tenant.TenantConstants;
 import com.erp.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,9 +56,12 @@ class BootstrapAdminPasswordIntegrationTest extends AbstractIntegrationTest {
         assertThat(admin.getStatusCode()).isEqualTo("PENDING");
         assertThat(admin.getPasswordHash()).isEqualTo(UserDomain.BOOTSTRAP_PASSWORD_PLACEHOLDER);
         assertThat(UserDomain.awaitsBootstrapPassword(admin)).isTrue();
+        // Plain SQL bypasses Hibernate's tenant filter: scope it to the PLATFORM tenant, because every
+        // tenant provisioned by another test class has its own 'admin' holding its own SYS_ADMIN.
         assertThat(jdbcTemplate.queryForList(
             "select r.code from sec_user_role ur join sec_role r on r.role_pk = ur.role_id "
-                + "join sec_user u on u.user_pk = ur.user_id where u.username = 'admin'", String.class))
+                + "join sec_user u on u.user_pk = ur.user_id where u.username = 'admin' and u.tenant_id = ?",
+            String.class, TenantConstants.PLATFORM_TENANT_ID))
             .containsExactly("SYS_ADMIN");
 
         for (String attempt : new String[] {"admin", UserDomain.BOOTSTRAP_PASSWORD_PLACEHOLDER}) {

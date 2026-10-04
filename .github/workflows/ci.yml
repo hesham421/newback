@@ -39,17 +39,35 @@ jobs:
           cache: maven
 
       - name: Docker is available for Testcontainers
-        run: docker version --format 'Docker server {{.Server.Version}}'
+        # The versions go into a notice annotation: annotations are public, job logs are not.
+        run: |
+          DOCKER="$(docker version --format 'server {{.Server.Version}}, API {{.Server.APIVersion}} (min {{.Server.MinAPIVersion}})' || docker version --format 'server {{.Server.Version}}')"
+          echo "$DOCKER"
+          echo "::notice title=Docker::$DOCKER"
 
       - name: mvn verify (tests, ArchUnit, enforcer, JaCoCo gate)
-        run: mvn -B -q verify
+        # Not -q: the full output is teed to mvn-verify.log, which the next step mines for annotations.
+        shell: bash
+        run: |
+          set -o pipefail
+          mvn -B -ntp verify 2>&1 | tee mvn-verify.log
+
+      - name: Test failures as annotations
+        # Job logs of this public repository need a token to download; check-run annotations do not.
+        # One summary annotation (totals + every failed test id), one per failed test (message + top of
+        # the stack), or the Maven [ERROR] lines when no test failed (enforcer, compile, JaCoCo gate,
+        # Testcontainers start-up).
+        if: failure()
+        run: python3 .github/scripts/ci-annotate-failures.py mvn-verify.log
 
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: '**/target/surefire-reports/'
+          path: |
+            **/target/surefire-reports/
+            mvn-verify.log
           if-no-files-found: warn
 
       - name: Upload JaCoCo report (erp-core)
