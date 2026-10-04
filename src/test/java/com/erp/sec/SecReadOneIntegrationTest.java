@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.erp.common.exception.LocalizedException;
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.dto.DevPasswordResetTokenResponse;
 import com.erp.sec.dto.PasswordResetCompleteRequest;
 import com.erp.sec.dto.RoleResponse;
@@ -13,6 +12,7 @@ import com.erp.sec.entity.Role;
 import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
 import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.repository.PasswordResetTokenRepository;
 import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.service.DevPasswordResetSupportService;
@@ -21,18 +21,20 @@ import com.erp.sec.service.RoleService;
 import com.erp.sec.service.UserRoleService;
 import com.erp.sec.service.UserService;
 import com.erp.sec.dto.UserRoleAssignmentRequest;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -41,13 +43,12 @@ import org.springframework.transaction.annotation.Transactional;
  * drawer could not resolve its row on a cold load), and the dev-profile fixture that finally makes
  * TC-SEC-038 — completing a reset with a VALID token — reachable by an automated run.
  *
- * <p>Same posture as {@link SecFrontendGapIntegrationTest}: real dev Postgres/Redis, {@code dev}
+ * <p>Same posture as {@link SecFrontendGapIntegrationTest}: shared test database, {@code test}
  * profile, every write rolled back by the class-level {@link Transactional}.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class SecReadOneIntegrationTest {
+@Import(SecReadOneIntegrationTest.DevPasswordResetSupportTestConfig.class)
+class SecReadOneIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private RoleService roleService;
@@ -180,5 +181,23 @@ class SecReadOneIntegrationTest {
 
     private String uniqueSuffix() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    /**
+     * {@link DevPasswordResetSupportService} is {@code @Profile("dev")} on purpose (its endpoint must
+     * exist in no other profile), and tests never run with the dev profile. Its two token tests
+     * therefore get the service as a test-only bean: same class, same proxies
+     * ({@code @Transactional}/{@code @PreAuthorize}), while the dev controller stays absent.
+     * Imported explicitly: nested configurations are not auto-detected when the base class names
+     * its {@code @SpringBootTest(classes = ...)}.
+     */
+    @TestConfiguration(proxyBeanMethods = false)
+    static class DevPasswordResetSupportTestConfig {
+
+        @Bean
+        DevPasswordResetSupportService devPasswordResetSupportService(
+                PasswordResetTokenRepository passwordResetTokenRepository, UserRepository userRepository) {
+            return new DevPasswordResetSupportService(passwordResetTokenRepository, userRepository);
+        }
     }
 }

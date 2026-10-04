@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.search.SearchFilter;
 import com.erp.common.search.SearchOperator;
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.dto.RoleGrantTreeResponse;
 import com.erp.sec.dto.RoleModuleGrantNodeResponse;
 import com.erp.sec.dto.RoleResponse;
@@ -36,18 +35,17 @@ import com.erp.sec.service.AuditLogService;
 import com.erp.sec.service.RoleGrantService;
 import com.erp.sec.service.RoleService;
 import com.erp.sec.service.SignupRequestService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -56,13 +54,11 @@ import org.springframework.transaction.annotation.Transactional;
  * grants, role update, and the audit-log CSV export's charset. Each one was an endpoint or a
  * response detail the frontend consumes but the backend never published.
  *
- * <p>Same posture as {@link SecCoverageIntegrationTest}: real dev Postgres/Redis, {@code dev}
+ * <p>Same posture as {@link SecCoverageIntegrationTest}: shared test database, {@code test}
  * profile, every write rolled back by the class-level {@link Transactional}.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class SecFrontendGapIntegrationTest {
+class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private SignupRequestService signupRequestService;

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.util.TokenHasher;
-import com.erp.main.ErpMainApplication;
 import com.erp.notif.crossmodule.DispatchLogRecord;
 import com.erp.notif.crossmodule.NotificationChannelAdminApi;
 import com.erp.notif.crossmodule.NotificationLogQueryApi;
@@ -39,6 +38,7 @@ import com.erp.sec.repository.UserRoleAssignmentRepository;
 import com.erp.sec.service.AuthService;
 import com.erp.sec.service.DashboardService;
 import com.erp.sec.service.PasswordResetService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
@@ -48,13 +48,11 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -69,8 +67,8 @@ import org.springframework.web.bind.annotation.PutMapping;
  * permission, a deliberately deactivated grant row). This is a new, standalone JUnit suite — it
  * does not touch the TestSprite mechanism, the MODE-5 script, or {@code execution-state.json}.
  *
- * <p>Runs against the real dev Postgres/Redis (docker/docker-compose.yml, {@code dev} profile) the
- * same way the running application does; every test wraps its writes in the outer class-level
+ * <p>Runs on the shared PostgreSQL 16 test database of {@code AbstractIntegrationTest} (profile
+ * {@code test}, Flyway-migrated like the running application); every test wraps its writes in the outer class-level
  * {@link Transactional} and rolls back on completion, so nothing here leaves data behind.
  *
  * <p>TC-SEC-033 is deliberately NOT covered here: it requires a real business-module endpoint
@@ -78,10 +76,8 @@ import org.springframework.web.bind.annotation.PutMapping;
  * There is no code to exercise, in-process or otherwise — see the task report rather than a
  * stub test here.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class SecCoverageIntegrationTest {
+class SecCoverageIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private PasswordResetService passwordResetService;

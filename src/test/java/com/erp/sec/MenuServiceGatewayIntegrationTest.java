@@ -2,7 +2,6 @@ package com.erp.sec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.entity.ActionRegistry;
 import com.erp.sec.entity.ModuleRegistry;
 import com.erp.sec.entity.Role;
@@ -18,17 +17,16 @@ import com.erp.sec.repository.ScreenRegistryRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.repository.UserRoleAssignmentRepository;
 import com.erp.sec.service.MenuService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -44,13 +42,11 @@ import org.springframework.transaction.annotation.Transactional;
  * fixture below is built from its own registry rows rather than any seeded ones so it stays independent
  * of any one module's seed, but it reproduces exactly that shape.
  *
- * <p>Runs against the real dev Postgres the same way {@link SecCoverageIntegrationTest} does; the
+ * <p>Runs on the shared test database ({@code AbstractIntegrationTest}) like {@link SecCoverageIntegrationTest}; the
  * class-level {@link Transactional} rolls every fixture row back on completion.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class MenuServiceGatewayIntegrationTest {
+class MenuServiceGatewayIntegrationTest extends AbstractIntegrationTest {
 
     private static final String GATEWAY_ACTION_CODE = "VIEW";
     private static final String MULTI_WORD_ACTION_CODE = "CLOSE_APPROVE";

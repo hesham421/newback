@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.erp.common.domain.status.ServiceResult;
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.dto.LoginRequest;
 import com.erp.sec.dto.LoginResponse;
 import com.erp.sec.dto.SessionTerminationResponse;
@@ -17,13 +16,13 @@ import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtAuthenticationFilter;
 import com.erp.sec.security.JwtTokenValidator;
 import com.erp.sec.service.AuthService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockFilterChain;
@@ -32,7 +31,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -42,13 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Driven in-process rather than over HTTP because the assertions need the token's {@code jti}
  * and the {@code SEC_ACTIVE_SESSION} row behind it — neither is ever returned to a client. Runs
- * against the real dev Postgres/Redis like {@link SecCoverageIntegrationTest}, with the same
+ * on the shared test database like {@link SecCoverageIntegrationTest}, with the same
  * class-level {@link Transactional} rollback, so nothing is left behind.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class SecLogoutIntegrationTest {
+class SecLogoutIntegrationTest extends AbstractIntegrationTest {
 
     private static final String CALLER_IP = "203.0.113.7";
 
