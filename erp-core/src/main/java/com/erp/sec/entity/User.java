@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,6 +29,7 @@ import lombok.experimental.SuperBuilder;
  * {@code CHK_SEC_USER_STATUS}.
  */
 @Entity
+@Audited(entityType = "SEC_USER", ignore = {"passwordHash", "lastLoginAt"})
 @Table(name = "SEC_USER",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_SEC_USER_USERNAME", columnNames = {"TENANT_ID", "REALM", "USERNAME"}),

@@ -59,7 +59,10 @@ public class CrossModuleBoundaryArchTest {
             // publish or listen to. com.erp.events.support (publisher impl, task decorator) is internal.
             new Module("com.erp.events", "com.erp.events.crossmodule", "com.erp.events"),
             // erp-core step 09: number series; public surface = com.erp.sequence.crossmodule (NumberSeriesApi)
-            new Module("com.erp.sequence", "com.erp.sequence.crossmodule")
+            new Module("com.erp.sequence", "com.erp.sequence.crossmodule"),
+            // erp-core step 10: the audit log's public surface is its crossmodule package (AuditApi,
+            // AuditEntry, AuditChange, the @Audited annotation every audited entity carries)
+            new Module("com.erp.audit", "com.erp.audit.crossmodule")
     );
 
     /**

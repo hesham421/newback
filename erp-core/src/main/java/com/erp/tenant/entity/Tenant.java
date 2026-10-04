@@ -1,5 +1,6 @@
 package com.erp.tenant.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.GlobalAuditableEntity;
 import com.erp.tenant.TenantConstants;
 import jakarta.persistence.Column;
@@ -29,6 +30,7 @@ import lombok.experimental.SuperBuilder;
  * by {@code TenantDomain}).
  */
 @Entity
+@Audited(entityType = "CORE_TENANT")
 @Table(name = "CORE_TENANT",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_CORE_TENANT_CODE", columnNames = {"CODE"})

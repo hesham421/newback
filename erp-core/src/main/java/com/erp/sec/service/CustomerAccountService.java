@@ -1,5 +1,6 @@
 package com.erp.sec.service;
 
+import com.erp.audit.crossmodule.AuditApi;
 import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
@@ -115,6 +116,8 @@ public class CustomerAccountService {
     private final NotificationDispatchApi notificationDispatchApi;
     private final ErpCoreProperties properties;
     private final DomainEventPublisher eventPublisher;
+    // erp-core step 10 — customer LOGIN / PASSWORD_RESET go to the generic audit log (realm CUSTOMER)
+    private final AuditApi auditApi;
 
     /** {@code POST /api/v1/public/customers/register} — 201 with the new, unverified account. */
     @Transactional
@@ -200,6 +203,8 @@ public class CustomerAccountService {
             .build());
         user.setLastLoginAt(now);
         userRepository.save(user);
+        auditApi.record(SecAuditEntries.accountEvent(AuditApi.ACTION_LOGIN, user,
+            "تسجيل دخول ناجح", "Successful login", ipAddress));
 
         log.info("Customer login succeeded for User ID: {}", user.getUserPk());
         return ServiceResult.success(LoginResponse.builder()
@@ -258,6 +263,8 @@ public class CustomerAccountService {
         List<ActiveSession> open = activeSessionRepository.findNonTerminatedByUser(user.getUserPk());
         open.forEach(session -> session.terminate(principal));
         activeSessionRepository.saveAll(open);
+        auditApi.record(SecAuditEntries.accountEvent(AuditApi.ACTION_PASSWORD_RESET, user,
+            "تم إتمام إعادة تعيين كلمة المرور", "Password reset completed", null));
 
         log.info("Customer password reset completed for User ID: {} ({} sessions terminated)",
             user.getUserPk(), open.size());
