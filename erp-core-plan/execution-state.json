@@ -424,12 +424,17 @@
         "V14__sequence_and_settings.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-09",
       "attempts": 1,
       "implementer_agent": "a181bd5f6686701b8",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "a2209f7b8d8cab5d6",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 283/app 9; concurrency x3 green; 55 live probes: tenant-predicated locks, settings isolation airtight, PLATFORM scope 403 for tenant super admin, cache keyed tenant:key",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/09-report.md",
       "deviations": [
@@ -873,6 +878,12 @@
       "step": "11",
       "event": "reported",
       "note": "implementer report 418d4da, 2/2; core 197/app 9 (base pre-08)"
+    },
+    {
+      "at": "2026-10-04T19:18:21Z",
+      "step": "09",
+      "event": "review",
+      "note": "PASS round 1; notes: cache-aside stale window, REQUIRES_NEW gaps accepted by step file"
     }
   ]
 }
