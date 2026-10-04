@@ -494,15 +494,23 @@
       "parallel_group": "A",
       "migrations": [],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-11",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "ad181b74b69a9957b",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/11-report.md",
+      "deviations": [
+        "per-module <MODULE>_REPORTS screens + <MODULE>:REPORT:<CODE> permissions",
+        "AUDIT_EVENT_LIST interim in sec on SEC_AUDIT_LOG",
+        "ReportResult totalRows",
+        "export cap+1 page, byte[] buffered, json supported, formula-injection prefix",
+        "per-report permission checked in service; ACCESS_DENIED",
+        "no OpenAPI group",
+        "PermissionCatalogIntegrationTest excludes report contributor"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -859,6 +867,12 @@
       "step": "09",
       "event": "reported",
       "note": "rebased onto 07+08 at a21b35d; core 283/app 9; concurrency re-run green"
+    },
+    {
+      "at": "2026-10-04T19:13:12Z",
+      "step": "11",
+      "event": "reported",
+      "note": "implementer report 418d4da, 2/2; core 197/app 9 (base pre-08)"
     }
   ]
 }
