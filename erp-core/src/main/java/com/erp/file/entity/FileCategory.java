@@ -69,10 +69,18 @@ public class FileCategory extends AuditableEntity {
     @Convert(converter = BooleanNumberConverter.class)
     private Boolean isActive = Boolean.TRUE;
 
+    /** erp-core step 07 — only categories allowing public may hold PUBLIC documents (native BOOLEAN). */
+    @Column(name = "ALLOW_PUBLIC", nullable = false)
+    @Builder.Default
+    private Boolean allowPublic = Boolean.FALSE;
+
     @PrePersist
     protected void onCreate() {
         if (isActive == null) {
             isActive = Boolean.TRUE;
+        }
+        if (allowPublic == null) {
+            allowPublic = Boolean.FALSE;
         }
         if (categoryCode != null) {
             categoryCode = categoryCode.trim().toUpperCase();

@@ -21,6 +21,7 @@ public class FileCategoryMapper {
             .maxSizeBytes(request.getMaxSizeBytes())
             .allowedContentTypes(request.getAllowedContentTypes())
             .isActive(request.getIsActiveFl() != null ? request.getIsActiveFl() : Boolean.TRUE)
+            .allowPublic(Boolean.TRUE.equals(request.getAllowPublic()))
             .build();
     }
 
@@ -37,6 +38,9 @@ public class FileCategoryMapper {
         entity.setNameEn(request.getNameEn());
         entity.setMaxSizeBytes(request.getMaxSizeBytes());
         entity.setAllowedContentTypes(request.getAllowedContentTypes());
+        if (request.getAllowPublic() != null) {
+            entity.setAllowPublic(request.getAllowPublic());
+        }
     }
 
     public CategoryResponse toResponse(FileCategory entity) {
@@ -51,6 +55,7 @@ public class FileCategoryMapper {
             .maxSizeBytes(entity.getMaxSizeBytes())
             .allowedContentTypes(entity.getAllowedContentTypes())
             .isActiveFl(Boolean.TRUE.equals(entity.getIsActive()))
+            .allowPublic(Boolean.TRUE.equals(entity.getAllowPublic()))
             .createdAt(entity.getCreatedAt())
             .createdBy(entity.getCreatedBy())
             .updatedAt(entity.getUpdatedAt())

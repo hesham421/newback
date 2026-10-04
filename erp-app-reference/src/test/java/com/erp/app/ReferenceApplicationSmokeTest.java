@@ -62,9 +62,9 @@ class ReferenceApplicationSmokeTest {
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V11 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms), then the
-        // application's own V1000
-        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "1000");
+        // core V2..V12 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
+        // V12 = file storage), then the application's own V1000
+        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "1000");
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from flyway_schema_history where not success", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("select to_regclass('public.app_smoke')::text", String.class))
@@ -146,5 +146,19 @@ class ReferenceApplicationSmokeTest {
             HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/sec/users")).GET().build(),
             HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(401);
+    }
+
+    /**
+     * erp-core step 07: the public file path needs neither a token nor {@code X-Tenant-Code} (the tenant
+     * is in the path) — an unknown slug is a plain 404 of FILE, not 401 or 400 TENANT_REQUIRED — and the
+     * app runs without the optional AWS SDK on its classpath.
+     */
+    @Test
+    void publicFilePathNeedsNoTokenOrTenantHeader() throws Exception {
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/v1/public/files/PLATFORM/no-such-slug")).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat((String) JsonPath.read(response.body(), "$.error.code")).isEqualTo("FILE_DOCUMENT_NOT_FOUND");
     }
 }

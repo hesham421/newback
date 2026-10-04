@@ -62,6 +62,22 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Optional: S3-compatible FILE storage (erp-core step 07, erp.core.files.storage=S3). The
+             provider is only created when software.amazon.awssdk.services.s3.S3Client is present;
+             an application that selects S3 adds this dependency itself. The async Netty client is
+             not needed (the provider uses the synchronous client). -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <optional>true</optional>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <!-- Flyway (spring-boot-flyway provides FlywayAutoConfiguration and
              FlywayConfigurationCustomizer; Boot 4 split it out of spring-boot-autoconfigure) -->
         <dependency>

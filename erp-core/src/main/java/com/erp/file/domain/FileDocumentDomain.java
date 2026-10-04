@@ -19,6 +19,10 @@ public final class FileDocumentDomain {
     public static final String STATUS_ARCHIVED = "ARCHIVED";
     public static final String STATUS_DELETED = "DELETED";
 
+    /** erp-core step 07 — VISIBILITY values (CHK_FILE_DOCUMENT_VISIBILITY). */
+    public static final String VISIBILITY_PRIVATE = "PRIVATE";
+    public static final String VISIBILITY_PUBLIC = "PUBLIC";
+
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
         STATUS_ACTIVE, Set.of(STATUS_ARCHIVED, STATUS_DELETED),
         STATUS_ARCHIVED, Set.of(STATUS_DELETED),
@@ -45,6 +49,27 @@ public final class FileDocumentDomain {
         if (targetStatus == null || !allowed.contains(targetStatus)) {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 FileErrorCodes.FILE_DOCUMENT_INVALID_TRANSITION, currentStatus, targetStatus);
+        }
+    }
+
+    /**
+     * erp-core step 07 — decision only: a document may become PUBLIC only when its category allows
+     * public files ({@code FILE_CATEGORY.ALLOW_PUBLIC}); a document without a category never may.
+     * Refused with 409 {@code FILE_PUBLIC_NOT_ALLOWED}.
+     */
+    public void assertCanBePublic(boolean categoryAllowsPublic) {
+        if (!categoryAllowsPublic) {
+            throw new LocalizedException(Status.CONFLICT, FileErrorCodes.FILE_PUBLIC_NOT_ALLOWED);
+        }
+    }
+
+    /**
+     * erp-core step 07 — decision only: a soft-deleted document is treated as gone (RULE-FILE-006), so
+     * its visibility cannot change; answered 404 {@code FILE_DOCUMENT_NOT_FOUND} like every other access.
+     */
+    public void assertNotDeleted(Long documentId) {
+        if (STATUS_DELETED.equals(currentStatus)) {
+            throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId);
         }
     }
 

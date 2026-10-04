@@ -36,4 +36,7 @@ public class CategoryUpdateRequest {
 
     @Schema(description = "Allowed content types, comma-separated (per-category override) - أنواع المحتوى المسموحة", example = "application/pdf,image/png")
     private String allowedContentTypes;
+
+    @Schema(description = "Category may hold PUBLIC files (erp-core step 07); null keeps the current value - تسمح الفئة بالملفات العامة", example = "true")
+    private Boolean allowPublic;
 }

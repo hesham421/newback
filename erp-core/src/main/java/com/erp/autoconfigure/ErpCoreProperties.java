@@ -145,6 +145,66 @@ public class ErpCoreProperties {
 
         /** Whole-request upload limit in bytes. */
         private long maxRequestBytes = 10_485_760L;
+
+        // --- erp-core step 07: storage provider selection and public file URLs ---------------
+
+        /**
+         * Where new file content is written: {@code DB} (default, the document row itself),
+         * {@code LOCAL} (needs {@link Local#getRoot() local.root}) or {@code S3} (needs
+         * {@link S3#getBucket() s3.bucket} and {@code software.amazon.awssdk:s3} on the classpath).
+         * Existing documents are always read from the provider recorded on them.
+         */
+        private String storage = "DB";
+
+        /**
+         * Optional origin prepended to public file URLs (e.g. {@code https://api.example.com});
+         * empty = the URL is the path {@code /api/v1/public/files/{tenantCode}/{publicSlug}}.
+         */
+        private String publicBaseUrl;
+
+        private final Local local = new Local();
+
+        private final S3 s3 = new S3();
+    }
+
+    /** {@code erp.core.files.local.*} — the LOCAL storage provider (erp-core step 07). */
+    @Getter
+    @Setter
+    public static class Local {
+
+        /**
+         * Root directory of the LOCAL provider; must exist and be writable when
+         * {@code erp.core.files.storage=LOCAL}. Content is stored under
+         * {@code <root>/<tenantId>/<category>/<yyyy>/<MM>/<documentId>_<filename>}.
+         */
+        private String root;
+    }
+
+    /** {@code erp.core.files.s3.*} — the optional S3-compatible storage provider (erp-core step 07). */
+    @Getter
+    @Setter
+    public static class S3 {
+
+        /** Bucket name; required when {@code erp.core.files.storage=S3}. */
+        private String bucket;
+
+        /** Region, e.g. {@code eu-central-1} (S3-compatible servers accept any value). */
+        private String region = "us-east-1";
+
+        /** Optional endpoint override for S3-compatible servers (MinIO, R2, ...); enables path-style access. */
+        private String endpoint;
+
+        /** Optional static access key; empty = the AWS default credentials chain. */
+        private String accessKey;
+
+        /** Optional static secret key (with {@link #accessKey}). */
+        private String secretKey;
+
+        /**
+         * Optional base URL under which objects are publicly readable (bucket website, CDN). When set,
+         * a PUBLIC document's public URL redirects (302) there instead of being streamed by the app.
+         */
+        private String publicBaseUrl;
     }
 
     /** Multi-tenancy settings (erp-core step 05). */
@@ -171,6 +231,21 @@ public class ErpCoreProperties {
          * is refused 400 {@code TENANT_REQUIRED} without the header. Setting this replaces the list.
          */
         private List<String> exemptPaths = new ArrayList<>(DEFAULT_EXEMPT_PATHS);
+
+        /**
+         * erp-core step 07: the default paths whose tenant comes from the path itself — the public
+         * file URLs, which must work in a plain browser/curl without a header or token.
+         */
+        public static final List<String> DEFAULT_PATH_TENANT_PATHS = List.of(
+            "/api/v1/public/files/{tenantCode}/**");
+
+        /**
+         * Paths whose tenant is resolved from the {@code {tenantCode}} path variable instead of the
+         * token or the {@code X-Tenant-Code} header (unknown → 404, suspended → 403). On such a path
+         * the path's tenant always wins; a caller authenticated in another tenant is treated as
+         * anonymous there. Setting this replaces the list.
+         */
+        private List<String> pathTenantPaths = new ArrayList<>(DEFAULT_PATH_TENANT_PATHS);
     }
 
     /** Links that point into the frontend (e.g. the emailed password-reset link). */

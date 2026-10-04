@@ -39,6 +39,21 @@ public interface FileMetadataView {
 
     String getUpdatedBy();
 
+    /** erp-core step 07 — StorageProvider key (DB | LOCAL | S3). */
+    String getStorageProvider();
+
+    /** erp-core step 07 — provider-specific reference of the content. */
+    String getStorageRef();
+
+    /** erp-core step 07 — PRIVATE | PUBLIC. */
+    String getVisibility();
+
+    /** erp-core step 07 — slug of a PUBLIC document, else null. */
+    String getPublicSlug();
+
+    /** erp-core step 07 — SHA-256 (hex) of the content. */
+    String getContentHash();
+
     /**
      * Builds a view from a {@link FileDocumentRepository#METADATA_SELECT} {@link Tuple} row. The
      * record's component names match this interface's getters exactly, so its auto-generated
@@ -49,7 +64,9 @@ public interface FileMetadataView {
             Long getId, Long getOwnerId, String getOwnerType, String getModuleCode,
             String getFileName, String getContentType, Long getFileSize, String getFileTypeId,
             String getFileStatusId, Long getFileCategoryId, Instant getCreatedAt,
-            String getCreatedBy, Instant getUpdatedAt, String getUpdatedBy) implements FileMetadataView {
+            String getCreatedBy, Instant getUpdatedAt, String getUpdatedBy, String getStorageProvider,
+            String getStorageRef, String getVisibility, String getPublicSlug,
+            String getContentHash) implements FileMetadataView {
         }
         return new TupleFileMetadataView(
             tuple.get("id", Long.class), tuple.get("ownerId", Long.class),
@@ -58,6 +75,9 @@ public interface FileMetadataView {
             tuple.get("fileSize", Long.class), tuple.get("fileTypeId", String.class),
             tuple.get("fileStatusId", String.class), tuple.get("fileCategoryId", Long.class),
             tuple.get("createdAt", Instant.class), tuple.get("createdBy", String.class),
-            tuple.get("updatedAt", Instant.class), tuple.get("updatedBy", String.class));
+            tuple.get("updatedAt", Instant.class), tuple.get("updatedBy", String.class),
+            tuple.get("storageProvider", String.class), tuple.get("storageRef", String.class),
+            tuple.get("visibility", String.class), tuple.get("publicSlug", String.class),
+            tuple.get("contentHash", String.class));
     }
 }

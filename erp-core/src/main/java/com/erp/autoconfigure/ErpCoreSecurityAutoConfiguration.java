@@ -87,6 +87,14 @@ public class ErpCoreSecurityAutoConfiguration {
     public static final String PLATFORM_TENANT_MANAGE_AUTHORITY = TenantPermissions.PLATFORM_TENANT_MANAGE;
 
     /**
+     * erp-core step 07 — the public file URLs ({@code PublicFileController}), always permitted without
+     * authentication. Their tenant comes from the path ({@code erp.core.tenant.path-tenant-paths}).
+     * Kept as one isolated constant + one matcher line so that step 06's customer/public chain can take
+     * it over with a minimal change.
+     */
+    public static final String PUBLIC_FILE_PATHS = "/api/v1/public/files/**";
+
+    /**
      * {@code @Lazy} keeps the JPA and method-security infrastructure out of the security-config
      * bootstrap: the filter is built while the filter chain is, long before those are ready.
      */
@@ -111,7 +119,8 @@ public class ErpCoreSecurityAutoConfiguration {
         String[] publicPaths = properties.getSecurity().getPublicPaths().toArray(String[]::new);
         TenantResolutionFilter tenantResolutionFilter = new TenantResolutionFilter(
             tenantRepository::getObject, messageSource,
-            properties.getSecurity().getPublicPaths(), properties.getTenant().getExemptPaths());
+            properties.getSecurity().getPublicPaths(), properties.getTenant().getExemptPaths(),
+            properties.getTenant().getPathTenantPaths());
         http
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -121,6 +130,7 @@ public class ErpCoreSecurityAutoConfiguration {
                 if (publicPaths.length > 0) {
                     auth.requestMatchers(publicPaths).permitAll();
                 }
+                auth.requestMatchers(PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
                 auth.anyRequest().authenticated();
             })
             .exceptionHandling(handling -> handling

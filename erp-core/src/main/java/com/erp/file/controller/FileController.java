@@ -5,12 +5,14 @@ import com.erp.common.web.OperationCode;
 import com.erp.file.dto.AccessTokenResponse;
 import com.erp.file.dto.FileMetadataResponse;
 import com.erp.file.dto.UploadRequest;
+import com.erp.file.dto.VisibilityUpdateRequest;
 import com.erp.file.service.FileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -19,8 +21,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,7 +61,7 @@ public class FileController {
 
     @GetMapping("/download")
     @Operation(summary = "Download file by access token", description = "تنزيل ملف برمز الوصول")
-    public ResponseEntity<byte[]> download(@RequestParam("token") String token) {
+    public ResponseEntity<InputStreamResource> download(@RequestParam("token") String token) {
         FileService.FileDownload payload = service.retrieve(token);
         // RFC 6266 encoding via ContentDisposition — safely handles non-ASCII (e.g. Arabic) names and
         // prevents header injection/breakage from quotes or CRLF in the stored filename.
@@ -67,7 +71,15 @@ public class FileController {
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(payload.contentType()))
             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-            .body(payload.content());
+            .body(new InputStreamResource(payload.content()));
+    }
+
+    @PatchMapping("/{id}/visibility")
+    @Operation(summary = "Publish (PUBLIC) or withdraw (PRIVATE) a file", description = "نشر الملف للعامة أو جعله خاصًا")
+    public ResponseEntity<ApiResponse<FileMetadataResponse>> updateVisibility(
+            @PathVariable Long id,
+            @Valid @RequestBody VisibilityUpdateRequest request) {
+        return operationCode.craftResponse(service.updateVisibility(id, request));
     }
 
     @GetMapping("/{id}")

@@ -46,6 +46,8 @@
         <!-- Test-only embedded PostgreSQL fallback (step 02) -->
         <embedded-postgres.version>2.1.0</embedded-postgres.version>
         <embedded-postgres-binaries.version>16.4.0</embedded-postgres-binaries.version>
+        <!-- Optional S3 storage provider of erp-core (step 07) -->
+        <aws-sdk.version>2.55.11</aws-sdk.version>
 
         <!-- Default: allow forking on non-Windows environments (see the windows-tests-no-fork
              profile below). -->
@@ -142,6 +144,13 @@
                 <version>${embedded-postgres-binaries.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <!-- Optional S3 storage provider of erp-core (step 07) -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>s3</artifactId>
+                <version>${aws-sdk.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

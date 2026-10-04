@@ -50,6 +50,16 @@ public class FileMetadataResponse {
     @Schema(description = "Optional file category id - معرّف فئة الملف", example = "3")
     private Long fileCategoryId;
 
+    @Schema(description = "Storage provider holding the content (DB, LOCAL, S3) - مزوّد التخزين", example = "DB")
+    private String storageProvider;
+
+    @Schema(description = "Visibility (PRIVATE, PUBLIC) - مستوى الإتاحة", example = "PRIVATE")
+    private String visibility;
+
+    @Schema(description = "Public URL when PUBLIC, else null - الرابط العام عند الإتاحة العامة",
+        example = "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs")
+    private String publicUrl;
+
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Instant createdAt;
