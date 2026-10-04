@@ -114,8 +114,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-03",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 2,
       "implementer_agent": "a4ad65f5255bec784",
       "reviewer_agent": "ade2fea7d515978b0",
@@ -125,7 +125,7 @@
         "evidence": "verify green core 60/app 4 (JDK21); scratch consumer cases A/B/C start, each repo bean once; fixtures test-only",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "6e1e668109b3a195c7f8d9e0ba5fbd1f7a7d2a9b",
       "report": "docs/steps/03-report.md",
       "deviations": [
         ".claude/ stays at root (orchestrator)",
@@ -566,6 +566,12 @@
       "step": "03",
       "event": "review",
       "note": "PASS round 2; notes for later: back-off check broader than JPA-only, bootstrap-mode fixed DEFAULT"
+    },
+    {
+      "at": "2026-10-04T15:41:50Z",
+      "step": "03",
+      "event": "merged",
+      "note": "merged 6e1e668 (pure replay); verify core 60/app 4 on branch+main; pushed. Leftover initialised governance/shared checkout at old path excluded locally via .git/info/exclude (not deleted)"
     }
   ]
 }
