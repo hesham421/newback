@@ -229,12 +229,17 @@
         "V10__tenant_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-05",
       "attempts": 1,
       "implementer_agent": "a68c8acdd2201dd84",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "aef3d3e978d055faa",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 111/app 7; live adversarial: cross-tenant by id 404 across 5 modules, header switch ignored, platform 403, tid tamper 401, provisioning injection-safe + atomic rollback, 409 on races",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/05-report.md",
       "deviations": [
@@ -640,6 +645,12 @@
       "step": "05",
       "event": "reported",
       "note": "implementer report c405302, 4/4; core 111, app 7"
+    },
+    {
+      "at": "2026-10-04T17:11:52Z",
+      "step": "05",
+      "event": "review",
+      "note": "PASS round 1; follow-ups (non-blocking): flip resolver flag before web server start (~10ms window), clear TenantContext at outermost filter start, TENANT_CONTEXT_MISSING surfaces as 500"
     }
   ]
 }
