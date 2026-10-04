@@ -560,15 +560,29 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-12",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a1a8b6db63498139f",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/12-report.md",
+      "deviations": [
+        "tag by merger; release + bump commits",
+        "rule1 allowed pkgs + javax, io.swagger.v3.oas, tools.jackson, org.aopalliance",
+        "rule2 real class names ModuleRegistry/ScreenRegistry/ActionRegistry",
+        "rule4 checks all @Value incl erp.core",
+        "rule5 exceptions ReportProvider AUTHORITY, SettingScope",
+        "rule7 raw-JDBC allow-list",
+        "migration guard strips comments/literals",
+        "erp-core always forks (JaCoCo)",
+        "enforcer no pins needed",
+        "CI adds docker-image job",
+        "erp.core.version property",
+        "registry URL hesham421/newback",
+        "publish/consume untested locally"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -970,6 +984,12 @@
       "step": "12",
       "event": "dispatched",
       "note": "implementer dispatched; no local GITHUB_TOKEN/gh auth: publish/consume run only in GitHub Actions after tag push"
+    },
+    {
+      "at": "2026-10-04T21:00:04Z",
+      "step": "12",
+      "event": "reported",
+      "note": "implementer report; release commit a02e500 (to tag v1.0.0), head 7ec6cac (1.1.0-SNAPSHOT); core 350/app 10; JaCoCo 75.21%"
     }
   ]
 }
