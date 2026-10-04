@@ -325,12 +325,17 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "FIXING",
       "worktree": ".worktrees/step-07",
       "attempts": 1,
       "implementer_agent": "a49feaa002168f461",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "a0d63958cc103b106",
+      "review": {
+        "verdict": "FAIL",
+        "round": 1,
+        "evidence": "3/3 acceptance + probes a-i pass; blocking: public files served inline with stored content-type -> anonymous stored XSS (text/html, svg) on platform origin, reproduced live",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/07-report.md",
       "deviations": [
@@ -708,6 +713,12 @@
       "step": "06",
       "event": "reported",
       "note": "implementer report 7656efc, 3/3; core 138, app 7"
+    },
+    {
+      "at": "2026-10-04T18:03:10Z",
+      "step": "07",
+      "event": "fix",
+      "note": "round 1 finding relayed (XSS inline serving) + minor notes"
     }
   ]
 }
