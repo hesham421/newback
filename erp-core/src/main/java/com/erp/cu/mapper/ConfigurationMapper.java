@@ -1,5 +1,6 @@
 package com.erp.cu.mapper;
 
+import com.erp.cu.domain.SettingScope;
 import com.erp.cu.dto.ConfigurationCreateRequest;
 import com.erp.cu.dto.ConfigurationResponse;
 import com.erp.cu.dto.ConfigurationUpdateRequest;
@@ -13,11 +14,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConfigurationMapper {
 
-    public AppConfiguration toEntity(ConfigurationCreateRequest request) {
+    /**
+     * {@code ownerTenantId} (erp-core step 09) is the row's owner, resolved by the service from the scope:
+     * {@code null} for a platform default, the caller's tenant for an override.
+     */
+    public AppConfiguration toEntity(ConfigurationCreateRequest request, Long ownerTenantId) {
         if (request == null) {
             return null;
         }
         return AppConfiguration.builder()
+            .tenantId(ownerTenantId)
             .configKey(request.getConfigKey())
             .configValue(request.getConfigValue())
             .notes(request.getNotes())
@@ -58,6 +64,7 @@ public class ConfigurationMapper {
         }
         return ConfigurationResponse.builder()
             .id(entity.getId())
+            .scope(entity.getTenantId() == null ? SettingScope.PLATFORM : SettingScope.TENANT)
             .configKey(entity.getConfigKey())
             .configValue(entity.getConfigValue())
             .notes(entity.getNotes())

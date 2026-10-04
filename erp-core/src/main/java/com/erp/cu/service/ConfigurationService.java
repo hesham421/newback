@@ -8,7 +8,9 @@ import com.erp.common.search.PageableBuilder;
 import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
+import com.erp.cu.crossmodule.SettingsApi;
 import com.erp.cu.domain.AppConfigurationDomain;
+import com.erp.cu.domain.SettingScope;
 import com.erp.cu.dto.ConfigurationCreateRequest;
 import com.erp.cu.dto.ConfigurationResponse;
 import com.erp.cu.dto.ConfigurationSearchRequest;
@@ -17,9 +19,14 @@ import com.erp.cu.entity.AppConfiguration;
 import com.erp.cu.exception.CuErrorCodes;
 import com.erp.cu.mapper.ConfigurationMapper;
 import com.erp.cu.repository.AppConfigurationRepository;
+import com.erp.tenant.TenantConstants;
+import com.erp.tenant.TenantContext;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,9 +37,17 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Orchestration layer for ENTITY-CU-001 (AppConfiguration), named Configuration per SVC-API.md's
  * deliberate DTO/service/controller family naming. Every non-search endpoint addresses the
- * resource by configKey (business key), not the surrogate id (DRV-003). No caching annotations
- * anywhere in this class — the project's cache-eligibility register is empty project-wide, so
- * AppConfiguration is not cache-eligible (gov-enforce-caching-rules D.1.1/D.5.5).
+ * resource by configKey (business key), not the surrogate id (DRV-003).
+ *
+ * <p><b>Scope (erp-core step 09).</b> Every CRUD operation takes a {@link SettingScope}: {@code TENANT}
+ * (the default) addresses the caller's own overrides, {@code PLATFORM} the platform defaults
+ * ({@code TENANT_ID IS NULL}), which require {@code PLATFORM_SETTINGS_MANAGE} and the PLATFORM tenant.
+ * The entity is not tenant-filtered by Hibernate, so each repository call names its owner.
+ *
+ * <p><b>Cache (erp-core step 09).</b> AppConfiguration is the one entity on the caching register (the
+ * step-09 plan's decision): {@link #resolve} is cached in {@value SettingsApi#CACHE_NAME} keyed
+ * {@code <tenantId>:<KEY>}, and every write evicts the whole cache ({@code allEntries}) — a platform
+ * default change affects every tenant's resolution, and writes are rare administrator actions.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,40 +68,49 @@ public class ConfigurationService {
         "configKey", "isActive", "createdAt", "updatedAt"
     );
 
+    @CacheEvict(cacheNames = SettingsApi.CACHE_NAME, allEntries = true)
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
-        + ".CONFIG_CREATE)")
-    public ServiceResult<ConfigurationResponse> create(ConfigurationCreateRequest request) {
-        log.info("Creating Configuration with key: {}", request.getConfigKey());
+    @PreAuthorize("(#scope == T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).PLATFORM_SETTINGS_MANAGE))"
+        + " or (#scope != T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).CONFIG_CREATE))")
+    public ServiceResult<ConfigurationResponse> create(SettingScope scope, ConfigurationCreateRequest request) {
+        log.info("Creating Configuration with key: {} (scope {})", request.getConfigKey(), scope);
+        Long owner = owner(scope);
 
-        // 1. Fetch what RULE-CU-001 needs — pre-check against the normalized (uppercase) key,
-        // since AppConfiguration.onCreate() always uppercases configKey before insert; without
-        // normalizing here a differently-cased duplicate would slip past this check and fail
-        // later as a raw DataIntegrityViolationException instead of ERR-0001.
-        boolean keyTaken = repository.existsByConfigKey(normalize(request.getConfigKey()));
+        // 1. Fetch what RULE-CU-001 needs — pre-check against the normalized (uppercase) key within the
+        // owner (platform defaults or the caller's tenant), since AppConfiguration.onCreate() always
+        // uppercases configKey before insert.
+        String key = normalize(request.getConfigKey());
+        boolean keyTaken = owner == null
+            ? repository.existsByTenantIdIsNullAndConfigKey(key)
+            : repository.existsByTenantIdAndConfigKey(owner, key);
 
         // 2. Delegate the decision (RULE-CU-002 required fields, RULE-CU-001 uniqueness)
         AppConfigurationDomain.create(request.getConfigKey(), request.getConfigValue(), keyTaken);
 
-        // 3. Map, then persist (SEQ_CU_APP_CONFIGURATION; audit via AuditEntityListener)
-        AppConfiguration entity = mapper.toEntity(request);
-        AppConfiguration saved = repository.save(entity);
+        // 3. Map (with the owner), then persist (SEQ_CU_APP_CONFIGURATION; audit via AuditEntityListener)
+        AppConfiguration saved = repository.save(mapper.toEntity(request, owner));
         log.info("Created Configuration ID: {}, key: {}", saved.getId(), saved.getConfigKey());
 
         return ServiceResult.success(mapper.toResponse(saved), Status.CREATED);
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
-        + ".CONFIG_VIEW)")
-    public ServiceResult<Page<ConfigurationResponse>> search(ConfigurationSearchRequest searchRequest) {
-        log.debug("Searching Configuration");
+    @PreAuthorize("(#scope == T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).PLATFORM_SETTINGS_MANAGE))"
+        + " or (#scope != T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).CONFIG_VIEW))")
+    public ServiceResult<Page<ConfigurationResponse>> search(SettingScope scope, ConfigurationSearchRequest searchRequest) {
+        log.debug("Searching Configuration (scope {})", scope);
+        Long owner = owner(scope);
 
         SearchRequest commonRequest = searchRequest.toCommonSearchRequest();
 
         SetAllowedFields allowedFields = new SetAllowedFields(ALLOWED_FILTER_FIELDS);
         Specification<AppConfiguration> spec =
-            SpecBuilder.build(commonRequest, allowedFields, DefaultFieldValueConverter.INSTANCE);
+            SpecBuilder.<AppConfiguration>build(commonRequest, allowedFields, DefaultFieldValueConverter.INSTANCE)
+                .and(AppConfigurationRepository.ownedBy(owner));
         Pageable pageable = PageableBuilder.from(commonRequest, ALLOWED_SORT_FIELDS);
 
         Page<AppConfiguration> page = repository.findAll(spec, pageable);
@@ -94,16 +118,18 @@ public class ConfigurationService {
         return ServiceResult.success(page.map(mapper::toResponse));
     }
 
+    @CacheEvict(cacheNames = SettingsApi.CACHE_NAME, allEntries = true)
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
-        + ".CONFIG_UPDATE)")
-    public ServiceResult<ConfigurationResponse> update(String configKey, ConfigurationUpdateRequest request) {
-        log.info("Updating Configuration key: {}", configKey);
+    @PreAuthorize("(#scope == T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).PLATFORM_SETTINGS_MANAGE))"
+        + " or (#scope != T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).CONFIG_UPDATE))")
+    public ServiceResult<ConfigurationResponse> update(SettingScope scope, String configKey,
+                                                       ConfigurationUpdateRequest request) {
+        log.info("Updating Configuration key: {} (scope {})", configKey, scope);
 
-        // 1. Load by key (QR-CU-0001) — not-found throw
-        AppConfiguration entity = repository.findByConfigKey(normalize(configKey))
-            .orElseThrow(() -> new LocalizedException(
-                Status.NOT_FOUND, CuErrorCodes.APP_CONFIGURATION_NOT_FOUND, configKey));
+        // 1. Load by key within the owner (QR-CU-0001) — not-found throw
+        AppConfiguration entity = findInScope(owner(scope), configKey);
 
         // 2. RULE-CU-003 (configKey immutability) needs no runtime guard here — configKey is
         // structurally absent from ConfigurationUpdateRequest, so there is no code path that
@@ -124,16 +150,13 @@ public class ConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
-        + ".CONFIG_VIEW)")
-    public ServiceResult<ConfigurationResponse> getByKey(String configKey) {
-        log.debug("Fetching Configuration key: {}", configKey);
-
-        AppConfiguration entity = repository.findByConfigKey(normalize(configKey))
-            .orElseThrow(() -> new LocalizedException(
-                Status.NOT_FOUND, CuErrorCodes.APP_CONFIGURATION_NOT_FOUND, configKey));
-
-        return ServiceResult.success(mapper.toResponse(entity));
+    @PreAuthorize("(#scope == T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).PLATFORM_SETTINGS_MANAGE))"
+        + " or (#scope != T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).CONFIG_VIEW))")
+    public ServiceResult<ConfigurationResponse> getByKey(SettingScope scope, String configKey) {
+        log.debug("Fetching Configuration key: {} (scope {})", configKey, scope);
+        return ServiceResult.success(mapper.toResponse(findInScope(owner(scope), configKey)));
     }
 
     /**
@@ -144,15 +167,16 @@ public class ConfigurationService {
      * repository.delete(entity) call and no reference/child-count check, since nothing in the
      * schema can ever reference this entity (ROOT module, single table, no children).
      */
+    @CacheEvict(cacheNames = SettingsApi.CACHE_NAME, allEntries = true)
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
-        + ".CONFIG_DEACTIVATE)")
-    public void deactivate(String configKey) {
-        log.info("Deactivating Configuration key: {}", configKey);
+    @PreAuthorize("(#scope == T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).PLATFORM_SETTINGS_MANAGE))"
+        + " or (#scope != T(com.erp.cu.domain.SettingScope).PLATFORM"
+        + " and hasAuthority(T(com.erp.cu.permission.CuPermissions).CONFIG_DEACTIVATE))")
+    public void deactivate(SettingScope scope, String configKey) {
+        log.info("Deactivating Configuration key: {} (scope {})", configKey, scope);
 
-        AppConfiguration entity = repository.findByConfigKey(normalize(configKey))
-            .orElseThrow(() -> new LocalizedException(
-                Status.NOT_FOUND, CuErrorCodes.APP_CONFIGURATION_NOT_FOUND, configKey));
+        AppConfiguration entity = findInScope(owner(scope), configKey);
 
         entity.deactivate();
         repository.save(entity);
@@ -160,39 +184,55 @@ public class ConfigurationService {
     }
 
     /**
-     * In-process read used by other modules (SEC/FILE/NOTIF consume CU as a plain library —
-     * SRS A7 / db-script.md §3 / master-registry §8: "a library relationship, not a
-     * cross-module/XM relationship"). Deliberately NOT behind a crossmodule package/interface —
-     * that pattern is reserved for genuine XM boundaries between business modules, which this is
-     * not. Returns a raw String, not ServiceResult<String>: this method is never touched by a
-     * controller/OperationCode, so there is nothing to unwrap for — wrapping it would only force
-     * every future internal caller to unwrap .getData() for no reason. Narrow, deliberate
-     * exception to A.5.8 for this one internal-only method.
+     * erp-core step 09 — the resolved raw value of {@code configKey} for {@code tenantId} (its active
+     * override, else the active platform default), or {@code null} when neither exists. Backs
+     * {@code SettingsApi}; cached per {@code <tenantId>:<KEY>} ({@code null} is cached too, as "absent"),
+     * and evicted by every write above.
      *
-     * <p>No {@code @PreAuthorize}: this is an in-process library read invoked by other modules from
-     * system/startup/async paths that carry no SecurityContext. A method-security check here would
-     * throw AccessDeniedException on exactly those internal calls. Access to the public,
-     * controller-facing read (getByKey) remains CONFIG_VIEW-gated; this internal accessor is never
-     * bound to a controller/OperationCode, so it needs no authority of its own.
+     * <p>Returns the raw value, not a {@code ServiceResult}: never bound to a controller, and the cached
+     * value must stay a plain serializable {@code String} (Redis cache type). No {@code @PreAuthorize}: an
+     * in-process library read used by other modules from system/startup/async paths that carry no
+     * SecurityContext — the same reasoning that applied to the {@code getValue} accessor this replaces.
+     * The tenant is a parameter (the caller passes {@code TenantContext.require()}), so the cache key can
+     * never mix tenants.
      */
+    @Cacheable(cacheNames = SettingsApi.CACHE_NAME, key = "#tenantId + ':' + #configKey")
     @Transactional(readOnly = true)
-    public String getValue(String configKey) {
-        log.debug("Fetching Configuration value for key: {}", configKey);
+    public String resolve(Long tenantId, String configKey) {
+        log.debug("Resolving setting {} for tenant {}", configKey, tenantId);
+        Optional<String> value = AppConfigurationDomain.resolve(
+            repository.findOverrideAndDefault(tenantId, configKey), tenantId);
+        return value.orElse(null);
+    }
 
-        AppConfiguration entity = repository.findByConfigKey(normalize(configKey))
-            .orElseThrow(() -> new LocalizedException(
-                Status.NOT_FOUND, CuErrorCodes.APP_CONFIGURATION_NOT_FOUND, configKey));
+    /**
+     * The owner a scope addresses — {@code null} (platform defaults) or the caller's tenant — after the
+     * tenant half of the scope rule (PLATFORM scope only from the PLATFORM tenant).
+     */
+    private static Long owner(SettingScope scope) {
+        Long current = TenantContext.require();
+        SettingScope effective = scope == null ? SettingScope.TENANT : scope;
+        AppConfigurationDomain.assertScopeAllowed(effective,
+            Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(current));
+        return effective == SettingScope.PLATFORM ? null : current;
+    }
 
-        return entity.getConfigValue();
+    private AppConfiguration findInScope(Long owner, String configKey) {
+        String key = normalize(configKey);
+        Optional<AppConfiguration> found = owner == null
+            ? repository.findByTenantIdIsNullAndConfigKey(key)
+            : repository.findByTenantIdAndConfigKey(owner, key);
+        return found.orElseThrow(() -> new LocalizedException(
+            Status.NOT_FOUND, CuErrorCodes.APP_CONFIGURATION_NOT_FOUND, configKey));
     }
 
     /**
      * Normalizes a caller-supplied configKey to the same canonical uppercase form
      * AppConfiguration.onCreate()/onUpdate() always applies before persisting, so every lookup
-     * (existence check, find-by-key) matches the stored value regardless of the case the caller
-     * used in the request body or path variable.
+     * (existence check, find-by-key, settings resolution) matches the stored value regardless of the
+     * case the caller used.
      */
-    private static String normalize(String configKey) {
+    public static String normalize(String configKey) {
         return configKey == null ? null : configKey.trim().toUpperCase();
     }
 }

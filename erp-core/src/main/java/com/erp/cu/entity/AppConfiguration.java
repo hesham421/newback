@@ -1,7 +1,7 @@
 package com.erp.cu.entity;
 
 import com.erp.common.converter.BooleanNumberConverter;
-import com.erp.common.domain.AuditableEntity;
+import com.erp.common.domain.GlobalAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -12,7 +12,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -25,21 +24,29 @@ import lombok.experimental.SuperBuilder;
 /**
  * ENTITY-CU-001 — AppConfiguration (platform runtime key/value configuration store).
  * Source: db-script-CU.md DBS-CU-001, DATA-DOM.md ENTITY-CU-001.
+ *
+ * <p>erp-core step 09 — platform defaults and tenant overrides: {@link #tenantId} {@code NULL} is a
+ * platform default, a tenant id is that tenant's override. This is the plan's one deliberate exception to
+ * "every scoped table has a NOT NULL tenant": the entity extends {@link GlobalAuditableEntity} (no
+ * Hibernate {@code @TenantId}), so <b>no query is tenant-filtered automatically</b> — every repository call
+ * names the owner explicitly ({@code ConfigurationService} scopes each operation). Uniqueness is the
+ * expression index {@code UQ_CU_APP_CONFIG_CONFIG_KEY (COALESCE(TENANT_ID, 0), CONFIG_KEY)} (V14), which
+ * {@code @UniqueConstraint} cannot express.
  */
 @Entity
-@Table(name = "CU_APP_CONFIGURATION",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_CU_APP_CONFIG_CONFIG_KEY", columnNames = {"TENANT_ID", "CONFIG_KEY"})
-    }
-)
+@Table(name = "CU_APP_CONFIGURATION")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class AppConfiguration extends AuditableEntity {
+public class AppConfiguration extends GlobalAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "app_configuration_seq")
     @SequenceGenerator(name = "app_configuration_seq", sequenceName = "SEQ_CU_APP_CONFIGURATION", allocationSize = 1)
     @Column(name = "ID")
     private Long id;
+
+    /** Owner: {@code NULL} = platform default, otherwise the overriding tenant ({@code CORE_TENANT.ID}). */
+    @Column(name = "TENANT_ID", updatable = false)
+    private Long tenantId;
 
     @NotBlank(message = "{validation.required}")
     @Size(max = 150, message = "{validation.size}")

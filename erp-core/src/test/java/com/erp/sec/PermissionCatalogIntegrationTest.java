@@ -36,6 +36,15 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
 
     static final String TEST_AUTHORITY = "PERM_TSTX_THINGS_VIEW";
 
+    /**
+     * Permissions and screens that later steps contribute and that V7/V10 never seeded (the synchronizer
+     * inserts them); the "reproduces the seeded catalog" check below is about the V7/V10 rows only.
+     */
+    private static final Set<String> NOT_SEEDED_AUTHORITIES = Set.of(
+        "PERM_PLATFORM_SETTINGS_VIEW", "PLATFORM_SETTINGS_MANAGE",          // step 09 (CuPermissions)
+        "PERM_SEQUENCE_SERIES_VIEW", "PERM_SEQUENCE_SERIES_MANAGE");        // step 09 (SequencePermissions)
+    private static final Set<String> NOT_SEEDED_SCREENS = Set.of("PLATFORM_SETTINGS", "SEQUENCE_SERIES"); // step 09
+
     /** A contributor that exists only in this test's context (module TSTX, one screen, one VIEW). */
     @TestConfiguration
     static class TestOnlyPermissions {
@@ -97,6 +106,7 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         List<PermissionDef> core = contributors.stream()
             .filter(c -> c.getClass().getName().startsWith("com.erp.") && !c.getClass().getName().contains("Test"))
             .flatMap(c -> c.permissions().stream())
+            .filter(def -> !NOT_SEEDED_AUTHORITIES.contains(def.authority()))
             .toList();
         // V7: 38 actions of SEC/MDL/NOTIF/FILE/CU; V10: 2 PLATFORM actions; V12 (step 07): FILE:DOCUMENT:PUBLISH
         assertThat(core).hasSize(41);
@@ -105,7 +115,8 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         Set<String> seeded = Set.copyOf(jdbcTemplate.queryForList(
             "select a.permission_code from sec_action_reg a join sec_screen_reg s on s.screen_reg_pk = a.screen_id"
                 + " join sec_module_reg m on m.module_reg_pk = s.module_id"
-                + " where m.code in ('SEC','MDL','NOTIF','FILE','CU','PLATFORM')", String.class));
+                + " where m.code in ('SEC','MDL','NOTIF','FILE','CU','PLATFORM')", String.class)
+            .stream().filter(code -> !NOT_SEEDED_AUTHORITIES.contains(code)).toList());
         assertThat(core.stream().map(PermissionDef::authority).collect(Collectors.toSet()))
             .containsExactlyInAnyOrderElementsOf(seeded);
 
@@ -126,7 +137,8 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         // every seeded screen (18, including SEC's three public screens) is declared with its seeded names
         List<PermissionScreen> screens = contributors.stream()
             .filter(c -> !c.getClass().getName().contains("Test"))
-            .flatMap(c -> c.screens().stream()).toList();
+            .flatMap(c -> c.screens().stream())
+            .filter(screen -> !NOT_SEEDED_SCREENS.contains(screen.screenCode())).toList();
         assertThat(screens).hasSize(18);
         for (PermissionScreen screen : screens) {
             assertThat(jdbcTemplate.queryForMap("select name_ar, name_en from sec_screen_reg where page_code = ?",

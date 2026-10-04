@@ -6,3 +6,4 @@ com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration
 com.erp.autoconfigure.FileStorageAutoConfiguration
 com.erp.autoconfigure.ErpCoreEventsAutoConfiguration
 com.erp.autoconfigure.ErpCoreNotifAutoConfiguration
+com.erp.autoconfigure.ErpCoreCacheAutoConfiguration

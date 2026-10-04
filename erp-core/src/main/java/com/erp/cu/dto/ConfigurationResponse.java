@@ -1,5 +1,6 @@
 package com.erp.cu.dto;
 
+import com.erp.cu.domain.SettingScope;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -17,6 +18,9 @@ public class ConfigurationResponse {
 
     @Schema(description = "Unique identifier - المعرف الفريد", example = "1")
     private Long id;
+
+    @Schema(description = "PLATFORM (platform default) or TENANT (tenant override) - نطاق الإعداد", example = "TENANT")
+    private SettingScope scope;
 
     @Schema(description = "Unique configuration key - مفتاح الإعداد الفريد", example = "MAIL_SMTP_HOST")
     private String configKey;
