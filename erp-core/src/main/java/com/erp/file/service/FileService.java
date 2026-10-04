@@ -337,6 +337,12 @@ public class FileService {
 
         FileDocument saved = repository.save(entity);
         log.info("File ID: {} visibility is now {}", saved.getId(), saved.getVisibility());
+        if (FileDocumentDomain.VISIBILITY_PUBLIC.equals(saved.getVisibility())) {
+            // erp-core step 08 — the document is now served on its public URL
+            eventPublisher.publish(new FileDocumentPublishedEvent(saved.getId(), saved.getModuleCode(),
+                saved.getOwnerType(), saved.getOwnerId(), saved.getFileName(), saved.getContentType(),
+                FileDocumentPublishedEvent.VISIBILITY_PUBLIC));
+        }
 
         return ServiceResult.success(
             mapper.toMetadataResponse(saved, publicFileUrls.of(saved).orElse(null)), Status.UPDATED);

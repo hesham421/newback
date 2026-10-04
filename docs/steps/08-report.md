@@ -386,6 +386,31 @@ com.erp.app.ReferenceApplicationSmokeTest                           8 0 0 0
 erp-app-reference tests=8 failures=0 errors=0 skipped=0
 ```
 
+### Rebase onto 07
+
+This branch was rebased onto `main` at `df9bc6d`, which contains the step 07 merge `6c0eae1`.
+
+**Conflicts and resolutions:**
+- `DEVIATIONS.md`, both i18n bundles and the migration README: entries kept in the order 06, 07, 08.
+- `AutoConfiguration.imports`: step 07's `FileStorageAutoConfiguration`, then step 08's two
+  auto-configurations.
+- `FileService.store`: step 07's storage-provider code and its log line kept, followed by step 08's
+  `FileDocumentPublishedEvent(PRIVATE)`.
+- `ReferenceApplicationSmokeTest`: Flyway versions `2..13, 1000`.
+- `TenantSchemaIntegrationTest` needed no change: the run confirms 20 tables, 14 unique constraints
+  and 20 entities.
+
+**Follow-up:** `FileService.updateVisibility` now publishes
+`FileDocumentPublishedEvent(VISIBILITY_PUBLIC)` inside its transaction when a document becomes
+PUBLIC. No dedicated test was added for this one publish line; the reference suite and the file
+suite still pass.
+
+**Verification:** `rm -rf target erp-core/target erp-app-reference/target; mvn -o -q verify` returned
+EXIT=0 in 197 s.
+- erp-core: 206 tests, 0 failures, 0 errors, 0 skipped.
+- erp-app-reference: 9 tests, 0 failures, 0 errors, 0 skipped.
+- Dispatch durations in ms: `[2, 2, 3, 3, 3, 3, 4]`.
+
 ## Skills checked
 
 - **`build-create-entity`: `NotificationInboxItem` is compliant except named items.**
@@ -447,7 +472,7 @@ erp-app-reference tests=8 failures=0 errors=0 skipped=0
   - `NotificationRequestedEvent` / `NotificationDispatchedEvent` / `NotificationFailedEvent`: NOTIF.
 - **Customer events:** `CustomerRegisteredEvent` and `CustomerVerifiedEvent` are published by
   `CustomerAccountService` (added during the rebase onto 06).
-- **Step 07 still to do:** publish `FileDocumentPublishedEvent(..., VISIBILITY_PUBLIC)` when a document is made public.
+- **Public files:** `FileDocumentPublishedEvent(..., VISIBILITY_PUBLIC)` is published when a document is made public (added during the rebase onto 07).
 - **Realms:** `findCurrentUserId` is realm-aware. The inbox is served at `/api/v1/notif/inbox` (staff)
   and at `/api/v1/customers/me/inbox` (customers). Customer-token tests exist.
 - **Channel SPI.** An application adds SMS/PUSH (or replaces EMAIL/IN_APP) by defining a
