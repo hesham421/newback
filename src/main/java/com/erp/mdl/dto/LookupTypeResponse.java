@@ -25,7 +25,7 @@ public class LookupTypeResponse {
     @Schema(description = "Unique lookup type key - مفتاح نوع اللوكب الفريد", example = "ORDER_STATUS")
     private String key;
 
-    @Schema(description = "Owner module code - رمز الوحدة المالكة", example = "FIN")
+    @Schema(description = "Owner module code - رمز الوحدة المالكة", example = "NOTIF")
     private String ownerModuleCode;
 
     @Schema(description = "Name (Arabic) - الاسم بالعربية", example = "حالة الطلب")

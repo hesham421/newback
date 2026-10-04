@@ -25,7 +25,7 @@ public class LookupTypeCreateRequest {
 
     @NotBlank(message = "{validation.required}")
     @Size(max = 10, message = "{validation.size}")
-    @Schema(description = "Owner module code, validated against SEC's module registry - رمز الوحدة المالكة", example = "FIN")
+    @Schema(description = "Owner module code, validated against SEC's module registry - رمز الوحدة المالكة", example = "NOTIF")
     private String ownerModuleCode;
 
     @NotBlank(message = "{validation.required}")

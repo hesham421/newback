@@ -17,12 +17,12 @@ public class ScreenMenuResponse {
     @Schema(description = "Unique identifier - المعرف الفريد", example = "1")
     private Long screenRegPk;
 
-    @Schema(description = "Page code - رمز الصفحة", example = "FIN_JOURNAL_ENTRIES")
+    @Schema(description = "Page code - رمز الصفحة", example = "NOTIF_TEMPLATES")
     private String pageCode;
 
-    @Schema(description = "Screen name (Arabic) - اسم الشاشة بالعربية", example = "قيود اليومية")
+    @Schema(description = "Screen name (Arabic) - اسم الشاشة بالعربية", example = "قوالب الإشعارات")
     private String nameAr;
 
-    @Schema(description = "Screen name (English) - اسم الشاشة بالإنجليزية", example = "Journal entries")
+    @Schema(description = "Screen name (English) - اسم الشاشة بالإنجليزية", example = "Notification templates")
     private String nameEn;
 }

@@ -1,0 +1,16 @@
+# Deviations from the erp-core execution plan
+
+Every place where a step file was silent, wrong about the source, or impossible
+as written, and what was done instead. Format:
+`- [NN] <what was unspecified> → <what was chosen> (<why>)`. Earlier entries
+bind later steps.
+
+- [01] Acceptance runs the app against `docker run ... postgres:16` → used a natively installed PostgreSQL 16.15 (localhost:5432) with a fresh, empty scratch database `erp_step01`, dropped afterwards (Docker is not available on the execution machine; same major version, same empty-database condition).
+- [01] Acceptance expects `GET /actuator/health` = `UP` with the `dev` profile → started with `--management.health.mail.enabled=false` (and `--spring.cache.type=simple`); without overrides the app starts and Flyway applies V1..V20, but overall health is `DOWN` solely because the `mail` indicator cannot authenticate to the default `smtp.gmail.com` with no credentials. Redis is not needed at startup (`management.health.redis.enabled=false` already). Making SMTP/Redis optional is step 02/03's job.
+- [01] Step file says `PermissionConstants` holds 45 `PERM_FIN_*` constants → the source actually held 30; all 30 were deleted (the count in the audit was wrong; the goal is "none left").
+- [01] Step file names `messages_en.properties` and `fin.*` keys → the English bundle is the base `i18n/messages.properties` and fin keys are `FIN-<status>-<CODE>`; the whole FIN block (header + 53 keys) was removed from `messages.properties` and `messages_ar.properties`. No `fin.*`/`app.fin.*` keys existed in `application*.properties`.
+- [01] Non-fin code still mentioned FIN (OpenAPI `@Schema` examples `"FIN"`, `"FIN_JOURNAL_ENTRIES"`, `"Finance"`, and `PERM_FIN_*`/`com.erp.fin` in javadoc, test javadoc and the V19 SQL header) → `@Schema` examples switched to the NOTIF module (`NOTIF`, `NOTIF_TEMPLATES`, `Notification Service`), the `PERM_FIN`/`com.erp.fin` comments rewritten with a neutral `X_` example; purely historical provenance comments in `common`/`sec` (e.g. "REQ-FIN-015", "found by the FIN api-verify run") were left untouched (they are not code, data or references to the deleted package, and the README forbids reformatting unrelated code).
+- [01] Renumbering leaves old version numbers inside file comments → every full file-name reference (`V<n>__<desc>`) in `src/` was rewritten to the new name; bare `V<n>` mentions in comments were left as written, and the old→new mapping is recorded in `src/main/resources/db/migration/README.md` and `docs/steps/01-report.md` (rewriting free-text history risks changing meaning; a mapping table is unambiguous).
+- [01] Task 6 (delete fin lines from `CLAUDE.md`) → no edit made (`CLAUDE.md` contains no line listing `fin`/`FIN` as a module).
+- [01] Task 7 (drop fin-only dependencies) → `pom.xml` unchanged (no dependency is used only by fin; `bucket4j-core` is unused by all code, fin included, so it is not fin-only and is kept — "keep if unsure").
+- [01] `src/test/java/com/erp/architecture/CrossModuleBoundaryArchTest.java` listed `com.erp.fin` as a bounded module → entry and its javadoc paragraph removed (a module that no longer exists must not stay in the boundary list).

@@ -36,12 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code JwtAuthenticationFilter} installs on every authenticated request.
  *
  * <p>The registry's shape is {@code PERM_<PAGE_CODE>_<ACTION_CODE>}, and nothing forbids an action
- * code from containing an underscore of its own: {@code FIN_PERIODS} / {@code CLOSE_APPROVE} yields
- * {@code PERM_FIN_PERIODS_CLOSE_APPROVE} (V24__fin_security_seed.sql), whose screen is
- * {@code FIN_PERIODS} and whose gateway is therefore {@code PERM_FIN_PERIODS_VIEW}. Deriving the
+ * code from containing an underscore of its own: {@code X_PERIODS} / {@code CLOSE_APPROVE} yields
+ * {@code PERM_X_PERIODS_CLOSE_APPROVE}, whose screen is
+ * {@code X_PERIODS} and whose gateway is therefore {@code PERM_X_PERIODS_VIEW}. Deriving the
  * screen by splitting the code at its LAST underscore instead yields a screen that does not exist,
  * so the gateway can never be satisfied and the authority is silently stripped for every role. The
- * fixture below is built from registry rows rather than the seeded FIN ones so it stays independent
+ * fixture below is built from its own registry rows rather than any seeded ones so it stays independent
  * of any one module's seed, but it reproduces exactly that shape.
  *
  * <p>Runs against the real dev Postgres the same way {@link SecCoverageIntegrationTest} does; the
