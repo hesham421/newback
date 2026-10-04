@@ -471,15 +471,25 @@
         "V15__audit_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "FIXING",
       "worktree": ".worktrees/step-10",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a4485201235fdf72f",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/10-report.md",
+      "deviations": [
+        "plain JDBC writes on writer connection; AuditEvent read-only JPA",
+        "listener calls recorder internals",
+        "synchronous, no event bus",
+        "NumberSeries not annotated (09 unmerged)",
+        "denylist substring + extended",
+        "ACTOR_USER_ID no default",
+        "GET query, no write endpoints",
+        "PermissionCatalog test excludes audit contributor",
+        "SEC_AUDIT_LOG kept; SEC also writes LOGIN/LOGOUT/PASSWORD_RESET to generic log"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -901,6 +911,12 @@
       "step": "11",
       "event": "review",
       "note": "PASS round 1 (pre-rebase); waits for 10 merge, then final rebase (move AUDIT_EVENT_LIST to com.erp.audit) + re-verify"
+    },
+    {
+      "at": "2026-10-04T19:37:50Z",
+      "step": "10",
+      "event": "reported",
+      "note": "implementer report 6e4eff2 (2/2; core 237/app 9); pre-review rebase onto main (09 merged) requested"
     }
   ]
 }
