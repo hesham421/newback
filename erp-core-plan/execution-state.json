@@ -114,15 +114,34 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-03",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a4ad65f5255bec784",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/03-report.md",
+      "deviations": [
+        ".claude/ stays at root (orchestrator)",
+        "depoymentssh absent",
+        "CORE_PACKAGE_LIST string constant (annotation arrays)",
+        "app package added to entity/repo scan",
+        "core supplies MessageSource",
+        "JwtAuthenticationFilter bean via security autoconfig",
+        "public paths any HTTP method",
+        "fail-fast validated properties",
+        "configurable file size limits",
+        "no CacheConfig existed",
+        "Flyway duplicate location WARN",
+        "reference app adds springdoc+lombok",
+        "reference app.yml carries app-level settings",
+        "Dockerfile root build, not built (no Docker)",
+        "erp-core test-jar for TestPostgres",
+        "reference app forks surefire",
+        "ArchUnit exemption com.erp.autoconfigure",
+        "reference start check on native PG"
+      ],
       "verification": [
         "mvn -q verify",
         "unzip -l erp-core/target/erp-core-*.jar | grep -E \"AutoConfiguration.imports|com/erp/main|application.properties\""
@@ -518,6 +537,12 @@
       "step": "03",
       "event": "dispatched",
       "note": "implementer dispatched; orchestrator decision: .claude/ stays at repo root (not moved per task 18) — needed by plan commands, skills and PHASE D"
+    },
+    {
+      "at": "2026-10-04T15:13:48Z",
+      "step": "03",
+      "event": "reported",
+      "note": "implementer report b58e228, 5/5, core 55 + app 4 tests"
     }
   ]
 }
