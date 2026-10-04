@@ -3,11 +3,12 @@ package com.erp.notif.service;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.NotificationRequestedEvent;
 import com.erp.notif.crossmodule.RecipientDirectory;
 import com.erp.notif.domain.NotificationChannelConfigDomain;
 import com.erp.notif.domain.NotificationLogDomain;
 import com.erp.notif.domain.NotificationTemplateDomain;
-import com.erp.notif.domain.RetryPolicy;
 import com.erp.notif.dto.DispatchRequest;
 import com.erp.notif.dto.DispatchResponse;
 import com.erp.notif.entity.NotificationChannelConfig;
@@ -17,10 +18,8 @@ import com.erp.notif.exception.NotifErrorCodes;
 import com.erp.notif.repository.NotificationChannelConfigRepository;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.notif.repository.NotificationTemplateRepository;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,14 +28,18 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * API-NOTIF-001 dispatch orchestration (ENTITY-NOTIF-001). Business-neutral fan-out: resolve the
- * template (QR-NOTIF-0007), skip an inactive recipient (RULE-NOTIF-007), then create one NOTIF_LOG
- * per requested channel (RULE-NOTIF-001) — a disabled/unconfigured channel becomes CHANNEL_DISABLED
- * with no retry (RULE-NOTIF-003), an enabled channel is sent via {@link ChannelProvider} with the
- * {@link RetryPolicy} retry-then-FAILED path (RULE-NOTIF-002). Pure "is this allowed?" decisions are
- * delegated to the entity Domain companions ({@link NotificationTemplateDomain},
- * {@link NotificationChannelConfigDomain}, {@link NotificationLogDomain}) and to {@link RetryPolicy};
- * this service is orchestration only.
+ * API-NOTIF-001 dispatch orchestration (ENTITY-NOTIF-001) — event-driven since erp-core step 08.
+ * Business-neutral fan-out: resolve the template (QR-NOTIF-0007), skip an inactive recipient
+ * (RULE-NOTIF-007), then create one NOTIF_LOG per requested channel (RULE-NOTIF-001) — a
+ * disabled/unconfigured channel becomes CHANNEL_DISABLED and is never delivered (RULE-NOTIF-003), an
+ * enabled channel becomes QUEUED (its variables kept in VARIABLES_JSON) and a
+ * {@link NotificationRequestedEvent} is published.
+ *
+ * <p>Nothing is sent here: {@link NotificationDeliveryListener} delivers each queued row asynchronously
+ * after this transaction commits, through the channel's {@code ChannelProvider}, with Spring Retry
+ * (RULE-NOTIF-002, {@link NotificationDeliveryWorker}). Dispatch therefore returns in the time of a few
+ * inserts, whatever the channel. Pure "is this allowed?" decisions are delegated to the entity Domain
+ * companions; this service is orchestration only.
  *
  * <p>No caching annotations — NOTIF is absent from the caching approved-register.
  */
@@ -49,10 +52,7 @@ public class DispatchService {
     private final NotificationChannelConfigRepository channelRepository;
     private final NotificationLogRepository logRepository;
     private final RecipientDirectory recipientDirectory;
-    private final ChannelProvider channelProvider;
-
-    /** RULE-NOTIF-002 — pure retry-policy value object (attempt ceiling + backoff). */
-    private static final RetryPolicy RETRY_POLICY = new RetryPolicy();
+    private final DomainEventPublisher eventPublisher;
 
     /**
      * API-NOTIF-001 — fan-out dispatch. Returns the created NOTIF_LOG ids (empty when the recipient is
@@ -73,22 +73,16 @@ public class DispatchService {
      * Independent-transaction entry point, reached from within this JVM only — never from a
      * controller. Its declared caller is {@code NotificationDispatchApi.dispatchIndependently}, the
      * cross-module surface a consuming module uses when its own writes must survive a failed
-     * dispatch (SEC's password-reset token issuance, API-SEC-003). An in-process
-     * {@code @EventListener} with no HTTP principal is the other anticipated shape.
+     * dispatch (SEC's password-reset token issuance, API-SEC-003).
      *
      * <p>Gated by the same {@code isAuthenticated()} check as {@link #dispatch} (RULE-NOTIF-005): a
      * principal-less in-process caller satisfies it by wrapping the call in its own internal-caller
      * utility, which installs a synthetic authentication for the duration of the call.
      *
-     * <p>REQUIRES_NEW is deliberate, not decorative. Two independent reasons:
-     * (1) a failure inside dispatch must not mark a consuming module's transaction rollback-only —
-     * that flag survives a consuming-side catch and would fail the caller's commit; and
-     * (2) an {@code AFTER_COMMIT} {@code @TransactionalEventListener} runs while the just-committed
-     * outer transaction's synchronization is still winding down, so the default REQUIRED propagation
-     * silently "joins" it instead of opening a fresh one — {@code isNewTransaction()} comes back
-     * false, this method's own commit never fires, and the NOTIF_LOG row is dropped with no
-     * exception (confirmed empirically: the sequence advances, the row never appears). REQUIRES_NEW
-     * forces a genuinely independent transaction so the write actually commits.
+     * <p>REQUIRES_NEW is deliberate: a failure inside dispatch must not mark a consuming module's
+     * transaction rollback-only — that flag survives a consuming-side catch and would fail the
+     * caller's commit. The queued rows commit with this inner transaction, which is also when their
+     * {@link NotificationRequestedEvent}s reach the asynchronous delivery listener.
      *
      * <p>The recipient's status is resolved by the caller, <em>before</em> this transaction opens: a
      * REQUIRES_NEW transaction cannot see a user account the consuming module created in its own,
@@ -124,6 +118,7 @@ public class DispatchService {
             return ServiceResult.success(DispatchResponse.builder().logIds(List.of()).build());
         }
 
+        String variablesJson = DispatchVariables.write(request.getVariables());
         List<Long> logIds = new ArrayList<>();
         for (String channelHint : request.getChannelHint()) {
             String channelTypeId = normalize(channelHint);
@@ -135,13 +130,19 @@ public class DispatchService {
 
             NotificationLog logRow = newPendingLog(request, template, channelTypeId);
             if (!enabled) {
-                // RULE-NOTIF-003 — disabled/unconfigured channel → CHANNEL_DISABLED, no retry.
+                // RULE-NOTIF-003 — disabled/unconfigured channel → CHANNEL_DISABLED, never delivered.
                 transitionTo(logRow, NotificationLogDomain.STATUS_CHANNEL_DISABLED);
             } else {
-                // RULE-NOTIF-001/002 — attempt send with retry, then set SENT or FAILED.
-                attemptSend(logRow, template, channel, request.getVariables());
+                // erp-core step 08 — queue it; the asynchronous worker delivers it after commit.
+                transitionTo(logRow, NotificationLogDomain.STATUS_QUEUED);
+                logRow.setVariablesJson(variablesJson);
             }
-            logIds.add(logRepository.save(logRow).getId());
+            NotificationLog saved = logRepository.save(logRow);
+            logIds.add(saved.getId());
+            if (enabled) {
+                eventPublisher.publish(new NotificationRequestedEvent(saved.getId(), channelTypeId,
+                    saved.getRecipientId(), template.getTemplateCode()));
+            }
         }
 
         return ServiceResult.success(DispatchResponse.builder().logIds(logIds).build());
@@ -158,39 +159,9 @@ public class DispatchService {
             .referenceId(request.getReferenceId())
             .referenceType(request.getReferenceType())
             .retryCount((short) 0)
+            .attempts(0)
             .templateFk(template)
             .build();
-    }
-
-    /**
-     * RULE-NOTIF-002 — send via the provider with bounded retries (≤5, 2s ×1.5 backoff). The backoff
-     * delay is computed but not slept: real asynchronous scheduling is an in-process implementation
-     * detail (no external broker). retryCount records the retries beyond the first attempt.
-     */
-    private void attemptSend(NotificationLog logRow, NotificationTemplate template,
-                             NotificationChannelConfig channel, Map<String, String> variables) {
-        int attempts = 0;
-        ChannelSendResult result = ChannelSendResult.failure("not attempted");
-        while (attempts < RETRY_POLICY.maxAttempts()) {
-            attempts++;
-            result = channelProvider.send(logRow.getChannelTypeId(), logRow.getRecipientId(),
-                template, channel.getConfigJson(), variables);
-            if (result.success()) {
-                break;
-            }
-            long backoffMillis = RETRY_POLICY.backoffMillis(attempts);
-            log.warn("Send attempt {} failed for channel {} (recipient {}); next backoff {}ms",
-                attempts, logRow.getChannelTypeId(), logRow.getRecipientId(), backoffMillis);
-        }
-
-        logRow.setRetryCount((short) (attempts - 1));
-        if (result.success()) {
-            transitionTo(logRow, NotificationLogDomain.STATUS_SENT);
-            logRow.setSentAt(LocalDateTime.now());
-        } else {
-            transitionTo(logRow, NotificationLogDomain.STATUS_FAILED);
-            logRow.setErrorMessage(result.errorMessage());
-        }
     }
 
     /** LOV-NOTIF-002 (A6) — guard the transition via the log Domain, then mutate the status. */

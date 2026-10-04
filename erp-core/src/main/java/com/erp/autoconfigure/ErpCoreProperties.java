@@ -39,6 +39,11 @@ public class ErpCoreProperties {
 
     private final Tenant tenant = new Tenant();
 
+    // erp-core step 08 — event bus executor and NOTIF asynchronous delivery
+    private final Events events = new Events();
+
+    private final Notif notif = new Notif();
+
     /** Authentication settings. */
     @Getter
     @Setter
@@ -264,5 +269,81 @@ public class ErpCoreProperties {
 
         /** Route on {@link #baseUrl} that the customer password-reset link opens (erp-core step 06). */
         private String customerPasswordResetPath = "/customer/reset";
+    }
+
+    /** Domain event bus settings (erp-core step 08). */
+    @Getter
+    public static class Events {
+
+        private final Executor executor = new Executor();
+
+        /** The core event executor ({@code erpCoreEventExecutor}) that runs asynchronous listeners. */
+        @Getter
+        @Setter
+        public static class Executor {
+
+            /** Threads kept alive. */
+            private int corePoolSize = 4;
+
+            /** Upper bound of threads, reached only once the queue is full. */
+            private int maxPoolSize = 16;
+
+            /** Tasks waiting for a thread before the pool grows beyond the core size. */
+            private int queueCapacity = 500;
+
+            /** Prefix of the worker thread names. */
+            private String threadNamePrefix = "erp-event-";
+        }
+    }
+
+    /** NOTIF asynchronous delivery settings (erp-core step 08). */
+    @Getter
+    public static class Notif {
+
+        private final Retry retry = new Retry();
+
+        private final Requeue requeue = new Requeue();
+
+        /**
+         * Delivery retry policy (Spring Retry, exponential backoff): the delays between attempts are
+         * {@code initialDelayMs}, ×{@code multiplier} each time, capped at {@code maxDelayMs} — by
+         * default 5 attempts, 2 s → 4 s → 8 s → 16 s (cap 32 s). After the last failed attempt the
+         * {@code NOTIF_LOG} row is {@code FAILED}. Read by the {@code @Retryable} placeholders too.
+         */
+        @Getter
+        @Setter
+        public static class Retry {
+
+            /** Total delivery attempts, the first included. */
+            private int maxAttempts = 5;
+
+            /** Delay before the second attempt, in milliseconds. */
+            private long initialDelayMs = 2_000L;
+
+            /** Factor applied to the delay after each failed attempt. */
+            private double multiplier = 2.0d;
+
+            /** Upper bound of the delay between two attempts, in milliseconds. */
+            private long maxDelayMs = 32_000L;
+        }
+
+        /**
+         * Crash recovery: {@code NotificationRequeueJob} re-dispatches {@code QUEUED} rows whose
+         * delivery stalled (e.g. the JVM stopped mid-queue). Core never schedules it; an application
+         * enables it here and turns on {@code @EnableScheduling} (or calls the job itself).
+         */
+        @Getter
+        @Setter
+        public static class Requeue {
+
+            /** Registers the {@code NotificationRequeueJob} bean. */
+            private boolean enabled = false;
+
+            /** A QUEUED row is stale once its next attempt (or creation) is this many minutes old. */
+            private long staleAfterMinutes = 10L;
+
+            /** Delay between two runs when the application has scheduling enabled, in milliseconds. */
+            private long intervalMs = 60_000L;
+        }
     }
 }

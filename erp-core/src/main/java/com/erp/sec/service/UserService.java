@@ -9,6 +9,9 @@ import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.UserCreatedEvent;
+import com.erp.events.UserStatusChangedEvent;
 import com.erp.sec.crossmodule.UserContact;
 import com.erp.sec.domain.ActiveSessionDomain;
 import com.erp.sec.domain.UserDomain;
@@ -67,6 +70,7 @@ public class UserService {
     private final UserMapper mapper;
     private final UserRoleService userRoleService;
     private final PasswordEncoder passwordEncoder;
+    private final DomainEventPublisher eventPublisher;
 
     /**
      * API-SEC-006. SRS A6 defines no AUDIT_EVENT_TYPE for plain user creation, so no audit row is
@@ -103,6 +107,9 @@ public class UserService {
         // so a half-configured account cannot survive a failed assignment.
         List<RoleSummaryResponse> roles =
             assigningRoles ? userRoleService.replaceAssignments(saved, roleIds) : List.of();
+
+        // erp-core step 08 — delivered to AFTER_COMMIT listeners only if this transaction commits
+        eventPublisher.publish(new UserCreatedEvent(saved.getUserPk(), saved.getUsername()));
 
         return ServiceResult.success(mapper.toResponse(saved, roles), Status.CREATED);
     }
@@ -155,6 +162,8 @@ public class UserService {
         }
         activeSessionRepository.saveAll(openSessions);
         log.info("Deactivated User ID: {}, terminated sessions: {}", saved.getUserPk(), openSessions.size());
+        eventPublisher.publish(new UserStatusChangedEvent(saved.getUserPk(), saved.getUsername(),
+            saved.getStatusCode(), Boolean.TRUE.equals(saved.getIsActiveFl())));
 
         return ServiceResult.success(mapper.toStatusResponse(saved), Status.UPDATED);
     }
@@ -171,6 +180,8 @@ public class UserService {
         entity.activate();
         User saved = repository.save(entity);
         log.info("Reactivated User ID: {}", saved.getUserPk());
+        eventPublisher.publish(new UserStatusChangedEvent(saved.getUserPk(), saved.getUsername(),
+            saved.getStatusCode(), Boolean.TRUE.equals(saved.getIsActiveFl())));
 
         return ServiceResult.success(mapper.toStatusResponse(saved), Status.UPDATED);
     }
@@ -229,6 +240,21 @@ public class UserService {
         log.debug("Resolving the cross-module contact of User ID: {}", userPk);
 
         return ServiceResult.success(repository.findById(userPk).map(UserService::toContact));
+    }
+
+    /**
+     * erp-core step 08 — the {@code SEC_USER} id of the authenticated caller, reached only through
+     * {@code SecUserDirectoryApi.findCurrentUserId} (NOTIF's in-app inbox). Resolved by the principal
+     * name within the current tenant; empty when the principal is not a user account (e.g. a
+     * synthetic internal caller). The customer realm of erp-core step 06 must keep this realm-aware.
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public ServiceResult<Optional<Long>> findCurrentUserId() {
+        String username = SecurityContextHelper.getCurrentUsername();
+        log.debug("Resolving the user id of the current principal: {}", username);
+
+        return ServiceResult.success(repository.findByUsername(username).map(User::getUserPk));
     }
 
     /**

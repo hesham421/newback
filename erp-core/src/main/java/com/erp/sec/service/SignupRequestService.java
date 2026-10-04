@@ -8,6 +8,8 @@ import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.UserCreatedEvent;
 import com.erp.sec.domain.SignupRequestDomain;
 import com.erp.sec.dto.SignupDecisionRequest;
 import com.erp.sec.dto.SignupRequestResponse;
@@ -58,6 +60,7 @@ public class SignupRequestService {
     private final SignupRequestMapper mapper;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final DomainEventPublisher eventPublisher;
 
     /**
      * API-SEC-002 — pre-authentication by contract (SVC-API-INT.md {@code Security : screen
@@ -141,6 +144,7 @@ public class SignupRequestService {
             entity.approve(principal);
             repository.save(entity);
             log.info("Approved SignupRequest ID: {}, created User ID: {}", id, created.getUserPk());
+            eventPublisher.publish(new UserCreatedEvent(created.getUserPk(), created.getUsername()));
 
             // A just-approved sign-up holds no roles yet — an empty array, not a missing key.
             return ServiceResult.success(

@@ -55,6 +55,16 @@ public class NotificationLogResponse {
     @Schema(description = "Parent template id - معرّف القالب", example = "5")
     private Long templateId;
 
+    @Schema(description = "Delivery attempts made (erp-core step 08) - عدد محاولات التسليم", example = "1")
+    private Integer attempts;
+
+    @Schema(description = "Next retry due while QUEUED - موعد المحاولة التالية")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
+    private Instant nextAttemptAt;
+
+    @Schema(description = "Error of the last failed attempt - خطأ آخر محاولة")
+    private String lastError;
+
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Instant createdAt;

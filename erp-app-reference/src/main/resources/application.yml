@@ -5,8 +5,8 @@
 # SYS_ADMIN) on the first start; erp-core seeds it without a usable password, so without this
 # variable nobody can log in as admin. Ignored once the account has been initialised.
 # Redis and SMTP are optional and NOT configured here: without Redis, FILE download
-# tokens use the in-memory store; without spring.mail.host, EMAIL notifications are
-# recorded as FAILED (NO_MAIL_SENDER). Add spring-boot-starter-data-redis /
+# tokens use the in-memory store; without spring.mail.host, EMAIL notifications end
+# SKIPPED_NO_PROVIDER (erp-core step 08). Add spring-boot-starter-data-redis /
 # spring-boot-starter-mail plus spring.data.redis.* / spring.mail.* to enable them.
 # =====================================================================
 spring:

@@ -6,6 +6,8 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.common.util.TokenHasher;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.PasswordResetRequestedEvent;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
 import com.erp.sec.domain.PasswordResetTokenDomain;
@@ -59,7 +61,7 @@ public class PasswordResetService {
     private static final String MODULE_CODE = "SEC";
     private static final String REFERENCE_TYPE = "SEC_PWD_RESET_TOKEN";
 
-    /** Button wording for the one-click reset link rendered by {@code DefaultChannelProvider}. */
+    /** Button wording for the one-click reset link rendered by NOTIF's {@code EmailChannelProvider}. */
     private static final String CTA_LABEL_EN = "Reset Password";
     private static final String CTA_LABEL_AR = "\u0625\u0639\u0627\u062f\u0629 \u062a\u0639\u064a\u064a\u0646 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631";
 
@@ -80,6 +82,7 @@ public class PasswordResetService {
     private final ActiveSessionRepository activeSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final NotificationDispatchApi notificationDispatchApi;
+    private final DomainEventPublisher eventPublisher;
 
     /**
      * The base of the UI that hosts the reset screen ({@code erp.core.frontend.base-url}) and the
@@ -192,6 +195,10 @@ public class PasswordResetService {
             .detailsEn("Password reset requested")
             .build());
 
+        // erp-core step 08 — never the raw token; AFTER_COMMIT listeners see it only if this commits
+        eventPublisher.publish(new PasswordResetRequestedEvent(user.getUserPk(), saved.getPwdResetTokenPk(),
+            saved.getExpiresAt()));
+
         dispatchResetNotification(user, saved, rawToken);
     }
 
@@ -204,7 +211,7 @@ public class PasswordResetService {
      * PasswordResetToken + audit rows still commit (the catch below is therefore effective).
      *
      * <p>The recipient's {@code email} travels among the dispatch variables because that is NOTIF's
-     * published contract to callers: {@code DefaultChannelProvider} reads the destination address
+     * published contract to callers: NOTIF's {@code EmailChannelProvider} reads the destination address
      * from {@code variables.get("email")} "since NOTIF has no crossmodule contact-lookup for a bare
      * recipientId", and returns {@code failure("missing recipient email address")} without it.
      * ENT-SEC-001's {@code email} field is specified for exactly this — "used for password-reset

@@ -23,4 +23,11 @@ public interface SecUserDirectoryApi {
      * permission codes; no module consumes it today.
      */
     List<Long> findUserIdsHoldingPermission(String permissionCode);
+
+    /**
+     * erp-core step 08 — the {@code SEC_USER} id of the authenticated caller (either realm), for a
+     * consumer that keys its own rows by user id (NOTIF's in-app inbox). Empty when the principal is
+     * not a user account.
+     */
+    Optional<Long> findCurrentUserId();
 }

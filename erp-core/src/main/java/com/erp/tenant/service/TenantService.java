@@ -9,6 +9,8 @@ import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.TenantCreatedEvent;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantProvisioning;
 import com.erp.tenant.TenantProvisioningContributor;
@@ -61,6 +63,7 @@ public class TenantService {
     private final TenantRepository repository;
     private final TenantMapper mapper;
     private final ObjectProvider<TenantProvisioningContributor> contributors;
+    private final DomainEventPublisher eventPublisher;
 
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
@@ -92,6 +95,9 @@ public class TenantService {
         }
         log.info("Created tenant ID: {}, code: {} ({} provisioning contributors)",
             saved.getId(), saved.getCode(), ordered.size());
+        // erp-core step 08 — the event's tenant is the NEW tenant (see TenantCreatedEvent)
+        eventPublisher.publish(new TenantCreatedEvent(saved.getId(), saved.getCode(),
+            SecurityContextHelper.getCurrentUsername()));
 
         return ServiceResult.success(mapper.toResponse(saved), Status.CREATED);
     }
