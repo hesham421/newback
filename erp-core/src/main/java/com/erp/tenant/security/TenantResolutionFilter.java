@@ -39,7 +39,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *       public (unauthenticated) path is refused 400 {@code TENANT_REQUIRED}; any other path proceeds
  *       so the authorization layer answers 401 for the missing token.</li>
  * </ol>
- * The tenant this filter sets is removed in a {@code finally}. Not a {@code @Component}: built by
+ * <b>Path tenant</b> (erp-core step 07) — before all of the above, a path matching
+ * {@code erp.core.tenant.path-tenant-paths} (default: the public file URLs
+ * {@code /api/v1/public/files/{tenantCode}/**}) takes its tenant from the {@code {tenantCode}} path
+ * variable, resolved like the header (unknown → 404, suspended → 403). The path's tenant always wins
+ * there: a caller authenticated in a different tenant is treated as anonymous (its authentication is
+ * dropped), so a token can never act in a foreign tenant through such a path.
+ *
+ * <p>The tenant this filter sets is removed in a {@code finally}. Not a {@code @Component}: built by
  * {@code ErpCoreSecurityAutoConfiguration} and registered only inside the security chain.
  *
  * <p>{@code CORE_TENANT} is global, but a Hibernate session always needs a tenant, so the lookups run
@@ -52,19 +59,36 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     private final MessageSource messageSource;
     private final List<String> publicPaths;
     private final List<String> exemptPaths;
+    private final List<String> pathTenantPaths;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     public TenantResolutionFilter(Supplier<TenantRepository> tenantRepository, MessageSource messageSource,
                                   List<String> publicPaths, List<String> exemptPaths) {
+        this(tenantRepository, messageSource, publicPaths, exemptPaths, List.of());
+    }
+
+    /**
+     * @param pathTenantPaths patterns with a {@code {tenantCode}} variable whose tenant comes from the
+     *                        path (erp-core step 07)
+     */
+    public TenantResolutionFilter(Supplier<TenantRepository> tenantRepository, MessageSource messageSource,
+                                  List<String> publicPaths, List<String> exemptPaths, List<String> pathTenantPaths) {
         this.tenantRepository = tenantRepository;
         this.messageSource = messageSource;
         this.publicPaths = List.copyOf(publicPaths);
         this.exemptPaths = List.copyOf(exemptPaths);
+        this.pathTenantPaths = List.copyOf(pathTenantPaths);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
+        String pathTenantCode = pathTenantCode(pathOf(request));
+        if (pathTenantCode != null) {
+            resolveFromPath(pathTenantCode, request, response, chain);
+            return;
+        }
+
         Long tokenTenant = TenantContext.current();
         if (tokenTenant != null) {
             Optional<Tenant> tenant = findTenant(() -> tenantRepository.get().findById(tokenTenant));
@@ -104,6 +128,49 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    /** erp-core step 07 — the tenant of a path-tenant path is the one named in the path. */
+    private void resolveFromPath(String code, HttpServletRequest request, HttpServletResponse response,
+                                 FilterChain chain) throws ServletException, IOException {
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        Optional<Tenant> tenant = findTenant(() -> tenantRepository.get().findByCode(normalized));
+        if (tenant.isEmpty()) {
+            reject(request, response, HttpServletResponse.SC_NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND);
+            return;
+        }
+        if (!isActive(tenant.get())) {
+            reject(request, response, HttpServletResponse.SC_FORBIDDEN, TenantErrorCodes.TENANT_SUSPENDED);
+            return;
+        }
+        Long previous = TenantContext.current();
+        if (previous != null && !previous.equals(tenant.get().getId())) {
+            // A token of another tenant never authenticates inside this tenant.
+            SecurityContextHolder.clearContext();
+        }
+        TenantContext.set(tenant.get().getId());
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            if (previous == null) {
+                TenantContext.clear();
+            } else {
+                TenantContext.set(previous);
+            }
+        }
+    }
+
+    /** The {@code {tenantCode}} variable of the first matching path-tenant pattern, or {@code null}. */
+    private String pathTenantCode(String path) {
+        for (String pattern : pathTenantPaths) {
+            if (pathMatcher.match(pattern, path)) {
+                String code = pathMatcher.extractUriTemplateVariables(pattern, path).get("tenantCode");
+                if (StringUtils.hasText(code)) {
+                    return code;
+                }
+            }
+        }
+        return null;
     }
 
     private static Optional<Tenant> findTenant(Supplier<Optional<Tenant>> lookup) {

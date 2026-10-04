@@ -16,10 +16,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileMapper {
 
-    /** Builds a new FileDocument from the upload request plus the service-detected fields. */
+    /**
+     * Builds a new FileDocument from the upload request plus the service-detected fields. The content
+     * itself is not mapped: the service hands it to the selected StorageProvider (erp-core step 07),
+     * which records where it lives ({@code storageProvider}, then {@code storageRef}).
+     */
     public FileDocument toEntity(UploadRequest request, String fileName, String contentType,
-                                 long fileSize, byte[] fileContent, String fileTypeId,
-                                 String fileStatusId, FileCategory category) {
+                                 long fileSize, String contentHash, String fileTypeId,
+                                 String fileStatusId, FileCategory category, String storageProvider) {
         if (request == null) {
             return null;
         }
@@ -30,7 +34,8 @@ public class FileMapper {
             .fileName(fileName)
             .contentType(contentType)
             .fileSize(fileSize)
-            .fileContent(fileContent)
+            .contentHash(contentHash)
+            .storageProvider(storageProvider)
             .fileTypeId(fileTypeId)
             .fileStatusId(fileStatusId)
             .fileCategoryFk(category)
@@ -40,9 +45,10 @@ public class FileMapper {
     /**
      * Single mapping for both the entity (store/softDelete) and the bytes-excluded projection
      * (getMetadata/listByOwner) paths — {@link FileDocument} implements {@link FileMetadataView}, so
-     * the two callers share one method and can never drift field-for-field.
+     * the two callers share one method and can never drift field-for-field. {@code publicUrl} is
+     * resolved by the service (it needs the tenant code), null for a PRIVATE document.
      */
-    public FileMetadataResponse toMetadataResponse(FileMetadataView view) {
+    public FileMetadataResponse toMetadataResponse(FileMetadataView view, String publicUrl) {
         if (view == null) {
             return null;
         }
@@ -57,6 +63,9 @@ public class FileMapper {
             .fileTypeId(view.getFileTypeId())
             .fileStatusId(view.getFileStatusId())
             .fileCategoryId(view.getFileCategoryId())
+            .storageProvider(view.getStorageProvider())
+            .visibility(view.getVisibility())
+            .publicUrl(publicUrl)
             .createdAt(view.getCreatedAt())
             .createdBy(view.getCreatedBy())
             .updatedAt(view.getUpdatedAt())

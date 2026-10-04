@@ -46,4 +46,8 @@ public class CategoryCreateRequest {
     @Schema(description = "Active status - حالة التفعيل", example = "true")
     @Builder.Default
     private Boolean isActiveFl = Boolean.TRUE;
+
+    @Schema(description = "Category may hold PUBLIC files (erp-core step 07) - تسمح الفئة بالملفات العامة", example = "false")
+    @Builder.Default
+    private Boolean allowPublic = Boolean.FALSE;
 }

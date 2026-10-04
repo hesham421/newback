@@ -41,4 +41,10 @@ public final class FileErrorCodes {
 
     /** ERR-0006 (PLATFORM-STD) — file category not found by id. */
     public static final String FILE_CATEGORY_NOT_FOUND = "FILE_CATEGORY_NOT_FOUND";
+
+    /** erp-core step 07 — the document's category does not allow PUBLIC files (FILE_CATEGORY.ALLOW_PUBLIC). */
+    public static final String FILE_PUBLIC_NOT_ALLOWED = "FILE_PUBLIC_NOT_ALLOWED";
+
+    /** erp-core step 07 — the storage provider holding the content is not configured or failed. */
+    public static final String FILE_STORAGE_UNAVAILABLE = "FILE_STORAGE_UNAVAILABLE";
 }

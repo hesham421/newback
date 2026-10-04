@@ -15,6 +15,7 @@ import com.erp.file.domain.FileValidationDomainService;
 import com.erp.file.dto.AccessTokenResponse;
 import com.erp.file.dto.FileMetadataResponse;
 import com.erp.file.dto.UploadRequest;
+import com.erp.file.dto.VisibilityUpdateRequest;
 import com.erp.file.entity.FileCategory;
 import com.erp.file.entity.FileDocument;
 import com.erp.file.exception.FileErrorCodes;
@@ -22,10 +23,20 @@ import com.erp.file.mapper.FileMapper;
 import com.erp.file.repository.FileCategoryRepository;
 import com.erp.file.repository.FileDocumentRepository;
 import com.erp.file.repository.FileMetadataView;
+import com.erp.file.storage.StorageProvider;
+import com.erp.file.storage.StorageProviderRegistry;
+import com.erp.file.storage.StorageTarget;
+import com.erp.file.storage.StoredObject;
+import com.erp.tenant.TenantContext;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLConnection;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +46,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -44,9 +57,13 @@ import org.springframework.web.multipart.MultipartFile;
  * decisions are delegated: size/type to {@link FileValidationDomainService} (RULE-FILE-001/002),
  * token crypto to {@link FileAccessTokenDomainService} (RULE-FILE-003), the lifecycle state machine
  * to {@link FileDocumentDomain} (RULE-FILE-006). Metadata reads use the bytes-excluded projection
- * (DRV-003); only download loads the BYTEA content. Single-use of the download token is enforced
- * here via a {@link DownloadTokenStore} entry consumed on download (Redis when configured, otherwise
- * in-memory).
+ * (DRV-003). Single-use of the download token is enforced here via a {@link DownloadTokenStore}
+ * entry consumed on download (Redis when configured, otherwise in-memory).
+ *
+ * <p>erp-core step 07: content goes through the {@link StorageProviderRegistry} — uploads to the
+ * provider selected by {@code erp.core.files.storage} (DB / LOCAL / S3), downloads from the provider
+ * recorded on the document. A PUBLIC document (category with {@code ALLOW_PUBLIC}) is served without
+ * authentication by {@link #openPublic} at the URL built by {@link PublicFileUrls}.
  *
  * <p>No caching annotations — FILE is absent from the caching approved-register, so per
  * gov-enforce-caching-rules this service carries zero {@code @Cacheable}/{@code @CacheEvict}. The
@@ -62,6 +79,8 @@ public class FileService {
     private final FileMapper mapper;
     private final FileAccessTokenDomainService accessTokenService;
     private final DownloadTokenStore tokenStore;
+    private final StorageProviderRegistry storageProviders;
+    private final PublicFileUrls publicFileUrls;
     /** Upload size limits ({@code erp.core.files.max-content-bytes} / {@code max-request-bytes}). */
     private final ErpCoreProperties erpCoreProperties;
 
@@ -71,8 +90,18 @@ public class FileService {
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
     private static final String TOKEN_KEY_PREFIX = "file:dl-token:";
 
-    /** Download payload handed to the controller for streaming — carries bytes, not JSON. */
-    public record FileDownload(byte[] content, String contentType, String fileName) {
+    /** Download payload handed to the controller for streaming — carries the content stream, not JSON. */
+    public record FileDownload(InputStream content, Long size, String contentType, String fileName) {
+    }
+
+    /**
+     * Public file payload (erp-core step 07): either a {@code redirectUrl} (the provider serves the
+     * content directly) or the content stream with its metadata; {@code etag} is the quoted content hash;
+     * {@code inline} is true only for the safe content types of
+     * {@link FileDocumentDomain#INLINE_SAFE_CONTENT_TYPES} (everything else is an attachment).
+     */
+    public record PublicFile(String redirectUrl, InputStream content, Long size, String contentType,
+                             String fileName, String etag, boolean inline) {
     }
 
     /** API-FILE-001 — upload: validate ownership → resolve limits → detect+enforce type → enforce size → store ACTIVE. */
@@ -111,13 +140,23 @@ public class FileService {
         FileValidationDomainService.assertRequestSizeAllowed(size,
             erpCoreProperties.getFiles().getMaxRequestBytes());
 
-        FileDocument entity = mapper.toEntity(request, safeFileName(originalName), contentType, size,
-            content, deriveFileType(contentType), FileDocumentDomain.STATUS_ACTIVE, category);
+        StorageProvider provider = storageProviders.active();
+        String fileName = safeFileName(originalName);
+        FileDocument entity = mapper.toEntity(request, fileName, contentType, size, sha256Hex(content),
+            deriveFileType(contentType), FileDocumentDomain.STATUS_ACTIVE, category, provider.key());
 
+        // The id is assigned on persist (sequence), so the provider can name the object after it; the
+        // row itself is written at flush, together with the storage reference.
         FileDocument saved = repository.save(entity);
-        log.info("Stored file ID: {} ({} bytes, {})", saved.getId(), size, contentType);
+        StoredObject stored = provider.put(
+            new StorageTarget(TenantContext.require(),
+                category != null ? category.getCategoryCode() : StorageTarget.NO_CATEGORY, saved.getId(), fileName),
+            new ByteArrayInputStream(content), size, contentType);
+        saved.setStorageRef(stored.storageRef());
+        deleteOnRollback(provider, stored.storageRef());
+        log.info("Stored file ID: {} ({} bytes, {}) with provider {}", saved.getId(), size, contentType, provider.key());
 
-        return ServiceResult.success(mapper.toMetadataResponse(saved), Status.CREATED);
+        return ServiceResult.success(mapper.toMetadataResponse(saved, null), Status.CREATED);
     }
 
     /** API-FILE-002 — issue a fresh single-use download token; store its nonce in the token store for the TTL. */
@@ -164,23 +203,27 @@ public class FileService {
             throw new LocalizedException(Status.UNAUTHORIZED, FileErrorCodes.FILE_ACCESS_TOKEN_INVALID);
         }
 
-        // Load the content BEFORE consuming the token so a failed/absent load does not burn the
+        // Open the content BEFORE consuming the token so a failed/absent load does not burn the
         // single-use grant — the caller can retry with the same token until a download succeeds.
-        FileDocument entity = repository.findWithContentById(fileId)
+        FileMetadataView view = repository.findMetadataTupleById(fileId)
+            .map(FileMetadataView::from)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, fileId));
 
         // RULE-FILE-006 — a soft-deleted file is treated as gone and is never downloadable.
-        if (FileDocumentDomain.STATUS_DELETED.equals(entity.getFileStatusId())) {
+        if (FileDocumentDomain.STATUS_DELETED.equals(view.getFileStatusId())) {
             throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, fileId);
         }
 
+        InputStream content = storageProviders.forKey(view.getStorageProvider()).get(view.getStorageRef());
+
         // Single-use: delete returns true only for the first consumer; a gone/expired key ⇒ ERR-0003.
         if (!tokenStore.consume(key)) {
+            closeQuietly(content);
             throw new LocalizedException(Status.UNAUTHORIZED, FileErrorCodes.FILE_ACCESS_TOKEN_INVALID);
         }
 
-        return new FileDownload(entity.getFileContent(), entity.getContentType(), entity.getFileName());
+        return new FileDownload(content, view.getFileSize(), view.getContentType(), view.getFileName());
     }
 
     /** API-FILE-004 — metadata by id (bytes excluded, DRV-003). */
@@ -195,7 +238,7 @@ public class FileService {
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
 
-        return ServiceResult.success(mapper.toMetadataResponse(view));
+        return ServiceResult.success(mapper.toMetadataResponse(view, publicFileUrls.of(view).orElse(null)));
     }
 
     /** API-FILE-005 — owner list (bytes excluded, DRV-003). Empty result is a 200 empty page. */
@@ -221,7 +264,8 @@ public class FileService {
             ownerId, ownerType, moduleCode, fileTypeId, fileStatusId, pageable)
             .map(FileMetadataView::from);
 
-        return ServiceResult.success(result.map(mapper::toMetadataResponse));
+        return ServiceResult.success(result.map(view ->
+            mapper.toMetadataResponse(view, publicFileUrls.of(view).orElse(null))));
     }
 
     /**
@@ -252,7 +296,105 @@ public class FileService {
         FileDocument saved = repository.save(entity);
         log.info("File ID: {} status set to {}", saved.getId(), targetStatus);
 
-        return ServiceResult.success(mapper.toMetadataResponse(saved), Status.UPDATED);
+        return ServiceResult.success(
+            mapper.toMetadataResponse(saved, publicFileUrls.of(saved).orElse(null)), Status.UPDATED);
+    }
+
+    /**
+     * erp-core step 07 — {@code PATCH /api/v1/files/{id}/visibility}: PUBLIC publishes the document
+     * under a fresh random slug (an already public document keeps its slug, so its URL stays stable);
+     * PRIVATE withdraws it and drops the slug. Only a category with {@code ALLOW_PUBLIC} may hold
+     * PUBLIC files (409 {@code FILE_PUBLIC_NOT_ALLOWED}, decided by FileDocumentDomain); a soft-deleted
+     * or foreign-tenant document is 404.
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions).DOCUMENT_PUBLISH)")
+    public ServiceResult<FileMetadataResponse> updateVisibility(Long id, VisibilityUpdateRequest request) {
+        log.info("Setting visibility of file ID: {} to {}", id, request.getVisibility());
+
+        FileDocument entity = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(
+                Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
+
+        FileDocumentDomain domain = FileDocumentDomain.from(entity);
+        domain.assertNotDeleted(id);
+
+        if (FileDocumentDomain.VISIBILITY_PUBLIC.equals(request.getVisibility())) {
+            FileCategory category = entity.getFileCategoryFk();
+            domain.assertCanBePublic(category != null && Boolean.TRUE.equals(category.getAllowPublic()));
+            if (entity.getPublicSlug() == null) {
+                entity.publish(PublicFileUrls.newSlug());
+            }
+        } else {
+            entity.unpublish();
+        }
+
+        FileDocument saved = repository.save(entity);
+        log.info("File ID: {} visibility is now {}", saved.getId(), saved.getVisibility());
+
+        return ServiceResult.success(
+            mapper.toMetadataResponse(saved, publicFileUrls.of(saved).orElse(null)), Status.UPDATED);
+    }
+
+    /**
+     * erp-core step 07 — {@code GET /api/v1/public/files/{tenantCode}/{publicSlug}}, unauthenticated.
+     * The tenant was set from the path by the tenant filter, so the lookup only sees that tenant's
+     * documents: a PUBLIC, ACTIVE document in a category allowing public files, else 404. When the
+     * provider can serve the content itself the caller is redirected there.
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("permitAll()")
+    public PublicFile openPublic(String publicSlug) {
+        log.debug("Serving public file {}", publicSlug);
+
+        FileMetadataView view = repository.findPublicMetadataTupleBySlug(publicSlug,
+                FileDocumentDomain.VISIBILITY_PUBLIC, FileDocumentDomain.STATUS_ACTIVE)
+            .map(FileMetadataView::from)
+            .orElseThrow(() -> new LocalizedException(
+                Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, publicSlug));
+
+        StorageProvider provider = storageProviders.forKey(view.getStorageProvider());
+        String etag = view.getContentHash() != null ? "\"" + view.getContentHash() + "\"" : null;
+        Optional<String> direct = provider.publicUrl(view.getStorageRef());
+        if (direct.isPresent()) {
+            return new PublicFile(direct.get(), null, null, null, null, etag, false);
+        }
+        return new PublicFile(null, provider.get(view.getStorageRef()), view.getFileSize(),
+            view.getContentType(), view.getFileName(), etag, FileDocumentDomain.isInlineSafe(view.getContentType()));
+    }
+
+    /**
+     * A LOCAL/S3 object written for a transaction that then rolls back would be orphaned (the row that
+     * names it never commits), so it is removed again. DB content rolls back with the row.
+     */
+    private static void deleteOnRollback(StorageProvider provider, String storageRef) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    provider.delete(storageRef);
+                }
+            }
+        });
+    }
+
+    private static void closeQuietly(InputStream stream) {
+        try {
+            stream.close();
+        } catch (IOException e) {
+            log.debug("Closing a download stream failed", e);
+        }
+    }
+
+    private static String sha256Hex(byte[] content) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (NoSuchAlgorithmException e) {
+            throw new LocalizedException(Status.INTERNAL_ERROR, CommonErrorCodes.INTERNAL_ERROR);
+        }
     }
 
     private FileCategory resolveCategory(Long categoryId) {

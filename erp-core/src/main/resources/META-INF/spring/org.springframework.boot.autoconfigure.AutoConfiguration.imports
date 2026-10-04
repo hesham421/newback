@@ -3,3 +3,4 @@ com.erp.autoconfigure.ErpCoreSecurityAutoConfiguration
 com.erp.autoconfigure.ErpCoreFlywayAutoConfiguration
 com.erp.autoconfigure.ErpCoreOpenApiAutoConfiguration
 com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration
+com.erp.autoconfigure.FileStorageAutoConfiguration

@@ -19,6 +19,10 @@ public final class FileDocumentDomain {
     public static final String STATUS_ARCHIVED = "ARCHIVED";
     public static final String STATUS_DELETED = "DELETED";
 
+    /** erp-core step 07 — VISIBILITY values (CHK_FILE_DOCUMENT_VISIBILITY). */
+    public static final String VISIBILITY_PRIVATE = "PRIVATE";
+    public static final String VISIBILITY_PUBLIC = "PUBLIC";
+
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
         STATUS_ACTIVE, Set.of(STATUS_ARCHIVED, STATUS_DELETED),
         STATUS_ARCHIVED, Set.of(STATUS_DELETED),
@@ -46,6 +50,58 @@ public final class FileDocumentDomain {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 FileErrorCodes.FILE_DOCUMENT_INVALID_TRANSITION, currentStatus, targetStatus);
         }
+    }
+
+    /**
+     * erp-core step 07 — decision only: a document may become PUBLIC only when its category allows
+     * public files ({@code FILE_CATEGORY.ALLOW_PUBLIC}); a document without a category never may.
+     * Refused with 409 {@code FILE_PUBLIC_NOT_ALLOWED}.
+     */
+    public void assertCanBePublic(boolean categoryAllowsPublic) {
+        if (!categoryAllowsPublic) {
+            throw new LocalizedException(Status.CONFLICT, FileErrorCodes.FILE_PUBLIC_NOT_ALLOWED);
+        }
+    }
+
+    /**
+     * erp-core step 07 — decision only: a soft-deleted document is treated as gone (RULE-FILE-006), so
+     * its visibility cannot change; answered 404 {@code FILE_DOCUMENT_NOT_FOUND} like every other access.
+     */
+    public void assertNotDeleted(Long documentId) {
+        if (STATUS_DELETED.equals(currentStatus)) {
+            throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId);
+        }
+    }
+
+    /**
+     * erp-core step 07 — content types a public file may be rendered {@code inline} with: raster images
+     * and PDF. Everything else (HTML, SVG, XML, JavaScript, text, ...) is served as an
+     * {@code attachment}, so no tenant can host active content on the platform origin. SVG is
+     * deliberately absent (it can carry script).
+     */
+    public static final Set<String> INLINE_SAFE_CONTENT_TYPES = Set.of(
+        "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp",
+        "application/pdf");
+
+    /** Whether a public file of this content type may be served inline (parameters such as charset ignored). */
+    public static boolean isInlineSafe(String contentType) {
+        if (contentType == null) {
+            return false;
+        }
+        int semicolon = contentType.indexOf(';');
+        String base = (semicolon >= 0 ? contentType.substring(0, semicolon) : contentType).trim().toLowerCase(java.util.Locale.ROOT);
+        return INLINE_SAFE_CONTENT_TYPES.contains(base);
+    }
+
+    /**
+     * erp-core step 07 — whether the public URL of a document actually serves it: PUBLIC with a slug,
+     * ACTIVE, and in a category that (still) allows public files. The public lookup query applies the
+     * same conditions, so no URL is handed out that would answer 404.
+     */
+    public static boolean isPubliclyServable(String visibility, String publicSlug, String fileStatusId,
+                                             Boolean categoryAllowPublic) {
+        return VISIBILITY_PUBLIC.equals(visibility) && publicSlug != null
+            && STATUS_ACTIVE.equals(fileStatusId) && Boolean.TRUE.equals(categoryAllowPublic);
     }
 
     public String getCurrentStatus() {

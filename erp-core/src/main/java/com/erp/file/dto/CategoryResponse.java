@@ -40,6 +40,9 @@ public class CategoryResponse {
     @Schema(description = "Active status - حالة التفعيل", example = "true")
     private Boolean isActiveFl;
 
+    @Schema(description = "Category may hold PUBLIC files (erp-core step 07) - تسمح الفئة بالملفات العامة", example = "false")
+    private Boolean allowPublic;
+
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Instant createdAt;

@@ -30,7 +30,13 @@ public interface FileDocumentRepository
         + "f.moduleCode AS moduleCode, f.fileName AS fileName, f.contentType AS contentType, "
         + "f.fileSize AS fileSize, f.fileTypeId AS fileTypeId, f.fileStatusId AS fileStatusId, "
         + "f.fileCategoryFk.id AS fileCategoryId, f.createdAt AS createdAt, f.createdBy AS createdBy, "
-        + "f.updatedAt AS updatedAt, f.updatedBy AS updatedBy FROM FileDocument f";
+        + "f.updatedAt AS updatedAt, f.updatedBy AS updatedBy, f.storageProvider AS storageProvider, "
+        + "f.storageRef AS storageRef, f.visibility AS visibility, f.publicSlug AS publicSlug, "
+        + "f.contentHash AS contentHash, c.allowPublic AS categoryAllowPublic "
+        + "FROM FileDocument f LEFT JOIN f.fileCategoryFk c";
+
+    /** Alias of the content column in {@link #findContentTupleById}. */
+    String CONTENT_ALIAS = "content";
 
     /** QR-FILE-0004 / QR-FILE-0002 — single metadata read by id (bytes excluded). */
     @Query(METADATA_SELECT + " WHERE f.id = :id")
@@ -58,7 +64,20 @@ public interface FileDocumentRepository
     /** Existence check for {@code FileDocumentLookupApi} — no content or metadata loaded. */
     boolean existsByIdAndFileStatusIdNot(Long id, String fileStatusId);
 
-    /** QR-FILE-0003 — full row incl. BYTEA content, download path only. */
-    @Query("SELECT f FROM FileDocument f WHERE f.id = :id")
-    Optional<FileDocument> findWithContentById(@Param("id") Long id);
+    /**
+     * erp-core step 07 — the bytes of a DB-stored document (DbStorageProvider only). A {@link Tuple}
+     * rather than {@code Optional<byte[]>}, which Spring Data would treat as a collection result.
+     */
+    @Query("SELECT f.fileContent AS " + CONTENT_ALIAS + " FROM FileDocument f WHERE f.id = :id")
+    Optional<Tuple> findContentTupleById(@Param("id") Long id);
+
+    /**
+     * erp-core step 07 — a servable public document of the current tenant by slug: PUBLIC, in the given
+     * lifecycle status, and in a category that (still) allows public files. Bytes excluded.
+     */
+    @Query(METADATA_SELECT + " WHERE f.publicSlug = :slug AND f.visibility = :visibility "
+        + "AND f.fileStatusId = :status AND c.allowPublic = true")
+    Optional<Tuple> findPublicMetadataTupleBySlug(@Param("slug") String slug,
+                                                  @Param("visibility") String visibility,
+                                                  @Param("status") String status);
 }
