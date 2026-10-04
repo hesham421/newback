@@ -16,12 +16,17 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-01",
       "attempts": 1,
       "implementer_agent": "a52423e37028cd885",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "a76d643bb593a74e4",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "reviewer re-ran 3 verification cmds + live app on fresh PG16 (20 migrations, health UP, 60 paths 0 fin); diff review clean",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/01-report.md",
       "deviations": [
@@ -452,6 +457,12 @@
       "step": "01",
       "event": "reported",
       "note": "implementer report 2fd6dc1, 5/5 acceptance claimed"
+    },
+    {
+      "at": "2026-10-04T14:09:54Z",
+      "step": "01",
+      "event": "review",
+      "note": "PASS round 1; merge gate for step 01 = mvn -q -DskipTests package (step file precondition: tests runnable from step 02)"
     }
   ]
 }
