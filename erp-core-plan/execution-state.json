@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "12",
+  "current_step": "13",
   "max_parallel": 3,
   "steps": [
     {
@@ -608,7 +608,7 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": true,
-      "status": "PENDING",
+      "status": "BLOCKED",
       "worktree": null,
       "attempts": 0,
       "implementer_agent": null,
@@ -634,7 +634,14 @@
       "status": "NOT_SCHEDULED"
     }
   ],
-  "halts": [],
+  "halts": [
+    {
+      "reason": "Step 13 requires local paths of the factory and governance-shared repos (env ERP_FACTORY_DIR, ERP_GOV_SHARED_DIR); not set — per orchestrate-plan STEP 5 in --auto mode, marked BLOCKED for a human",
+      "needs_human": true,
+      "recorded_at": "2026-10-04T21:18:36Z",
+      "step": "13"
+    }
+  ],
   "log": [
     {
       "at": "2026-10-04T13:52:39Z",
@@ -1007,6 +1014,12 @@
       "step": "12",
       "event": "merged",
       "note": "merged eb4dd28 (pure replay); core 350/app 10 on branch+main; tag v1.0.0 -> 2eb6c39 pushed; CI runs 37235529649 (main) and 37235531822 (tag) started"
+    },
+    {
+      "at": "2026-10-04T21:18:36Z",
+      "step": "13",
+      "event": "halt",
+      "note": "ERP_FACTORY_DIR / ERP_GOV_SHARED_DIR not set; step 13 touches external repos (factory, governance-shared) — human-only"
     }
   ]
 }
