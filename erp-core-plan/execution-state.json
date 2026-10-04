@@ -283,12 +283,17 @@
         "V11__sec_realms.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-06",
       "attempts": 1,
       "implementer_agent": "af553cc9f1ddb7ca5",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "ae17110c259b607c2",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 138/app 7; @PreAuthorize 84 annotations, 0 cross-module; live probes a-j pass (realm mismatch 403, tampered tokens 401, mass-assignment blocked, rate limit, reset cross-realm 409, synchronizer idempotent)",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/06-report.md",
       "deviations": [
@@ -736,6 +741,12 @@
       "step": "08",
       "event": "reported",
       "note": "implementer report c486039, 3/3; core 138, app 8"
+    },
+    {
+      "at": "2026-10-04T18:10:04Z",
+      "step": "06",
+      "event": "review",
+      "note": "PASS round 1; follow-up notes: staff admin can assign roles/edit customers (no privilege gain); findUserIdsHoldingPermission not realm-filtered; customer email case-sensitive"
     }
   ]
 }
