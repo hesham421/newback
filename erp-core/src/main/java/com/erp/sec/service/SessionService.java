@@ -83,7 +83,7 @@ public class SessionService {
         if (usernameFilter != null) {
             spec = spec.and(usernameMatches(usernameFilter));
         }
-        spec = spec.and(notTerminated());
+        spec = spec.and(notTerminated()).and(staffSessions());
 
         Page<ActiveSession> result =
             repository.findAll(spec, PageableBuilder.from(commonRequest, ALLOWED_SORT_FIELDS));
@@ -97,6 +97,14 @@ public class SessionService {
      */
     private Specification<ActiveSession> notTerminated() {
         return (root, query, cb) -> cb.isNull(root.get("terminatedAt"));
+    }
+
+    /**
+     * erp-core step 14 — the staff session API lists STAFF accounts' sessions only; a customer's
+     * session (customer logins open one too) is neither listed nor terminable here.
+     */
+    private Specification<ActiveSession> staffSessions() {
+        return (root, query, cb) -> cb.equal(root.get("user").get("realm"), User.REALM_STAFF);
     }
 
     /**
@@ -137,13 +145,17 @@ public class SessionService {
         return (root, query, cb) -> cb.equal(root.get("user"), reference);
     }
 
-    /** API-SEC-026 — a session already terminated is rejected by {@code ActiveSessionDomain}. */
+    /**
+     * API-SEC-026 — a session already terminated is rejected by {@code ActiveSessionDomain}. Only a
+     * STAFF account's session is found (erp-core step 14): a customer session id answers 404
+     * {@code SEC-404-SESSION}, like an unknown one.
+     */
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_SESSIONS_DELETE)")
     public ServiceResult<SessionTerminationResponse> terminate(Long id) {
         log.info("Terminating ActiveSession ID: {}", id);
 
-        ActiveSession entity = repository.findById(id)
+        ActiveSession entity = repository.findStaffSessionById(id)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, SecErrorCodes.SEC_404_SESSION, id));
 

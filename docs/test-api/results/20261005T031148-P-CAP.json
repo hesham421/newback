@@ -1,0 +1,52 @@
+{
+ "meta": {
+  "profile": "P-CAP",
+  "base": "http://localhost:7295",
+  "run": "26100503115E",
+  "started": "2026-10-05T03:11:48",
+  "cap": 2,
+  "local_root": null,
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-05T03:11:49",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-REPORT-013": {
+   "tc": "TC-CORE-REPORT-013",
+   "test": "test_report_013_export_cap",
+   "profile": "P-CAP",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}",
+     "expected": "422 E(REPORT_EXPORT_TOO_LARGE)",
+     "observed": "422 E(REPORT_EXPORT_TOO_LARGE) · {\"error\":{\"code\":\"REPORT_EXPORT_TOO_LARGE\",\"fieldErrors\":null,\"message\":\"The export exceeds the limit of 2 rows. Narrow the report parameters and try again.\"},\"success\":false,\"timestamp\":\"2026-10-04T23:11:49.417662100Z\"}",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/APP_SMOKE_REPORT/run [token] {}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"code\":\"APP_SMOKE_REPORT\",\"columns\":[{\"key\":\"id\",\"type\":\"INTEGER\",\"labelAr\":\"المعرف\",\"labelEn\":\"Id\"},{\"key\":\"label\",\"type\":\"STRING\",\"labelAr\":\"التسمية\",\"labelEn\":\"Label\"}],\"rows\":[{\"id\":1,\"label\":\"alpha\"},{\"id\":2,\"label\":\"بيتا\"},{\"id\":3,\"label\":\"gamma, delta\"}],\"totals\":{},\"page\":0,\"size\":2",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/run [token] {}"
+    },
+    {
+     "ok": true,
+     "what": "run returns 3 rows (cap applies to exports only)",
+     "expected": "3",
+     "observed": "3",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.29
+  }
+ }
+}

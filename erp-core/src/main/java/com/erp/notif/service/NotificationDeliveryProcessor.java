@@ -32,7 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link #recordOutcome} — {@code SENT} (+ {@link NotificationDispatchedEvent}),
  *       {@code SKIPPED_NO_PROVIDER} (final, never retried), or a failed attempt: the row stays
  *       {@code QUEUED} with {@code LAST_ERROR} and {@code NEXT_ATTEMPT_AT} and the worker retries;</li>
- *   <li>{@link #markFailed} once the retries are exhausted ({@code FAILED} + {@link NotificationFailedEvent}).</li>
+ *   <li>{@link #markFailed} once the retries are exhausted ({@code FAILED} + {@link NotificationFailedEvent}),
+ *       or at once when the provider rejects the message permanently (erp-core step 14, e.g. an EMAIL
+ *       with no recipient address).</li>
  * </ol>
  * Every final status clears {@code VARIABLES_JSON}. Delivery is at-least-once: a crash after a send
  * but before its outcome is recorded leaves the row {@code QUEUED} for the requeue job.
@@ -53,6 +55,8 @@ public class NotificationDeliveryProcessor {
         SKIPPED,
         /** The attempt failed and was recorded; another attempt is due. */
         RETRY,
+        /** The provider rejected the message permanently: {@code FAILED} after this attempt (step 14). */
+        REJECTED,
         /** The row is unknown or no longer {@code QUEUED}: nothing was done. */
         NOT_QUEUED
     }
@@ -109,6 +113,12 @@ public class NotificationDeliveryProcessor {
                 log.info("Notification {} skipped: no provider for channel {}", logId, row.getChannelTypeId());
                 return Outcome.SKIPPED;
             }
+            case REJECTED -> {
+                log.warn("Notification {} rejected by the {} provider (attempt {}), not retried: {}", logId,
+                    row.getChannelTypeId(), attempt, result.detail());
+                fail(row, result.detail());
+                return Outcome.REJECTED;
+            }
             default -> {
                 row.setLastError(result.detail());
                 boolean more = NotificationLogDomain.hasAttemptsLeft(attempt,
@@ -133,13 +143,18 @@ public class NotificationDeliveryProcessor {
             return;
         }
         String reason = row.getLastError() != null ? row.getLastError() : error;
+        fail(row, reason);
+    }
+
+    /** The row becomes {@code FAILED} (final) and {@link NotificationFailedEvent} is published. */
+    private void fail(NotificationLog row, String reason) {
         transitionTo(row, NotificationLogDomain.STATUS_FAILED);
         row.setErrorMessage(reason);
         row.setLastError(reason);
         row.setNextAttemptAt(null);
         row.setVariablesJson(null);
         logRepository.save(row);
-        log.warn("Notification {} FAILED after {} attempts: {}", logId, row.getAttempts(), reason);
+        log.warn("Notification {} FAILED after {} attempts: {}", row.getId(), row.getAttempts(), reason);
         eventPublisher.publish(new NotificationFailedEvent(row.getId(), row.getChannelTypeId(), row.getRecipientId(),
             row.getTemplateFk().getTemplateCode(), row.getAttempts(), reason));
     }

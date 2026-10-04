@@ -23,6 +23,12 @@ public class SecRecipientDirectory implements RecipientDirectory {
     }
 
     @Override
+    public Optional<String> emailOf(Long recipientId) {
+        return secUserDirectoryApi.findContact(recipientId).map(UserContact::email)
+            .filter(email -> !email.isBlank());
+    }
+
+    @Override
     public Optional<Long> currentRecipientId() {
         return secUserDirectoryApi.findCurrentUserId();
     }

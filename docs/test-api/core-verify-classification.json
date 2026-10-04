@@ -1,0 +1,70 @@
+{
+  "_comment": "Human classification of each FAIL in the verification run (read by core_verify_report.py). Classes: APP-DEFECT (code wrong vs plan/docs), PLAN-DEFECT (plan expectation wrong, source cited), DOC-DEFECT, ENV. `history` keeps the classifications of the first run (v1.0.0 code), which are no longer FAILs; it is not rendered as a problem.",
+  "code_under_test": "branch `step/14-api-verify` at `9068779` (the two fix commits `e8a8b33` fix(sec) and `9068779` fix(notif) on top of `phase-d/api-verify` `154eb53`); every instance ran the jar built from that tree",
+  "fail": {},
+  "history": {
+    "run": "2610050236DB / 26100502287C (phase-D api-verify on v1.0.0 code, branch phase-d/api-verify at 2830799)",
+    "TC-CORE-SEC-028": "APP-DEFECT: UserService.loadUser used findById (no realm filter); GET /api/v1/sec/users/{customerId} answered 200 realm=CUSTOMER. Fixed by e8a8b33 (UserRepository.findStaffById).",
+    "TC-CORE-SEC-029": "APP-DEFECT: staff update and role assignment acted on a CUSTOMER row (renamed, holding SYS_ADMIN). Fixed by e8a8b33.",
+    "TC-CORE-SEC-030": "APP-DEFECT: staff DELETE + PATCH turned an unverified customer ACTIVE and its login succeeded. Fixed by e8a8b33.",
+    "TC-CORE-NOTIF-003": "First classified PLAN-DEFECT (no variables.email in the request); the orchestrator ruled it an APP gap after the coverage debate: NOTIF now addresses an EMAIL from the recipient directory (9068779), so the plan's request is valid as written."
+  },
+  "plan_notes": [
+    "Agreed-set closure (orchestrator decisions after the coverage debate): items 1/3/5 and SEC-028..030 are application fixes (`docs/DEVIATIONS.md` `[14]`, commits `e8a8b33`, `9068779`); items 2, 4, 6–12 are plan/script changes in `core-test-plan.md` and `core_api_verify.py`; item 13 is this run: a fresh instance of the fixed code on 7272 against the new database `erp_phase_d2`, whose first and only P-LIVE run is the one reported here, and the profile instances on a new scratch database `erp_pd2_verify`.",
+    "New cases (each module's sequence continued): SEC-031 (staff search excludes customers), SEC-032 [P-MAIL] (staff session API and dashboard session count exclude customers), SEC-033 (dashboard user counts staff only), SEC-034 [P-MAIL] (same e-mail active in both realms), TENANT-025 (list/search isolation of categories, files, roles, templates; lookup catalog copied), TENANT-026 [P-MAIL] (a suspended tenant's customer token). Strengthened: SEC-004 (codes compared), SEQ-014 / FILE-021 / AUDIT-008 (a role with the view/upload grants but not the guarded permission: 200 on read, 403 `ACCESS_DENIED` on the guarded action), NOTIF-006 (lastError must name the mail-server connection failure), NOTIF-011 (a DISABLED staff recipient), AUDIT-010 (order check unconditional), REPORT-003/014/015/016 (non-empty and required members). NOTIF-010 relabelled as the cross-tenant owner check, with the `NOTIF_INBOX` tenant isolation cited to JUnit in plan §9.",
+    "NOTIF-003 (P-MAIL) now PASSES with the plan's request unchanged: the EMAIL row is addressed to alice's account e-mail by the recipient directory. NOTIF-006 (P-MAIL-DOWN) now fails for the intended reason: every attempt reaches the closed port 2525 (`MailConnectException … localhost, 2525`), never `missing recipient email address`.",
+    "SEC-032 identifies the customer's session without reading the database: session ids come from one sequence (`SEQ_SEC_ACTIVE_SESSION`, allocation size 1) and the profile instance serves only this script, so the id allocated between two staff logins that the staff list does not show is the customer login's. Each such id answers 404 `SEC-404-SESSION`, and the customer's token still works afterwards.",
+    "P-MAIL token handling: SEC-026 changes c2's password; the script logs c2 in again with the new password (`Cust0mer!New`) to keep a verified-customer `T_CUST` for the remaining P-MAIL cases. TENANT-026 runs last because it suspends (and re-activates) the run's tenant A.",
+    "Profile variant: the plan's P-MAIL/P-MAIL-DOWN `spring-boot-starter-mail` build was made as a local, uncommitted pom edit (reverted with `git checkout`); P-CAP, P-LOCAL and the 7272 instance used the unmodified jar.",
+    "REPORT-013 is merged from its two P-CAP parts and counts as PASS only when both the cap=2 and the cap=3 parts ran and passed (`core_verify_report.py` `REQUIRED_PARTS`; a missing part makes it BLOCKED).",
+    "NOTIF-006 (P-MAIL-DOWN): 3/3 consecutive runs PASS after the race fix (review round 1: the early read keyed only on `attempts`, which prepare() commits before the SMTP connect; it now waits for the recorded outcome, `lastError` + `nextAttemptAt`). Each run on its own restart of the mail-variant instance (port 7295, scratch DB, mail on closed port 2525): RUN `2610050332E2` PASS, RUN `26100503339B` PASS, RUN `26100503346B` PASS; the committed result file is the third."
+  ],
+  "junit_evidence": {
+    "intro": "Agreed item 4: the five JUnit classes behind the plan's §9 step-09 rows, run at the fix commit `9068779` (`mvn -o -q -pl erp-core test -Dtest=<the five> -Djacoco.skip=true`, embedded PostgreSQL 16, JDK 21), surefire counts copied from `erp-core/target/surefire-reports/*.txt`. The same five classes, with the same counts, also passed inside the clean root `mvn -o -q verify` at that commit (target/ deleted first): erp-core 358 tests, erp-app-reference 10, 0 failures, 0 errors, 0 skipped.",
+    "rows": [
+      {
+        "class": "NumberSeriesConcurrencyIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "NumberSeriesIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "SettingsIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "SettingsCacheTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      },
+      {
+        "class": "ConfigurationScopeApiIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "source": "surefire, 9068779"
+      }
+    ],
+    "notes": [
+      "CI run id: not available yet. This branch is local (never pushed, per the task rules), so no GitHub Actions run exists for the fix; the orchestrator cites the main CI run id once the fix is merged and main CI is green."
+    ]
+  }
+}

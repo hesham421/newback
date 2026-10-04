@@ -42,14 +42,16 @@ public class UserController {
     private final OperationCode operationCode;
 
     @PostMapping("/search")
-    @Operation(summary = "Search users", description = "بحث المستخدمين")
+    @Operation(summary = "Search users", description = "STAFF accounts only; customer accounts are never listed"
+        + " - بحث المستخدمين (حسابات الموظفين فقط، لا تظهر حسابات العملاء)")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> search(
             @Valid @RequestBody UserSearchRequest searchRequest) {
         return operationCode.craftResponse(service.search(searchRequest));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get user by ID", description = "جلب مستخدم بالمعرّف")
+    @Operation(summary = "Get user by ID", description = "STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id"
+        + " - جلب مستخدم بالمعرّف (حسابات الموظفين فقط)")
     public ResponseEntity<ApiResponse<UserResponse>> getById(@PathVariable Long id) {
         return operationCode.craftResponse(service.getById(id));
     }
@@ -62,7 +64,8 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update user", description = "تحديث مستخدم")
+    @Operation(summary = "Update user", description = "STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id"
+        + " - تحديث مستخدم (حسابات الموظفين فقط)")
     public ResponseEntity<ApiResponse<UserResponse>> update(
             @PathVariable Long id,
             @Valid @RequestBody UserUpdateRequest request) {
@@ -70,7 +73,8 @@ public class UserController {
     }
 
     @PutMapping("/{id}/roles")
-    @Operation(summary = "Assign roles to user", description = "إسناد أدوار إلى مستخدم")
+    @Operation(summary = "Assign roles to user", description = "STAFF accounts only (customers hold no roles); a customer account id answers 404 SEC-404-USER, like an unknown id"
+        + " - إسناد أدوار إلى مستخدم (حسابات الموظفين فقط)")
     public ResponseEntity<ApiResponse<UserResponse>> assignRoles(
             @PathVariable Long id,
             @Valid @RequestBody UserRoleAssignmentRequest request) {
@@ -78,13 +82,15 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deactivate user", description = "تعطيل مستخدم وإنهاء جلساته النشطة")
+    @Operation(summary = "Deactivate user", description = "STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id"
+        + " - تعطيل مستخدم وإنهاء جلساته النشطة (حسابات الموظفين فقط)")
     public ResponseEntity<ApiResponse<UserStatusResponse>> deactivate(@PathVariable Long id) {
         return operationCode.craftResponse(service.deactivate(id));
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Reactivate user", description = "إعادة تفعيل مستخدم معطَّل")
+    @Operation(summary = "Reactivate user", description = "STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id"
+        + " - إعادة تفعيل مستخدم معطَّل (حسابات الموظفين فقط)")
     public ResponseEntity<ApiResponse<UserStatusResponse>> reactivate(@PathVariable Long id) {
         return operationCode.craftResponse(service.reactivate(id));
     }

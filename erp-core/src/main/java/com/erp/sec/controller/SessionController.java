@@ -33,14 +33,16 @@ public class SessionController {
     private final OperationCode operationCode;
 
     @PostMapping("/search")
-    @Operation(summary = "List active sessions", description = "عرض الجلسات غير المنتهية")
+    @Operation(summary = "List active sessions", description = "Sessions of STAFF accounts only; customer sessions"
+        + " are never listed - عرض الجلسات غير المنتهية (جلسات الموظفين فقط)")
     public ResponseEntity<ApiResponse<Page<ActiveSessionResponse>>> search(
             @Valid @RequestBody ActiveSessionSearchRequest searchRequest) {
         return operationCode.craftResponse(service.search(searchRequest));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Terminate session", description = "إنهاء جلسة نشطة")
+    @Operation(summary = "Terminate session", description = "Sessions of STAFF accounts only; a customer session id"
+        + " answers 404 SEC-404-SESSION, like an unknown id - إنهاء جلسة نشطة (جلسات الموظفين فقط)")
     public ResponseEntity<ApiResponse<SessionTerminationResponse>> terminate(@PathVariable Long id) {
         return operationCode.craftResponse(service.terminate(id));
     }

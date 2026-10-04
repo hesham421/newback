@@ -15,7 +15,8 @@ import lombok.NoArgsConstructor;
 /**
  * API-NOTIF-001 dispatch request body. The sender chooses target channels via {@code channelHint}
  * (LOV-NOTIF-001 codes); dispatch fans out one NOTIF_LOG per requested channel (RULE-NOTIF-001).
- * {@code variables} feed template placeholder substitution. Excludes id and audit fields — dispatch
+ * {@code variables} feed template placeholder substitution; for EMAIL, {@code variables.email} is an
+ * optional destination override (default: the recipient's account e-mail). Excludes id and audit fields — dispatch
  * creates the log rows internally, never accepts them.
  */
 @Data
@@ -50,6 +51,11 @@ public class DispatchRequest {
     @Schema(description = "Source entity reference type - نوع المرجع", example = "USER_ACCOUNT")
     private String referenceType;
 
-    @Schema(description = "Template placeholder variables - متغيرات القالب")
+    @Schema(description = "Template placeholder variables. For the EMAIL channel, the optional `email` entry"
+        + " overrides the destination address; without it the recipient's account e-mail is used, and an EMAIL"
+        + " with no address at all ends FAILED after one attempt (no retry)"
+        + " - متغيرات القالب؛ في قناة البريد الإلكتروني يحدد المفتاح الاختياري email عنوان المستلم بدلًا من"
+        + " بريد حسابه، وإذا لم يتوفر أي عنوان ينتهي الإشعار بحالة FAILED بعد محاولة واحدة دون إعادة",
+        example = "{\"actionLink\":\"https://app.example/reset?token=abc\",\"email\":\"someone@example.com\"}")
     private Map<String, String> variables;
 }

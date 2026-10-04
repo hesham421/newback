@@ -1,0 +1,38 @@
+{
+ "meta": {
+  "profile": "P-CAP",
+  "base": "http://localhost:7295",
+  "run": "2610050312FB",
+  "started": "2026-10-05T03:12:18",
+  "cap": 3,
+  "local_root": null,
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-05T03:12:19",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-REPORT-013": {
+   "tc": "TC-CORE-REPORT-013",
+   "test": "test_report_013_export_cap",
+   "profile": "P-CAP",
+   "checks": [
+    {
+     "ok": true,
+     "what": "export with the cap at 3",
+     "expected": "200",
+     "observed": "200 · ﻿Id,Label\r\n1,alpha\r\n2,بيتا\r\n3,\"gamma, delta\"\r\n",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.4
+  }
+ }
+}

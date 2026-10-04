@@ -49,7 +49,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Orchestration for ENT-SEC-001 (User) — API-SEC-005/006/007/009/010. No caching: SEC is absent from
+ * Orchestration for ENT-SEC-001 (User) — API-SEC-005/006/007/009/010, STAFF realm only (erp-core step
+ * 14: search, get, update, deactivate and reactivate never see a CUSTOMER row). No caching: SEC is absent from
  * the gov-enforce-caching-rules approved register. The raw password is hashed once here and never
  * logged, stored or returned.
  */
@@ -218,6 +219,7 @@ public class UserService {
         if (fullName != null && !fullName.isBlank()) {
             spec = spec.and(fullNameMatches(fullName));
         }
+        spec = spec.and(staffRealm());
 
         Page<User> result =
             repository.findAll(spec, PageableBuilder.from(commonRequest, ALLOWED_SORT_FIELDS));
@@ -292,6 +294,14 @@ public class UserService {
             cb.like(cb.lower(root.get("fullNameEn")), pattern));
     }
 
+    /**
+     * erp-core step 14 — staff user management lists STAFF accounts only, applied unconditionally
+     * (a client filter cannot widen it; {@code realm} is not a filterable field either).
+     */
+    private static Specification<User> staffRealm() {
+        return (root, query, cb) -> cb.equal(root.get("realm"), User.REALM_STAFF);
+    }
+
     /** The body-dependent half of API-SEC-006's gate; SEC-403-FORBIDDEN is the module's denial. */
     private void assertMayAssignRoles() {
         if (!SecurityContextHelper.hasAuthority(SecPermissions.PERM_SEC_USERS_UPDATE)) {
@@ -299,8 +309,14 @@ public class UserService {
         }
     }
 
+    /**
+     * The by-id load of every staff management operation (get, update, deactivate, reactivate):
+     * STAFF realm only (erp-core step 14), so a CUSTOMER id answers 404 {@code SEC-404-USER} exactly
+     * like an unknown one, and staff management can never rename, disable, reactivate (bypassing
+     * e-mail verification) or otherwise act on a customer account.
+     */
     private User loadUser(Long id) {
-        return repository.findById(id)
+        return repository.findStaffById(id)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, SecErrorCodes.SEC_404_USER, id));
     }

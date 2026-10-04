@@ -53,10 +53,11 @@ class EmailChannelProviderTest {
     }
 
     @Test
-    void aMissingAddress_isFailed_withoutTouchingTheMailSender() {
+    void aMissingAddress_isRejected_withoutTouchingTheMailSender() {
         DeliveryResult result = provider.send(message(Map.of()));
 
-        assertThat(result.status()).isEqualTo(DeliveryStatus.FAILED);
+        // erp-core step 14: a permanent failure (REJECTED → FAILED after one attempt), no longer a retried FAILED
+        assertThat(result.status()).isEqualTo(DeliveryStatus.REJECTED);
         assertThat(result.detail()).isEqualTo(EmailChannelProvider.MISSING_EMAIL);
         verify(mailSender, never()).send(any(MimeMessage.class));
         assertThat(provider.channel()).isEqualTo(NotifChannels.EMAIL);

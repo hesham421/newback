@@ -18,14 +18,16 @@ import org.springframework.mail.javamail.MimeMessageHelper;
  *
  * <p>Sends a single-language HTML e-mail (with a plain-text alternative) chosen from the bilingual
  * template by the {@code lang} variable (falls back to EN). The address comes from the {@code email}
- * variable the dispatching module supplies (e.g. from SEC's {@code SecUserDirectoryApi.findContact}).
+ * variable: the dispatching module may supply it explicitly (an override), otherwise NOTIF's dispatch
+ * fills it from the recipient's account e-mail (SEC's {@code SecUserDirectoryApi.findContact}, erp-core
+ * step 14). A message that still has no address is {@link DeliveryResult#rejected rejected}: no retry.
  * Template text and every substituted value are HTML-escaped in the HTML part; {@code actionLink}
  * becomes a button.
  */
 @Slf4j
 public class EmailChannelProvider implements ChannelProvider {
 
-    /** Failure reason when the message carries no {@code email} variable (retrying cannot help, but it is a failure). */
+    /** Failure reason when the message carries no {@code email} variable: a permanent failure, never retried (step 14). */
     public static final String MISSING_EMAIL = "missing recipient email address";
 
     private static final String ARABIC_LANG = "AR";
@@ -49,7 +51,7 @@ public class EmailChannelProvider implements ChannelProvider {
         String to = variables.get("email");
         if (to == null || to.isBlank()) {
             log.warn("EMAIL notification {} has no 'email' variable — cannot send", message.notificationLogId());
-            return DeliveryResult.failed(MISSING_EMAIL);
+            return DeliveryResult.rejected(MISSING_EMAIL);
         }
 
         boolean rtl = ARABIC_LANG.equalsIgnoreCase(variables.get("lang"));

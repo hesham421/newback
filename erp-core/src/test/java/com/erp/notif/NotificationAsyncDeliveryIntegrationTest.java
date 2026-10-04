@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.erp.events.NotificationDispatchedEvent;
 import com.erp.events.NotificationFailedEvent;
+import com.erp.notif.channel.EmailChannelProvider;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
 import com.erp.notif.domain.NotificationLogDomain;
@@ -31,6 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -149,6 +151,59 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
         assertThat(failed.getLastError()).contains("smtp down");
     }
 
+    // erp-core step 14 — NOTIF addresses an EMAIL from the recipient directory when the dispatching
+    // module supplied no `email` variable; an explicit one wins; no address at all is terminal.
+
+    @Test
+    void emailDispatch_withoutAnEmailVariable_isAddressedToTheRecipientsAccountEmail() throws Exception {
+        String accountEmail = jdbc.queryForObject("SELECT EMAIL FROM SEC_USER WHERE USER_PK = ?", String.class,
+            recipientId);
+
+        long id = dispatchApi.dispatch(new DispatchCommand(recipientId, TEMPLATE, List.of("EMAIL"), "TEST", null,
+            null, Map.of("actionLink", "https://app.example.test/activate?token=t", "expiresAt", "soon"))).get(0);
+        Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_SENT);
+
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(1);
+        assertThat(row.get("last_error")).isNull();
+        assertThat(sentRecipients()).containsExactly(accountEmail);
+    }
+
+    @Test
+    void anExplicitEmailVariable_overridesTheRecipientsAccountEmail() throws Exception {
+        long id = dispatchApi.dispatch(emailCommand("override@example.test")).get(0);
+        awaitStatus(id, NotificationLogDomain.STATUS_SENT);
+
+        assertThat(sentRecipients()).containsExactly("override@example.test");
+    }
+
+    @Test
+    void anEmailWithNoAddressAnywhere_isFailedAfterOneAttempt_withoutAnyRetry() {
+        String accountEmail = jdbc.queryForObject("SELECT EMAIL FROM SEC_USER WHERE USER_PK = ?", String.class,
+            recipientId);
+        jdbc.update("UPDATE SEC_USER SET EMAIL = '' WHERE USER_PK = ?", recipientId);
+        try {
+            long id = dispatchApi.dispatch(new DispatchCommand(recipientId, TEMPLATE, List.of("EMAIL"), "TEST", null,
+                null, Map.of("email", "  ", "actionLink", "https://app.example.test/activate?token=t"))).get(0);
+            Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_FAILED);
+
+            assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(1);
+            assertThat(((Number) row.get("retry_count")).intValue()).isZero();
+            assertThat(row.get("last_error")).isEqualTo(EmailChannelProvider.MISSING_EMAIL);
+            assertThat(row.get("error_message")).isEqualTo(EmailChannelProvider.MISSING_EMAIL);
+            assertThat(row.get("next_attempt_at")).isNull();
+            assertThat(row.get("variables_json")).isNull();
+            NotificationFailedEvent failed =
+                (NotificationFailedEvent) awaitEvent(NotificationFailedEvent.class, id).event();
+            assertThat(failed.getAttempts()).isEqualTo(1);
+            awaitExecutorIdle();
+            assertThat(((Number) jdbc.queryForObject("SELECT ATTEMPTS FROM NOTIF_LOG WHERE ID = ?", Integer.class, id))
+                .intValue()).as("no retry after the rejection").isEqualTo(1);
+            verify(mailSender, never()).send(any(MimeMessage.class));
+        } finally {
+            jdbc.update("UPDATE SEC_USER SET EMAIL = ? WHERE USER_PK = ?", accountEmail, recipientId);
+        }
+    }
+
     @Test
     void smsWithoutAProvider_endsSkippedNoProvider_withoutAnException() {
         jdbc.update("INSERT INTO NOTIF_CHANNEL_CONFIG (ID, TENANT_ID, CHANNEL_TYPE_ID, IS_ENABLED_FL, CREATED_BY, CREATED_AT)"
@@ -225,6 +280,13 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
     private DispatchCommand emailCommand(String email) {
         return new DispatchCommand(recipientId, TEMPLATE, List.of("EMAIL"), "TEST", null, null,
             Map.of("email", email, "actionLink", "https://app.example.test/activate?token=t", "expiresAt", "soon"));
+    }
+
+    /** The To addresses of the one message the mock mail sender was asked to send. */
+    private List<String> sentRecipients() throws Exception {
+        ArgumentCaptor<MimeMessage> sent = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender, times(1)).send(sent.capture());
+        return Arrays.stream(sent.getValue().getAllRecipients()).map(Object::toString).toList();
     }
 
     /** Audit timestamps are stored as UTC wall-clock time (Hibernate binds {@code Instant} in UTC). */
