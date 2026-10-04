@@ -1026,6 +1026,12 @@
       "step": "12",
       "event": "halt",
       "note": "CI on GitHub: build-test failed at mvn verify (main eb4dd28 + tag v1.0.0); docker-image green; publish/consume skipped. Logs need auth (403). STEP 4: fix agent on step/12-ci-fix for failure visibility + Linux portability"
+    },
+    {
+      "at": "2026-10-04T22:23:14Z",
+      "step": "12",
+      "event": "fix",
+      "note": "post-merge CI fix merged f905025 (order-dependent BootstrapAdminPasswordIntegrationTest scoped to PLATFORM tenant; CI failure annotations; runOrder pinned). Awaiting CI on main"
     }
   ]
 }
