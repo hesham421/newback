@@ -1032,6 +1032,12 @@
       "step": "12",
       "event": "fix",
       "note": "post-merge CI fix merged f905025 (order-dependent BootstrapAdminPasswordIntegrationTest scoped to PLATFORM tenant; CI failure annotations; runOrder pinned). Awaiting CI on main"
+    },
+    {
+      "at": "2026-10-04T22:27:15Z",
+      "step": "12",
+      "event": "fix",
+      "note": "CI on main green (run 37239814860: build-test w/ Testcontainers on Docker 28.0.4 + docker-image). v1.0.0 tag predates fix; per RELEASE.md (no re-tag, PATCH for fixes) preparing v1.0.1 to run publish/consume"
     }
   ]
 }
