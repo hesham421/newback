@@ -1,0 +1,31 @@
+{
+  "_comment": "Human classification of each FAIL in the verification run (read by core_verify_report.py). Classes: APP-DEFECT (code wrong vs plan/docs), PLAN-DEFECT (plan expectation wrong, source cited), DOC-DEFECT, ENV.",
+  "fail": {
+    "TC-CORE-SEC-028": {
+      "class": "APP-DEFECT",
+      "summary": "Known gap, announced by the plan (\"Expected to FAIL against v1.0.0 — known gap, see review round 1\"). The staff user API returns a CUSTOMER row by id.",
+      "rationale": "APP-DEFECT. `UserService.loadUser` (erp-core/src/main/java/com/erp/sec/service/UserService.java, `repository.findById(id)`) has no realm filter, so `GET /api/v1/sec/users/{customerId}` answers 200 with `realm=CUSTOMER`. The plan's intended behaviour (06-STEP T3/T7; 06-report Notes \"Staff code must keep using the STAFF-scoped `UserRepository` methods\"; orchestrator ruling in review round 1) is 404 `SEC-404-USER`."
+    },
+    "TC-CORE-SEC-029": {
+      "class": "APP-DEFECT",
+      "summary": "Known gap, announced by the plan (expected to FAIL against v1.0.0). Staff update and role assignment act on a CUSTOMER row: the customer was renamed and now holds `SYS_ADMIN`.",
+      "rationale": "APP-DEFECT. `UserService.loadUser` and `UserRoleService` (`userRepository.findById(userId)`, UserRoleService.java line 66) load the user without a realm filter, so `PUT /api/v1/sec/users/{customerId}` and `PUT …/roles` succeed (200) and a customer ends up holding a staff role, contradicting 06-report Summary \"Customers hold no roles. Their only authority is `ROLE_CUSTOMER`\"."
+    },
+    "TC-CORE-SEC-030": {
+      "class": "APP-DEFECT",
+      "summary": "Known gap, announced by the plan (expected to FAIL against v1.0.0). Staff deactivate + reactivate turns an unverified customer into an ACTIVE one, which then logs in without ever verifying the e-mail.",
+      "rationale": "APP-DEFECT (realm isolation + e-mail-verification bypass). Same root cause (`UserService.loadUser` → `findById`, no realm filter): `DELETE` moves `PENDING_VERIFICATION` → `DISABLED` (deactivate has no state guard), `PATCH` moves `DISABLED` → `ACTIVE` (`assertCanReactivate` only requires `DISABLED`), and `CustomerAccountService.login` then sees status `ACTIVE`. The plan requires the login to stay 403 `CUSTOMER_NOT_VERIFIED` in every case (06-STEP T2/T9; 06-report Summary)."
+    },
+    "TC-CORE-NOTIF-003": {
+      "class": "PLAN-DEFECT",
+      "summary": "The plan's request (the NOTIF-002 body) carries no `variables.email`; the EMAIL provider has no address and fails (`missing recipient email address`), so the log is retried instead of reaching `SENT`. The same dispatch with `variables.email` set reaches `SENT` with `attempts`=1 and the sink receives the mail (see §5 observation).",
+      "rationale": "PLAN-DEFECT. `EmailChannelProvider` (erp-core/src/main/java/com/erp/notif/channel/EmailChannelProvider.java, class javadoc and `send`: `String to = variables.get(\"email\")`, else `DeliveryResult.failed(MISSING_EMAIL)`) documents that the address comes from the `email` variable the dispatching module supplies; nothing in `DispatchService` looks the recipient's address up. The JUnit the case mirrors, `NotificationAsyncDeliveryIntegrationTest.emailDispatch_isQueuedThenSentAsynchronously_andLogUpdated`, dispatches `emailCommand(\"someone@example.test\")`, i.e. with the address. Fix the plan: add `\"email\":\"alice-{run}@t.test\"` to `variables`. Secondary DOC-DEFECT: `docs/api-docs/notif/endpoints/notification-dispatch.md` describes `variables` only as \"Template placeholder variables\" and does not say an EMAIL dispatch needs `variables.email`."
+    }
+  },
+  "plan_notes": [
+    "NOTIF-006 (P-MAIL-DOWN) PASSES as written, but for a weaker reason than the case intends: its request is the NOTIF-002 body without `variables.email`, so every attempt fails with `missing recipient email address` before the closed port 2525 is ever contacted (same plan defect as NOTIF-003). The §5 observation repeats the dispatch with the address set: it also ends `FAILED` after 5 attempts (`retryCount` 4) with `MailConnectException … localhost, 2525`, so the retry-then-FAILED behaviour holds for a real connection failure too.",
+    "P-MAIL token handling: SEC-026 changes c2's password; the script logs c2 in again with the new password (`Cust0mer!New`) to keep a verified-customer `T_CUST` for the remaining P-MAIL cases, which run after it in the plan's §3 order. All of them passed with that token.",
+    "Profile variant: the plan's P-MAIL/P-MAIL-DOWN `spring-boot-starter-mail` build was made as a local, uncommitted pom edit (reverted with `git checkout`); P-CAP and P-LOCAL used the unmodified jar. With the mail starter and no SMTP listener, `/actuator/health` reports DOWN (mail health indicator); this does not affect any case.",
+    "Run order: the plan runs the profiles after the P-LIVE phases because they share one database. Here the profile instances ran on their own scratch database (`erp_pd_verify`), so the order is immaterial; a first P-LIVE run (RUN `261005022288`, same 3 SEC failures plus a script bug in AUDIT-014's test; it left the same kind of surviving records listed in §8 under that suffix) preceded them, and the P-LIVE run reported here was repeated after them with the corrected script (an `entityId` string/number comparison in AUDIT-014's test, a script bug, not an app finding)."
+  ]
+}

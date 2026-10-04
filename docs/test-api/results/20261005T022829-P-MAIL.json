@@ -1,0 +1,652 @@
+{
+ "meta": {
+  "profile": "P-MAIL",
+  "base": "http://localhost:7295",
+  "run": "26100502287C",
+  "started": "2026-10-05T02:28:29",
+  "cap": null,
+  "local_root": null,
+  "mail_dir": "C:/Users/MOE133~1/AppData/Local/Temp/claude/c--Users-moe133212665-source-repos-newback/6a0fd397-e5df-40da-bcbe-dda914f90f52/scratchpad/verify/mail-pmail",
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   },
+   {
+    "step": "TENANT-005 provision A",
+    "status": 201,
+    "code": null
+   },
+   {
+    "step": "TENANT-006 login ta-admin",
+    "status": 200,
+    "code": null
+   },
+   {
+    "step": "TENANT-013 alice",
+    "status": 201,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-05T02:28:59",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-SEC-021": {
+   "tc": "TC-CORE-SEC-021",
+   "test": "test_sec_021_verify_single_use",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/register [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\", \"fullName\": \"Customer Two\"}",
+     "expected": "201",
+     "observed": "201 · {\"data\":{\"id\":9,\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"Customer Two\",\"fullNameEn\":\"Customer Two\",\"statusCode\":\"PENDING_VERIFICATION\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":null,\"createdAt\":\"2026-10-04T22:28:29.834Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:29.834Z\",\"updatedBy\":",
+     "request": "POST /api/v1/public/customers/register [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\", \"fullName\": \"Customer Two\"}"
+    },
+    {
+     "ok": true,
+     "what": "captured CUSTOMER_VERIFY_EMAIL mail yields token",
+     "expected": "token",
+     "observed": "subject='Verify your e-mail address' token=yes",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/verify [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"b1566b3f-9603-4d27-ba3f-be4f08a31e9d\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":9,\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"Customer Two\",\"fullNameEn\":\"Customer Two\",\"statusCode\":\"ACTIVE\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":null,\"createdAt\":\"2026-10-04T22:28:29.834Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:29.834Z\",\"updatedBy\":\"anonymousUser",
+     "request": "POST /api/v1/public/customers/verify [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"b1566b3f-9603-4d27-ba3f-be4f08a31e9d\"}"
+    },
+    {
+     "ok": true,
+     "what": "data.statusCode",
+     "expected": "'ACTIVE'",
+     "observed": "'ACTIVE'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "data.realm",
+     "expected": "'CUSTOMER'",
+     "observed": "'CUSTOMER'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/verify [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"b1566b3f-9603-4d27-ba3f-be4f08a31e9d\"}",
+     "expected": "409 E(VERIFY_TOKEN_INVALID)",
+     "observed": "409 E(VERIFY_TOKEN_INVALID) · {\"error\":{\"code\":\"VERIFY_TOKEN_INVALID\",\"fieldErrors\":null,\"message\":\"The verification link is invalid, expired or already used\"},\"success\":false,\"timestamp\":\"2026-10-04T22:28:30.232650300Z\"}",
+     "request": "POST /api/v1/public/customers/verify [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"b1566b3f-9603-4d27-ba3f-be4f08a31e9d\"}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.49
+  },
+  "TC-CORE-SEC-022": {
+   "tc": "TC-CORE-SEC-022",
+   "test": "test_sec_022_verified_customer_login",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"accessToken\":\"<redacted>\",\"tokenType\":\"Bearer\",\"expiresIn\":3600},\"success\":true,\"timestamp\":\"2026-10-04T22:28:30.363542100Z\"}",
+     "request": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\"}"
+    },
+    {
+     "ok": true,
+     "what": "tokenType",
+     "expected": "'Bearer'",
+     "observed": "'Bearer'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "JWT realm",
+     "expected": "'CUSTOMER'",
+     "observed": "'CUSTOMER'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "JWT tid",
+     "expected": "3",
+     "observed": "3",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.13
+  },
+  "TC-CORE-SEC-023": {
+   "tc": "TC-CORE-SEC-023",
+   "test": "test_sec_023_read_my_profile",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/customers/me [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":9,\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"Customer Two\",\"fullNameEn\":\"Customer Two\",\"statusCode\":\"ACTIVE\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":\"2026-10-04T22:28:30.350Z\",\"createdAt\":\"2026-10-04T22:28:29.834Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:30.360Z\",\"upd",
+     "request": "GET /api/v1/customers/me [token]"
+    },
+    {
+     "ok": true,
+     "what": "id/email/realm/statusCode",
+     "expected": "(9, 'c2-26100502287c@shop.test', 'CUSTOMER', 'ACTIVE')",
+     "observed": "(9, 'c2-26100502287c@shop.test', 'CUSTOMER', 'ACTIVE')",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.02
+  },
+  "TC-CORE-SEC-024": {
+   "tc": "TC-CORE-SEC-024",
+   "test": "test_sec_024_profile_update_mass_assignment",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "PATCH /api/v1/customers/me [token] {\"fullNameAr\": \"اسم جديد\", \"fullNameEn\": \"New Name\", \"email\": \"evil-26100502287c@x.test\", \"statusCode\": \"SUSPENDED\", \"realm\": \"STAFF\", \"id\": 1}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":9,\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"اسم جديد\",\"fullNameEn\":\"New Name\",\"statusCode\":\"ACTIVE\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":\"2026-10-04T22:28:30.350Z\",\"createdAt\":\"2026-10-04T22:28:29.834Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:30.360Z\",\"updatedBy\":",
+     "request": "PATCH /api/v1/customers/me [token] {\"fullNameAr\": \"اسم جديد\", \"fullNameEn\": \"New Name\", \"email\": \"evil-26100502287c@x.test\", \"statusCode\": \"SUSPENDED\", \"realm\": \"STAFF\", \"id\": 1}"
+    },
+    {
+     "ok": true,
+     "what": "GET /api/v1/customers/me [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":9,\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"اسم جديد\",\"fullNameEn\":\"New Name\",\"statusCode\":\"ACTIVE\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":\"2026-10-04T22:28:30.350Z\",\"createdAt\":\"2026-10-04T22:28:29.834Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:30.420Z\",\"updatedBy\":",
+     "request": "GET /api/v1/customers/me [token]"
+    },
+    {
+     "ok": true,
+     "what": "names updated",
+     "expected": "('New Name', 'اسم جديد')",
+     "observed": "('New Name', 'اسم جديد')",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "immutable fields unchanged",
+     "expected": "('c2-26100502287c@shop.test', 'ACTIVE', 'CUSTOMER', 9)",
+     "observed": "('c2-26100502287c@shop.test', 'ACTIVE', 'CUSTOMER', 9)",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "names updated",
+     "expected": "('New Name', 'اسم جديد')",
+     "observed": "('New Name', 'اسم جديد')",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "immutable fields unchanged",
+     "expected": "('c2-26100502287c@shop.test', 'ACTIVE', 'CUSTOMER', 9)",
+     "observed": "('c2-26100502287c@shop.test', 'ACTIVE', 'CUSTOMER', 9)",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.05
+  },
+  "TC-CORE-SEC-025": {
+   "tc": "TC-CORE-SEC-025",
+   "test": "test_sec_025_customer_token_on_staff",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/sec/users/search [token] {\"size\": 10}",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:30.443279400Z\"}",
+     "request": "POST /api/v1/sec/users/search [token] {\"size\": 10}"
+    },
+    {
+     "ok": true,
+     "what": "GET /api/v1/sec/menu [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:30.460798900Z\"}",
+     "request": "GET /api/v1/sec/menu [token]"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.02
+  },
+  "TC-CORE-SEC-026": {
+   "tc": "TC-CORE-SEC-026",
+   "test": "test_sec_026_full_customer_reset",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/password-reset/request [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"messageAr\":\"إذا كان البريد الإلكتروني مسجلًا فسيتم إرسال رابط إعادة التعيين\",\"messageEn\":\"If that email is registered, a reset link has been sent\"},\"success\":true,\"timestamp\":\"2026-10-04T22:28:30.474801900Z\"}",
+     "request": "POST /api/v1/public/customers/password-reset/request [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\"}"
+    },
+    {
+     "ok": true,
+     "what": "captured CUSTOMER_PASSWORD_RESET mail yields token",
+     "expected": "token",
+     "observed": "subject='Reset your password'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"9caef55b-3db4-46c1-b9f0-0d67a85acfb6\", \"newPassword\": \"Cust0mer!New\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"messageAr\":\"تم تحديث كلمة المرور\",\"messageEn\":\"Your password has been updated\"},\"success\":true,\"timestamp\":\"2026-10-04T22:28:30.913586200Z\"}",
+     "request": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"9caef55b-3db4-46c1-b9f0-0d67a85acfb6\", \"newPassword\": \"Cust0mer!New\"}"
+    },
+    {
+     "ok": true,
+     "what": "data.messageEn",
+     "expected": "'Your password has been updated'",
+     "observed": "'Your password has been updated'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "login with the new password",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"accessToken\":\"<redacted>\",\"tokenType\":\"Bearer\",\"expiresIn\":3600},\"success\":true,\"timestamp\":\"2026-10-04T22:28:30.993691Z\"}",
+     "request": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Cust0mer!New\"}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\"}",
+     "expected": "401 E(SEC-401-INVALID-CREDENTIALS)",
+     "observed": "401 E(SEC-401-INVALID-CREDENTIALS) · {\"error\":{\"code\":\"SEC-401-INVALID-CREDENTIALS\",\"fieldErrors\":null,\"message\":\"Invalid credentials\"},\"success\":false,\"timestamp\":\"2026-10-04T22:28:31.074591300Z\"}",
+     "request": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c2-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\"}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"9caef55b-3db4-46c1-b9f0-0d67a85acfb6\", \"newPassword\": \"Cust0mer!New\"}",
+     "expected": "409 E(SEC-409-RESET-TOKEN-INVALID)",
+     "observed": "409 E(SEC-409-RESET-TOKEN-INVALID) · {\"error\":{\"code\":\"SEC-409-RESET-TOKEN-INVALID\",\"fieldErrors\":null,\"message\":\"This reset link is invalid or has expired\"},\"success\":false,\"timestamp\":\"2026-10-04T22:28:31.098602400Z\"}",
+     "request": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"9caef55b-3db4-46c1-b9f0-0d67a85acfb6\", \"newPassword\": \"Cust0mer!New\"}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.64
+  },
+  "TC-CORE-SEC-027": {
+   "tc": "TC-CORE-SEC-027",
+   "test": "test_sec_027_reset_verifies_unverified",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/register [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\", \"fullName\": \"Customer\"}",
+     "expected": "201",
+     "observed": "201 · {\"data\":{\"id\":10,\"email\":\"c3-26100502287c@shop.test\",\"fullNameAr\":\"Customer\",\"fullNameEn\":\"Customer\",\"statusCode\":\"PENDING_VERIFICATION\",\"realm\":\"CUSTOMER\",\"lastLoginAt\":null,\"createdAt\":\"2026-10-04T22:28:31.183Z\",\"createdBy\":\"anonymousUser\",\"updatedAt\":\"2026-10-04T22:28:31.183Z\",\"updatedBy\":\"anonym",
+     "request": "POST /api/v1/public/customers/register [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\", \"password\": \"Passw0rd!Tc1\", \"fullName\": \"Customer\"}"
+    },
+    {
+     "ok": true,
+     "what": "statusCode",
+     "expected": "'PENDING_VERIFICATION'",
+     "observed": "'PENDING_VERIFICATION'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/password-reset/request [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"messageAr\":\"إذا كان البريد الإلكتروني مسجلًا فسيتم إرسال رابط إعادة التعيين\",\"messageEn\":\"If that email is registered, a reset link has been sent\"},\"success\":true,\"timestamp\":\"2026-10-04T22:28:31.624041500Z\"}",
+     "request": "POST /api/v1/public/customers/password-reset/request [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\"}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"2984dadb-5dd7-4b6c-83b3-38bec3dd885c\", \"newPassword\": \"Cust0mer!C3\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"messageAr\":\"تم تحديث كلمة المرور\",\"messageEn\":\"Your password has been updated\"},\"success\":true,\"timestamp\":\"2026-10-04T22:28:32.165776400Z\"}",
+     "request": "POST /api/v1/public/customers/password-reset/complete [no token] X-Tenant-Code:'TCA26100502287C' {\"token\": \"2984dadb-5dd7-4b6c-83b3-38bec3dd885c\", \"newPassword\": \"Cust0mer!C3\"}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\", \"password\": \"Cust0mer!C3\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"accessToken\":\"<redacted>\",\"tokenType\":\"Bearer\",\"expiresIn\":3600},\"success\":true,\"timestamp\":\"2026-10-04T22:28:32.259054800Z\"}",
+     "request": "POST /api/v1/public/customers/login [no token] X-Tenant-Code:'TCA26100502287C' {\"email\": \"c3-26100502287c@shop.test\", \"password\": \"Cust0mer!C3\"}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 1.16
+  },
+  "TC-CORE-NOTIF-003": {
+   "tc": "TC-CORE-NOTIF-003",
+   "test": "test_notif_003_email_sent",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 8, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"logIds\":[11]},\"success\":true,\"timestamp\":\"2026-10-04T22:28:32.316629200Z\"}",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 8, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}"
+    },
+    {
+     "ok": true,
+     "what": "data.logIds has one id",
+     "expected": "1",
+     "observed": "1",
+     "request": ""
+    },
+    {
+     "ok": false,
+     "what": "notificationStatusId",
+     "expected": "'SENT'",
+     "observed": "'QUEUED'",
+     "request": ""
+    },
+    {
+     "ok": false,
+     "what": "attempts",
+     "expected": "1",
+     "observed": "4",
+     "request": ""
+    },
+    {
+     "ok": false,
+     "what": "sentAt set",
+     "expected": "set",
+     "observed": "None",
+     "request": ""
+    },
+    {
+     "ok": false,
+     "what": "sink received one mail to alice-26100502287c@t.test",
+     "expected": "1 mail",
+     "observed": "none (log lastError='missing recipient email address')",
+     "request": ""
+    }
+   ],
+   "result": "FAIL",
+   "note": "",
+   "observations": [
+    {
+     "what": "same dispatch with variables.email set",
+     "observed": "status=SENT attempts=1 sentAt=2026-10-05T02:28:57.559 sink_mail_to_alice=yes",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 8, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\", \"email\": \"alice-26100502287c@t.test\"}}"
+    }
+   ],
+   "seconds": 25.65
+  },
+  "TC-CORE-NOTIF-012": {
+   "tc": "TC-CORE-NOTIF-012",
+   "test": "test_notif_012_customer_inbox",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 9, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"IN_APP\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TEST_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"logIds\":[13]},\"success\":true,\"timestamp\":\"2026-10-04T22:28:57.952398900Z\"}",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 9, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"IN_APP\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TEST_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}"
+    },
+    {
+     "ok": true,
+     "what": "data.logIds has one id",
+     "expected": "1",
+     "observed": "1",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "GET /api/v1/customers/me/inbox [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"content\":[{\"id\":2,\"recipientUserId\":9,\"titleAr\":\"إعادة تعيين كلمة مرور نظام ERP\",\"titleEn\":\"Reset your ERP System password\",\"bodyAr\":\"تلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك في نظام ERP.\\nhttp://x/\\nلأسباب أمنية يمكن استخدام هذا الرابط مرة واحدة فقط، وتنتهي صلاحيته في soon.\\nإ",
+     "request": "GET /api/v1/customers/me/inbox [token]"
+    },
+    {
+     "ok": true,
+     "what": "list has the item (recipientUserId = $C2_ID)",
+     "expected": "present",
+     "observed": "{\"data\":{\"content\":[{\"id\":2,\"recipientUserId\":9,\"titleAr\":\"إعادة تعيين كلمة مرور نظام ERP\",\"titleEn\":\"Reset your ERP System password\",\"bodyAr\":\"تلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك في نظام ERP.\\nhttp://x/\\nلأسباب أمنية يمكن استخدام هذا الرابط مرة واحدة فقط، وتنتهي صلاحيته في soon.\\nإ",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "PATCH /api/v1/customers/me/inbox/2/read [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":2,\"recipientUserId\":9,\"titleAr\":\"إعادة تعيين كلمة مرور نظام ERP\",\"titleEn\":\"Reset your ERP System password\",\"bodyAr\":\"تلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك في نظام ERP.\\nhttp://x/\\nلأسباب أمنية يمكن استخدام هذا الرابط مرة واحدة فقط، وتنتهي صلاحيته في soon.\\nإذا لم تطلب ذ",
+     "request": "PATCH /api/v1/customers/me/inbox/2/read [token]"
+    },
+    {
+     "ok": true,
+     "what": "data.read",
+     "expected": "True",
+     "observed": "True",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.14
+  },
+  "TC-CORE-NOTIF-014": {
+   "tc": "TC-CORE-NOTIF-014",
+   "test": "test_notif_014_customer_on_staff_inbox",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/notif/inbox [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.073822700Z\"}",
+     "request": "GET /api/v1/notif/inbox [token]"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.03
+  },
+  "TC-CORE-NOTIF-015": {
+   "tc": "TC-CORE-NOTIF-015",
+   "test": "test_notif_015_staff_with_customer_name",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/sec/users [token] {\"username\": \"c2-26100502287c@shop.test\", \"email\": \"c2-26100502287c@shop.test\", \"fullNameAr\": \"موظف\", \"fullNameEn\": \"Staff\", \"password\": \"StaffPass!9\"}",
+     "expected": "201",
+     "observed": "201 · {\"data\":{\"userPk\":11,\"username\":\"c2-26100502287c@shop.test\",\"email\":\"c2-26100502287c@shop.test\",\"fullNameAr\":\"موظف\",\"fullNameEn\":\"Staff\",\"statusCode\":\"ACTIVE\",\"realm\":\"STAFF\",\"lastLoginAt\":null,\"isActiveFl\":true,\"roles\":[],\"createdAt\":\"2026-10-04T22:28:58.227Z\",\"createdBy\":\"ta-admin\",\"updatedAt\":\"20",
+     "request": "POST /api/v1/sec/users [token] {\"username\": \"c2-26100502287c@shop.test\", \"email\": \"c2-26100502287c@shop.test\", \"fullNameAr\": \"موظف\", \"fullNameEn\": \"Staff\", \"password\": \"StaffPass!9\"}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/sec/auth/login [no token] X-Tenant-Code:'TCA26100502287C' {\"username\": \"c2-26100502287c@shop.test\", \"password\": \"StaffPass!9\"}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"accessToken\":\"<redacted>\",\"tokenType\":\"Bearer\",\"expiresIn\":3600},\"success\":true,\"timestamp\":\"2026-10-04T22:28:58.303557200Z\"}",
+     "request": "POST /api/v1/sec/auth/login [no token] X-Tenant-Code:'TCA26100502287C' {\"username\": \"c2-26100502287c@shop.test\", \"password\": \"StaffPass!9\"}"
+    },
+    {
+     "ok": true,
+     "what": "GET /api/v1/notif/inbox [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"content\":[],\"empty\":true,\"first\":true,\"last\":true,\"number\":0,\"numberOfElements\":0,\"pageable\":{\"offset\":0,\"pageNumber\":0,\"pageSize\":20,\"paged\":true,\"sort\":{\"empty\":false,\"sorted\":true,\"unsorted\":false},\"unpaged\":false},\"size\":20,\"sort\":{\"empty\":false,\"sorted\":true,\"unsorted\":false},\"totalEl",
+     "request": "GET /api/v1/notif/inbox [token]"
+    },
+    {
+     "ok": true,
+     "what": "no item of $C2_ID",
+     "expected": "none",
+     "observed": "{\"data\":{\"content\":[],\"empty\":true,\"first\":true,\"last\":true,\"number\":0,\"numberOfElements\":0,\"pageable\":{\"offset\":0,\"pageNumber\":0,\"pageSize\":20,\"paged\":true,\"sort\":{\"empty\":false,\"sorted\":true,\"unsorted\":false},\"unpaged\":false},\"size\":20,\"sort\":{\"empty\":false,\"sorted\":true,\"unsorted\":false},\"totalEl",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.26
+  },
+  "TC-CORE-FILE-022": {
+   "tc": "TC-CORE-FILE-022",
+   "test": "test_file_022_customer_tokens_on_files",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "setup FILE-001",
+     "expected": "201",
+     "observed": "201 · {\"data\":{\"id\":2,\"categoryCode\":\"TC_PUB_26100502287C\",\"nameAr\":\"فئة\",\"nameEn\":\"Public 26100502287C\",\"maxSizeBytes\":null,\"allowedContentTypes\":null,\"isActiveFl\":true,\"allowPublic\":true,\"createdAt\":\"2026-10-04T22:28:58.350Z\",\"createdBy\":\"ta-admin\",\"updatedAt\":\"2026-10-04T22:28:58.350Z\",\"updatedBy\":\"ta-",
+     "request": "POST /api/v1/files/categories [token] {\"categoryCode\": \"TC_PUB_26100502287C\", \"nameAr\": \"فئة\", \"nameEn\": \"Public 26100502287C\", \"allowPublic\": true}"
+    },
+    {
+     "ok": true,
+     "what": "setup FILE-003",
+     "expected": "201",
+     "observed": "201 · {\"data\":{\"id\":2,\"ownerId\":4711,\"ownerType\":\"PRODUCT\",\"moduleCode\":\"SHOP\",\"fileName\":\"logo.png\",\"contentType\":\"image/png\",\"fileSize\":69,\"fileTypeId\":\"IMAGE\",\"fileStatusId\":\"ACTIVE\",\"fileCategoryId\":2,\"storageProvider\":\"DB\",\"visibility\":\"PRIVATE\",\"publicUrl\":null,\"createdAt\":\"2026-10-04T22:28:58.384Z\"",
+     "request": "POST /api/v1/files [token]"
+    },
+    {
+     "ok": true,
+     "what": "setup FILE-008",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"id\":2,\"ownerId\":4711,\"ownerType\":\"PRODUCT\",\"moduleCode\":\"SHOP\",\"fileName\":\"logo.png\",\"contentType\":\"image/png\",\"fileSize\":69,\"fileTypeId\":\"IMAGE\",\"fileStatusId\":\"ACTIVE\",\"fileCategoryId\":2,\"storageProvider\":\"DB\",\"visibility\":\"PUBLIC\",\"publicUrl\":\"/api/v1/public/files/TCA26100502287C/KdIsjv",
+     "request": "PATCH /api/v1/files/2/visibility [token] {\"visibility\": \"PUBLIC\"}"
+    },
+    {
+     "ok": true,
+     "what": "GET $URL3 with T_CUST → 200 (like anonymous)",
+     "expected": "200 + bytes",
+     "observed": "200 b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc`g`\\x00\\x00\\x00\\x19\\x00\\x",
+     "request": "GET /api/v1/public/files/TCA26100502287C/KdIsjvSNxQf1sJkP31XUEd3t0TuFTk0B [token]"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/public/files/TCA26100502287C/KdIsjvSNxQf1sJkP31XUEd3t0TuFTk0B [token]",
+     "expected": "405 E(METHOD_NOT_ALLOWED)",
+     "observed": "405 E(METHOD_NOT_ALLOWED) · {\"error\":{\"code\":\"METHOD_NOT_ALLOWED\",\"fieldErrors\":null,\"message\":\"The HTTP method is not supported for this resource\"},\"success\":false,\"timestamp\":\"2026-10-04T22:28:58.436166600Z\"}",
+     "request": "POST /api/v1/public/files/TCA26100502287C/KdIsjvSNxQf1sJkP31XUEd3t0TuFTk0B [token]"
+    },
+    {
+     "ok": true,
+     "what": "GET /api/v1/files/2 [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.467212500Z\"}",
+     "request": "GET /api/v1/files/2 [token]"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.14
+  },
+  "TC-CORE-AUDIT-006": {
+   "tc": "TC-CORE-AUDIT-006",
+   "test": "test_audit_006_customer_login_audited",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/audit/events?entityType=SEC_USER&entityId=9&action=LOGIN [token]",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"content\":[{\"id\":31,\"occurredAt\":\"2026-10-04T22:28:30.990Z\",\"actor\":\"c2-26100502287c@shop.test\",\"actorRealm\":\"CUSTOMER\",\"actorUserId\":9,\"action\":\"LOGIN\",\"entityType\":\"SEC_USER\",\"entityId\":\"9\",\"summaryAr\":\"تسجيل دخول ناجح\",\"summaryEn\":\"Successful login\",\"changes\":null,\"ip\":\"127.0.0.1\",\"userA",
+     "request": "GET /api/v1/audit/events?entityType=SEC_USER&entityId=9&action=LOGIN [token]"
+    },
+    {
+     "ok": true,
+     "what": "≥ 1 row",
+     "expected": ">=1",
+     "observed": "2",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "actorRealm",
+     "expected": "'CUSTOMER'",
+     "observed": "'CUSTOMER'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "actor",
+     "expected": "'c2-26100502287c@shop.test'",
+     "observed": "'c2-26100502287c@shop.test'",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.01
+  },
+  "TC-CORE-AUDIT-009": {
+   "tc": "TC-CORE-AUDIT-009",
+   "test": "test_audit_009_customer_token_403",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/audit/events [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.501273100Z\"}",
+     "request": "GET /api/v1/audit/events [token]"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.02
+  },
+  "TC-CORE-REPORT-012": {
+   "tc": "TC-CORE-REPORT-012",
+   "test": "test_report_012_customer_token_403",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/report/definitions [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.511272Z\"}",
+     "request": "GET /api/v1/report/definitions [token]"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/SEC_USER_LIST/run [token] {}",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.549808Z\"}",
+     "request": "POST /api/v1/report/SEC_USER_LIST/run [token] {}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/SEC_USER_LIST/export [token] {}",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.574820100Z\"}",
+     "request": "POST /api/v1/report/SEC_USER_LIST/export [token] {}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.07
+  },
+  "TC-CORE-PLATFORM-004": {
+   "tc": "TC-CORE-PLATFORM-004",
+   "test": "test_platform_004_customer_token_on_platform",
+   "profile": "P-MAIL",
+   "checks": [
+    {
+     "ok": true,
+     "what": "GET /api/v1/platform/tenants [token]",
+     "expected": "403 E(REALM_MISMATCH)",
+     "observed": "403 E(REALM_MISMATCH) · {\"success\":false,\"error\":{\"code\":\"REALM_MISMATCH\",\"message\":\"This token belongs to another sign-in realm and cannot be used here\"},\"timestamp\":\"2026-10-04T22:28:58.602870100Z\"}",
+     "request": "GET /api/v1/platform/tenants [token]"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.03
+  }
+ }
+}

@@ -1,0 +1,130 @@
+{
+ "meta": {
+  "profile": "P-MAIL-DOWN",
+  "base": "http://localhost:7295",
+  "run": "2610050229E7",
+  "started": "2026-10-05T02:29:43",
+  "cap": null,
+  "local_root": null,
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   },
+   {
+    "step": "TENANT-005 provision A",
+    "status": 201,
+    "code": null
+   },
+   {
+    "step": "TENANT-006 login ta-admin",
+    "status": 200,
+    "code": null
+   },
+   {
+    "step": "TENANT-013 alice",
+    "status": 201,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-05T02:30:46",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-NOTIF-006": {
+   "tc": "TC-CORE-NOTIF-006",
+   "test": "test_notif_006_failing_provider_retried",
+   "profile": "P-MAIL-DOWN",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 13, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"logIds\":[14]},\"success\":true,\"timestamp\":\"2026-10-04T22:29:44.226728800Z\"}",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 13, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\"}}"
+    },
+    {
+     "ok": true,
+     "what": "early notificationStatusId",
+     "expected": "'QUEUED'",
+     "observed": "'QUEUED'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "early attempts ≥ 1",
+     "expected": ">=1",
+     "observed": "1",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "early nextAttemptAt set",
+     "expected": "set",
+     "observed": "2026-10-04T22:29:46.270Z",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "early lastError set",
+     "expected": "set",
+     "observed": "missing recipient email address",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "final notificationStatusId",
+     "expected": "'FAILED'",
+     "observed": "'FAILED'",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "final attempts",
+     "expected": "5",
+     "observed": "5",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "final retryCount",
+     "expected": "4",
+     "observed": "4",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "lastError and errorMessage non-empty",
+     "expected": "non-empty",
+     "observed": "('missing recipient email address', 'missing recipient email address')",
+     "request": ""
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/notifications/logs/search [token] {\"filters\": [{\"field\": \"notificationStatusId\", \"operator\": \"EQUALS\", \"value\": \"FAILED\"}], \"size\": 200}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"content\":[{\"id\":14,\"recipientId\":13,\"channelTypeId\":\"EMAIL\",\"notificationStatusId\":\"FAILED\",\"moduleCode\":\"TEST\",\"referenceId\":1,\"referenceType\":\"TC_REF\",\"retryCount\":4,\"errorMessage\":\"missing recipient email address\",\"sentAt\":null,\"templateId\":13,\"attempts\":5,\"nextAttemptAt\":null,\"lastErro",
+     "request": "POST /api/v1/notifications/logs/search [token] {\"filters\": [{\"field\": \"notificationStatusId\", \"operator\": \"EQUALS\", \"value\": \"FAILED\"}], \"size\": 200}"
+    },
+    {
+     "ok": true,
+     "what": "search contains the log id",
+     "expected": "14",
+     "observed": "[14]",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "observations": [
+    {
+     "what": "same dispatch with variables.email set (mail server down)",
+     "observed": "status=FAILED attempts=5 retryCount=4 lastError=\"Mail server connection failed. Failed messages: org.eclipse.angus.mail.util.MailConnectException: Couldn't connect to host, port: localhost, 2525; timeout -1;\\n  nested exception is:\\n\\tjava.net.ConnectException: Connection refused: connect\"",
+     "request": "POST /api/v1/notifications/dispatch [token] {\"recipientId\": 13, \"templateCode\": \"PASSWORD_RESET\", \"channelHint\": [\"EMAIL\"], \"moduleCode\": \"TEST\", \"referenceType\": \"TC_REF\", \"referenceId\": 1, \"variables\": {\"actionLink\": \"http://x/\", \"expiresAt\": \"soon\", \"email\": \"alice-2610050229e7@t.test\"}}"
+    }
+   ],
+   "seconds": 62.57
+  }
+ }
+}
