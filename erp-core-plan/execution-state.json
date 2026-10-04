@@ -372,15 +372,26 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-08",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a610cba22aa4f49f5",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/08-report.md",
+      "deviations": [
+        "spring-retry 2.0.11 explicit",
+        "EMAIL without sender -> SKIPPED_NO_PROVIDER (was FAILED/NO_MAIL_SENDER)",
+        "NOTIF_LOG.VARIABLES_JSON added, cleared when final",
+        "at-least-once delivery",
+        "inbox no realm column; SecUserDirectoryApi.findCurrentUserId",
+        "inbox tested with staff users",
+        "no realm in DispatchCommand",
+        "CUSTOMER templates left to 06",
+        "delivery components no @PreAuthorize",
+        "fixed empty From address bug"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -719,6 +730,12 @@
       "step": "07",
       "event": "fix",
       "note": "round 1 finding relayed (XSS inline serving) + minor notes"
+    },
+    {
+      "at": "2026-10-04T18:09:35Z",
+      "step": "08",
+      "event": "reported",
+      "note": "implementer report c486039, 3/3; core 138, app 8"
     }
   ]
 }
