@@ -2,6 +2,7 @@ package com.erp.autoconfigure;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +47,10 @@ public class ErpCoreProperties {
 
     // erp-core step 10 — generic audit log
     private final Audit audit = new Audit();
+
+    /** erp-core step 11 — reporting. */
+    @Valid
+    private final Report report = new Report();
 
     /** Authentication settings. */
     @Getter
@@ -366,5 +371,15 @@ public class ErpCoreProperties {
          * enables scheduling; {@code -} (the default) disables it.
          */
         private String retentionCron = "-";
+    }
+
+    /** Reporting settings (erp-core step 11). */
+    @Getter
+    @Setter
+    public static class Report {
+
+        /** Most rows one export may contain; a larger result answers 422 {@code REPORT_EXPORT_TOO_LARGE}. */
+        @Positive
+        private int maxExportRows = 100_000;
     }
 }
