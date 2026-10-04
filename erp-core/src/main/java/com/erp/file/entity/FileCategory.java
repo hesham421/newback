@@ -31,7 +31,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "FILE_CATEGORY",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_FILE_CATEGORY_CATEGORY_CODE", columnNames = {"CATEGORY_CODE"})
+        @UniqueConstraint(name = "UQ_FILE_CATEGORY_CATEGORY_CODE", columnNames = {"TENANT_ID", "CATEGORY_CODE"})
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder

@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -24,8 +25,8 @@ import lombok.experimental.SuperBuilder;
 /**
  * ENT-SEC-011 — AuditLogEntry (SEC_AUDIT_LOG). Source: db-script-sec.md §1 DBF-SEC-083..090 /
  * §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-011. Append-only (POL-SEC-009): no setter, no
- * mutator, no Domain companion, and no AuditableEntity — see
- * governance/project-artifacts/sec-implementation-notes.md.
+ * mutator, no Domain companion. Extends the tenant-aware AuditableEntity since erp-core step 05
+ * (V10 added its audit columns; they are written once, on insert, like the row itself).
  */
 @Entity
 @Table(name = "SEC_AUDIT_LOG",
@@ -36,7 +37,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class AuditLogEntry {
+public class AuditLogEntry extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_audit_log_seq")

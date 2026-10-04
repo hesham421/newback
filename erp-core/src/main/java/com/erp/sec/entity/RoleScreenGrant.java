@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -26,15 +27,14 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * ENT-SEC-008 — RoleScreenGrant (SEC_ROLE_SCREEN_GRANT). Source: db-script-sec.md §1
- * DBF-SEC-065..069 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-008. Does not extend
- * AuditableEntity — see governance/project-artifacts/sec-implementation-notes.md. RULE-SEC-001
+ * DBF-SEC-065..069 / §3 BLOCK 3, DATA-DOM-TRANSACTIONAL.md ENT-SEC-008. Extends the tenant-aware AuditableEntity since erp-core step 05 (V10 added its audit columns). RULE-SEC-001
  * and the duplication guard are decided by {@code RoleScreenGrantDomain}.
  */
 @Entity
 @Table(name = "SEC_ROLE_SCREEN_GRANT",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_SEC_ROLE_SCREEN_GRANT_ROLE_SCREEN",
-            columnNames = {"ROLE_ID", "SCREEN_ID"})
+            columnNames = {"TENANT_ID", "ROLE_ID", "SCREEN_ID"})
     },
     indexes = {
         @Index(name = "IDX_SEC_ROLE_SCREEN_GRANT_ROLE", columnList = "ROLE_ID"),
@@ -42,7 +42,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class RoleScreenGrant {
+public class RoleScreenGrant extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_role_screen_grant_seq")

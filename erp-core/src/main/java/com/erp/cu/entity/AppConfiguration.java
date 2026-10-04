@@ -29,7 +29,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "CU_APP_CONFIGURATION",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_CU_APP_CONFIG_CONFIG_KEY", columnNames = {"CONFIG_KEY"})
+        @UniqueConstraint(name = "UQ_CU_APP_CONFIG_CONFIG_KEY", columnNames = {"TENANT_ID", "CONFIG_KEY"})
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder

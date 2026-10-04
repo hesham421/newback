@@ -4,13 +4,14 @@ import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.entity.User;
 import com.erp.sec.repository.UserRepository;
+import com.erp.tenant.TenantConstants;
+import com.erp.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
@@ -27,6 +28,12 @@ import org.springframework.util.StringUtils;
  * <p>This is startup infrastructure, not a request path: it runs with no principal, so it uses
  * the repository directly (as {@link JwtAuthenticationFilter} does) instead of a
  * {@code @PreAuthorize}-gated service method. The password is never logged.
+ *
+ * <p>Tenant (erp-core step 05): the bootstrap admin belongs to the PLATFORM tenant, and a runner has
+ * no request tenant, so the whole run executes inside {@code TenantContext.runAs(PLATFORM_TENANT_ID)}.
+ * The method is deliberately not {@code @Transactional}: a transaction opened before {@code runAs}
+ * would bind its Hibernate session to no tenant. The lookup and the save are each their own
+ * repository transaction (the save merges the loaded row, version-checked); at startup nothing races it.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,8 +48,11 @@ public class BootstrapAdminPasswordRunner implements ApplicationRunner {
     private final ErpCoreProperties properties;
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
+        TenantContext.runAs(TenantConstants.PLATFORM_TENANT_ID, this::initialiseBootstrapAdmin);
+    }
+
+    private void initialiseBootstrapAdmin() {
         String password = properties.getSecurity().getBootstrapAdminPassword();
         if (!StringUtils.hasText(password)) {
             log.debug("erp.core.security.bootstrap-admin-password is not set; bootstrap admin left as it is");

@@ -86,7 +86,7 @@ public class ErpCoreAutoConfiguration {
      * {@code @ComponentScan} tokenizes it on commas, and {@link #CORE_PACKAGES} is derived from it.
      */
     public static final String CORE_PACKAGE_LIST =
-        "com.erp.common,com.erp.cu,com.erp.mdl,com.erp.sec,com.erp.file,com.erp.notif";
+        "com.erp.common,com.erp.cu,com.erp.mdl,com.erp.sec,com.erp.file,com.erp.notif,com.erp.tenant";
 
     /** The core packages: component scan, entity scan and JPA repositories all use exactly these. */
     public static final String[] CORE_PACKAGES = StringUtils.commaDelimitedListToStringArray(CORE_PACKAGE_LIST);

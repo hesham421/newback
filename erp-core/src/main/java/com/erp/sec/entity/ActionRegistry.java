@@ -1,6 +1,6 @@
 package com.erp.sec.entity;
 
-import com.erp.common.domain.AuditableEntity;
+import com.erp.common.domain.GlobalAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -42,7 +42,7 @@ import lombok.experimental.SuperBuilder;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
-public class ActionRegistry extends AuditableEntity {
+public class ActionRegistry extends GlobalAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_action_reg_seq")

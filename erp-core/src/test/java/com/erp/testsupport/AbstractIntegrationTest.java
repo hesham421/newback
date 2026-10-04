@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestExecutionListeners;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
@@ -18,6 +19,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * {@code @ServiceConnection} when Docker is available, otherwise an in-process embedded PostgreSQL 16.
  * Force one with {@code -Derp.test.db=testcontainers|embedded} (or env {@code ERP_TEST_DB}).
  *
+ * <p>Tenant (erp-core step 05): every test method runs as the PLATFORM tenant
+ * ({@link TenantContextTestExecutionListener}), which owns all seeded rows.
+ *
  * <p>Subclasses add only what they need ({@code @Transactional}, {@code @TestPropertySource}, ...)
  * and must not redeclare {@code @SpringBootTest} or {@code @ActiveProfiles}.
  */
@@ -25,6 +29,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @ActiveProfiles("test")
 @Testcontainers
 @Import(TestcontainersPostgresConfiguration.class)
+@TestExecutionListeners(listeners = TenantContextTestExecutionListener.class,
+    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS)
 public abstract class AbstractIntegrationTest {
 
     @DynamicPropertySource

@@ -36,6 +36,8 @@ public class ErpCoreProperties {
 
     private final Frontend frontend = new Frontend();
 
+    private final Tenant tenant = new Tenant();
+
     /** Authentication settings. */
     @Getter
     @Setter
@@ -105,6 +107,32 @@ public class ErpCoreProperties {
 
         /** Whole-request upload limit in bytes. */
         private long maxRequestBytes = 10_485_760L;
+    }
+
+    /** Multi-tenancy settings (erp-core step 05). */
+    @Getter
+    @Setter
+    public static class Tenant {
+
+        /**
+         * The default tenant-exempt paths: the actuator, the springdoc document and UI, the servlet
+         * error page, and the platform API (its callers are authenticated PLATFORM operators, whose
+         * token carries the tenant anyway).
+         */
+        public static final List<String> DEFAULT_EXEMPT_PATHS = List.of(
+            "/actuator/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/error",
+            "/api/v1/platform/**");
+
+        /**
+         * Paths that may be served without a tenant: neither a token ({@code tid}) nor the
+         * {@code X-Tenant-Code} header is required there. Every other public (unauthenticated) path
+         * is refused 400 {@code TENANT_REQUIRED} without the header. Setting this replaces the list.
+         */
+        private List<String> exemptPaths = new ArrayList<>(DEFAULT_EXEMPT_PATHS);
     }
 
     /** Links that point into the frontend (e.g. the emailed password-reset link). */

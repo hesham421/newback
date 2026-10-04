@@ -30,8 +30,8 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "SEC_USER",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_SEC_USER_USERNAME", columnNames = {"USERNAME"}),
-        @UniqueConstraint(name = "UQ_SEC_USER_EMAIL", columnNames = {"EMAIL"})
+        @UniqueConstraint(name = "UQ_SEC_USER_USERNAME", columnNames = {"TENANT_ID", "USERNAME"}),
+        @UniqueConstraint(name = "UQ_SEC_USER_EMAIL", columnNames = {"TENANT_ID", "EMAIL"})
     },
     indexes = {
         @Index(name = "IDX_SEC_USER_STATUS", columnList = "STATUS_CODE")

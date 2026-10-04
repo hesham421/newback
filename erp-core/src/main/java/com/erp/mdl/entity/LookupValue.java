@@ -36,7 +36,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "MDL_LOOKUP_VALUE",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_MDL_LOOKUP_VALUE_TYPE_CODE", columnNames = {"LOOKUP_TYPE_ID", "CODE"})
+        @UniqueConstraint(name = "UQ_MDL_LOOKUP_VALUE_TYPE_CODE", columnNames = {"TENANT_ID", "LOOKUP_TYPE_ID", "CODE"})
     },
     indexes = {
         @Index(name = "IDX_MDL_LOOKUP_VALUE_TYPE", columnList = "LOOKUP_TYPE_ID"),
