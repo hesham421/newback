@@ -73,11 +73,10 @@ import org.springframework.web.bind.annotation.PutMapping;
  * same way the running application does; every test wraps its writes in the outer class-level
  * {@link Transactional} and rolls back on completion, so nothing here leaves data behind.
  *
- * <p>TC-SEC-033 is deliberately NOT covered here: it requires a real FIN endpoint gated by the
- * CORE module-access interceptor, and {@code com.erp.fin} does not exist anywhere under
- * {@code src/main/java} (confirmed via {@code find src/main/java/com/erp/fin}), nor is FIN listed
- * in {@code governance/modules-registry.json}. There is no code to exercise, in-process or
- * otherwise — see the task report rather than a stub test here.
+ * <p>TC-SEC-033 is deliberately NOT covered here: it requires a real business-module endpoint
+ * gated by the CORE module-access interceptor, and no such module exists in this codebase.
+ * There is no code to exercise, in-process or otherwise — see the task report rather than a
+ * stub test here.
  */
 @SpringBootTest(classes = ErpMainApplication.class)
 @ActiveProfiles("dev")
@@ -487,7 +486,7 @@ class SecCoverageIntegrationTest {
         return userRepository.save(user);
     }
 
-    /** Looks up an ActionRegistry row seeded by V17__sec_security_seed.sql by its permission code. */
+    /** Looks up an ActionRegistry row seeded by V14__sec_security_seed.sql by its permission code. */
     private void grantExistingSeededPermission(Role role, String permissionCode) {
         Specification<ActionRegistry> byPermissionCode =
             (root, query, cb) -> cb.equal(root.get("permissionCode"), permissionCode);

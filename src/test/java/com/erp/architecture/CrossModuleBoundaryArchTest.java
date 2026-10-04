@@ -30,10 +30,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * current package layout — see {@code src/main/java/com/erp/*}. {@code com.erp.mdl} (Master Data
  * Lookup, the {@code masterdata} module's actual package prefix) was added to {@link #MODULES}
  * once its first source classes landed, so it is no longer misclassified as {@code "shared"}.
- * {@code com.erp.fin} (Finance / General Ledger) was added in FIN's INT-C phase, the point at
- * which FIN first consumed another module ({@code mdl.crossmodule.MdlLookupApi} and
- * {@code sec.crossmodule.SecUserDirectoryApi}); it publishes no {@code crossmodule} package of
- * its own yet, which the structural rule below already handles.
  */
 @AnalyzeClasses(packages = "com.erp")
 public class CrossModuleBoundaryArchTest {
@@ -49,8 +45,7 @@ public class CrossModuleBoundaryArchTest {
             new Module("com.erp.notif", "com.erp.notif.crossmodule"),
             new Module("com.erp.file", "com.erp.file.crossmodule"),
             new Module("com.erp.cu", "com.erp.cu.crossmodule"),
-            new Module("com.erp.mdl", "com.erp.mdl.crossmodule"),
-            new Module("com.erp.fin", "com.erp.fin.crossmodule")
+            new Module("com.erp.mdl", "com.erp.mdl.crossmodule")
     );
 
     private record Module(String packagePrefix, String crossModulePackage) {

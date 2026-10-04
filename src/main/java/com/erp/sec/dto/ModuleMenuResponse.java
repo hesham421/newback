@@ -21,13 +21,13 @@ public class ModuleMenuResponse {
     @Schema(description = "Unique identifier - المعرف الفريد", example = "1")
     private Long moduleRegPk;
 
-    @Schema(description = "Module code - رمز الوحدة", example = "FIN")
+    @Schema(description = "Module code - رمز الوحدة", example = "NOTIF")
     private String code;
 
-    @Schema(description = "Module name (Arabic) - اسم الوحدة بالعربية", example = "المالية")
+    @Schema(description = "Module name (Arabic) - اسم الوحدة بالعربية", example = "خدمة الإشعارات")
     private String nameAr;
 
-    @Schema(description = "Module name (English) - اسم الوحدة بالإنجليزية", example = "Finance")
+    @Schema(description = "Module name (English) - اسم الوحدة بالإنجليزية", example = "Notification Service")
     private String nameEn;
 
     @Schema(description = "Granted screens beneath this module - الشاشات الممنوحة ضمن الوحدة")

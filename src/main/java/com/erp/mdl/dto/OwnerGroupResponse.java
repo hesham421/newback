@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Lookup type registry grouped by owner module - سجل أنواع اللوكب مجمّعاً حسب الوحدة المالكة")
 public class OwnerGroupResponse {
 
-    @Schema(description = "Owner module code - رمز الوحدة المالكة", example = "FIN")
+    @Schema(description = "Owner module code - رمز الوحدة المالكة", example = "NOTIF")
     private String ownerModuleCode;
 
     @Schema(description = "Active lookup types owned by this module - أنواع اللوكب النشطة التابعة لهذه الوحدة")

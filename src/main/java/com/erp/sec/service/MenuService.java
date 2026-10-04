@@ -91,8 +91,8 @@ public class MenuService {
      * <p>The screen of each held code is the registry's {@code SEC_SCREEN_REG} row, read in the
      * very same query as the codes themselves (QR-SEC-027's registry shape) — never derived from
      * the permission code's text. A code's action may be any number of words
-     * ({@code PERM_FIN_PERIODS_CLOSE_APPROVE} on screen {@code FIN_PERIODS}, gated by
-     * {@code PERM_FIN_PERIODS_VIEW}) and still resolve to the right screen, which a split on the
+     * (e.g. {@code PERM_X_PERIODS_CLOSE_APPROVE} on screen {@code X_PERIODS}, gated by
+     * {@code PERM_X_PERIODS_VIEW}) and still resolve to the right screen, which a split on the
      * code's last underscore cannot do. One query per call, no per-code lookup.
      */
     @Transactional(readOnly = true)
