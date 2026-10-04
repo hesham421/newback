@@ -315,15 +315,26 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-07",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a49feaa002168f461",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/07-report.md",
+      "deviations": [
+        "visibility endpoint PATCH /api/v1/files/{id}/visibility",
+        "public path wiring isolated (PUBLIC_FILE_PATHS + erp.core.tenant.path-tenant-paths) pending 06 chain",
+        "FilePermissions DOCUMENT_PUBLISH seeded in V12 + provisioning",
+        "CONTENT_HASH column for ETag; partial unique slug index",
+        "storage props nested in ErpCoreProperties.Files",
+        "reads use recorded provider",
+        "FILE_STORAGE_UNAVAILABLE -> 500",
+        "download tokens unchanged",
+        "S3 SDK optional, netty excluded",
+        "abstract test class DB/LOCAL subclasses"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -675,6 +686,12 @@
       "step": "08",
       "event": "dispatched",
       "note": "parallel batch A1 (06,07,08) dispatched"
+    },
+    {
+      "at": "2026-10-04T17:55:32Z",
+      "step": "07",
+      "event": "reported",
+      "note": "implementer report 2b758b5, 3/3; core 142, app 8"
     }
   ]
 }
