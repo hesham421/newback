@@ -377,9 +377,9 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-08",
-      "attempts": 1,
+      "attempts": 2,
       "implementer_agent": "a610cba22aa4f49f5",
       "reviewer_agent": "a798b3445c7335bfb",
       "review": {
@@ -782,6 +782,12 @@
       "step": "07",
       "event": "reported",
       "note": "fix round 1 + rebase onto 06 at 2e3bdae; core 177/app 8"
+    },
+    {
+      "at": "2026-10-04T18:29:46Z",
+      "step": "08",
+      "event": "reported",
+      "note": "rebased onto 06 at 8f7a5c4 (realm-aware inbox, customer events, 06 test awaits async FAILED); core 167/app 8; awaiting 07 merge -> final rebase -> reviewer re-verify"
     }
   ]
 }
