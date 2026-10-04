@@ -1,0 +1,409 @@
+-- ============================================================
+-- V16 — Security (SEC) — full module schema (ground-up rebuild)
+-- Source: governance/modules/SEC/P2/db-script-sec.md §3 FULL_DATABASE_SCRIPT (BLOCK 1..7)
+-- Target: POSTGRESQL_16 | 13 tables, 13 sequences | 104 DBF-IDs | 0 XM (SEC is ROOT)
+-- Replaces the legacy SEC schema dropped by V14 (V2/V3 are never edited — forward-fix only).
+-- Schema only — no seed data (SEC-BE phase owns the SEC self-registration seed).
+-- Flyway wraps this migration in its own transaction (no explicit COMMIT — matches every earlier migration).
+--
+-- DEVIATION from db-script §3 BLOCK 1/2/3 (deliberate, decided at DATA-DOM-MASTER):
+--   the db-script declares every PK as `GENERATED ALWAYS AS IDENTITY` with "BLOCK 1 — none".
+--   This repo's entity contract mandates GenerationType.SEQUENCE + @SequenceGenerator
+--   (build-create-entity A.1.3/A.1.4; GenerationType.IDENTITY is an automatic rejection
+--   trigger), and every other module here (CU/NOTIF/FILE, and the old SEC V2) uses explicit
+--   SEQ_<TABLE> sequences. PK columns are therefore plain BIGINT NOT NULL, fed by the
+--   sequences created in BLOCK 1 below. Every table/column/constraint/index name is otherwise
+--   verbatim from the db-script.
+-- ============================================================
+
+-- ============================================================
+-- BLOCK 1: SEQUENCES (one per table; SEQ_<TABLE>, matching V1/V2/V6/V8 style)
+-- ============================================================
+CREATE SEQUENCE SEQ_SEC_USER              START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ROLE              START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_USER_ROLE         START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_MODULE_REG        START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_SCREEN_REG        START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ACTION_REG        START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ROLE_MODULE_GRANT START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ROLE_SCREEN_GRANT START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ROLE_ACTION_GRANT START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_ACTIVE_SESSION    START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_AUDIT_LOG         START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_PWD_RESET_TOKEN   START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_SEC_SIGNUP_REQUEST    START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+
+-- ============================================================
+-- BLOCK 2: PARENT TABLES (no FK dependencies)
+-- ============================================================
+-- Shared platform lookup infrastructure (ADR-SEC-001): NOT created here in v1. SEC's own
+-- lookup-backed columns (status_code, event_type_code) are CHECK-constrained below.
+
+CREATE TABLE SEC_USER (
+  user_pk        BIGINT        NOT NULL,
+  username       VARCHAR(100)  NOT NULL,
+  email          VARCHAR(255)  NOT NULL,
+  password_hash  TEXT          NOT NULL,
+  full_name_ar   VARCHAR(200)  NOT NULL,
+  full_name_en   VARCHAR(200)  NOT NULL,
+  status_code    VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE',
+  last_login_at  TIMESTAMPTZ,
+  is_active_fl   BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by     VARCHAR(100)  NOT NULL,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by     VARCHAR(100),
+  updated_at     TIMESTAMPTZ
+);
+
+CREATE TABLE SEC_ROLE (
+  role_pk          BIGINT        NOT NULL,
+  code             VARCHAR(50)   NOT NULL,
+  name_ar          VARCHAR(150)  NOT NULL,
+  name_en          VARCHAR(150)  NOT NULL,
+  description_ar   VARCHAR(500),
+  description_en   VARCHAR(500),
+  is_active_fl     BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by       VARCHAR(100)  NOT NULL,
+  created_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by       VARCHAR(100),
+  updated_at       TIMESTAMPTZ
+);
+
+CREATE TABLE SEC_MODULE_REG (
+  module_reg_pk  BIGINT        NOT NULL,
+  code           VARCHAR(10)   NOT NULL,
+  name_ar        VARCHAR(150)  NOT NULL,
+  name_en        VARCHAR(150)  NOT NULL,
+  is_active_fl   BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by     VARCHAR(100)  NOT NULL,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by     VARCHAR(100),
+  updated_at     TIMESTAMPTZ
+);
+
+CREATE TABLE SEC_SIGNUP_REQUEST (
+  signup_request_pk  BIGINT        NOT NULL,
+  email              VARCHAR(255)  NOT NULL,
+  full_name_ar       VARCHAR(200)  NOT NULL,
+  full_name_en       VARCHAR(200)  NOT NULL,
+  submitted_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  status_code        VARCHAR(20)   NOT NULL DEFAULT 'PENDING',
+  reviewed_by        VARCHAR(100),
+  reviewed_at        TIMESTAMPTZ
+);
+
+-- ============================================================
+-- BLOCK 3: CHILD TABLES (parents already created above; chain respected)
+-- ============================================================
+CREATE TABLE SEC_USER_ROLE (
+  user_role_pk  BIGINT        NOT NULL,
+  user_id       BIGINT        NOT NULL,
+  role_id       BIGINT        NOT NULL,
+  assigned_by   VARCHAR(100)  NOT NULL,
+  assigned_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE SEC_SCREEN_REG (
+  screen_reg_pk  BIGINT        NOT NULL,
+  page_code      VARCHAR(50)   NOT NULL,
+  module_id      BIGINT        NOT NULL,
+  name_ar        VARCHAR(150)  NOT NULL,
+  name_en        VARCHAR(150)  NOT NULL,
+  is_active_fl   BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by     VARCHAR(100)  NOT NULL,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by     VARCHAR(100),
+  updated_at     TIMESTAMPTZ
+);
+
+CREATE TABLE SEC_ACTION_REG (
+  action_reg_pk    BIGINT        NOT NULL,
+  permission_code  VARCHAR(100)  NOT NULL,
+  screen_id        BIGINT        NOT NULL,
+  action_code      VARCHAR(40)   NOT NULL,
+  name_ar          VARCHAR(150)  NOT NULL,
+  name_en          VARCHAR(150)  NOT NULL,
+  is_active_fl     BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by       VARCHAR(100)  NOT NULL,
+  created_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by       VARCHAR(100),
+  updated_at       TIMESTAMPTZ
+);
+
+CREATE TABLE SEC_ROLE_MODULE_GRANT (
+  role_module_grant_pk  BIGINT        NOT NULL,
+  role_id               BIGINT        NOT NULL,
+  module_id             BIGINT        NOT NULL,
+  granted_by            VARCHAR(100)  NOT NULL,
+  granted_at            TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE SEC_ROLE_SCREEN_GRANT (
+  role_screen_grant_pk  BIGINT        NOT NULL,
+  role_id               BIGINT        NOT NULL,
+  screen_id             BIGINT        NOT NULL,
+  granted_by            VARCHAR(100)  NOT NULL,
+  granted_at            TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE SEC_ROLE_ACTION_GRANT (
+  role_action_grant_pk  BIGINT        NOT NULL,
+  role_id               BIGINT        NOT NULL,
+  action_id             BIGINT        NOT NULL,
+  granted_by            VARCHAR(100)  NOT NULL,
+  granted_at            TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE SEC_ACTIVE_SESSION (
+  active_session_pk  BIGINT        NOT NULL,
+  user_id            BIGINT        NOT NULL,
+  token_ref          VARCHAR(200)  NOT NULL,
+  started_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  last_activity_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  ip_address         VARCHAR(64),
+  terminated_at      TIMESTAMPTZ,
+  terminated_by      VARCHAR(100)
+);
+
+CREATE TABLE SEC_AUDIT_LOG (
+  audit_log_pk      BIGINT        NOT NULL,
+  event_type_code   VARCHAR(40)   NOT NULL,
+  actor_user_id     BIGINT,
+  occurred_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  target_ref        VARCHAR(200),
+  details_ar        TEXT,
+  details_en        TEXT,
+  ip_address        VARCHAR(64)
+);
+
+CREATE TABLE SEC_PWD_RESET_TOKEN (
+  pwd_reset_token_pk  BIGINT       NOT NULL,
+  user_id             BIGINT       NOT NULL,
+  token_hash          TEXT         NOT NULL,
+  requested_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  expires_at          TIMESTAMPTZ  NOT NULL,
+  used_at             TIMESTAMPTZ
+);
+
+-- ============================================================
+-- BLOCK 4: COMMENTS (table + every column; each column comment cites its DBF id)
+-- ============================================================
+COMMENT ON TABLE SEC_USER IS 'ENT-SEC-001 User — SHARED(owner); [DBF-SEC-001..013]';
+COMMENT ON COLUMN SEC_USER.user_pk IS 'DBF-SEC-001';
+COMMENT ON COLUMN SEC_USER.username IS 'DBF-SEC-002';
+COMMENT ON COLUMN SEC_USER.email IS 'DBF-SEC-003';
+COMMENT ON COLUMN SEC_USER.password_hash IS 'DBF-SEC-004 — never returned to any client (POL-SEC-004)';
+COMMENT ON COLUMN SEC_USER.full_name_ar IS 'DBF-SEC-005';
+COMMENT ON COLUMN SEC_USER.full_name_en IS 'DBF-SEC-006';
+COMMENT ON COLUMN SEC_USER.status_code IS 'DBF-SEC-007 — lookup USER_STATUS (ADR-SEC-001)';
+COMMENT ON COLUMN SEC_USER.last_login_at IS 'DBF-SEC-008';
+COMMENT ON COLUMN SEC_USER.is_active_fl IS 'DBF-SEC-009';
+COMMENT ON COLUMN SEC_USER.created_by IS 'DBF-SEC-010';
+COMMENT ON COLUMN SEC_USER.created_at IS 'DBF-SEC-011';
+COMMENT ON COLUMN SEC_USER.updated_by IS 'DBF-SEC-012';
+COMMENT ON COLUMN SEC_USER.updated_at IS 'DBF-SEC-013';
+
+COMMENT ON TABLE SEC_ROLE IS 'ENT-SEC-002 Role — PRIVATE; [DBF-SEC-014..024]';
+COMMENT ON COLUMN SEC_ROLE.role_pk IS 'DBF-SEC-014';
+COMMENT ON COLUMN SEC_ROLE.code IS 'DBF-SEC-015';
+COMMENT ON COLUMN SEC_ROLE.name_ar IS 'DBF-SEC-016';
+COMMENT ON COLUMN SEC_ROLE.name_en IS 'DBF-SEC-017';
+COMMENT ON COLUMN SEC_ROLE.description_ar IS 'DBF-SEC-018';
+COMMENT ON COLUMN SEC_ROLE.description_en IS 'DBF-SEC-019';
+COMMENT ON COLUMN SEC_ROLE.is_active_fl IS 'DBF-SEC-020';
+COMMENT ON COLUMN SEC_ROLE.created_by IS 'DBF-SEC-021';
+COMMENT ON COLUMN SEC_ROLE.created_at IS 'DBF-SEC-022';
+COMMENT ON COLUMN SEC_ROLE.updated_by IS 'DBF-SEC-023';
+COMMENT ON COLUMN SEC_ROLE.updated_at IS 'DBF-SEC-024';
+
+COMMENT ON TABLE SEC_USER_ROLE IS 'ENT-SEC-003 UserRoleAssignment — PRIVATE; [DBF-SEC-025..029]';
+COMMENT ON COLUMN SEC_USER_ROLE.user_role_pk IS 'DBF-SEC-025';
+COMMENT ON COLUMN SEC_USER_ROLE.user_id IS 'DBF-SEC-026';
+COMMENT ON COLUMN SEC_USER_ROLE.role_id IS 'DBF-SEC-027';
+COMMENT ON COLUMN SEC_USER_ROLE.assigned_by IS 'DBF-SEC-028';
+COMMENT ON COLUMN SEC_USER_ROLE.assigned_at IS 'DBF-SEC-029';
+
+COMMENT ON TABLE SEC_MODULE_REG IS 'ENT-SEC-004 ModuleRegistry — SHARED(owner); [DBF-SEC-030..038]';
+COMMENT ON COLUMN SEC_MODULE_REG.module_reg_pk IS 'DBF-SEC-030';
+COMMENT ON COLUMN SEC_MODULE_REG.code IS 'DBF-SEC-031';
+COMMENT ON COLUMN SEC_MODULE_REG.name_ar IS 'DBF-SEC-032';
+COMMENT ON COLUMN SEC_MODULE_REG.name_en IS 'DBF-SEC-033';
+COMMENT ON COLUMN SEC_MODULE_REG.is_active_fl IS 'DBF-SEC-034';
+COMMENT ON COLUMN SEC_MODULE_REG.created_by IS 'DBF-SEC-035';
+COMMENT ON COLUMN SEC_MODULE_REG.created_at IS 'DBF-SEC-036';
+COMMENT ON COLUMN SEC_MODULE_REG.updated_by IS 'DBF-SEC-037';
+COMMENT ON COLUMN SEC_MODULE_REG.updated_at IS 'DBF-SEC-038';
+
+COMMENT ON TABLE SEC_SCREEN_REG IS 'ENT-SEC-005 ScreenRegistry (SEC_PAGES) — SHARED(owner); [DBF-SEC-039..048]';
+COMMENT ON COLUMN SEC_SCREEN_REG.screen_reg_pk IS 'DBF-SEC-039';
+COMMENT ON COLUMN SEC_SCREEN_REG.page_code IS 'DBF-SEC-040';
+COMMENT ON COLUMN SEC_SCREEN_REG.module_id IS 'DBF-SEC-041 — RULE-SEC-004 enforced by FK_SCREEN_REG_MODULE';
+COMMENT ON COLUMN SEC_SCREEN_REG.name_ar IS 'DBF-SEC-042';
+COMMENT ON COLUMN SEC_SCREEN_REG.name_en IS 'DBF-SEC-043';
+COMMENT ON COLUMN SEC_SCREEN_REG.is_active_fl IS 'DBF-SEC-044';
+COMMENT ON COLUMN SEC_SCREEN_REG.created_by IS 'DBF-SEC-045';
+COMMENT ON COLUMN SEC_SCREEN_REG.created_at IS 'DBF-SEC-046';
+COMMENT ON COLUMN SEC_SCREEN_REG.updated_by IS 'DBF-SEC-047';
+COMMENT ON COLUMN SEC_SCREEN_REG.updated_at IS 'DBF-SEC-048';
+
+COMMENT ON TABLE SEC_ACTION_REG IS 'ENT-SEC-006 ActionRegistry — SHARED(owner); [DBF-SEC-049..059]';
+COMMENT ON COLUMN SEC_ACTION_REG.action_reg_pk IS 'DBF-SEC-049';
+COMMENT ON COLUMN SEC_ACTION_REG.permission_code IS 'DBF-SEC-050';
+COMMENT ON COLUMN SEC_ACTION_REG.screen_id IS 'DBF-SEC-051';
+COMMENT ON COLUMN SEC_ACTION_REG.action_code IS 'DBF-SEC-052';
+COMMENT ON COLUMN SEC_ACTION_REG.name_ar IS 'DBF-SEC-053';
+COMMENT ON COLUMN SEC_ACTION_REG.name_en IS 'DBF-SEC-054';
+COMMENT ON COLUMN SEC_ACTION_REG.is_active_fl IS 'DBF-SEC-055';
+COMMENT ON COLUMN SEC_ACTION_REG.created_by IS 'DBF-SEC-056';
+COMMENT ON COLUMN SEC_ACTION_REG.created_at IS 'DBF-SEC-057';
+COMMENT ON COLUMN SEC_ACTION_REG.updated_by IS 'DBF-SEC-058';
+COMMENT ON COLUMN SEC_ACTION_REG.updated_at IS 'DBF-SEC-059';
+
+COMMENT ON TABLE SEC_ROLE_MODULE_GRANT IS 'ENT-SEC-007 RoleModuleGrant — PRIVATE; [DBF-SEC-060..064]';
+COMMENT ON COLUMN SEC_ROLE_MODULE_GRANT.role_module_grant_pk IS 'DBF-SEC-060';
+COMMENT ON COLUMN SEC_ROLE_MODULE_GRANT.role_id IS 'DBF-SEC-061';
+COMMENT ON COLUMN SEC_ROLE_MODULE_GRANT.module_id IS 'DBF-SEC-062';
+COMMENT ON COLUMN SEC_ROLE_MODULE_GRANT.granted_by IS 'DBF-SEC-063';
+COMMENT ON COLUMN SEC_ROLE_MODULE_GRANT.granted_at IS 'DBF-SEC-064';
+
+COMMENT ON TABLE SEC_ROLE_SCREEN_GRANT IS 'ENT-SEC-008 RoleScreenGrant — PRIVATE; RULE-SEC-001 enforced at application layer (P3.1); [DBF-SEC-065..069]';
+COMMENT ON COLUMN SEC_ROLE_SCREEN_GRANT.role_screen_grant_pk IS 'DBF-SEC-065';
+COMMENT ON COLUMN SEC_ROLE_SCREEN_GRANT.role_id IS 'DBF-SEC-066';
+COMMENT ON COLUMN SEC_ROLE_SCREEN_GRANT.screen_id IS 'DBF-SEC-067';
+COMMENT ON COLUMN SEC_ROLE_SCREEN_GRANT.granted_by IS 'DBF-SEC-068';
+COMMENT ON COLUMN SEC_ROLE_SCREEN_GRANT.granted_at IS 'DBF-SEC-069';
+
+COMMENT ON TABLE SEC_ROLE_ACTION_GRANT IS 'ENT-SEC-009 RoleActionGrant — PRIVATE; RULE-SEC-002/005/007 enforced at application layer (P3.1); [DBF-SEC-070..074]';
+COMMENT ON COLUMN SEC_ROLE_ACTION_GRANT.role_action_grant_pk IS 'DBF-SEC-070';
+COMMENT ON COLUMN SEC_ROLE_ACTION_GRANT.role_id IS 'DBF-SEC-071';
+COMMENT ON COLUMN SEC_ROLE_ACTION_GRANT.action_id IS 'DBF-SEC-072';
+COMMENT ON COLUMN SEC_ROLE_ACTION_GRANT.granted_by IS 'DBF-SEC-073';
+COMMENT ON COLUMN SEC_ROLE_ACTION_GRANT.granted_at IS 'DBF-SEC-074';
+
+COMMENT ON TABLE SEC_ACTIVE_SESSION IS 'ENT-SEC-010 ActiveSession — PRIVATE; [DBF-SEC-075..082]';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.active_session_pk IS 'DBF-SEC-075';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.user_id IS 'DBF-SEC-076';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.token_ref IS 'DBF-SEC-077';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.started_at IS 'DBF-SEC-078';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.last_activity_at IS 'DBF-SEC-079';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.ip_address IS 'DBF-SEC-080';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.terminated_at IS 'DBF-SEC-081';
+COMMENT ON COLUMN SEC_ACTIVE_SESSION.terminated_by IS 'DBF-SEC-082';
+
+COMMENT ON TABLE SEC_AUDIT_LOG IS 'ENT-SEC-011 AuditLogEntry — PRIVATE, append-only, immutable (POL-SEC-009); [DBF-SEC-083..090]';
+COMMENT ON COLUMN SEC_AUDIT_LOG.audit_log_pk IS 'DBF-SEC-083';
+COMMENT ON COLUMN SEC_AUDIT_LOG.event_type_code IS 'DBF-SEC-084 — lookup AUDIT_EVENT_TYPE (ADR-SEC-001)';
+COMMENT ON COLUMN SEC_AUDIT_LOG.actor_user_id IS 'DBF-SEC-085';
+COMMENT ON COLUMN SEC_AUDIT_LOG.occurred_at IS 'DBF-SEC-086';
+COMMENT ON COLUMN SEC_AUDIT_LOG.target_ref IS 'DBF-SEC-087';
+COMMENT ON COLUMN SEC_AUDIT_LOG.details_ar IS 'DBF-SEC-088';
+COMMENT ON COLUMN SEC_AUDIT_LOG.details_en IS 'DBF-SEC-089';
+COMMENT ON COLUMN SEC_AUDIT_LOG.ip_address IS 'DBF-SEC-090';
+
+COMMENT ON TABLE SEC_PWD_RESET_TOKEN IS 'ENT-SEC-012 PasswordResetToken — PRIVATE; [DBF-SEC-091..096]';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.pwd_reset_token_pk IS 'DBF-SEC-091';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.user_id IS 'DBF-SEC-092';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.token_hash IS 'DBF-SEC-093';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.requested_at IS 'DBF-SEC-094';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.expires_at IS 'DBF-SEC-095';
+COMMENT ON COLUMN SEC_PWD_RESET_TOKEN.used_at IS 'DBF-SEC-096 — RULE-SEC-006 enforced at application layer (P3.1)';
+
+COMMENT ON TABLE SEC_SIGNUP_REQUEST IS 'ENT-SEC-013 SignupRequest — PRIVATE; [DBF-SEC-097..104]';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.signup_request_pk IS 'DBF-SEC-097';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.email IS 'DBF-SEC-098';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.full_name_ar IS 'DBF-SEC-099';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.full_name_en IS 'DBF-SEC-100';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.submitted_at IS 'DBF-SEC-101';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.status_code IS 'DBF-SEC-102 — lookup SIGNUP_STATUS (ADR-SEC-001)';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.reviewed_by IS 'DBF-SEC-103';
+COMMENT ON COLUMN SEC_SIGNUP_REQUEST.reviewed_at IS 'DBF-SEC-104';
+
+-- ============================================================
+-- BLOCK 5: CONSTRAINTS
+-- ============================================================
+-- 5a. PRIMARY KEYS
+ALTER TABLE SEC_USER               ADD CONSTRAINT PK_SEC_USER               PRIMARY KEY (user_pk);
+ALTER TABLE SEC_ROLE               ADD CONSTRAINT PK_SEC_ROLE               PRIMARY KEY (role_pk);
+ALTER TABLE SEC_USER_ROLE          ADD CONSTRAINT PK_SEC_USER_ROLE          PRIMARY KEY (user_role_pk);
+ALTER TABLE SEC_MODULE_REG         ADD CONSTRAINT PK_SEC_MODULE_REG         PRIMARY KEY (module_reg_pk);
+ALTER TABLE SEC_SCREEN_REG         ADD CONSTRAINT PK_SEC_SCREEN_REG         PRIMARY KEY (screen_reg_pk);
+ALTER TABLE SEC_ACTION_REG         ADD CONSTRAINT PK_SEC_ACTION_REG         PRIMARY KEY (action_reg_pk);
+ALTER TABLE SEC_ROLE_MODULE_GRANT  ADD CONSTRAINT PK_SEC_ROLE_MODULE_GRANT  PRIMARY KEY (role_module_grant_pk);
+ALTER TABLE SEC_ROLE_SCREEN_GRANT  ADD CONSTRAINT PK_SEC_ROLE_SCREEN_GRANT  PRIMARY KEY (role_screen_grant_pk);
+ALTER TABLE SEC_ROLE_ACTION_GRANT  ADD CONSTRAINT PK_SEC_ROLE_ACTION_GRANT  PRIMARY KEY (role_action_grant_pk);
+ALTER TABLE SEC_ACTIVE_SESSION     ADD CONSTRAINT PK_SEC_ACTIVE_SESSION     PRIMARY KEY (active_session_pk);
+ALTER TABLE SEC_AUDIT_LOG          ADD CONSTRAINT PK_SEC_AUDIT_LOG          PRIMARY KEY (audit_log_pk);
+ALTER TABLE SEC_PWD_RESET_TOKEN    ADD CONSTRAINT PK_SEC_PWD_RESET_TOKEN    PRIMARY KEY (pwd_reset_token_pk);
+ALTER TABLE SEC_SIGNUP_REQUEST     ADD CONSTRAINT PK_SEC_SIGNUP_REQUEST     PRIMARY KEY (signup_request_pk);
+
+-- 5b. UNIQUE
+ALTER TABLE SEC_USER               ADD CONSTRAINT UQ_SEC_USER_USERNAME     UNIQUE (username);
+ALTER TABLE SEC_USER               ADD CONSTRAINT UQ_SEC_USER_EMAIL        UNIQUE (email);
+ALTER TABLE SEC_ROLE               ADD CONSTRAINT UQ_SEC_ROLE_CODE         UNIQUE (code);
+ALTER TABLE SEC_USER_ROLE          ADD CONSTRAINT UQ_SEC_USER_ROLE_USER_ROLE UNIQUE (user_id, role_id);
+ALTER TABLE SEC_MODULE_REG         ADD CONSTRAINT UQ_SEC_MODULE_REG_CODE   UNIQUE (code);
+ALTER TABLE SEC_SCREEN_REG         ADD CONSTRAINT UQ_SEC_SCREEN_REG_PAGE   UNIQUE (page_code);
+ALTER TABLE SEC_ACTION_REG         ADD CONSTRAINT UQ_SEC_ACTION_REG_PERM   UNIQUE (permission_code);
+ALTER TABLE SEC_ROLE_MODULE_GRANT  ADD CONSTRAINT UQ_SEC_ROLE_MODULE_GRANT_ROLE_MODULE UNIQUE (role_id, module_id);
+ALTER TABLE SEC_ROLE_SCREEN_GRANT  ADD CONSTRAINT UQ_SEC_ROLE_SCREEN_GRANT_ROLE_SCREEN UNIQUE (role_id, screen_id);
+ALTER TABLE SEC_ROLE_ACTION_GRANT  ADD CONSTRAINT UQ_SEC_ROLE_ACTION_GRANT_ROLE_ACTION UNIQUE (role_id, action_id);
+
+-- 5c. CHECK (the closed A6 lookup value sets per ADR-SEC-001 — CHECK today, migrated to an FK
+--     on the shared lookup infrastructure once MDL's own P2 stage creates it)
+ALTER TABLE SEC_USER            ADD CONSTRAINT CHK_SEC_USER_STATUS          CHECK (status_code IN ('PENDING','ACTIVE','DISABLED'));
+ALTER TABLE SEC_SIGNUP_REQUEST  ADD CONSTRAINT CHK_SEC_SIGNUP_REQUEST_STATUS CHECK (status_code IN ('PENDING','APPROVED','REJECTED'));
+ALTER TABLE SEC_AUDIT_LOG       ADD CONSTRAINT CHK_SEC_AUDIT_LOG_EVENT_TYPE CHECK (event_type_code IN (
+  'LOGIN_SUCCESS','LOGIN_FAILED','LOGOUT','PASSWORD_RESET_REQUESTED','PASSWORD_RESET_COMPLETED',
+  'ROLE_ASSIGNED','ROLE_REVOKED','MODULE_GRANTED','MODULE_REVOKED','SCREEN_GRANTED','SCREEN_REVOKED',
+  'ACTION_GRANTED','ACTION_REVOKED','SESSION_TERMINATED'));
+
+-- 5d. INTRA-MODULE FK (parent PK first)
+ALTER TABLE SEC_USER_ROLE         ADD CONSTRAINT FK_USER_ROLE_USER    FOREIGN KEY (user_id)   REFERENCES SEC_USER (user_pk);
+ALTER TABLE SEC_USER_ROLE         ADD CONSTRAINT FK_USER_ROLE_ROLE    FOREIGN KEY (role_id)   REFERENCES SEC_ROLE (role_pk);
+ALTER TABLE SEC_SCREEN_REG        ADD CONSTRAINT FK_SCREEN_REG_MODULE FOREIGN KEY (module_id) REFERENCES SEC_MODULE_REG (module_reg_pk);   -- RULE-SEC-004
+ALTER TABLE SEC_ACTION_REG        ADD CONSTRAINT FK_ACTION_REG_SCREEN FOREIGN KEY (screen_id) REFERENCES SEC_SCREEN_REG (screen_reg_pk);
+ALTER TABLE SEC_ROLE_MODULE_GRANT ADD CONSTRAINT FK_ROLE_MODULE_GRANT_ROLE   FOREIGN KEY (role_id)   REFERENCES SEC_ROLE (role_pk);
+ALTER TABLE SEC_ROLE_MODULE_GRANT ADD CONSTRAINT FK_ROLE_MODULE_GRANT_MODULE FOREIGN KEY (module_id) REFERENCES SEC_MODULE_REG (module_reg_pk);
+ALTER TABLE SEC_ROLE_SCREEN_GRANT ADD CONSTRAINT FK_ROLE_SCREEN_GRANT_ROLE   FOREIGN KEY (role_id)   REFERENCES SEC_ROLE (role_pk);
+ALTER TABLE SEC_ROLE_SCREEN_GRANT ADD CONSTRAINT FK_ROLE_SCREEN_GRANT_SCREEN FOREIGN KEY (screen_id) REFERENCES SEC_SCREEN_REG (screen_reg_pk);
+ALTER TABLE SEC_ROLE_ACTION_GRANT ADD CONSTRAINT FK_ROLE_ACTION_GRANT_ROLE   FOREIGN KEY (role_id)   REFERENCES SEC_ROLE (role_pk);
+ALTER TABLE SEC_ROLE_ACTION_GRANT ADD CONSTRAINT FK_ROLE_ACTION_GRANT_ACTION FOREIGN KEY (action_id) REFERENCES SEC_ACTION_REG (action_reg_pk);
+ALTER TABLE SEC_ACTIVE_SESSION    ADD CONSTRAINT FK_ACTIVE_SESSION_USER      FOREIGN KEY (user_id)   REFERENCES SEC_USER (user_pk);
+ALTER TABLE SEC_AUDIT_LOG         ADD CONSTRAINT FK_AUDIT_LOG_USER           FOREIGN KEY (actor_user_id) REFERENCES SEC_USER (user_pk);
+ALTER TABLE SEC_PWD_RESET_TOKEN   ADD CONSTRAINT FK_PWD_RESET_TOKEN_USER     FOREIGN KEY (user_id)   REFERENCES SEC_USER (user_pk);
+
+-- ============================================================
+-- BLOCK 6: TRIGGERS
+-- none: RULE-SEC-001/002/003/005/006/007 are application-layer rules; RULE-SEC-004 is already
+-- enforced structurally by FK_SCREEN_REG_MODULE above.
+-- ============================================================
+
+-- ============================================================
+-- BLOCK 7: INDEXES (non-PK; every FK column + every SRS search/list filter column)
+-- ============================================================
+CREATE INDEX IDX_SEC_USER_STATUS               ON SEC_USER (status_code);
+CREATE INDEX IDX_SEC_USER_ROLE_USER            ON SEC_USER_ROLE (user_id);
+CREATE INDEX IDX_SEC_USER_ROLE_ROLE            ON SEC_USER_ROLE (role_id);
+CREATE INDEX IDX_SEC_SCREEN_REG_MODULE         ON SEC_SCREEN_REG (module_id);
+CREATE INDEX IDX_SEC_ACTION_REG_SCREEN         ON SEC_ACTION_REG (screen_id);
+CREATE INDEX IDX_SEC_ROLE_MODULE_GRANT_ROLE    ON SEC_ROLE_MODULE_GRANT (role_id);
+CREATE INDEX IDX_SEC_ROLE_MODULE_GRANT_MODULE  ON SEC_ROLE_MODULE_GRANT (module_id);
+CREATE INDEX IDX_SEC_ROLE_SCREEN_GRANT_ROLE    ON SEC_ROLE_SCREEN_GRANT (role_id);
+CREATE INDEX IDX_SEC_ROLE_SCREEN_GRANT_SCREEN  ON SEC_ROLE_SCREEN_GRANT (screen_id);
+CREATE INDEX IDX_SEC_ROLE_ACTION_GRANT_ROLE    ON SEC_ROLE_ACTION_GRANT (role_id);
+CREATE INDEX IDX_SEC_ROLE_ACTION_GRANT_ACTION  ON SEC_ROLE_ACTION_GRANT (action_id);
+CREATE INDEX IDX_SEC_ACTIVE_SESSION_USER       ON SEC_ACTIVE_SESSION (user_id);
+CREATE INDEX IDX_SEC_ACTIVE_SESSION_TERMINATED ON SEC_ACTIVE_SESSION (terminated_at);
+CREATE INDEX IDX_SEC_AUDIT_LOG_EVENT_TYPE      ON SEC_AUDIT_LOG (event_type_code);
+CREATE INDEX IDX_SEC_AUDIT_LOG_ACTOR           ON SEC_AUDIT_LOG (actor_user_id);
+CREATE INDEX IDX_SEC_AUDIT_LOG_OCCURRED_AT     ON SEC_AUDIT_LOG (occurred_at);
+CREATE INDEX IDX_SEC_PWD_RESET_TOKEN_USER      ON SEC_PWD_RESET_TOKEN (user_id);
+CREATE INDEX IDX_SEC_SIGNUP_REQUEST_STATUS     ON SEC_SIGNUP_REQUEST (status_code);
+CREATE INDEX IDX_SEC_SIGNUP_REQUEST_EMAIL      ON SEC_SIGNUP_REQUEST (email);
+
+-- ============================================================
+-- BLOCK 8: LOOKUP SEED DATA
+-- none — the A6 value sets (USER_STATUS, SIGNUP_STATUS, AUDIT_EVENT_TYPE) live only as the
+-- CHECK constraints above in v1 (ADR-SEC-001); no shared lookup table exists yet.
+-- BLOCK 9 VIEWS / BLOCK 10 FUNCTIONS / BLOCK 11 DEFERRED FK PATCHES — none (SEC is ROOT).
+-- ============================================================

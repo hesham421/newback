@@ -1,0 +1,56 @@
+{
+  "_comment": [
+    "The postgres entry is the SAME server the repository root declares — the",
+    "bespoke node server under governance/mcp-servers/postgres. It replaced an",
+    "`uvx postgres-mcp` line that could not start here: uvx is not installed,",
+    "and a second server sharing the name `postgres` meant the tools a session",
+    "got depended on the directory it was launched from.",
+    "Run `npm install` once in governance/mcp-servers/postgres — without it the",
+    "server exits on a missing @modelcontextprotocol/sdk and the client only",
+    "reports a closed connection.",
+    "The oracle entry is the same shape: a bespoke node server under",
+    "governance/mcp-servers/oracle, talking to LOAN_SYS@localhost:1521/FREEPDB1",
+    "through node-oracledb's thin mode (no Oracle Instant Client needed).",
+    "unless ORACLE_ALLOW_WRITE=true.",
+    "The oracle entry's values are literal on purpose: this is a local throwaway",
+    "test database (LOAN_SYS@localhost:1521/FREEPDB1), not a real environment.",
+    "Run `npm install` once in governance/mcp-servers/oracle. Read-only unless",
+    "ORACLE_ALLOW_WRITE is set to true."
+  ],
+  "mcpServers": {
+    "postgres": {
+      "command": "node",
+      "args": [
+        "governance/mcp-servers/postgres/index.js"
+      ],
+      "env": {
+        "DB_HOST": "${DB_HOST:-localhost}",
+        "DB_PORT": "${DB_PORT:-5432}",
+        "DB_USER": "${DB_USERNAME:-postgres}",
+        "DB_PASSWORD": "${DB_PASSWORD:-postgres}",
+        "DB_NAME": "${DB_NAME:-erp_db}"
+      }
+    },
+    "oracle": {
+      "command": "node",
+      "args": [
+        "governance/mcp-servers/oracle/index.js"
+      ],
+      "env": {
+        "ORACLE_HOST": "localhost",
+        "ORACLE_PORT": "1521",
+        "ORACLE_SERVICE": "FREEPDB1",
+        "ORACLE_USER": "LOAN_SYS",
+        "ORACLE_PASSWORD": "LOAN_SYS",
+        "ORACLE_ALLOW_WRITE": "true"
+      }
+    },
+    "TestSprite": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "set -a; [ -f ./.env ] && . ./.env; set +a; export API_KEY=\"$TESTSPRITE_API_KEY\"; exec npx -y @testsprite/testsprite-mcp@0.0.42"
+      ]
+    }
+  }
+}

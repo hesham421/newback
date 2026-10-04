@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.erp</groupId>
+    <artifactId>erp-system</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>ERP System</name>
+    <description>Enterprise Resource Planning System — single Spring Boot deployable
+    (package-by-feature; consolidated from the prior 9-module Maven layout — see
+    governance/project-artifacts/INTERFACE-VS-REST-AND-POM-STRUCTURE-RECOMMENDATION.md).
+    Module boundaries (com.erp.security.*, com.erp.notification.*,
+    com.erp.masterdata.*, com.erp.org.*, com.erp.file.*,
+    com.erp.common.*) are enforced by the ArchUnit suite in
+    src/test/java/com/erp/architecture — not by separate pom.xml files.</description>
+
+    <properties>
+        <!-- Post-implementation-audit remediation, Item 5 — bumped 21 -> 25 (Spring Boot 4.0.1
+             has first-class Java 25 support per its own docs, confirmed before making this
+             change). maven-enforcer-plugin below fails the build immediately, with a clear
+             message, if invoked under any other JDK — the audit's own finding was that a stale
+             target/ directory let an incremental build silently "succeed" under JDK 17 despite
+             this requirement; this rule removes that silent-false-positive path rather than
+             just documenting the requirement in prose. -->
+        <java.version>25</java.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Dependency Versions -->
+        <spring-boot.version>4.0.1</spring-boot.version>
+        <jjwt.version>0.12.6</jjwt.version>
+        <!-- 1.18.40+ required for JDK 25 (see pitched Item 5 remediation) — 1.18.36 crashes
+             javac on this JDK (com.sun.tools.javac.code.TypeTag :: UNKNOWN), confirmed directly
+             in this session before bumping. -->
+        <lombok.version>1.18.40</lombok.version>
+        <springdoc.version>2.8.0</springdoc.version>
+        <!-- 1.3.0 doesn't parse Java 25 class files (major version 69) — ArchUnit silently
+             failed to import com.erp.security's classes under JDK 25, which surfaced as a
+             (correctly, loudly) failing "failed to check any classes" assertion rather than a
+             silent false-pass. 1.4.2+ adds Java 25/26 support; confirmed directly in this
+             session before bumping. -->
+        <archunit.version>1.4.2</archunit.version>
+
+        <!-- Default: allow forking on non-Windows environments (see the windows-tests-no-fork
+             profile below, moved here from the old erp-finance-gl module). -->
+        <surefire.forkCount>1</surefire.forkCount>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot Dependencies -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <!-- Required for the Docker healthcheck (/actuator/health) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Flyway — Database Migration (spring-boot-flyway provides FlywayAutoConfiguration;
+             Boot 4 split it out of spring-boot-autoconfigure) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- PostgreSQL Driver -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Rate Limiting (login brute-force protection) -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.10.1</version>
+        </dependency>
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- SLF4J -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- SpringDoc OpenAPI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ArchUnit — replaces the compile-time module-boundary nudge that separate pom.xml
+             files used to give (see the recommendation report referenced above). Encodes the
+             actual boundary rules: no class outside a module's own crossmodule/ package may be
+             referenced from another module's package, and the known SpEL/reflection bypass
+             pattern (hasAuthority(T(com.erp.security.constants.SecurityPermissions).*))
+             is pattern-matched too, since plain import-based rules would miss it. -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.erp.main.ErpMainApplication</mainClass>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- Inert unless invoked directly (mvn flyway:migrate) — Spring Boot's own
+                 FlywayAutoConfiguration already runs migrations from db/migration at app
+                 startup; this plugin is a manual/CLI convenience only. -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Mockito Agent for Java 21+ dynamic agent loading (moved here from the old
+                 erp-finance-gl module — applies module-wide now that there's one module). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <forkCount>${surefire.forkCount}</forkCount>
+                    <argLine>-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- Post-implementation-audit remediation, Item 5 — fails the build immediately,
+                 with an explicit message, if invoked under any JDK other than 25. Runs in the
+                 default "validate" phase, before compilation, so this fires even faster than a
+                 compiler "release version not supported" error would, and can't be masked by a
+                 stale target/ directory the way the audit found the compiler's own check to be
+                 (an incremental build with nothing to recompile never re-invokes javac at all). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-25</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[25,26)</version>
+                                    <message>
+                                        This project requires JDK 25 (pinned in pom.xml, java.version).
+                                        You are running ${java.runtime.version} from ${java.home}.
+                                        Point JAVA_HOME at a JDK 25 install and retry.
+                                    </message>
+                                </requireJavaVersion>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>windows-tests-no-fork</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                </os>
+            </activation>
+            <properties>
+                <!-- Avoid intermittent Surefire fork/classpath issues on Windows -->
+                <surefire.forkCount>0</surefire.forkCount>
+            </properties>
+        </profile>
+    </profiles>
+
+</project>

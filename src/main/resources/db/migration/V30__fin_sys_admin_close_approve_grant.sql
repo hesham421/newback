@@ -1,0 +1,105 @@
+-- ============================================================
+-- V30 — Grant PERM_FIN_PERIODS_CLOSE_APPROVE to SYS_ADMIN (reverses V25's deliberate exclusion)
+-- ============================================================
+-- Source of the statement shape: V28__fin_dimensions_update_action.sql:101-106 — its
+--   SEC_ROLE_ACTION_GRANT INSERT ... SELECT, column list (ROLE_ACTION_GRANT_PK, ROLE_ID,
+--   ACTION_ID, GRANTED_BY, GRANTED_AT), the SEQ_SEC_ROLE_ACTION_GRANT sequence, the role resolved
+--   by natural key from SEC_ROLE, and the WHERE on a single PERMISSION_CODE are all copied from
+--   there verbatim. V28 in turn took that shape from V25__fin_role_grants.sql:103-111.
+--
+-- ------------------------------------------------------------
+-- What this reverses, and why the exclusion existed
+-- ------------------------------------------------------------
+-- V25__fin_role_grants.sql:111 granted SYS_ADMIN every registered FIN action row EXCEPT one:
+--   "AND a.PERMISSION_CODE <> 'PERM_FIN_PERIODS_CLOSE_APPROVE';   -- RULE-FIN-015 — see header".
+--   Its header states the reasoning in full — V25:46-48: "grant SYS_ADMIN the FIN module, all 12
+--   screens, and 25 of the 26 action rows — every one EXCEPT PERM_FIN_PERIODS_CLOSE_APPROVE,
+--   which is left GRANTED TO NOBODY pending a human decision on which role owns period-close
+--   approval." — and V25:36-39 names the mechanism it was avoiding: "Granting both codes to
+--   SYS_ADMIN — the one role the bootstrap admin user (V17 §8/§9) holds — would put the same
+--   *user* in both sets. API-FIN-026 (hard-close) and API-FIN-027 (year-end close) would then
+--   fail FOREVER with FIN-403-SOD-VIOLATION".
+--
+--   That failure mode was produced by FIN code, not by SEC and not by the SRS. V25:32-34 records
+--   it exactly: "FinSeparationOfDutiesService.resolveFacts() asks SEC for the user sets holding
+--   each of the two codes and reports entryCreatePermissionShared = !Collections.disjoint(...);
+--   FiscalPeriodDomain.assertCanHardClose throws FIN-403-SOD-VIOLATION when that is true."
+--   V27__fin_close_approver_role.sql:50-58 repeats the same warning for its new role.
+--
+--   THAT CODE NO LONGER EXISTS. FinSeparationOfDutiesService and
+--   FiscalPeriodDomain.assertCanHardClose(boolean, boolean) were both removed as an
+--   over-implementation: they enforced GLOBAL user-set disjointness — if any single user in the
+--   system held both permissions, the close was refused for every caller — which no requirement
+--   asks for. The specification asks only that the two PERMISSIONS be distinct and that the gate
+--   be SEC's own:
+--     * governance/modules/FIN/P1/srs-fin.md:1026-1029 (RULE-FIN-015): "The system shall require
+--       the period-close-approval action to be gated by a permission distinct from the
+--       journal-entry-creation permission, enforced through the Security module."
+--     * srs-fin.md:1030 (RULE-FIN-015, Data source): "DEFERRED — the permission matrix is the
+--       Security module's declaration surface; FIN declares no permission entity in this version,
+--       so the separation is enforced there and has no FIN-side field to read." There is, by the
+--       rule's own text, no FIN-side fact to read — yet the removed code read one.
+--     * srs-fin.md:783 (REQ-FIN-038): "The system shall gate the period-close-approval action
+--       behind a permission distinct from the journal-entry-creation permission, enforced by the
+--       Security module."
+--     * srs-fin.md:790-792 (AC-FIN-038): "Given a role holding only the entry-creation permission
+--       / When that role's user attempts the period-close-approval action / Then the system denies
+--       it (the CORE interceptor, per SEC's own mechanism)."
+--   No REQ, AC or RULE requires the two permissions' USER SETS to be disjoint.
+--
+-- ------------------------------------------------------------
+-- RULE-FIN-015 remains enforced — by the gate, which this migration does not touch
+-- ------------------------------------------------------------
+-- The two close endpoints keep their distinct-permission @PreAuthorize, unchanged:
+--   * FiscalPeriodService.hardClose   — @PreAuthorize hasAuthority(PermissionConstants
+--                                       .PERM_FIN_PERIODS_CLOSE_APPROVE)  (API-FIN-026)
+--   * FiscalYearService.yearEndClose  — the same gate                     (API-FIN-027)
+-- PERM_FIN_PERIODS_CLOSE_APPROVE (registered by V24__fin_security_seed.sql) is a different
+-- permission code from PERM_FIN_JOURNAL_ENTRIES_CREATE, enforced by SEC's own mechanism:
+-- JwtAuthenticationFilter builds the caller's authorities from MenuService, which reads
+-- SEC_ROLE_ACTION_GRANT (V25:9-12 states that chain). A role holding only entry-creation still
+-- cannot reach the close endpoint — AC-FIN-038 continues to hold, unchanged, after this grant.
+--
+-- ------------------------------------------------------------
+-- Recorded human decision
+-- ------------------------------------------------------------
+-- The human decided explicitly, and on the record, that (1) the global separation-of-duties check
+-- is removed and RULE-FIN-015 is satisfied by the distinct-permission gate as the SRS states, and
+-- (2) 'admin' (role SYS_ADMIN) must hold ALL FIN permissions, PERM_FIN_PERIODS_CLOSE_APPROVE
+-- included. This migration is the second half of that decision. Its effect: on a fresh database
+-- the bootstrap 'admin' user (V17 §8/§9 → SYS_ADMIN) can call PATCH
+-- /api/v1/fin/fiscal-periods/{id}/hard-close and POST
+-- /api/v1/fin/fiscal-years/{id}/year-end-close, which V25:50-54 had deliberately left answering
+-- 403 ACCESS_DENIED to every principal.
+--
+-- Scope. One statement, one permission code. No SEC_ACTION_REG row is inserted — V24 already
+--   registered PERM_FIN_PERIODS_CLOSE_APPROVE, and V25's own SELECT skipped it at grant time, not
+--   at registration time. Nothing is deleted or updated, so the 25 grants V25 made and the two
+--   V27 made to FIN_CLOSE_APPROVER are untouched.
+--
+-- RULE-SEC-007 (the gateway convention — a role needs the screen's VIEW grant before any other
+--   action grant on that screen takes effect) holds without a second statement: V25's Tier-3
+--   SELECT (V25:103-111) excluded only CLOSE_APPROVE, so SYS_ADMIN already holds
+--   PERM_FIN_PERIODS_VIEW, and V25's Tier-1 (V25:76-80) and Tier-2 (V25:88-94) statements already
+--   grant SYS_ADMIN the FIN module and all 12 FIN screens including FIN_PERIODS.
+--
+-- V27's FIN_CLOSE_APPROVER role is left exactly as it is — applied, immutable and harmless. It
+--   is no longer the only path to a working close, but a deployment that wants close approval
+--   separated from system administration in practice can still assign it, and its two grants stay
+--   valid.
+--
+-- Style matches V24/V25/V27/V28: a plain INSERT (runs once, not idempotent), surrogate PK from
+--   the V16 SEQ_SEC_* sequence, the FK resolved by natural key (role CODE / PERMISSION_CODE),
+--   never a hardcoded id.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- SEC_ROLE_ACTION_GRANT — the one row V25 deliberately withheld.
+--   Scoped to the single PERMISSION_CODE, so it cannot disturb any grant V25, V27 or V28 made.
+-- ------------------------------------------------------------
+INSERT INTO SEC_ROLE_ACTION_GRANT (ROLE_ACTION_GRANT_PK, ROLE_ID, ACTION_ID, GRANTED_BY, GRANTED_AT)
+SELECT nextval('SEQ_SEC_ROLE_ACTION_GRANT'),
+       (SELECT ROLE_PK FROM SEC_ROLE WHERE CODE = 'SYS_ADMIN'),
+       a.ACTION_REG_PK, 'SYSTEM', CURRENT_TIMESTAMP
+FROM SEC_ACTION_REG a
+WHERE a.PERMISSION_CODE = 'PERM_FIN_PERIODS_CLOSE_APPROVE';

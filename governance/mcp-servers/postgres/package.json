@@ -1,0 +1,12 @@
+{
+  "name": "erp-postgres-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local MCP server exposing the ERP Postgres database (erp_db) to Claude Code",
+  "main": "index.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "pg": "^8.22.0"
+  }
+}

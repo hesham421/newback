@@ -1,0 +1,484 @@
+-- ============================================================
+-- V22 — Finance / General Ledger (FIN) — full module schema
+-- Source: governance/modules/FIN/P2/db-script-fin.md §3 FULL_DATABASE_SCRIPT (BLOCK 1..11)
+-- Target: POSTGRESQL_16 | 14 tables, 14 sequences | 146 DBF-IDs | 1 XM (SOFT-READ -> MDL)
+-- Schema only — no seed data (the SEC-BE phase owns FIN's security/permission seed;
+-- BLOCK 8 lookup values live in MDL, registered through MDL's own API per XM-FIN-001).
+-- Flyway wraps this migration in its own transaction (no explicit COMMIT — matches every
+-- earlier migration, so the db-script's own trailing COMMIT is intentionally omitted).
+--
+-- Whole-module migration on purpose: FK dependencies cross the DATA-DOM sub boundaries
+-- (FIN_RECURRING_TEMPLATE_LINE.account_id and FIN_ALLOCATION_TARGET.target_account_id both
+-- reference FIN_ACCOUNT, built by a later sub), and a whole-module schema file is this
+-- repo's established pattern (V16__sec_schema.sql = 13 tables + 13 sequences). The later
+-- DATA-DOM subs add NO further migration — they map entities onto the tables created here.
+--
+-- DEVIATION from db-script §3 BLOCK 1/2/3 (deliberate, same decision already taken for SEC):
+--   the db-script declares every PK as `GENERATED ALWAYS AS IDENTITY` with "BLOCK 1 — none".
+--   This repo's entity contract mandates GenerationType.SEQUENCE + @SequenceGenerator
+--   (build-create-entity A.1.3/A.1.4; GenerationType.IDENTITY is an automatic rejection
+--   trigger), and every other module here (SEC/MDL/CU/NOTIF/FILE) uses explicit SEQ_<TABLE>
+--   sequences. PK columns are therefore plain BIGINT NOT NULL, fed by the sequences created
+--   in BLOCK 1 below. Every table / column / constraint / index name is otherwise verbatim
+--   from the db-script.
+-- ============================================================
+
+-- ============================================================
+-- BLOCK 1: SEQUENCES (one per table; SEQ_<TABLE>, matching V1/V2/V6/V8/V16/V18 style)
+-- ============================================================
+CREATE SEQUENCE SEQ_FIN_ACCOUNT                 START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_DIMENSION               START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_DIMENSION_VALUE         START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_JOURNAL_ENTRY           START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_JOURNAL_LINE            START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_JOURNAL_LINE_DIM        START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_FISCAL_YEAR             START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_FISCAL_PERIOD           START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_EVENT_TYPE_RULE         START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_RULE_LINE               START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_RECURRING_TEMPLATE      START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_RECURRING_TEMPLATE_LINE START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_ALLOCATION_RULE         START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+CREATE SEQUENCE SEQ_FIN_ALLOCATION_TARGET       START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+
+-- BLOCK 2 — PARENT TABLES (no FK dependencies)
+
+CREATE TABLE FIN_DIMENSION (
+  dimension_pk   BIGINT        NOT NULL,
+  code           VARCHAR(30)   NOT NULL,
+  name_ar        VARCHAR(150)  NOT NULL,
+  name_en        VARCHAR(150)  NOT NULL,
+  is_active_fl   BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by     VARCHAR(100)  NOT NULL,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by     VARCHAR(100),
+  updated_at     TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_ACCOUNT (
+  account_pk        BIGINT        NOT NULL,
+  code               VARCHAR(30)   NOT NULL,
+  name_ar            VARCHAR(200)  NOT NULL,
+  name_en            VARCHAR(200)  NOT NULL,
+  account_type_code  VARCHAR(20)   NOT NULL,
+  nature_code        VARCHAR(10)   NOT NULL,
+  parent_account_id  BIGINT,
+  is_leaf_fl         BOOLEAN       NOT NULL DEFAULT TRUE,
+  is_active_fl       BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by         VARCHAR(100)  NOT NULL,
+  created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by         VARCHAR(100),
+  updated_at         TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_FISCAL_YEAR (
+  fiscal_year_pk  BIGINT        NOT NULL,
+  code            VARCHAR(10)   NOT NULL,
+  start_date      DATE          NOT NULL,
+  end_date        DATE          NOT NULL,
+  status_code     VARCHAR(10)   NOT NULL DEFAULT 'OPEN',
+  is_active_fl    BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by      VARCHAR(100)  NOT NULL,
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by      VARCHAR(100),
+  updated_at      TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_EVENT_TYPE_RULE (
+  event_type_rule_pk  BIGINT        NOT NULL,
+  event_type_code     VARCHAR(50)   NOT NULL,
+  name_ar             VARCHAR(150)  NOT NULL,
+  name_en             VARCHAR(150)  NOT NULL,
+  is_active_fl        BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by          VARCHAR(100)  NOT NULL,
+  created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by          VARCHAR(100),
+  updated_at          TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_RECURRING_TEMPLATE (
+  recurring_template_pk  BIGINT        NOT NULL,
+  name_ar                VARCHAR(150)  NOT NULL,
+  name_en                VARCHAR(150)  NOT NULL,
+  schedule_type_code     VARCHAR(15)   NOT NULL,
+  frequency_code         VARCHAR(15),
+  start_date             DATE          NOT NULL,
+  next_run_date          DATE          NOT NULL,
+  end_date               DATE,
+  is_active_fl           BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by             VARCHAR(100)  NOT NULL,
+  created_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by             VARCHAR(100),
+  updated_at             TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_ALLOCATION_RULE (
+  allocation_rule_pk  BIGINT        NOT NULL,
+  name_ar             VARCHAR(150)  NOT NULL,
+  name_en             VARCHAR(150)  NOT NULL,
+  source_account_id   BIGINT        NOT NULL,
+  is_active_fl        BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by          VARCHAR(100)  NOT NULL,
+  created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by           VARCHAR(100),
+  updated_at           TIMESTAMPTZ
+);
+
+-- BLOCK 3 — CHILD TABLES (parents already created above; chain respected)
+
+CREATE TABLE FIN_DIMENSION_VALUE (
+  dimension_value_pk  BIGINT        NOT NULL,
+  dimension_id        BIGINT        NOT NULL,
+  code                VARCHAR(30)   NOT NULL,
+  name_ar             VARCHAR(150)  NOT NULL,
+  name_en             VARCHAR(150)  NOT NULL,
+  sort_order          NUMERIC       NOT NULL DEFAULT 0,
+  is_active_fl        BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by          VARCHAR(100)  NOT NULL,
+  created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by          VARCHAR(100),
+  updated_at          TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_FISCAL_PERIOD (
+  fiscal_period_pk  BIGINT        NOT NULL,
+  fiscal_year_id    BIGINT        NOT NULL,
+  period_no         NUMERIC       NOT NULL,
+  name_ar           VARCHAR(100)  NOT NULL,
+  name_en           VARCHAR(100)  NOT NULL,
+  start_date        DATE          NOT NULL,
+  end_date          DATE          NOT NULL,
+  status_code       VARCHAR(15)   NOT NULL DEFAULT 'OPEN',
+  closed_by         VARCHAR(100),
+  closed_at         TIMESTAMPTZ,
+  created_by        VARCHAR(100)  NOT NULL,
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by        VARCHAR(100),
+  updated_at        TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_JOURNAL_ENTRY (
+  journal_entry_pk   BIGINT        NOT NULL,
+  doc_no             VARCHAR(30)   NOT NULL,
+  doc_date           DATE          NOT NULL,
+  fiscal_year_id     BIGINT        NOT NULL,
+  period_id          BIGINT        NOT NULL,
+  journal_type_code  VARCHAR(20)   NOT NULL,
+  status_code        VARCHAR(10)   NOT NULL DEFAULT 'DRAFT',
+  event_reference    VARCHAR(100),
+  original_entry_id  BIGINT,
+  reversal_entry_id  BIGINT,
+  description_ar     TEXT,
+  description_en     TEXT,
+  posted_at          TIMESTAMPTZ,
+  created_by         VARCHAR(100)  NOT NULL,
+  created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by         VARCHAR(100),
+  updated_at         TIMESTAMPTZ
+);
+
+CREATE TABLE FIN_RULE_LINE (
+  rule_line_pk                    BIGINT        NOT NULL,
+  event_type_rule_id              BIGINT        NOT NULL,
+  line_no                         NUMERIC       NOT NULL,
+  account_derivation_type_code    VARCHAR(20)   NOT NULL,
+  account_derivation_value        TEXT          NOT NULL,
+  amount_source_type_code         VARCHAR(20)   NOT NULL,
+  amount_source_value             TEXT,
+  direction_code                  VARCHAR(10)   NOT NULL,
+  distribution_type_code          VARCHAR(15)   NOT NULL,
+  is_remainder_fl                 BOOLEAN       NOT NULL DEFAULT FALSE,
+  created_at                      TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE FIN_RECURRING_TEMPLATE_LINE (
+  recurring_template_line_pk  BIGINT        NOT NULL,
+  recurring_template_id       BIGINT        NOT NULL,
+  line_no                     NUMERIC       NOT NULL,
+  account_id                  BIGINT        NOT NULL,
+  amount                      NUMERIC(18,4) NOT NULL,
+  direction_code              VARCHAR(10)   NOT NULL,
+  dimension_value_id          BIGINT,
+  created_at                  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE FIN_ALLOCATION_TARGET (
+  allocation_target_pk    BIGINT        NOT NULL,
+  allocation_rule_id      BIGINT        NOT NULL,
+  line_no                 NUMERIC       NOT NULL,
+  target_account_id       BIGINT        NOT NULL,
+  dimension_value_id      BIGINT,
+  distribution_type_code  VARCHAR(15)   NOT NULL,
+  distribution_value      NUMERIC(18,4),
+  is_remainder_fl         BOOLEAN       NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE FIN_JOURNAL_LINE (
+  journal_line_pk   BIGINT        NOT NULL,
+  journal_entry_id  BIGINT        NOT NULL,
+  line_no           NUMERIC       NOT NULL,
+  account_id        BIGINT        NOT NULL,
+  amount            NUMERIC(18,4) NOT NULL,
+  direction_code    VARCHAR(10)   NOT NULL,
+  is_remainder_fl   BOOLEAN       NOT NULL DEFAULT FALSE,
+  description_ar    TEXT,
+  description_en    TEXT,
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE FIN_JOURNAL_LINE_DIM (
+  journal_line_dim_pk  BIGINT        NOT NULL,
+  journal_line_id      BIGINT  NOT NULL,
+  dimension_id          BIGINT  NOT NULL,
+  dimension_value_id    BIGINT  NOT NULL
+);
+
+
+-- ============================================================
+-- BLOCK 4: COMMENTS (table + every column; each column comment cites its DBF id)
+-- ============================================================
+COMMENT ON TABLE FIN_ACCOUNT IS 'ENT-FIN-001 Account — PRIVATE; [DBF-FIN-001..013]';
+COMMENT ON COLUMN FIN_ACCOUNT.account_pk IS 'DBF-FIN-001';
+COMMENT ON COLUMN FIN_ACCOUNT.code IS 'DBF-FIN-002';
+COMMENT ON COLUMN FIN_ACCOUNT.name_ar IS 'DBF-FIN-003';
+COMMENT ON COLUMN FIN_ACCOUNT.name_en IS 'DBF-FIN-004';
+COMMENT ON COLUMN FIN_ACCOUNT.account_type_code IS 'DBF-FIN-005 — lookup ACCOUNT_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_ACCOUNT.nature_code IS 'DBF-FIN-006 — lookup DEBIT_CREDIT (XM-FIN-001)';
+COMMENT ON COLUMN FIN_ACCOUNT.parent_account_id IS 'DBF-FIN-007';
+COMMENT ON COLUMN FIN_ACCOUNT.is_leaf_fl IS 'DBF-FIN-008 — RULE-FIN-001 enforced at application layer';
+COMMENT ON COLUMN FIN_ACCOUNT.is_active_fl IS 'DBF-FIN-009';
+COMMENT ON COLUMN FIN_ACCOUNT.created_by IS 'DBF-FIN-010';
+COMMENT ON COLUMN FIN_ACCOUNT.created_at IS 'DBF-FIN-011';
+COMMENT ON COLUMN FIN_ACCOUNT.updated_by IS 'DBF-FIN-012';
+COMMENT ON COLUMN FIN_ACCOUNT.updated_at IS 'DBF-FIN-013';
+COMMENT ON TABLE FIN_DIMENSION IS 'ENT-FIN-002 Dimension — PRIVATE; [DBF-FIN-014..022]';
+COMMENT ON COLUMN FIN_DIMENSION.dimension_pk IS 'DBF-FIN-014';
+COMMENT ON COLUMN FIN_DIMENSION.code IS 'DBF-FIN-015';
+COMMENT ON COLUMN FIN_DIMENSION.name_ar IS 'DBF-FIN-016';
+COMMENT ON COLUMN FIN_DIMENSION.name_en IS 'DBF-FIN-017';
+COMMENT ON COLUMN FIN_DIMENSION.is_active_fl IS 'DBF-FIN-018';
+COMMENT ON COLUMN FIN_DIMENSION.created_by IS 'DBF-FIN-019';
+COMMENT ON COLUMN FIN_DIMENSION.created_at IS 'DBF-FIN-020';
+COMMENT ON COLUMN FIN_DIMENSION.updated_by IS 'DBF-FIN-021';
+COMMENT ON COLUMN FIN_DIMENSION.updated_at IS 'DBF-FIN-022';
+COMMENT ON TABLE FIN_DIMENSION_VALUE IS 'ENT-FIN-003 DimensionValue — PRIVATE; [DBF-FIN-023..033]';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.dimension_value_pk IS 'DBF-FIN-023';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.dimension_id IS 'DBF-FIN-024';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.code IS 'DBF-FIN-025 — RULE-FIN-002 (UQ_FIN_DIMENSION_VALUE_DIM_CODE)';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.name_ar IS 'DBF-FIN-026';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.name_en IS 'DBF-FIN-027';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.sort_order IS 'DBF-FIN-028';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.is_active_fl IS 'DBF-FIN-029';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.created_by IS 'DBF-FIN-030';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.created_at IS 'DBF-FIN-031';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.updated_by IS 'DBF-FIN-032';
+COMMENT ON COLUMN FIN_DIMENSION_VALUE.updated_at IS 'DBF-FIN-033';
+COMMENT ON TABLE FIN_JOURNAL_ENTRY IS 'ENT-FIN-004 JournalEntry — PRIVATE, immutable after POSTED (POL-FIN-013); [DBF-FIN-034..050]';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.journal_entry_pk IS 'DBF-FIN-034';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.doc_no IS 'DBF-FIN-035 — platform numbering engine, unique per fiscal_year_id';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.doc_date IS 'DBF-FIN-036';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.fiscal_year_id IS 'DBF-FIN-037';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.period_id IS 'DBF-FIN-038 — RULE-FIN-008 period-open-at-post-time, application layer';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.journal_type_code IS 'DBF-FIN-039 — lookup JOURNAL_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.status_code IS 'DBF-FIN-040 — lookup JOURNAL_STATUS (XM-FIN-001)';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.event_reference IS 'DBF-FIN-041 — RULE-FIN-004 idempotency (UQ_FIN_JOURNAL_ENTRY_EVENT_REF)';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.original_entry_id IS 'DBF-FIN-042 — RULE-FIN-011 reversal link';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.reversal_entry_id IS 'DBF-FIN-043 — RULE-FIN-011 reversal link';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.description_ar IS 'DBF-FIN-044';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.description_en IS 'DBF-FIN-045';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.posted_at IS 'DBF-FIN-046';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.created_by IS 'DBF-FIN-047';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.created_at IS 'DBF-FIN-048';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.updated_by IS 'DBF-FIN-049';
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.updated_at IS 'DBF-FIN-050';
+COMMENT ON TABLE FIN_JOURNAL_LINE IS 'ENT-FIN-005 JournalLine — PRIVATE; [DBF-FIN-051..060]';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.journal_line_pk IS 'DBF-FIN-051';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.journal_entry_id IS 'DBF-FIN-052';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.line_no IS 'DBF-FIN-053';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.account_id IS 'DBF-FIN-054 — RULE-FIN-007 leaf/active check, application layer';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.amount IS 'DBF-FIN-055 — POL-FIN-005 always positive (CHK_FIN_JOURNAL_LINE_AMOUNT_POSITIVE)';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.direction_code IS 'DBF-FIN-056 — lookup DEBIT_CREDIT (XM-FIN-001)';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.is_remainder_fl IS 'DBF-FIN-057 — RULE-FIN-010';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.description_ar IS 'DBF-FIN-058';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.description_en IS 'DBF-FIN-059';
+COMMENT ON COLUMN FIN_JOURNAL_LINE.created_at IS 'DBF-FIN-060';
+COMMENT ON TABLE FIN_JOURNAL_LINE_DIM IS 'ENT-FIN-006 JournalLineDimension — PRIVATE; [DBF-FIN-061..064]';
+COMMENT ON COLUMN FIN_JOURNAL_LINE_DIM.journal_line_dim_pk IS 'DBF-FIN-061';
+COMMENT ON COLUMN FIN_JOURNAL_LINE_DIM.journal_line_id IS 'DBF-FIN-062';
+COMMENT ON COLUMN FIN_JOURNAL_LINE_DIM.dimension_id IS 'DBF-FIN-063';
+COMMENT ON COLUMN FIN_JOURNAL_LINE_DIM.dimension_value_id IS 'DBF-FIN-064 — RULE-FIN-009, application layer';
+COMMENT ON TABLE FIN_FISCAL_YEAR IS 'ENT-FIN-007 FiscalYear — PRIVATE; [DBF-FIN-065..074]';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.fiscal_year_pk IS 'DBF-FIN-065';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.code IS 'DBF-FIN-066';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.start_date IS 'DBF-FIN-067';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.end_date IS 'DBF-FIN-068';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.status_code IS 'DBF-FIN-069 — lookup FISCAL_YEAR_STATUS (XM-FIN-001)';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.is_active_fl IS 'DBF-FIN-070';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.created_by IS 'DBF-FIN-071';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.created_at IS 'DBF-FIN-072';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.updated_by IS 'DBF-FIN-073';
+COMMENT ON COLUMN FIN_FISCAL_YEAR.updated_at IS 'DBF-FIN-074';
+COMMENT ON TABLE FIN_FISCAL_PERIOD IS 'ENT-FIN-008 FiscalPeriod — PRIVATE; [DBF-FIN-075..088]';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.fiscal_period_pk IS 'DBF-FIN-075';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.fiscal_year_id IS 'DBF-FIN-076';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.period_no IS 'DBF-FIN-077';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.name_ar IS 'DBF-FIN-078';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.name_en IS 'DBF-FIN-079';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.start_date IS 'DBF-FIN-080';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.end_date IS 'DBF-FIN-081';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.status_code IS 'DBF-FIN-082 — lookup PERIOD_STATE (XM-FIN-001); RULE-FIN-008, RULE-FIN-014 application layer';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.closed_by IS 'DBF-FIN-083 — RULE-FIN-015 SoD, application layer via SEC';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.closed_at IS 'DBF-FIN-084';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.created_by IS 'DBF-FIN-085';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.created_at IS 'DBF-FIN-086';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.updated_by IS 'DBF-FIN-087';
+COMMENT ON COLUMN FIN_FISCAL_PERIOD.updated_at IS 'DBF-FIN-088';
+COMMENT ON TABLE FIN_EVENT_TYPE_RULE IS 'ENT-FIN-009 EventTypeRule — PRIVATE; [DBF-FIN-089..097]';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.event_type_rule_pk IS 'DBF-FIN-089';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.event_type_code IS 'DBF-FIN-090 — lookup ACCOUNTING_EVENT_TYPE (XM-FIN-001); RULE-FIN-005 (UQ_FIN_EVENT_TYPE_RULE_CODE)';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.name_ar IS 'DBF-FIN-091';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.name_en IS 'DBF-FIN-092';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.is_active_fl IS 'DBF-FIN-093';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.created_by IS 'DBF-FIN-094';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.created_at IS 'DBF-FIN-095';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.updated_by IS 'DBF-FIN-096';
+COMMENT ON COLUMN FIN_EVENT_TYPE_RULE.updated_at IS 'DBF-FIN-097';
+COMMENT ON TABLE FIN_RULE_LINE IS 'ENT-FIN-010 RuleLine — PRIVATE; [DBF-FIN-098..108]';
+COMMENT ON COLUMN FIN_RULE_LINE.rule_line_pk IS 'DBF-FIN-098';
+COMMENT ON COLUMN FIN_RULE_LINE.event_type_rule_id IS 'DBF-FIN-099';
+COMMENT ON COLUMN FIN_RULE_LINE.line_no IS 'DBF-FIN-100';
+COMMENT ON COLUMN FIN_RULE_LINE.account_derivation_type_code IS 'DBF-FIN-101 — lookup ACCOUNT_DERIVATION_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RULE_LINE.account_derivation_value IS 'DBF-FIN-102';
+COMMENT ON COLUMN FIN_RULE_LINE.amount_source_type_code IS 'DBF-FIN-103 — lookup AMOUNT_SOURCE_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RULE_LINE.amount_source_value IS 'DBF-FIN-104';
+COMMENT ON COLUMN FIN_RULE_LINE.direction_code IS 'DBF-FIN-105 — lookup DEBIT_CREDIT (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RULE_LINE.distribution_type_code IS 'DBF-FIN-106 — lookup DISTRIBUTION_TYPE (XM-FIN-001); RULE-FIN-003 application layer';
+COMMENT ON COLUMN FIN_RULE_LINE.is_remainder_fl IS 'DBF-FIN-107 — RULE-FIN-003, RULE-FIN-010';
+COMMENT ON COLUMN FIN_RULE_LINE.created_at IS 'DBF-FIN-108';
+COMMENT ON TABLE FIN_RECURRING_TEMPLATE IS 'ENT-FIN-011 RecurringTemplate — PRIVATE; [DBF-FIN-109..121]';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.recurring_template_pk IS 'DBF-FIN-109';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.name_ar IS 'DBF-FIN-110';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.name_en IS 'DBF-FIN-111';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.schedule_type_code IS 'DBF-FIN-112 — lookup RECURRING_SCHEDULE_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.frequency_code IS 'DBF-FIN-113 — lookup RECURRING_FREQUENCY (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.start_date IS 'DBF-FIN-114';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.next_run_date IS 'DBF-FIN-115';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.end_date IS 'DBF-FIN-116';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.is_active_fl IS 'DBF-FIN-117';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.created_by IS 'DBF-FIN-118';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.created_at IS 'DBF-FIN-119';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.updated_by IS 'DBF-FIN-120';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE.updated_at IS 'DBF-FIN-121';
+COMMENT ON TABLE FIN_RECURRING_TEMPLATE_LINE IS 'ENT-FIN-012 RecurringTemplateLine — PRIVATE; [DBF-FIN-122..129]';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.recurring_template_line_pk IS 'DBF-FIN-122';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.recurring_template_id IS 'DBF-FIN-123';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.line_no IS 'DBF-FIN-124';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.account_id IS 'DBF-FIN-125';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.amount IS 'DBF-FIN-126 — CHK positive, reuses RULE-FIN-006 spirit';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.direction_code IS 'DBF-FIN-127 — lookup DEBIT_CREDIT (XM-FIN-001)';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.dimension_value_id IS 'DBF-FIN-128';
+COMMENT ON COLUMN FIN_RECURRING_TEMPLATE_LINE.created_at IS 'DBF-FIN-129';
+COMMENT ON TABLE FIN_ALLOCATION_RULE IS 'ENT-FIN-013 AllocationRule — PRIVATE; [DBF-FIN-130..138]';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.allocation_rule_pk IS 'DBF-FIN-130';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.name_ar IS 'DBF-FIN-131';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.name_en IS 'DBF-FIN-132';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.source_account_id IS 'DBF-FIN-133';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.is_active_fl IS 'DBF-FIN-134';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.created_by IS 'DBF-FIN-135';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.created_at IS 'DBF-FIN-136';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.updated_by IS 'DBF-FIN-137';
+COMMENT ON COLUMN FIN_ALLOCATION_RULE.updated_at IS 'DBF-FIN-138';
+COMMENT ON TABLE FIN_ALLOCATION_TARGET IS 'ENT-FIN-014 AllocationTarget — PRIVATE; [DBF-FIN-139..146]';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.allocation_target_pk IS 'DBF-FIN-139';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.allocation_rule_id IS 'DBF-FIN-140';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.line_no IS 'DBF-FIN-141';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.target_account_id IS 'DBF-FIN-142';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.dimension_value_id IS 'DBF-FIN-143';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.distribution_type_code IS 'DBF-FIN-144 — lookup DISTRIBUTION_TYPE (XM-FIN-001)';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.distribution_value IS 'DBF-FIN-145';
+COMMENT ON COLUMN FIN_ALLOCATION_TARGET.is_remainder_fl IS 'DBF-FIN-146 — RULE-FIN-003, RULE-FIN-010';
+
+-- ============================================================
+-- BLOCK 5: CONSTRAINTS (PK / UNIQUE / CHECK / intra-module FK)
+-- ============================================================
+ALTER TABLE FIN_ACCOUNT                  ADD CONSTRAINT PK_FIN_ACCOUNT                  PRIMARY KEY (account_pk);
+ALTER TABLE FIN_DIMENSION                ADD CONSTRAINT PK_FIN_DIMENSION                PRIMARY KEY (dimension_pk);
+ALTER TABLE FIN_DIMENSION_VALUE          ADD CONSTRAINT PK_FIN_DIMENSION_VALUE          PRIMARY KEY (dimension_value_pk);
+ALTER TABLE FIN_JOURNAL_ENTRY            ADD CONSTRAINT PK_FIN_JOURNAL_ENTRY            PRIMARY KEY (journal_entry_pk);
+ALTER TABLE FIN_JOURNAL_LINE             ADD CONSTRAINT PK_FIN_JOURNAL_LINE             PRIMARY KEY (journal_line_pk);
+ALTER TABLE FIN_JOURNAL_LINE_DIM         ADD CONSTRAINT PK_FIN_JOURNAL_LINE_DIM         PRIMARY KEY (journal_line_dim_pk);
+ALTER TABLE FIN_FISCAL_YEAR              ADD CONSTRAINT PK_FIN_FISCAL_YEAR              PRIMARY KEY (fiscal_year_pk);
+ALTER TABLE FIN_FISCAL_PERIOD            ADD CONSTRAINT PK_FIN_FISCAL_PERIOD            PRIMARY KEY (fiscal_period_pk);
+ALTER TABLE FIN_EVENT_TYPE_RULE          ADD CONSTRAINT PK_FIN_EVENT_TYPE_RULE          PRIMARY KEY (event_type_rule_pk);
+ALTER TABLE FIN_RULE_LINE                ADD CONSTRAINT PK_FIN_RULE_LINE                PRIMARY KEY (rule_line_pk);
+ALTER TABLE FIN_RECURRING_TEMPLATE       ADD CONSTRAINT PK_FIN_RECURRING_TEMPLATE       PRIMARY KEY (recurring_template_pk);
+ALTER TABLE FIN_RECURRING_TEMPLATE_LINE  ADD CONSTRAINT PK_FIN_RECURRING_TEMPLATE_LINE  PRIMARY KEY (recurring_template_line_pk);
+ALTER TABLE FIN_ALLOCATION_RULE          ADD CONSTRAINT PK_FIN_ALLOCATION_RULE          PRIMARY KEY (allocation_rule_pk);
+ALTER TABLE FIN_ALLOCATION_TARGET        ADD CONSTRAINT PK_FIN_ALLOCATION_TARGET        PRIMARY KEY (allocation_target_pk);
+ALTER TABLE FIN_ACCOUNT           ADD CONSTRAINT UQ_FIN_ACCOUNT_CODE                UNIQUE (code);
+ALTER TABLE FIN_DIMENSION         ADD CONSTRAINT UQ_FIN_DIMENSION_CODE              UNIQUE (code);
+ALTER TABLE FIN_DIMENSION_VALUE   ADD CONSTRAINT UQ_FIN_DIMENSION_VALUE_DIM_CODE    UNIQUE (dimension_id, code);   -- RULE-FIN-002
+ALTER TABLE FIN_JOURNAL_ENTRY     ADD CONSTRAINT UQ_FIN_JOURNAL_ENTRY_YEAR_DOCNO    UNIQUE (fiscal_year_id, doc_no);
+ALTER TABLE FIN_JOURNAL_ENTRY     ADD CONSTRAINT UQ_FIN_JOURNAL_ENTRY_EVENT_REF     UNIQUE (event_reference);      -- RULE-FIN-004 (NULLs never conflict)
+ALTER TABLE FIN_FISCAL_YEAR       ADD CONSTRAINT UQ_FIN_FISCAL_YEAR_CODE            UNIQUE (code);
+ALTER TABLE FIN_EVENT_TYPE_RULE   ADD CONSTRAINT UQ_FIN_EVENT_TYPE_RULE_CODE        UNIQUE (event_type_code);      -- RULE-FIN-005, §6.4 one rule per type
+ALTER TABLE FIN_JOURNAL_LINE            ADD CONSTRAINT CHK_FIN_JOURNAL_LINE_AMOUNT_POSITIVE   CHECK (amount > 0);   -- POL-FIN-005
+ALTER TABLE FIN_RECURRING_TEMPLATE_LINE ADD CONSTRAINT CHK_FIN_RECURRING_TPL_LINE_AMOUNT_POS  CHECK (amount > 0);
+ALTER TABLE FIN_ACCOUNT                 ADD CONSTRAINT FK_ACCOUNT_PARENT             FOREIGN KEY (parent_account_id) REFERENCES FIN_ACCOUNT (account_pk);
+ALTER TABLE FIN_DIMENSION_VALUE         ADD CONSTRAINT FK_DIMENSION_VALUE_DIMENSION  FOREIGN KEY (dimension_id) REFERENCES FIN_DIMENSION (dimension_pk);
+ALTER TABLE FIN_FISCAL_PERIOD           ADD CONSTRAINT FK_FISCAL_PERIOD_YEAR         FOREIGN KEY (fiscal_year_id) REFERENCES FIN_FISCAL_YEAR (fiscal_year_pk);
+ALTER TABLE FIN_JOURNAL_ENTRY           ADD CONSTRAINT FK_JOURNAL_ENTRY_YEAR         FOREIGN KEY (fiscal_year_id) REFERENCES FIN_FISCAL_YEAR (fiscal_year_pk);
+ALTER TABLE FIN_JOURNAL_ENTRY           ADD CONSTRAINT FK_JOURNAL_ENTRY_PERIOD       FOREIGN KEY (period_id) REFERENCES FIN_FISCAL_PERIOD (fiscal_period_pk);
+ALTER TABLE FIN_JOURNAL_ENTRY           ADD CONSTRAINT FK_JOURNAL_ENTRY_ORIGINAL     FOREIGN KEY (original_entry_id) REFERENCES FIN_JOURNAL_ENTRY (journal_entry_pk);
+ALTER TABLE FIN_JOURNAL_ENTRY           ADD CONSTRAINT FK_JOURNAL_ENTRY_REVERSAL     FOREIGN KEY (reversal_entry_id) REFERENCES FIN_JOURNAL_ENTRY (journal_entry_pk);
+ALTER TABLE FIN_JOURNAL_LINE            ADD CONSTRAINT FK_JOURNAL_LINE_ENTRY         FOREIGN KEY (journal_entry_id) REFERENCES FIN_JOURNAL_ENTRY (journal_entry_pk);
+ALTER TABLE FIN_JOURNAL_LINE            ADD CONSTRAINT FK_JOURNAL_LINE_ACCOUNT       FOREIGN KEY (account_id) REFERENCES FIN_ACCOUNT (account_pk);
+ALTER TABLE FIN_JOURNAL_LINE_DIM        ADD CONSTRAINT FK_JOURNAL_LINE_DIM_LINE      FOREIGN KEY (journal_line_id) REFERENCES FIN_JOURNAL_LINE (journal_line_pk);
+ALTER TABLE FIN_JOURNAL_LINE_DIM        ADD CONSTRAINT FK_JOURNAL_LINE_DIM_DIMENSION FOREIGN KEY (dimension_id) REFERENCES FIN_DIMENSION (dimension_pk);
+ALTER TABLE FIN_JOURNAL_LINE_DIM        ADD CONSTRAINT FK_JOURNAL_LINE_DIM_VALUE     FOREIGN KEY (dimension_value_id) REFERENCES FIN_DIMENSION_VALUE (dimension_value_pk);
+ALTER TABLE FIN_RULE_LINE               ADD CONSTRAINT FK_RULE_LINE_RULE             FOREIGN KEY (event_type_rule_id) REFERENCES FIN_EVENT_TYPE_RULE (event_type_rule_pk);
+ALTER TABLE FIN_RECURRING_TEMPLATE_LINE ADD CONSTRAINT FK_RECURRING_TPL_LINE_TPL     FOREIGN KEY (recurring_template_id) REFERENCES FIN_RECURRING_TEMPLATE (recurring_template_pk);
+ALTER TABLE FIN_RECURRING_TEMPLATE_LINE ADD CONSTRAINT FK_RECURRING_TPL_LINE_ACCOUNT FOREIGN KEY (account_id) REFERENCES FIN_ACCOUNT (account_pk);
+ALTER TABLE FIN_RECURRING_TEMPLATE_LINE ADD CONSTRAINT FK_RECURRING_TPL_LINE_DIMVAL  FOREIGN KEY (dimension_value_id) REFERENCES FIN_DIMENSION_VALUE (dimension_value_pk);
+ALTER TABLE FIN_ALLOCATION_RULE         ADD CONSTRAINT FK_ALLOCATION_RULE_SRC_ACCT   FOREIGN KEY (source_account_id) REFERENCES FIN_ACCOUNT (account_pk);
+ALTER TABLE FIN_ALLOCATION_TARGET       ADD CONSTRAINT FK_ALLOCATION_TARGET_RULE     FOREIGN KEY (allocation_rule_id) REFERENCES FIN_ALLOCATION_RULE (allocation_rule_pk);
+ALTER TABLE FIN_ALLOCATION_TARGET       ADD CONSTRAINT FK_ALLOCATION_TARGET_ACCOUNT  FOREIGN KEY (target_account_id) REFERENCES FIN_ACCOUNT (account_pk);
+ALTER TABLE FIN_ALLOCATION_TARGET       ADD CONSTRAINT FK_ALLOCATION_TARGET_DIMVAL   FOREIGN KEY (dimension_value_id) REFERENCES FIN_DIMENSION_VALUE (dimension_value_pk);
+
+-- ============================================================
+-- BLOCK 6: TRIGGERS
+-- none — every SRS RULE is enforced at the application layer, or already covered
+-- structurally by a constraint above (RULE-FIN-002, POL-FIN-005 amount positivity,
+-- RULE-FIN-004/005 uniqueness). No PK-population trigger (sequences feed the PKs).
+-- ============================================================
+
+-- ============================================================
+-- BLOCK 7: INDEXES (non-PK; every FK column + every SRS search/list filter column)
+-- ============================================================
+CREATE INDEX IDX_FIN_ACCOUNT_PARENT              ON FIN_ACCOUNT (parent_account_id);
+CREATE INDEX IDX_FIN_ACCOUNT_TYPE                ON FIN_ACCOUNT (account_type_code);
+CREATE INDEX IDX_FIN_DIMENSION_VALUE_DIMENSION   ON FIN_DIMENSION_VALUE (dimension_id);
+CREATE INDEX IDX_FIN_JOURNAL_ENTRY_YEAR          ON FIN_JOURNAL_ENTRY (fiscal_year_id);
+CREATE INDEX IDX_FIN_JOURNAL_ENTRY_PERIOD        ON FIN_JOURNAL_ENTRY (period_id);
+CREATE INDEX IDX_FIN_JOURNAL_ENTRY_STATUS        ON FIN_JOURNAL_ENTRY (status_code);
+CREATE INDEX IDX_FIN_JOURNAL_ENTRY_DOCDATE       ON FIN_JOURNAL_ENTRY (doc_date);
+CREATE INDEX IDX_FIN_JOURNAL_LINE_ENTRY          ON FIN_JOURNAL_LINE (journal_entry_id);
+CREATE INDEX IDX_FIN_JOURNAL_LINE_ACCOUNT        ON FIN_JOURNAL_LINE (account_id);
+CREATE INDEX IDX_FIN_JOURNAL_LINE_DIM_LINE       ON FIN_JOURNAL_LINE_DIM (journal_line_id);
+CREATE INDEX IDX_FIN_JOURNAL_LINE_DIM_VALUE      ON FIN_JOURNAL_LINE_DIM (dimension_value_id);
+CREATE INDEX IDX_FIN_FISCAL_PERIOD_YEAR          ON FIN_FISCAL_PERIOD (fiscal_year_id);
+CREATE INDEX IDX_FIN_FISCAL_PERIOD_STATUS        ON FIN_FISCAL_PERIOD (status_code);
+CREATE INDEX IDX_FIN_RULE_LINE_RULE              ON FIN_RULE_LINE (event_type_rule_id);
+CREATE INDEX IDX_FIN_RECURRING_TPL_LINE_TPL      ON FIN_RECURRING_TEMPLATE_LINE (recurring_template_id);
+CREATE INDEX IDX_FIN_RECURRING_TPL_LINE_ACCOUNT  ON FIN_RECURRING_TEMPLATE_LINE (account_id);
+CREATE INDEX IDX_FIN_ALLOCATION_RULE_SRC_ACCT    ON FIN_ALLOCATION_RULE (source_account_id);
+CREATE INDEX IDX_FIN_ALLOCATION_TARGET_RULE      ON FIN_ALLOCATION_TARGET (allocation_rule_id);
+CREATE INDEX IDX_FIN_ALLOCATION_TARGET_ACCOUNT   ON FIN_ALLOCATION_TARGET (target_account_id);
+
+-- ============================================================
+-- BLOCK 8: LOOKUP SEED DATA
+-- none — all 13 FIN-owned lookup types are registered and seeded through MDL's own API
+-- (API-MDL-002/006, REQ-FIN-045); the values live in MDL_LOOKUP_TYPE/MDL_LOOKUP_VALUE
+-- per XM-FIN-001, never as local INSERTs or CHECK constraints.
+-- BLOCK 9 VIEWS / BLOCK 10 FUNCTIONS / BLOCK 11 DEFERRED FK PATCHES — none.
+-- ============================================================

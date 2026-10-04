@@ -1,0 +1,101 @@
+-- V9 — File Service (FILE) security-registry seed
+-- Source: governance/modules/FILE/packages/backend-execution/SEC-BE/SEC-BE.md (SECURITY SEED DATA REQUIREMENTS)
+--         governance/modules/FILE/P1/srs.md (SCR-FILE-001 File Categories, SCR-FILE-002 File Browser)
+-- Seeds FILE into the SEC RBAC registry: FILE module, FILE_ADMIN role, 2 pages
+--   (FILE_CATEGORIES, FILE_BROWSER), 4 CORE-9 permissions per page (8 total),
+--   Tier-1 (SEC_ROLE_MODULE) + Tier-2 (SEC_ROLE_PERMISSION) grants.
+-- Mirrors V7 (NOTIF) exactly. All FKs resolved by natural key (never a hardcoded id).
+--   Surrogate PKs from the V2 SEQ_SEC_* sequences.
+--
+-- PERMISSION_CODE convention: PERM_<PAGE_CODE>_<TYPE> (e.g. PERM_FILE_CATEGORIES_VIEW), so the seed
+--   equals runtime PermissionGenerationDomainService output (RULE-SEC-011 / CORE-9). These values
+--   EXACTLY equal the string VALUES of the FILE constants in
+--   com.erp.security.permission.PermissionConstants (PERM_FILE_CATEGORIES_* / PERM_FILE_BROWSER_*,
+--   value == name) so runtime hasAuthority(...) in each FILE service's @PreAuthorize resolves.
+--
+-- Role-code derivation: the SRS names the role "مدير الملفات / File Administrator"; created here with
+--   the short-uppercase code FILE_ADMIN (mirrors the SYS_ADMIN / NOTIF_ADMIN pattern).
+-- Pre-existing dependency: SYS_ADMIN ('مدير النظام' / 'System Administrator') was already seeded by
+--   V3 (SEC seed). It is NOT re-inserted here — it is referenced by natural key (ROLE_CODE = 'SYS_ADMIN').
+--
+-- Upload grant note: all 8 permissions (including PERM_FILE_BROWSER_CREATE) are granted to both
+--   FILE_ADMIN and SYS_ADMIN. The API-FILE-001 upload endpoint's @PreAuthorize requires
+--   PERM_FILE_BROWSER_CREATE for a direct admin upload; the "upload is contextual in owner module"
+--   note (SEC-BE.md) refers to OTHER modules calling the in-process FileService provider under THEIR
+--   own security context, which bypasses this endpoint. The gate is therefore correct and granted.
+--
+-- Nav-parent note: SEC-BE.md lists "parent: File Service" for both pages. That is a
+--   frontend-navigation concern; PARENT_PAGE_FK is left NULL here (mirrors NOTIF V7 — a parent nav
+--   page would have to be invented, and no invented parent nav page is seeded).
+
+-- 1. SEC_MODULE — module FILE (Tier-1 grantable unit)
+INSERT INTO SEC_MODULE (ID, MODULE_CODE, NAME_AR, NAME_EN, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_MODULE'), 'FILE', 'خدمة الملفات', 'File Service', 1, 'SYSTEM', CURRENT_TIMESTAMP);
+
+-- 2. SEC_ROLE — FILE_ADMIN (new). SYS_ADMIN already exists (V3) — not inserted here.
+INSERT INTO SEC_ROLE (ID, ROLE_CODE, NAME_AR, NAME_EN, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_ROLE'), 'FILE_ADMIN', 'مدير الملفات', 'File Administrator', 1, 'SYSTEM', CURRENT_TIMESTAMP);
+
+-- 3. SEC_PAGE — 2 screens, MODULE_FK -> FILE, no parent nav (PARENT_PAGE_FK NULL)
+INSERT INTO SEC_PAGE (ID, PAGE_CODE, NAME_AR, NAME_EN, MODULE_FK, PARENT_PAGE_FK, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PAGE'), 'FILE_CATEGORIES', 'إدارة فئات الملفات', 'File Categories',
+        (SELECT ID FROM SEC_MODULE WHERE MODULE_CODE = 'FILE'), NULL, 1, 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PAGE (ID, PAGE_CODE, NAME_AR, NAME_EN, MODULE_FK, PARENT_PAGE_FK, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PAGE'), 'FILE_BROWSER', 'مستعرض الملفات', 'File Browser',
+        (SELECT ID FROM SEC_MODULE WHERE MODULE_CODE = 'FILE'), NULL, 1, 'SYSTEM', CURRENT_TIMESTAMP);
+
+-- 4. SEC_PERMISSION — 4 per page (CORE-9, 8 total). code = PERM_<PAGE_CODE>_<TYPE>;
+--    name = <page name> - <TYPE> (matches PermissionGenerationDomainService so the seed equals runtime).
+
+-- 4a. FILE_CATEGORIES page -> PERM_FILE_CATEGORIES_{VIEW,CREATE,UPDATE,DELETE}
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_CATEGORIES_VIEW', 'VIEW', 'إدارة فئات الملفات - VIEW', 'File Categories - VIEW', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_CATEGORIES'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_CATEGORIES_CREATE', 'CREATE', 'إدارة فئات الملفات - CREATE', 'File Categories - CREATE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_CATEGORIES'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_CATEGORIES_UPDATE', 'UPDATE', 'إدارة فئات الملفات - UPDATE', 'File Categories - UPDATE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_CATEGORIES'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_CATEGORIES_DELETE', 'DELETE', 'إدارة فئات الملفات - DELETE', 'File Categories - DELETE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_CATEGORIES'), 'SYSTEM', CURRENT_TIMESTAMP);
+
+-- 4b. FILE_BROWSER page -> PERM_FILE_BROWSER_{VIEW,CREATE,UPDATE,DELETE}
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_BROWSER_VIEW', 'VIEW', 'مستعرض الملفات - VIEW', 'File Browser - VIEW', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_BROWSER'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_BROWSER_CREATE', 'CREATE', 'مستعرض الملفات - CREATE', 'File Browser - CREATE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_BROWSER'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_BROWSER_UPDATE', 'UPDATE', 'مستعرض الملفات - UPDATE', 'File Browser - UPDATE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_BROWSER'), 'SYSTEM', CURRENT_TIMESTAMP);
+INSERT INTO SEC_PERMISSION (ID, PERMISSION_CODE, PERMISSION_TYPE, NAME_AR, NAME_EN, IS_ACTIVE_FL, PAGE_FK, CREATED_BY, CREATED_AT)
+VALUES (nextval('SEQ_SEC_PERMISSION'), 'PERM_FILE_BROWSER_DELETE', 'DELETE', 'مستعرض الملفات - DELETE', 'File Browser - DELETE', 1,
+        (SELECT ID FROM SEC_PAGE WHERE PAGE_CODE = 'FILE_BROWSER'), 'SYSTEM', CURRENT_TIMESTAMP);
+
+-- 5. SEC_ROLE_MODULE — Tier-1 grants (FILE_ADMIN -> FILE, SYS_ADMIN -> FILE).
+--    MUST precede Tier-2 grants (RULE-SEC-014 prerequisite: no orphan screen permission).
+INSERT INTO SEC_ROLE_MODULE (ROLE_FK, MODULE_FK)
+VALUES ((SELECT ID FROM SEC_ROLE WHERE ROLE_CODE = 'FILE_ADMIN'),
+        (SELECT ID FROM SEC_MODULE WHERE MODULE_CODE = 'FILE'));
+INSERT INTO SEC_ROLE_MODULE (ROLE_FK, MODULE_FK)
+VALUES ((SELECT ID FROM SEC_ROLE WHERE ROLE_CODE = 'SYS_ADMIN'),
+        (SELECT ID FROM SEC_MODULE WHERE MODULE_CODE = 'FILE'));
+
+-- 6. SEC_ROLE_PERMISSION — Tier-2: grant ALL 8 permissions to BOTH FILE_ADMIN and SYS_ADMIN.
+INSERT INTO SEC_ROLE_PERMISSION (ROLE_FK, PERMISSION_FK)
+SELECT (SELECT ID FROM SEC_ROLE WHERE ROLE_CODE = 'FILE_ADMIN'), p.ID
+FROM SEC_PERMISSION p
+WHERE p.PERMISSION_CODE IN (
+  'PERM_FILE_CATEGORIES_VIEW', 'PERM_FILE_CATEGORIES_CREATE', 'PERM_FILE_CATEGORIES_UPDATE', 'PERM_FILE_CATEGORIES_DELETE',
+  'PERM_FILE_BROWSER_VIEW', 'PERM_FILE_BROWSER_CREATE', 'PERM_FILE_BROWSER_UPDATE', 'PERM_FILE_BROWSER_DELETE'
+);
+INSERT INTO SEC_ROLE_PERMISSION (ROLE_FK, PERMISSION_FK)
+SELECT (SELECT ID FROM SEC_ROLE WHERE ROLE_CODE = 'SYS_ADMIN'), p.ID
+FROM SEC_PERMISSION p
+WHERE p.PERMISSION_CODE IN (
+  'PERM_FILE_CATEGORIES_VIEW', 'PERM_FILE_CATEGORIES_CREATE', 'PERM_FILE_CATEGORIES_UPDATE', 'PERM_FILE_CATEGORIES_DELETE',
+  'PERM_FILE_BROWSER_VIEW', 'PERM_FILE_BROWSER_CREATE', 'PERM_FILE_BROWSER_UPDATE', 'PERM_FILE_BROWSER_DELETE'
+);

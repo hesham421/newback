@@ -1,0 +1,41 @@
+-- ============================================================
+-- V29 — Finance / General Ledger (FIN) — two corrected schema COMMENTs
+-- ============================================================
+-- Supersedes exactly two statements applied by V22__fin_schema.sql:
+--   * V22:240  COMMENT ON TABLE FIN_ACCOUNT IS 'ENT-FIN-001 Account — PRIVATE; [DBF-FIN-001..013]';
+--   * V22:278  COMMENT ON COLUMN FIN_JOURNAL_ENTRY.doc_no IS 'DBF-FIN-035 — platform numbering
+--              engine, unique per fiscal_year_id';
+-- V22 is applied and Flyway-checksummed, so it is immutable and must never be edited; both are
+-- corrected forward here instead. This migration changes NO structure and NO data — it rewrites
+-- two comment strings and nothing else.
+--
+-- WHY (1) — FIN_ACCOUNT table comment. V23__fin_account_retained_earnings_flag.sql:21-22 added
+--   the column is_retained_earnings_fl as DBF-FIN-147 and V23:24-27 gave it its own column
+--   comment, but V23 added no replacement TABLE comment, so the live table comment still
+--   enumerates only [DBF-FIN-001..013]. governance/modules/FIN/P2/db-script-fin.md:447 states the
+--   text as '[DBF-FIN-001..013, DBF-FIN-147]', and db-script-fin.md:448-452 records the
+--   divergence as an open ALIGN-BE finding awaiting exactly this forward migration. The
+--   corrected statement below is that line, verbatim.
+--
+-- WHY (2) — FIN_JOURNAL_ENTRY.doc_no column comment. "platform numbering engine" names a
+--   component that does not exist in this repository. The recorded decision is in
+--   governance/modules/FIN/packages/backend-execution/CORE/CORE.md:47-61 ("Numbering"), which
+--   calls the engine reference "a conscious, recorded deviation from the profile's standing
+--   guidance ... that guidance presumes an engine which does not exist in this repo" and
+--   specifies a FIN-local generator instead. As delivered, that generator is
+--   src/main/java/com/erp/fin/numbering/JournalDocNoGenerator.java — PREFIX = "JV-" (:38),
+--   COUNTER_WIDTH = 6 (:41), and format() at :62-64 returns
+--   PREFIX + fiscalYearCode + "-" + String.format("%06d", counter), i.e.
+--   JV-{fiscalYearCode}-{NNNNNN}, e.g. JV-2026-000123 (:11-12). The counter is scoped per
+--   fiscalYearId and restarts each fiscal year (:14-18), which is what
+--   UQ_FIN_JOURNAL_ENTRY_YEAR_DOCNO (fiscal_year_id, doc_no) — V22:421 — backs at the database.
+--   The "unique per fiscal_year_id" half of the original comment was correct and is preserved.
+--
+-- Register: V22's comments are single-line, English-only (not bilingual) and lead with the DBF
+--   id; that style is kept unchanged here. Object names are verbatim from V22 — table
+--   FIN_ACCOUNT (V22:58) and FIN_JOURNAL_ENTRY.doc_no (V22:160,162).
+-- ============================================================
+
+COMMENT ON TABLE FIN_ACCOUNT IS 'ENT-FIN-001 Account — PRIVATE; [DBF-FIN-001..013, DBF-FIN-147]';
+
+COMMENT ON COLUMN FIN_JOURNAL_ENTRY.doc_no IS 'DBF-FIN-035 — FIN-local generator (com.erp.fin.numbering.JournalDocNoGenerator), format JV-{fiscalYearCode}-{NNNNNN}, unique per fiscal_year_id';

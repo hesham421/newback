@@ -1,0 +1,37 @@
+[
+  {
+    "id": "TC001",
+    "title": "post api v1 sec auth login with valid credentials",
+    "description": "Verify that POST /api/v1/sec/auth/login with valid username and password returns 200 status with a valid JWT accessToken, tokenType, and expiresIn in the response body."
+  },
+  {
+    "id": "TC002",
+    "title": "post api v1 sec auth login with invalid credentials",
+    "description": "Verify that POST /api/v1/sec/auth/login with invalid username or password returns 401 status with error code SEC-401-INVALID-CREDENTIALS and no session is created."
+  },
+  {
+    "id": "TC003",
+    "title": "post api v1 sec auth signup with new email",
+    "description": "Verify that POST /api/v1/sec/auth/signup with a new email and bilingual full names returns 200 or 201 status with SignupRequest status PENDING and does not create a User yet."
+  },
+  {
+    "id": "TC004",
+    "title": "post api v1 sec auth signup with duplicate email",
+    "description": "Verify that POST /api/v1/sec/auth/signup with an email that already exists or is pending returns 409 status with error code SEC-409-SIGNUP-DUP and no duplicate signup request is created."
+  },
+  {
+    "id": "TC005",
+    "title": "post api v1 sec auth password reset request",
+    "description": "Verify that POST /api/v1/sec/auth/password-reset/request with an email returns 200 status with a generic confirmation response regardless of whether the email exists, and creates a PasswordResetToken if the email matches a user."
+  },
+  {
+    "id": "TC006",
+    "title": "post api v1 sec auth password reset complete with valid token",
+    "description": "Verify that POST /api/v1/sec/auth/password-reset/complete with a valid token and new password returns 200 status with confirmation, updates the user's password, and marks the token as used."
+  },
+  {
+    "id": "TC007",
+    "title": "post api v1 sec auth password reset complete with invalid token",
+    "description": "Verify that POST /api/v1/sec/auth/password-reset/complete with an expired or already-used token returns 409 status with error code SEC-409-RESET-TOKEN-INVALID and the password remains unchanged."
+  }
+]

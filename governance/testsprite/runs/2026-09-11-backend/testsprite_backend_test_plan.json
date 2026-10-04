@@ -1,0 +1,7 @@
+[
+  {
+    "id": "TC001",
+    "title": "post apiv1secauthlogin with valid credentials",
+    "description": "Verify that POST /api/v1/sec/auth/login with valid username and password returns 200 with accessToken, tokenType, and expiresIn, and that the token can be used to access protected SEC endpoints successfully."
+  }
+]

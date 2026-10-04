@@ -1,0 +1,53 @@
+# Environment variables (contains real secrets — never commit)
+.env
+
+# Deployment credentials — never commit
+depoymentssh/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+
+# Java / Maven / Spring Boot
+**/target/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs and runtime output
+*.log
+*.log.*
+logs/
+erp-security/cp.txt
+erp-security/temp-log.txt
+startup.log
+test-output.txt
+test-run-output.txt
+
+# Docker overrides
+docker-compose.override.yml
+
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+tests/masterdata-test-results.json
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json
+
+# Python (governance-tools) — compiled bytecode is interpreter/machine
+# specific and must never be committed
+__pycache__/
+*.pyc

@@ -1,0 +1,78 @@
+# =====================================================================
+# ERP Backend — local development stack (PostgreSQL + Redis)
+#
+# Fixes data loss on machine restart: PostgreSQL and Redis are backed by
+# NAMED volumes (erp-backend-postgres-data / erp-backend-redis-data), not
+# anonymous ones. A named volume survives `docker compose down`, container
+# removal, and machine reboots — it is only ever destroyed by an explicit
+# `docker compose down -v` or `docker volume rm`, neither of which this
+# file or any script here runs automatically. `restart: unless-stopped`
+# also brings both containers back automatically after Docker itself
+# restarts (e.g. after a reboot), so you don't have to remember to start
+# them by hand every time.
+#
+# Only Postgres + Redis are defined here — the two datastores this
+# backend's pom.xml actually depends on (Flyway/JDBC Postgres driver,
+# spring-boot-starter-data-redis). Oracle/RabbitMQ appear in the separate
+# infrastructure/ compose stack but have no scoping decision yet
+# (tracked in governance/modules-registry.json) and nothing in this repo connects
+# to them — they are deliberately not duplicated here.
+#
+# Usage (from the backend repo root — --env-file points substitution at the
+# root .env so DB_USERNAME/DB_PASSWORD/DB_NAME/REDIS_PORT below pick up your
+# real values; it only affects substitution here, it does NOT inject the
+# whole .env into either container's environment):
+#   docker compose --env-file .env -f docker/docker-compose.yml up -d
+#   docker compose --env-file .env -f docker/docker-compose.yml down       # stops, keeps data
+#   docker compose --env-file .env -f docker/docker-compose.yml down -v    # deletes data — only run this on purpose
+# =====================================================================
+
+name: erp-backend-dev
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: erp-backend-postgres
+    restart: unless-stopped
+    environment:
+      # Matches application-dev.properties' own fallbacks
+      # (DB_URL=jdbc:postgresql://localhost:5432/erp_db, DB_USERNAME/DB_PASSWORD
+      # default to postgres/postgres) so this works with zero .env changes.
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-erp_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-erp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: erp-backend-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# Named, not anonymous — see the header note. Explicit "name:" keeps a
+# stable, predictable volume name regardless of which directory
+# `docker compose` is invoked from.
+volumes:
+  postgres-data:
+    name: erp-backend-postgres-data
+  redis-data:
+    name: erp-backend-redis-data

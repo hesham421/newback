@@ -1,0 +1,16 @@
+# This .dockerignore is at the workspace root.
+# No Dockerfile exists at this level — each repo (backend/, frontend/) has its own.
+# This file guards against accidental docker build from the workspace root.
+.git
+.github
+**/node_modules
+**/dist
+**/target
+**/coverage
+**/test-results
+**/.angular
+**/.idea
+**/.vscode
+logs
+*.log
+*.log.*
