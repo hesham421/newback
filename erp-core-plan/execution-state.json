@@ -180,8 +180,8 @@
         "V9__notif_seed.sql"
       ],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-04",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "ae801abc7f152e1c1",
       "reviewer_agent": "a634d89190cf3090a",
@@ -191,7 +191,7 @@
         "evidence": "core 69/app 5 green; independent pg_dump old vs new identical (only restrict tokens); seed 198/198 lines, only admin row differs by design; naming test failure reproduced in scratch copy",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "4a08319591c5a3f5e0972ad2657b724b2e3246af",
       "report": "docs/steps/04-report.md",
       "deviations": [
         "old V-numbers = pre-step-01 numbering",
@@ -606,6 +606,12 @@
       "step": "04",
       "event": "review",
       "note": "PASS round 1; note for 05/06: admin PENDING edge case if password reset done before bootstrap property"
+    },
+    {
+      "at": "2026-10-04T16:15:40Z",
+      "step": "04",
+      "event": "merged",
+      "note": "merged 4a08319 (pure replay); core 69/app 5 on branch+main; pushed"
     }
   ]
 }
