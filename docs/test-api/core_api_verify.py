@@ -477,7 +477,9 @@ def test_sec_004_platform_super_role_holds_all(ctx):
     st(api("POST", "/api/v1/sequence/series/search", t=ctx.T_PLAT, body={}), 200)
     r = api("GET", "/api/v1/report/definitions", t=ctx.T_PLAT)
     st(r, 200)
-    eq(len(r.data or []), 4, "definitions count")
+    eq(sorted(x.get("code") for x in r.data or []),
+       sorted(["SEC_USER_LIST", "AUDIT_EVENT_LIST", "NOTIF_LOG_SUMMARY", "APP_SMOKE_REPORT"]),
+       "definitions data[*].code = the 4 codes of REPORT-001")
     st(api("POST", "/api/v1/common/configurations/search?scope=PLATFORM", t=ctx.T_PLAT, body={}), 200)
 
 
@@ -759,6 +761,56 @@ def test_app_002_dev_reset_fixture_needs_auth(ctx):
 # =============================================================================================
 # Phase 4 — number series
 # =============================================================================================
+def registry_ids(ctx, token, page_code, perm_codes):
+    """(module id, screen id, {permissionCode: action id}) of one registry screen (REPORT-011's lookup)."""
+    r = api("POST", "/api/v1/sec/registry/search", t=token, body={"pageCode": page_code, "size": 50})
+    st(r, 200, what=f"registry search {page_code}")
+    mod_id = scr_id = None
+    actions = {}
+    for m in r.content:
+        for s in m.get("screens") or []:
+            if s.get("pageCode") == page_code:
+                mod_id, scr_id = m.get("moduleRegPk"), s.get("screenRegPk")
+                for a in s.get("actions") or []:
+                    if a.get("permissionCode") in perm_codes:
+                        actions[a.get("permissionCode")] = a.get("actionRegPk")
+    check(mod_id and scr_id and set(actions) == set(perm_codes), f"registry ids of {page_code}",
+          f"module, screen, {sorted(perm_codes)}", (mod_id, scr_id, actions))
+    return mod_id, scr_id, actions
+
+
+def limited_user(ctx):
+    """`lim-{run}` in A: a role with SEQUENCE_SERIES VIEW and FILE_BROWSER VIEW + CREATE (upload), nothing
+    else — in particular neither PERM_SEQUENCE_SERIES_MANAGE, FILE:DOCUMENT:PUBLISH nor AUDIT:EVENT:READ.
+    Built once (SEQ-014) and reused by FILE-021 and AUDIT-008 (plan §2.3 `T_LIM`)."""
+    if ctx.has("T_LIM"):
+        return ctx.T_LIM
+    r = api("POST", "/api/v1/sec/roles", t=ctx.T_A, body={"code": f"TC_LIM_{ctx.RUN}", "nameAr": "محدود", "nameEn": "Limited"})
+    st(r, 201, what="create role TC_LIM_{RUN}")
+    role = (r.data or {}).get("rolePk")
+    granted_modules = set()
+    for page, perms in (("SEQUENCE_SERIES", ["PERM_SEQUENCE_SERIES_VIEW"]),
+                        ("FILE_BROWSER", ["PERM_FILE_BROWSER_VIEW", "PERM_FILE_BROWSER_CREATE"])):
+        mod_id, scr_id, actions = registry_ids(ctx, ctx.T_A, page, perms)
+        if mod_id not in granted_modules:
+            st(api("POST", f"/api/v1/sec/roles/{role}/modules", t=ctx.T_A, body={"moduleId": mod_id}), 201)
+            granted_modules.add(mod_id)
+        st(api("POST", f"/api/v1/sec/roles/{role}/screens", t=ctx.T_A, body={"screenId": scr_id}), 201)
+        for p in perms:
+            st(api("POST", f"/api/v1/sec/roles/{role}/actions", t=ctx.T_A, body={"actionId": actions.get(p)}), 201)
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_A, body=user_body(f"lim-{ctx.run}", f"lim-{ctx.run}@t.test", "محدود", "Limited"))
+    st(r, 201)
+    uid = (r.data or {}).get("userPk")
+    st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_A, body={"roleIds": [role]}), 200)
+    r = login_staff(ctx.TA, f"lim-{ctx.run}", PW)
+    st(r, 200, what="login lim-{run}")
+    t = (r.data or {}).get("accessToken")
+    if not t:
+        raise Blocked("no T_LIM")
+    ctx.T_LIM = t
+    return t
+
+
 def series(ctx, body, token=None):
     return api("POST", "/api/v1/sequence/series", t=token or ctx.T_PLAT, body=body)
 
@@ -870,6 +922,10 @@ def test_seq_014_auth_and_permission(ctx):
     st(api("POST", "/api/v1/sequence/series/search", body={}), 401, "SEC-401-INVALID-CREDENTIALS")
     st(api("POST", "/api/v1/sequence/series/search", t=ctx.T_NOPERM, body={}), 403, "ACCESS_DENIED")
     st(series(ctx, {"code": f"X_{ctx.RUN}"}, ctx.T_ALICE), 403, "ACCESS_DENIED")
+    # a role holding the gateway PERM_SEQUENCE_SERIES_VIEW but not PERM_SEQUENCE_SERIES_MANAGE
+    t = limited_user(ctx)
+    st(api("POST", "/api/v1/sequence/series/search", t=t, body={}), 200, what="T_LIM search (VIEW) → 200")
+    st(series(ctx, {"code": f"X2_{ctx.RUN}"}, t), 403, "ACCESS_DENIED", what="T_LIM create (no MANAGE) → 403")
 
 
 # =============================================================================================
@@ -1118,6 +1174,38 @@ def test_sec_030_deactivate_reactivate_no_bypass(ctx):
     r = cust_login(ctx.TA, e, PW)
     st(r, 403, "CUSTOMER_NOT_VERIFIED")
     check(r.status != 200, "login must never answer 200", "!= 200", r.status, r.req)
+
+
+@tc("TC-CORE-SEC-031")
+def test_sec_031_staff_search_excludes_customers(ctx):
+    r = api("POST", "/api/v1/sec/users/search", t=ctx.T_A, body={"size": 200})
+    st(r, 200)
+    realms = [x.get("realm") for x in r.content]
+    ids_ = [x.get("userPk") for x in r.content]
+    check(r.content and set(realms) == {"STAFF"}, "every row realm = STAFF (non-empty)", "{'STAFF'}", sorted(set(map(str, realms))))
+    cust = [ctx.get(k) for k in ("C1_ID", "C4_ID", "C5_ID") if ctx.get(k)]
+    check(cust and not [c for c in cust if c in ids_], "no customer id ($C1_ID, $C4_ID, $C5_ID) listed", f"none of {cust}", ids_)
+    names = [x.get("username") for x in r.content]
+    check(f"c1-{ctx.run}@shop.test" in names and "ta-admin" in names, "the staff c1 (SEC-012) and ta-admin are listed",
+          "both present", names)
+    r = api("POST", "/api/v1/sec/users/search", t=ctx.T_A,
+            body={"filters": [{"field": "email", "operator": "EQUALS", "value": f"c1-{ctx.run}@shop.test"}]})
+    st(r, 200)
+    eq([x.get("realm") for x in r.content], ["STAFF"], "search by c1's e-mail → only the STAFF row")
+
+
+@tc("TC-CORE-SEC-033")
+def test_sec_033_dashboard_counts_staff_only(ctx):
+    r = api("GET", "/api/v1/sec/dashboard", t=ctx.T_A)
+    st(r, 200)
+    uo = (r.data or {}).get("usersOverview") or {}
+    s = api("POST", "/api/v1/sec/users/search", t=ctx.T_A, body={"size": 200})
+    st(s, 200)
+    staff_total = (s.data or {}).get("totalElements")
+    eq(uo.get("total"), staff_total, "usersOverview.total = staff user search totalElements (A has 3 customers: c1, c4, c5)")
+    act = len([x for x in s.content if x.get("statusCode") == "ACTIVE"])
+    dis = len([x for x in s.content if x.get("statusCode") == "DISABLED"])
+    eq((uo.get("active"), uo.get("disabled")), (act, dis), "usersOverview.active/disabled = staff rows by status")
 
 
 @tc("TC-CORE-NOTIF-001")
@@ -1404,6 +1492,14 @@ def test_file_020_withdraw_allow_public(ctx):
 @tc("TC-CORE-FILE-021")
 def test_file_021_publish_needs_permission(ctx):
     st(publish(ctx, ctx.DOC1, "PUBLIC", ctx.T_ALICE), 403, "ACCESS_DENIED")
+    # a role with FILE_BROWSER VIEW + CREATE but without FILE:DOCUMENT:PUBLISH: reads, cannot publish
+    t = limited_user(ctx)
+    r = api("GET", f"/api/v1/files/{ctx.DOC1}", t=t)
+    st(r, 200, what="T_LIM GET /api/v1/files/$DOC1 (PERM_FILE_BROWSER_VIEW) → 200")
+    eq((r.data or {}).get("id"), ctx.DOC1, "data.id")
+    st(publish(ctx, ctx.DOC1, "PUBLIC", t), 403, "ACCESS_DENIED", what="T_LIM PATCH visibility (no FILE:DOCUMENT:PUBLISH) → 403")
+    g = api("GET", f"/api/v1/files/{ctx.DOC1}", t=ctx.T_A)
+    eq((g.data or {}).get("visibility"), "PRIVATE", "$DOC1 unchanged (still PRIVATE after FILE-019)")
 
 
 @tc("TC-CORE-FILE-023")
@@ -1530,7 +1626,21 @@ def test_notif_010_inbox_tenant_isolated(ctx):
 def test_notif_011_unknown_recipient_no_log(ctx):
     r = api("POST", "/api/v1/notifications/dispatch", t=ctx.T_A, body=dispatch_body(987654321, ["EMAIL"]))
     st(r, 200)
-    eq((r.data or {}).get("logIds"), [], "data.logIds")
+    eq((r.data or {}).get("logIds"), [], "unknown recipient: data.logIds")
+    # an inactive recipient: a DISABLED staff user of A
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_A, body=user_body(f"inact-{ctx.run}", f"inact-{ctx.run}@t.test", "معطل", "Inactive"))
+    st(r, 201)
+    uid = (r.data or {}).get("userPk")
+    d = api("DELETE", f"/api/v1/sec/users/{uid}", t=ctx.T_A)
+    st(d, 200)
+    eq((d.data or {}).get("statusCode"), "DISABLED", "deactivated: data.statusCode")
+    r = api("POST", "/api/v1/notifications/dispatch", t=ctx.T_A, body=dispatch_body(uid, ["EMAIL", "IN_APP"]))
+    st(r, 200)
+    eq((r.data or {}).get("logIds"), [], "inactive (DISABLED) recipient: data.logIds")
+    s = api("POST", "/api/v1/notifications/logs/search", t=ctx.T_A,
+            body={"filters": [{"field": "recipientId", "operator": "EQUALS", "value": uid}]})
+    st(s, 200)
+    eq(s.content, [], "no log row for the inactive recipient")
 
 
 @tc("TC-CORE-NOTIF-013")
@@ -1636,6 +1746,10 @@ def test_audit_008_permission_and_token(ctx):
     st(api("GET", "/api/v1/audit/events", t=ctx.T_NOPERM), 403, "ACCESS_DENIED")
     st(api("GET", "/api/v1/audit/events", t=ctx.T_ALICE), 403, "ACCESS_DENIED")
     st(api("GET", "/api/v1/audit/events"), 401, "SEC-401-INVALID-CREDENTIALS")
+    # a user whose role grants other screens (SEQUENCE_SERIES, FILE_BROWSER) but not AUDIT:EVENT:READ
+    t = limited_user(ctx)
+    st(api("POST", "/api/v1/sequence/series/search", t=t, body={}), 200, what="T_LIM holds its own grants (series search 200)")
+    st(api("GET", "/api/v1/audit/events", t=t), 403, "ACCESS_DENIED", what="T_LIM GET /api/v1/audit/events → 403")
 
 
 @tc("TC-CORE-AUDIT-010")
@@ -1646,8 +1760,8 @@ def test_audit_010_dates_filters_order(ctx):
     occ = [x.get("occurredAt") for x in r.content]
     check(occ == sorted(occ, reverse=True), "occurredAt non-increasing", "newest first", occ[:6])
     acts = [x.get("action") for x in r.content]
-    if "UPDATE" in acts and "CREATE" in acts:
-        check(acts.index("UPDATE") < acts.index("CREATE"), "the UPDATE before the CREATE", "UPDATE first", acts)
+    check("UPDATE" in acts and "CREATE" in acts and acts.index("UPDATE") < acts.index("CREATE"),
+          "both rows present and the UPDATE before the CREATE", "UPDATE … CREATE", acts)
     r = audit(ctx.T_A, entityType="SEC_USER", entityId=ctx.ALICE_ID, action="CREATE", **{"from": "2000-01-01T00:00:00Z"})
     st(r, 200)
     check(r.content and all(x.get("action") == "CREATE" for x in r.content), "only CREATE", "CREATE only", [x.get("action") for x in r.content])
@@ -1781,8 +1895,10 @@ def test_report_003_sec_user_list_isolated(ctx):
     eq([c.get("key") for c in d.get("columns") or []],
        ["username", "email", "fullNameAr", "fullNameEn", "realm", "status", "active", "lastLoginAt", "createdAt"], "columns[*].key")
     names = [x.get("username") for x in d.get("rows") or []]
-    allowed = {"ta-admin", f"alice-{ctx.run}", f"c1-{ctx.run}@shop.test"}
+    allowed = {"ta-admin", f"alice-{ctx.run}", f"c1-{ctx.run}@shop.test", f"lim-{ctx.run}", f"inact-{ctx.run}"}
     check(set(names) <= allowed, "rows ⊆ A's staff users", sorted(allowed), names)
+    required = {"ta-admin", f"alice-{ctx.run}", f"c1-{ctx.run}@shop.test"}
+    check(required <= set(names), "rows contain ta-admin, alice and the staff c1", sorted(required), names)
     check("tb-admin" not in names and f"bob-{ctx.run}" not in names, "no B users", "absent", names)
     eq((d.get("page"), d.get("size"), d.get("totalRows")), (0, 50, len(names)), "page/size/totalRows")
     blob = json.dumps(d)
@@ -1927,8 +2043,10 @@ def test_report_014_audit_event_list_isolated(ctx):
     r = api("POST", "/api/v1/report/AUDIT_EVENT_LIST/run", t=ctx.T_B, body={"params": {"action": "LOGIN"}, "size": 200})
     st(r, 200)
     rows = (r.data or {}).get("rows") or []
-    check(all(x.get("action") == "LOGIN" for x in rows), "B rows all LOGIN", "LOGIN", {x.get("action") for x in rows})
+    check(rows and all(x.get("action") == "LOGIN" for x in rows), "B rows non-empty and all LOGIN", "LOGIN",
+          {x.get("action") for x in rows})
     actors = {x.get("actor") for x in rows}
+    check("tb-admin" in actors, "B rows contain tb-admin's LOGIN (TENANT-007)", "tb-admin", sorted(map(str, actors)))
     check("ta-admin" not in actors and f"alice-{ctx.run}" not in actors, "B has no A actors", "absent", sorted(map(str, actors)))
     r = api("POST", "/api/v1/report/AUDIT_EVENT_LIST/run", t=ctx.T_A, body={"params": {"action": "LOGIN"}, "size": 200})
     st(r, 200)
@@ -1951,6 +2069,9 @@ def test_report_015_notif_log_summary(ctx):
     rb = api("POST", "/api/v1/report/NOTIF_LOG_SUMMARY/run", t=ctx.T_B, body={"params": {}, "size": 200})
     st(rb, 200)
     brows = (rb.data or {}).get("rows") or []
+    b_email = sum(int(x.get("count") or 0) for x in brows if x.get("channel") == "EMAIL")
+    check(brows and b_email >= 1, "B's summary is non-empty (B's c1 verify mail, SEC-011)", "EMAIL >= 1",
+          [(x.get("channel"), x.get("status"), x.get("count")) for x in brows])
     b_push = sum(int(x.get("count") or 0) for x in brows if x.get("channel") == "PUSH")
     b_inapp = sum(int(x.get("count") or 0) for x in brows if x.get("channel") == "IN_APP")
     check(b_push == 0 and b_inapp == 0, "B's rows do not include A's counts (no PUSH/IN_APP dispatch in B)", "0, 0", (b_push, b_inapp))
@@ -1963,7 +2084,8 @@ def test_report_016_core_report_export(ctx):
     rows = csv_rows(r.body) if r.status == 200 else [[]]
     exp = "Occurred at,Action,Actor,Actor realm,Entity type,Entity id,Summary (Arabic),Summary (English),IP address,Reference"
     eq(",".join(rows[0]) if rows else "", exp, "header line")
-    check(all(len(x) > 1 and x[1] == "LOGIN" for x in rows[1:]), "every data row Action = LOGIN", "LOGIN",
+    check(len(rows) > 1 and all(len(x) > 1 and x[1] == "LOGIN" for x in rows[1:]),
+          "at least one data row, every data row Action = LOGIN", "LOGIN",
           sorted({x[1] if len(x) > 1 else "" for x in rows[1:]}))
 
 
@@ -1990,6 +2112,53 @@ def test_app_001_app_report_runs(ctx):
 # =============================================================================================
 def tstatus(ctx, tid, code):
     return api("PATCH", f"/api/v1/platform/tenants/{tid}/status", t=ctx.T_PLAT, body={"statusCode": code})
+
+
+@tc("TC-CORE-TENANT-025")
+def test_tenant_025_lists_isolated_and_lookups_copied(ctx):
+    # file categories: B's search never shows A's TC_PUB/TC_PRV
+    r = api("POST", "/api/v1/files/categories/search", t=ctx.T_B, body={"size": 200})
+    st(r, 200)
+    codes = {x.get("categoryCode") for x in r.content}
+    check(not ({f"TC_PUB_{ctx.RUN}", f"TC_PRV_{ctx.RUN}"} & codes), "B's category search has no A category", "absent", sorted(map(str, codes)))
+    ra = api("POST", "/api/v1/files/categories/search", t=ctx.T_A, body={"size": 200})
+    check({f"TC_PUB_{ctx.RUN}", f"TC_PRV_{ctx.RUN}"} <= {x.get("categoryCode") for x in ra.content},
+          "A's own search shows both", "present", ra.excerpt(200), ra.req)
+    # files listed by owner (FILE-003's owner 4711/PRODUCT/SHOP): A sees its documents, B none of them
+    q = "/api/v1/files?ownerId=4711&ownerType=PRODUCT&moduleCode=SHOP&size=200"
+    fa = api("GET", q, t=ctx.T_A)
+    fb = api("GET", q, t=ctx.T_B)
+    st(fa, 200)
+    st(fb, 200)
+    a_ids = {x.get("id") for x in fa.content}
+    check(ctx.DOC1 in a_ids, "A's owner list contains $DOC1", ctx.DOC1, sorted(map(str, a_ids)))
+    check(not (a_ids & {x.get("id") for x in fb.content}), "B's owner list shares no document with A's", "disjoint",
+          [x.get("id") for x in fb.content])
+    # roles: B's search never shows A's TC_RPT/TC_LIM roles
+    r = api("POST", "/api/v1/sec/roles/search", t=ctx.T_B, body={"size": 200})
+    st(r, 200)
+    rcodes = {x.get("code") for x in r.content}
+    check(r.content and not ({f"TC_RPT_{ctx.RUN}", f"TC_LIM_{ctx.RUN}"} & rcodes), "B's role search has no A role (non-empty)",
+          "absent", sorted(map(str, rcodes)))
+    # templates: both tenants hold the same codes, as separate rows
+    ta = api("POST", "/api/v1/notifications/templates/search", t=ctx.T_A, body={"size": 200})
+    tb = api("POST", "/api/v1/notifications/templates/search", t=ctx.T_B, body={"size": 200})
+    st(ta, 200)
+    st(tb, 200)
+    check(ta.content and tb.content and not ({x.get("id") for x in ta.content} & {x.get("id") for x in tb.content}),
+          "A's and B's template rows are disjoint (no shared id)", "disjoint",
+          ([x.get("id") for x in ta.content], [x.get("id") for x in tb.content]))
+    # provisioning copied PLATFORM's lookup catalog: same keys, different rows
+    lp = api("POST", "/api/v1/mdl/lookup-types/search", t=ctx.T_PLAT, body={"size": 200})
+    la = api("POST", "/api/v1/mdl/lookup-types/search", t=ctx.T_A, body={"size": 200})
+    st(lp, 200)
+    st(la, 200)
+    pk = {x.get("key") for x in lp.content}
+    ak = {x.get("key") for x in la.content}
+    check(pk and pk == ak, "A's lookup-type keys = PLATFORM's", sorted(map(str, pk)), sorted(map(str, ak)))
+    check(not ({x.get("lookupTypePk") for x in lp.content} & {x.get("lookupTypePk") for x in la.content}),
+          "A's lookup types are its own rows (no shared id)", "disjoint",
+          ([x.get("lookupTypePk") for x in lp.content], [x.get("lookupTypePk") for x in la.content]))
 
 
 @tc("TC-CORE-TENANT-019")
@@ -2170,18 +2339,6 @@ def test_notif_003_email_sent(ctx):
     to = f"alice-{ctx.run}@t.test"
     m = SINK["sink"].wait_for(lambda m: to in ((m.get("To") or "") + (m.get("X-Sink-Rcpt") or "")), 5) if SINK["sink"] else None
     check(m is not None, f"sink received one mail to {to}", "1 mail", "received" if m else f"none (log lastError={d.get('lastError')!r})")
-    # Observation (not part of the verdict): the same dispatch with `variables.email` set, as the
-    # EmailChannelProvider contract and the JUnit emailCommand(...) supply it.
-    b = dispatch_body(ctx.ALICE_ID, ["EMAIL"])
-    b["variables"]["email"] = to
-    r = api("POST", "/api/v1/notifications/dispatch", t=ctx.T_A, body=b)
-    lid2 = ((r.data or {}).get("logIds") or [None])[0]
-    if lid2:
-        lg = poll(lambda: get_log(ctx.T_A, lid2), lambda x: (x.data or {}).get("notificationStatusId") not in ("PENDING", "QUEUED"), 20)
-        dd = lg.data or {}
-        m2 = SINK["sink"].wait_for(lambda m: to in ((m.get("To") or "") + (m.get("X-Sink-Rcpt") or "")), 5) if SINK["sink"] else None
-        observe("same dispatch with variables.email set", f"status={dd.get('notificationStatusId')} attempts={dd.get('attempts')} "
-                f"sentAt={dd.get('sentAt')} sink_mail_to_alice={'yes' if m2 else 'no'}", r.req)
 
 
 @tc("TC-CORE-NOTIF-012", profile="P-MAIL")
@@ -2213,6 +2370,75 @@ def test_notif_015_staff_with_customer_name(ctx):
     r = api("GET", "/api/v1/notif/inbox", t=t)
     st(r, 200)
     check(not [x for x in r.content if x.get("recipientUserId") == ctx.C2_ID], "no item of $C2_ID", "none", r.excerpt())
+
+
+@tc("TC-CORE-SEC-034", profile="P-MAIL")
+def test_sec_034_same_email_both_realms_login(ctx):
+    e = f"c2-{ctx.run}@shop.test"
+    r = login_staff(ctx.TA, e, "StaffPass!9")
+    st(r, 200, what="staff login c2 (NOTIF-015's staff account)")
+    ts = (r.data or {}).get("accessToken") or ""
+    eq(jwt_claims(ts).get("realm"), "STAFF", "staff JWT realm")
+    s = api("POST", "/api/v1/sec/users/search", t=ctx.T_A,
+            body={"filters": [{"field": "username", "operator": "EQUALS", "value": e}]})
+    st(s, 200)
+    staff_pk = [x.get("userPk") for x in s.content]
+    eq(len(staff_pk), 1, "exactly one STAFF row named c2")
+    r = cust_login(ctx.TA, e, "Cust0mer!New")
+    st(r, 200, what="customer login c2 (password set by SEC-026)")
+    tc_ = (r.data or {}).get("accessToken") or ""
+    eq(jwt_claims(tc_).get("realm"), "CUSTOMER", "customer JWT realm")
+    me = api("GET", "/api/v1/customers/me", t=tc_)
+    st(me, 200)
+    mid = (me.data or {}).get("id")
+    eq(mid, ctx.C2_ID, "/customers/me id = $C2_ID")
+    check(staff_pk and mid not in staff_pk, "/customers/me id != the staff userPk", f"!= {staff_pk}", mid)
+
+
+@tc("TC-CORE-SEC-032", profile="P-MAIL")
+def test_sec_032_staff_sessions_exclude_customers(ctx):
+    def staff_sessions(t):
+        r = api("POST", "/api/v1/sec/sessions/search", t=t, body={"size": 200})
+        st(r, 200)
+        return r, [x.get("activeSessionPk") for x in r.content]
+    r = login_staff(ctx.TA, "ta-admin", PW)
+    st(r, 200)
+    t1 = r.data["accessToken"]
+    _, before = staff_sessions(t1)
+    r = cust_login(ctx.TA, f"c2-{ctx.run}@shop.test", "Cust0mer!New")
+    st(r, 200, what="customer login c2 → a new customer session")
+    t_cust = (r.data or {}).get("accessToken")
+    r = login_staff(ctx.TA, "ta-admin", PW)
+    st(r, 200)
+    t2 = r.data["accessToken"]
+    lst, after = staff_sessions(t2)
+    check(before and after, "the staff lists are non-empty", "non-empty", (before, after))
+    check(ctx.C2_ID not in [x.get("userId") for x in lst.content], "no listed session belongs to $C2_ID", "absent",
+          sorted({x.get("userId") for x in lst.content}))
+    lo, hi = max(before or [0]), max(after or [0])
+    hidden = [i for i in range(lo + 1, hi) if i not in after]
+    check(len(hidden) >= 1, "the ids allocated between the two staff logins that the staff list does not show (the customer's)",
+          ">= 1", hidden)
+    for sid in hidden:
+        st(api("DELETE", f"/api/v1/sec/sessions/{sid}", t=t2), 404, "SEC-404-SESSION", what=f"DELETE /api/v1/sec/sessions/{sid} (not a staff session)")
+    st(api("GET", "/api/v1/customers/me", t=t_cust), 200, what="the customer's session is still live (GET /customers/me)")
+    d = api("GET", "/api/v1/sec/dashboard", t=t2)
+    st(d, 200)
+    eq(((d.data or {}).get("activeSessions") or {}).get("count"), (lst.data or {}).get("totalElements"),
+       "dashboard activeSessions.count = staff session search totalElements (live customer sessions not counted)")
+
+
+@tc("TC-CORE-TENANT-026", profile="P-MAIL")
+def test_tenant_026_suspended_tenant_customer_token(ctx):
+    st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 200, what="before: T_CUST works")
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT, body={"statusCode": "SUSPENDED"})
+    st(r, 200, what="suspend the run's tenant A")
+    try:
+        st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 403, "TENANT_SUSPENDED", what="issued customer token refused")
+        st(cust_login(ctx.TA, f"c2-{ctx.run}@shop.test", "Cust0mer!New"), 403, "TENANT_SUSPENDED", what="customer login refused")
+    finally:
+        r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"})
+        st(r, 200, what="re-activate tenant A")
 
 
 @tc("TC-CORE-FILE-022", profile="P-MAIL")
@@ -2281,22 +2507,15 @@ def test_notif_006_failing_provider_retried(ctx):
     eq(d.get("retryCount"), 4, "final retryCount")
     check(bool(d.get("lastError")) and bool(d.get("errorMessage")), "lastError and errorMessage non-empty", "non-empty",
           (d.get("lastError"), d.get("errorMessage")))
+    le = d.get("lastError") or ""
+    check("MailConnectException" in le or "2525" in le, "lastError names the connection failure (MailConnectException / port 2525)",
+          "MailConnectException … 2525", le)
+    check("missing recipient email address" not in le, "the failure is the mail server, not a missing address",
+          "no 'missing recipient email address'", le)
     s = api("POST", "/api/v1/notifications/logs/search", t=ctx.T_A,
             body={"filters": [{"field": "notificationStatusId", "operator": "EQUALS", "value": "FAILED"}], "size": 200})
     st(s, 200)
     check(lid in [x.get("id") for x in s.content], "search contains the log id", lid, [x.get("id") for x in s.content][:10])
-    # Observation: the plan's request carries no `variables.email`, so the provider fails with
-    # "missing recipient email address" without contacting the (down) mail server. Repeat with the
-    # address set so the closed port is what fails.
-    b = dispatch_body(ctx.ALICE_ID, ["EMAIL"])
-    b["variables"]["email"] = f"alice-{ctx.run}@t.test"
-    r = api("POST", "/api/v1/notifications/dispatch", t=ctx.T_A, body=b)
-    lid2 = ((r.data or {}).get("logIds") or [None])[0]
-    if lid2:
-        lg = poll(lambda: get_log(ctx.T_A, lid2), lambda x: (x.data or {}).get("notificationStatusId") == "FAILED", timeout=60, interval=1)
-        dd = lg.data or {}
-        observe("same dispatch with variables.email set (mail server down)", f"status={dd.get('notificationStatusId')} "
-                f"attempts={dd.get('attempts')} retryCount={dd.get('retryCount')} lastError={dd.get('lastError')!r}", r.req)
 
 
 @tc("TC-CORE-REPORT-013", profile="P-CAP")
@@ -2349,14 +2568,15 @@ ORDER = {
                   *rng("TENANT", 13, 18), "SEC-005", "SEC-006", "PLATFORM-002", "PLATFORM-003", "APP-002",
                   *rng("SEQ", 3, 14),
                   *rng("SETTINGS", 4, 10),
-                  *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "NOTIF-001",
+                  *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "SEC-031", "SEC-033",
+                  "NOTIF-001",
                   *rng("FILE", 1, 18), "FILE-024", *rng("FILE", 19, 21), "FILE-023",
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
-                  *rng("TENANT", 19, 24)),
-    "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "FILE-022",
-                  "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004"),
+                  "TENANT-025", *rng("TENANT", 19, 24)),
+    "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
+                  "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
     "P-CAP": ids("REPORT-013"),
     "P-LOCAL": ids("FILE-025"),

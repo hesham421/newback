@@ -2,8 +2,8 @@
  "meta": {
   "profile": "P-CAP",
   "base": "http://localhost:7295",
-  "run": "2610050231BE",
-  "started": "2026-10-05T02:31:34",
+  "run": "26100503115E",
+  "started": "2026-10-05T03:11:48",
   "cap": 2,
   "local_root": null,
   "setup": [
@@ -13,7 +13,7 @@
     "code": null
    }
   ],
-  "finished": "2026-10-05T02:31:35",
+  "finished": "2026-10-05T03:11:49",
   "plan_notes": []
  },
  "results": {
@@ -26,7 +26,7 @@
      "ok": true,
      "what": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}",
      "expected": "422 E(REPORT_EXPORT_TOO_LARGE)",
-     "observed": "422 E(REPORT_EXPORT_TOO_LARGE) · {\"error\":{\"code\":\"REPORT_EXPORT_TOO_LARGE\",\"fieldErrors\":null,\"message\":\"The export exceeds the limit of 2 rows. Narrow the report parameters and try again.\"},\"success\":false,\"timestamp\":\"2026-10-04T22:31:35.157555500Z\"}",
+     "observed": "422 E(REPORT_EXPORT_TOO_LARGE) · {\"error\":{\"code\":\"REPORT_EXPORT_TOO_LARGE\",\"fieldErrors\":null,\"message\":\"The export exceeds the limit of 2 rows. Narrow the report parameters and try again.\"},\"success\":false,\"timestamp\":\"2026-10-04T23:11:49.417662100Z\"}",
      "request": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}"
     },
     {
@@ -46,7 +46,7 @@
    ],
    "result": "PASS",
    "note": "",
-   "seconds": 0.3
+   "seconds": 0.29
   }
  }
 }

@@ -90,6 +90,10 @@ def verify_junit(cell):
     return out
 
 
+# A case that the plan runs in several restarts, keyed by the part's `cap` (only REPORT-013 today).
+REQUIRED_PARTS = {"TC-CORE-REPORT-013": {2, 3}}
+
+
 def merge(files):
     merged, metas = OrderedDict(), []
     for f in files:
@@ -103,13 +107,21 @@ def merge(files):
     final = {}
     for tid, parts in merged.items():
         res = [p["result"] for p in parts]
+        note = ""
         if all(x == "PASS" for x in res):
             verdict = "PASS"
         elif "FAIL" in res:
             verdict = "FAIL"
         else:
             verdict = "BLOCKED"
-        final[tid] = {"result": verdict, "parts": parts, "test": parts[0]["test"], "profile": parts[0]["profile"]}
+        # REPORT-013 is one case in two restarts (plan §2.1 P-CAP): it passes only when BOTH the cap=2 and the
+        # cap=3 parts ran and passed; a missing part leaves the case BLOCKED, never a partial PASS.
+        missing = sorted(REQUIRED_PARTS.get(tid, set()) - {p.get("cap") for p in parts})
+        if missing and verdict != "FAIL":
+            verdict = "BLOCKED"
+            note = "missing part(s): " + ", ".join(f"cap={c}" for c in missing)
+        final[tid] = {"result": verdict, "parts": parts, "test": parts[0]["test"], "profile": parts[0]["profile"],
+                      "note": note}
     return final, metas
 
 
@@ -142,6 +154,8 @@ def build(files):
             shown = f"SKIPPED ({cls.get('skipped', {}).get(tid, 'its profile was not run')})"
         if res == "FAIL" and tid in cls.get("fail", {}):
             shown = f"FAIL — {cls['fail'][tid]['class']}"
+        if res == "BLOCKED" and final.get(tid, {}).get("note"):
+            shown = f"BLOCKED ({final[tid]['note']})"
         runs = ", ".join(sorted({p["run"] for p in final.get(tid, {}).get("parts", [])}))
         rows.append(f"| {tid} | {test} | {prof.get(tid, '?')} | {shown} | {runs} |")
 
@@ -155,9 +169,9 @@ def build(files):
     w("")
     w("## 1. What was run")
     w("")
-    w(f"- Input: `docs/test-api/core-test-plan.md` (166 cases). Contract reference: `docs/api-docs/` (105 operations).")
-    w(f"- Code under test: branch `{_git('rev-parse', '--abbrev-ref', 'HEAD')}` at `{_git('rev-parse', '--short', 'HEAD')}` "
-      "(erp-core 1.0.0 + erp-app-reference 1.1.0-SNAPSHOT, the same code as the `v1.0.0` tag per the plan §2).")
+    w(f"- Input: `docs/test-api/core-test-plan.md` ({len(ids)} cases). Contract reference: `docs/api-docs/` (105 operations).")
+    w(f"- Code under test: {cls.get('code_under_test', 'branch `' + _git('rev-parse', '--abbrev-ref', 'HEAD') + '`')} "
+      "(erp-core + erp-app-reference 1.1.0-SNAPSHOT). The result files record which instance each profile ran on (§1.1).")
     w("- Method: skill `api-verify` (translation, not derivation) with the phase-D overrides: one script, "
       "`docs/test-api/core_api_verify.py`, one `test_<name>()` per TC id declared with `@tc(\"TC-CORE-…\")`, run in the "
       "plan's §3 order, with a fresh `RUN` suffix per run. Stdlib-only Python; `smtp_sink.py` is a stdlib SMTP capture sink.")
@@ -172,7 +186,8 @@ def build(files):
     w("| Profile | Base URL | RUN | Started | Instance | Result file |")
     w("|---|---|---|---|---|---|")
     inst = {
-        "P-LIVE": "the shared long-lived instance (profile `dev`, simple cache, no SMTP, DB storage) — not restarted",
+        "P-LIVE": "a FRESH instance of the fixed code started for this run on 7272 (profile `dev`, simple cache, no SMTP, "
+                  "DB storage) against a new database `erp_phase_d2`; no earlier run touched it",
         "P-MAIL": "own instance, variant jar (+ `spring-boot-starter-mail`), `--spring.mail.host=localhost --spring.mail.port=1025`, sink in-process",
         "P-MAIL-DOWN": "own instance, variant jar, `--spring.mail.host=localhost --spring.mail.port=2525` (closed), default retry backoff",
         "P-CAP": "own instance, plain jar, `--erp.core.report.max-export-rows=<cap>`",
@@ -186,26 +201,26 @@ def build(files):
     w("")
     w("```bash")
     w("export ERP_BOOTSTRAP_ADMIN_PASSWORD='<bootstrap admin password>'   # never written to any output")
-    w("# P-LIVE (147 cases) against the running app")
+    w(f"# P-LIVE ({len(v.ORDER['P-LIVE'])} cases) against the running app")
     w("python docs/test-api/core_api_verify.py --base http://localhost:7272")
-    w("# profile instances (own port + scratch DB); JDK 21: export JAVA_HOME=...; createdb erp_pd_verify")
+    w("# profile instances (own port + scratch DB); JDK 21: export JAVA_HOME=...; createdb erp_pd2_verify")
     w("#  plain jar   : mvn -o -q -DskipTests package   -> erp-app-reference/target/erp-app-reference-1.1.0-SNAPSHOT.jar")
     w("#  variant jar : temporarily add org.springframework.boot:spring-boot-starter-mail to erp-app-reference/pom.xml,")
     w("#                mvn -o -q -DskipTests package, copy the jar aside, `git checkout erp-app-reference/pom.xml` (never committed)")
-    w("docs/test-api/start_profile_instance.sh app-mail.jar 7295 erp_pd_verify pmail.log --spring.mail.host=localhost --spring.mail.port=1025")
+    w("docs/test-api/start_profile_instance.sh app-mail.jar 7295 erp_pd2_verify pmail.log --spring.mail.host=localhost --spring.mail.port=1025")
     w("python docs/test-api/core_api_verify.py --profile P-MAIL --base http://localhost:7295 --smtp-port 1025")
-    w("docs/test-api/start_profile_instance.sh app-mail.jar 7295 erp_pd_verify down.log --spring.mail.host=localhost --spring.mail.port=2525")
+    w("docs/test-api/start_profile_instance.sh app-mail.jar 7295 erp_pd2_verify down.log --spring.mail.host=localhost --spring.mail.port=2525")
     w("python docs/test-api/core_api_verify.py --profile P-MAIL-DOWN --base http://localhost:7295")
-    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd_verify cap2.log --erp.core.report.max-export-rows=2")
+    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd2_verify cap2.log --erp.core.report.max-export-rows=2")
     w("python docs/test-api/core_api_verify.py --profile P-CAP --cap 2 --base http://localhost:7295")
-    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd_verify cap3.log --erp.core.report.max-export-rows=3")
+    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd2_verify cap3.log --erp.core.report.max-export-rows=3")
     w("python docs/test-api/core_api_verify.py --profile P-CAP --cap 3 --base http://localhost:7295")
-    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd_verify local.log --erp.core.files.storage=LOCAL --erp.core.files.local.root=<dir>")
+    w("docs/test-api/start_profile_instance.sh app-plain.jar 7295 erp_pd2_verify local.log --erp.core.files.storage=LOCAL --erp.core.files.local.root=<dir>")
     w("python docs/test-api/core_api_verify.py --profile P-LOCAL --local-root <dir> --base http://localhost:7295")
     w("python docs/test-api/core_api_verify.py --report docs/test-api/results/*.json   # this report")
     w("```")
     w("")
-    w("Each profile instance was stopped before the next started (one DB, `erp_pd_verify`, persisting across "
+    w("Each profile instance was stopped before the next started (one DB, `erp_pd2_verify`, persisting across "
       "restarts as plan §2.1 says, with a fresh `RUN` per profile). The instances were stopped and the scratch DB "
       "dropped at the end. Captured mail is written outside the repository (it holds tokens).")
     w("")
@@ -280,7 +295,7 @@ def build(files):
         w(f"- {n}")
     gaps = [t for t in ids if t not in impl]
     w("")
-    w("**Gaps (TC ids without a matching test):** " + (", ".join(gaps) if gaps else "none — all 166 ids map to a `test_<name>()`."))
+    w("**Gaps (TC ids without a matching test):** " + (", ".join(gaps) if gaps else f"none — all {len(ids)} ids map to a `test_<name>()`."))
     skipped = [t for t in ids if t in impl and t not in final]
     w("")
     w("**Not executed:** " + (", ".join(skipped) if skipped else "none — every case ran in its profile."))
@@ -303,14 +318,30 @@ def build(files):
                 parts.append(f"✓ `{name}`" if ok else f"✗ `{name}` ({where})")
                 missing_total += 0 if ok else 1
             cov = "; ".join(parts)
+            if r9["covered"].startswith("not a JUnit test"):
+                cov = md_cell(r9["covered"].split("`")[0].rstrip("; ")) + "; " + cov
         w(f"| {r9['step']} | {md_cell(r9['behaviour'])} | {cov} |")
     w("")
     w(f"JUnit names not found: **{missing_total}**.")
+    ev = cls.get("junit_evidence")
+    if ev:
+        w("")
+        w("### 7.1 JUnit evidence at the final commit")
+        w("")
+        w(ev.get("intro", ""))
+        w("")
+        w("| JUnit class | tests | failures | errors | skipped | source |")
+        w("|---|---:|---:|---:|---:|---|")
+        for row in ev.get("rows", []):
+            w(f"| `{row['class']}` | {row['tests']} | {row['failures']} | {row['errors']} | {row['skipped']} | {md_cell(row['source'])} |")
+        for n in ev.get("notes", []):
+            w("")
+            w(n)
     w("")
     w("## 8. Surviving records and privileges")
     w("")
     w("No case documents a hard delete for what it creates, so the run data stays (the plan's §7 data hygiene: every "
-      "code, username and e-mail carries the run suffix). On the shared P-LIVE instance, per RUN:")
+      "code, username and e-mail carries the run suffix). On the P-LIVE instance (7272, `erp_phase_d2`), per RUN:")
     w("")
     for m in metas:
         if m["profile"] != "P-LIVE":
@@ -318,18 +349,22 @@ def build(files):
         r = m["run"]
         w(f"- RUN `{r}`: tenants `TCA{r}`, `TCB{r}`, `TCC{r}` (C re-activated by TENANT-024) with their admins "
           f"`ta-admin`/`tb-admin`/`tc-admin`; staff users `alice-{r.lower()}` (A, B), `bob-{r.lower()}`, `c1-{r.lower()}@shop.test` "
-          f"(A staff), `f-{r.lower()}`, `g-{r.lower()}`, `rpt-{r.lower()}` (A), `p-noperm-{r.lower()}` (PLATFORM); customers "
-          f"`c1/c4/c5-{r.lower()}@shop.test` (A; c4 left ACTIVE and c5 holding SYS_ADMIN by the SEC-029/030 defects) and "
+          f"(A staff), `lim-{r.lower()}`, `inact-{r.lower()}` (A, DISABLED by NOTIF-011), `f-{r.lower()}`, `g-{r.lower()}`, "
+          f"`rpt-{r.lower()}` (A), `p-noperm-{r.lower()}` (PLATFORM); customers `c1/c4/c5-{r.lower()}@shop.test` (A; all three "
+          f"still `PENDING_VERIFICATION` and without roles: the staff API refused them, SEC-028..030) and "
           f"`c1-{r.lower()}@shop.test` (B); PLATFORM number series `TC_INV_{r}` and `TC_NEV_{r}`; PLATFORM configuration "
-          f"`TC_DEF_{r}` (platform default, deactivated) and its PLATFORM-tenant override; A role `TC_RPT_{r}`; A file "
-          f"categories `TC_PUB_{r}`/`TC_PRV_{r}` and their documents; an A `SMS` channel configuration; notification "
+          f"`TC_DEF_{r}` (platform default, deactivated) and its PLATFORM-tenant override; A roles `TC_RPT_{r}` and `TC_LIM_{r}`; "
+          f"A file categories `TC_PUB_{r}`/`TC_PRV_{r}` and their documents; an A `SMS` channel configuration; notification "
           f"logs and inbox rows; audit rows.")
     w("- **Permanent residue in reference tables read by other modules:** none. The run writes no registry rows "
       "(the permission catalog is only read) and no lookup values.")
     w("- **Privileges:** the script granted nothing to any pre-existing role or user. REPORT-011 creates its own role "
       "`TC_RPT_{RUN}` inside the run's own tenant A and grants it `PERM_SEC_REPORTS_VIEW` + `SEC:REPORT:SEC_USER_LIST` "
-      "exactly as the case prescribes; that role only ever reaches the run's own user `rpt-{run}`.")
-    w("- Profile runs used the scratch database `erp_pd_verify`, dropped at the end.")
+      "exactly as the case prescribes; that role only ever reaches the run's own user `rpt-{run}`. SEQ-014 creates "
+      "`TC_LIM_{RUN}` (A) with `PERM_SEQUENCE_SERIES_VIEW`, `PERM_FILE_BROWSER_VIEW` and `PERM_FILE_BROWSER_CREATE` only; "
+      "it only ever reaches the run's own user `lim-{run}`.")
+    w("- Profile runs used the scratch database `erp_pd2_verify`, dropped at the end. The P-LIVE database "
+      "`erp_phase_d2` is kept: the fixed app keeps running on it for the reviewer.")
     w("")
     open(OUT, "w", encoding="utf-8", newline="\n").write("\n".join(L) + "\n")
     print(f"wrote {OUT}: {dict(tot)}")
