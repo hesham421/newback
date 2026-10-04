@@ -424,7 +424,7 @@
         "V14__sequence_and_settings.sql"
       ],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-09",
       "attempts": 1,
       "implementer_agent": "a181bd5f6686701b8",
@@ -853,6 +853,12 @@
       "step": "10",
       "event": "dispatched",
       "note": "implementer dispatched (08 merged; slot freed)"
+    },
+    {
+      "at": "2026-10-04T19:10:05Z",
+      "step": "09",
+      "event": "reported",
+      "note": "rebased onto 07+08 at a21b35d; core 283/app 9; concurrency re-run green"
     }
   ]
 }
