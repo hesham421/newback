@@ -1020,6 +1020,12 @@
       "step": "13",
       "event": "halt",
       "note": "ERP_FACTORY_DIR / ERP_GOV_SHARED_DIR not set; step 13 touches external repos (factory, governance-shared) — human-only"
+    },
+    {
+      "at": "2026-10-04T21:22:38Z",
+      "step": "12",
+      "event": "halt",
+      "note": "CI on GitHub: build-test failed at mvn verify (main eb4dd28 + tag v1.0.0); docker-image green; publish/consume skipped. Logs need auth (403). STEP 4: fix agent on step/12-ci-fix for failure visibility + Linux portability"
     }
   ]
 }
