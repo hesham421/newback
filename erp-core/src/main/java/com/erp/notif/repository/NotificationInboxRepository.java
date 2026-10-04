@@ -21,7 +21,4 @@ public interface NotificationInboxRepository
 
     /** The recipient's unread items only. */
     Page<NotificationInboxItem> findByRecipientUserIdAndReadAtIsNull(Long recipientUserId, Pageable pageable);
-
-    /** Number of unread items of the recipient. */
-    long countByRecipientUserIdAndReadAtIsNull(Long recipientUserId);
 }
