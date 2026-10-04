@@ -80,6 +80,10 @@ public final class TestPostgres {
                     // non-UTF-8 Windows code pages (e.g. Cp1256) mangles the Arabic seed data.
                     .setLocaleConfig("encoding", "UTF8")
                     .setLocaleConfig("locale", "C")
+                    // zonky defaults to max_connections=300; the postgres:16 image CI uses keeps
+                    // PostgreSQL's 100. Same limit here, so the cached contexts' pools cannot fit
+                    // locally and then exhaust the container in CI.
+                    .setServerConfig("max_connections", "100")
                     .start();
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not start embedded PostgreSQL", e);

@@ -52,6 +52,9 @@
         <!-- Default: allow forking on non-Windows environments (see the windows-tests-no-fork
              profile below). -->
         <surefire.forkCount>1</surefire.forkCount>
+        <!-- Deterministic test-class order on every OS (see maven-surefire-plugin below);
+             override with -Dsurefire.runOrder=reversealphabetical|random to probe order dependence. -->
+        <surefire.runOrder>alphabetical</surefire.runOrder>
 
         <!-- erp-core step 12: line-coverage gate of erp-core (jacoco-maven-plugin, see erp-core/pom.xml). -->
         <jacoco.version>0.8.13</jacoco.version>
@@ -210,6 +213,12 @@
                     <configuration>
                         <forkCount>${surefire.forkCount}</forkCount>
                         <reuseForks>true</reuseForks>
+                        <!-- Post-merge CI fix (step 12): surefire's default runOrder is "filesystem",
+                             which is alphabetical on NTFS but hash order on Linux ext4, so CI ran the
+                             test classes (which share one database per JVM) in an order no Windows run
+                             ever used. Pinned so a CI order is reproducible locally; order independence
+                             is checked with -Dsurefire.runOrder=reversealphabetical / random. -->
+                        <runOrder>${surefire.runOrder}</runOrder>
                         <argLine>@{argLine} -XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</argLine>
                     </configuration>
                 </plugin>

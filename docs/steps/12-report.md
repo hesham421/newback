@@ -308,3 +308,61 @@ The local repository was cleaned of the `1.0.0` entries and the scratch reposito
   erp-app-reference tests=10  failures=0 errors=0 skipped=0
   artifacts: erp-core-1.1.0-SNAPSHOT.jar, erp-core-1.1.0-SNAPSHOT-tests.jar
   ```
+
+## Post-merge CI fix
+
+**What failed.** After the merge (`eb4dd28`) and the `v1.0.0` tag, GitHub Actions ran `ci.yml`:
+`docker-image` passed, `build-test` failed in "mvn verify" (exit 1), so `publish` and
+`consume-published` were skipped. Surefire reports were uploaded but no JaCoCo report, so tests
+failed. Job logs and artifacts need a token to download (403), and there is none here, so the
+failing tests themselves were not visible. The only public data were the check-run annotations,
+and they held nothing but "Process completed with exit code 1".
+
+**What changed (branch `step/12-ci-fix`).**
+- `.github/workflows/ci.yml` (`build-test` only):
+  - the Docker step publishes the server/API version as a notice annotation;
+  - `mvn -B -ntp verify` (no `-q`) runs under `set -o pipefail` and is teed to `mvn-verify.log`;
+  - a new `if: failure()` step runs `.github/scripts/ci-annotate-failures.py`, which writes the root
+    cause into public annotations:
+    - a summary: report totals, the Maven "Failed to execute goal" line and every failed test id;
+    - one annotation per failed test: file/line, message and 15 stack lines. At most 29, because
+      GitHub keeps 10 annotations per level per step;
+    - when no test failed (enforcer, compilation, JaCoCo gate, container start-up), the Maven
+      `[ERROR]` lines instead;
+  - `mvn-verify.log` joins the surefire artifact. The surefire upload already ran on `if: always()`.
+- `erp-core/src/test/java/com/erp/sec/BootstrapAdminPasswordIntegrationTest.java` had an
+  order-dependent assertion, a genuine Linux-only failure that was reproduced here:
+  - Surefire's default `runOrder=filesystem` is alphabetical on NTFS but hash order on Linux, and
+    every test class of a JVM shares one database.
+  - Run with `-Dsurefire.runOrder=reversealphabetical`,
+    `seededAdmin_isPendingWithThePlaceholderHash_holdsSysAdmin_andCannotLogIn` failed: its raw-SQL
+    role query returned 28 `SYS_ADMIN` rows, one for the `admin` of each tenant that other classes
+    had provisioned.
+  - Fix: the query is now scoped to the PLATFORM tenant. The assertion is unchanged.
+- Root `pom.xml`: surefire `runOrder` is pinned to `${surefire.runOrder}`, default `alphabetical`.
+  CI therefore runs the same order as Windows, so a CI failure can be reproduced locally. Override
+  with `-Dsurefire.runOrder=reversealphabetical|random` to probe for order dependence.
+- `TestPostgres`: the embedded fallback now uses `max_connections=100`, matching the `postgres:16`
+  container (zonky's default is 300).
+
+**Checked, no finding.**
+- Testcontainers 2.0.3 already includes the Docker 29 API fix from 2.0.2.
+- Resource and class names match case-sensitively.
+- No locale, time-zone, line-separator or path-separator assumptions in the tests.
+
+**Verification (local, Windows, embedded PostgreSQL).**
+- `mvn -q verify` on clean `target/`s: green, erp-core 350/0/0/0 and app 10/0/0/0.
+- `TZ=UTC mvn -B verify -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dfile.encoding=UTF-8`:
+  green, 350 + 10, BUILD SUCCESS (enforcer and JaCoCo gate included).
+- `mvn -pl erp-core test` in reverse-alphabetical order and in random orders (seeds 11, 22, 33):
+  350/0/0/0 each.
+- An earlier probe with ICU `en-US` collation on the embedded server was also green.
+- `ci.yml` parses with python yaml.
+- The annotation script was exercised on synthetic reports, both with failures and with none.
+
+**Still unknown until CI runs.** Nobody has seen the actual CI failure. The order dependence above
+is the best evidence-backed cause, but other order-dependent pairs may exist that the four orders
+tried here did not hit. Testcontainers-only differences (glibc `en_US.utf8` collation, database
+`test` / user `test`) also cannot be exercised without Docker. If `build-test` is still red, the
+new annotations name the failing tests:
+`GET https://api.github.com/repos/hesham421/newback/check-runs/<job_id>/annotations`.
