@@ -377,15 +377,15 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-08",
       "attempts": 3,
       "implementer_agent": "a610cba22aa4f49f5",
       "reviewer_agent": "a798b3445c7335bfb",
       "review": {
         "verdict": "PASS",
-        "round": 1,
-        "evidence": "core 138/app 8, 4 consecutive green runs; dispatch median 8ms with blocking mail; tenant/security propagation tested; rollback no-send; VARIABLES_JSON cleared; inbox IDOR-safe",
+        "round": 2,
+        "evidence": "post-rebase re-verify: core 206/app 9 x2 runs; 06 tests not weakened (stricter); realm-aware inbox + chains correct; 07 intact (additive FileService publish only)",
         "checked_at": "2026-10-04"
       },
       "merged_commit": null,
@@ -818,6 +818,12 @@
       "step": "08",
       "event": "reported",
       "note": "final rebase onto 07 at fc0bc85; core 206/app 9; reviewer post-rebase re-verify requested"
+    },
+    {
+      "at": "2026-10-04T18:54:25Z",
+      "step": "08",
+      "event": "review",
+      "note": "PASS post-rebase re-verification"
     }
   ]
 }
