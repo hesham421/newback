@@ -114,15 +114,15 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-03",
       "attempts": 2,
       "implementer_agent": "a4ad65f5255bec784",
       "reviewer_agent": "ade2fea7d515978b0",
       "review": {
-        "verdict": "FAIL",
-        "round": 1,
-        "evidence": "5/5 acceptance pass; blocking: core JPA repo registrar unconditional + no package-overlap collapse -> BeanDefinitionOverrideException when app declares @EnableJpaRepositories or sits in parent package (reproduced)",
+        "verdict": "PASS",
+        "round": 2,
+        "evidence": "verify green core 60/app 4 (JDK21); scratch consumer cases A/B/C start, each repo bean once; fixtures test-only",
         "checked_at": "2026-10-04"
       },
       "merged_commit": null,
@@ -560,6 +560,12 @@
       "step": "03",
       "event": "reported",
       "note": "round 1 fixes 261f9fb (repo/entity scan back-off + overlap collapse, +5 tests; core 60, app 4)"
+    },
+    {
+      "at": "2026-10-04T15:35:11Z",
+      "step": "03",
+      "event": "review",
+      "note": "PASS round 2; notes for later: back-off check broader than JPA-only, bootstrap-mode fixed DEFAULT"
     }
   ]
 }
