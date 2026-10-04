@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "02",
+  "current_step": "03",
   "max_parallel": 3,
   "steps": [
     {
@@ -114,8 +114,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-03",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -512,6 +512,12 @@
       "step": "02",
       "event": "merged",
       "note": "merged d143403; 51/51 on branch+main (main needed stale target/ cleared); pushed"
+    },
+    {
+      "at": "2026-10-04T14:42:10Z",
+      "step": "03",
+      "event": "dispatched",
+      "note": "implementer dispatched; orchestrator decision: .claude/ stays at repo root (not moved per task 18) — needed by plan commands, skills and PHASE D"
     }
   ]
 }
