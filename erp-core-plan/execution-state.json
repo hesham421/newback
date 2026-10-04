@@ -16,8 +16,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-01",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -430,5 +430,12 @@
     }
   ],
   "halts": [],
-  "log": []
+  "log": [
+    {
+      "at": "2026-10-04T13:52:39Z",
+      "step": "01",
+      "event": "dispatched",
+      "note": "implementer dispatched in worktree .worktrees/step-01"
+    }
+  ]
 }
