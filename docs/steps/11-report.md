@@ -45,8 +45,8 @@ runs them under the caller's tenant and permission, and returns JSON or exports 
   - The header row is Arabic when `Accept-Language` is `ar`, otherwise English.
 - **Reference providers.**
   - `SEC_USER_LIST` (`com.erp.sec.report`): `UserRepository` + `SpecBuilder`.
-  - `AUDIT_EVENT_LIST`: module code `AUDIT`. Until step 10 lands it lives in `com.erp.sec.report` and
-    reads `SEC_AUDIT_LOG` (see deviations).
+  - `AUDIT_EVENT_LIST` (`com.erp.audit.report`, module `AUDIT`): step 10's `CORE_AUDIT_EVENT` through
+    `AuditEventRepository` + `SpecBuilder` (since the rebase onto 08–10; see below).
   - `NOTIF_LOG_SUMMARY` (`com.erp.notif.report`): a JPQL group-by over channel/status/day through the new
     read-only `NotificationLogSummaryRepository`.
 
@@ -75,7 +75,7 @@ erp-app-reference 9 (8 before, + 1).
   - `controller/ReportController`
 - Reference providers:
   - `erp-core/src/main/java/com/erp/sec/report/SecUserListReport.java`
-  - `erp-core/src/main/java/com/erp/sec/report/AuditEventListReport.java`
+  - `erp-core/src/main/java/com/erp/audit/report/AuditEventListReport.java` (since the rebase; the interim `sec/report` version was deleted)
   - `erp-core/src/main/java/com/erp/notif/report/NotifLogSummaryReport.java`
   - `erp-core/src/main/java/com/erp/notif/repository/NotificationLogSummaryRepository.java`
 - `erp-app-reference/src/main/java/com/erp/app/report/AppSmokeReport.java`
@@ -121,9 +121,10 @@ These mirror the 13 `[11]` entries in `docs/DEVIATIONS.md`.
    - Each report's action code is its report code, with the explicit authority `<MODULE>:REPORT:<CODE>`.
    - No module rows are declared.
    - The registry caps the code at 40 characters and the module code at 10.
-3. **`AUDIT_EVENT_LIST`.** Step 10's audit module does not exist on this branch, so the report lives in
-   `com.erp.sec.report` over `SEC_AUDIT_LOG`. Its module code is already `AUDIT`, so the permission stays
-   stable when it moves.
+3. **`AUDIT_EVENT_LIST`** lives in `com.erp.audit.report` over `CORE_AUDIT_EVENT` (read-only). The
+   `AUDIT` module row and its names come from step 10's `AuditPermissions`; the report adds only the
+   screen `AUDIT_REPORTS`. Before the rebase, an interim version read `SEC_AUDIT_LOG` from
+   `com.erp.sec.report`; it was removed.
 4. **Export query.** The export asks for one page of cap + 1 rows rather than an unpaged result. Over the
    cap → 422 (`BUSINESS_RULE_VIOLATION`).
 5. **Export body.** The CSV or JSON is sent as a `byte[]` bounded by the cap, not as a
@@ -179,7 +180,7 @@ Task 4 tests, all green:
 | definitions list filtered by authority | `ReportApiIntegrationTest.definitions_areFilteredByTheCallersAuthorities_andRunNeedsTheReportsPermission`: a role holding only `PERM_SEC_REPORTS_VIEW` + `SEC:REPORT:SEC_USER_LIST` sees exactly `[SEC_USER_LIST]`; no grants → `[]`; other report → 403 |
 | run with a missing required param → 400 | `run_withAMissingRequiredOrInvalidParameter_is400ReportParamInvalid`: `REPORT_PARAM_INVALID` with field `rows`; AR message; wrong type plus an unknown param; invalid LOOKUP `FAX` plus a bad date |
 | CSV: BOM, quoted commas, AR headers with `Accept-Language: ar` | `csvExport_...`: `"Doe, ""J"" 1"`, `'=1+1`, EN headers with `en` |
-| tenant isolation (user list of A excludes B) | `coreReports_seeOnlyTheCallersTenant`: SEC_USER_LIST as JSON (totalRows 2) and as CSV; NOTIF_LOG_SUMMARY totals A = 3, B = 5; AUDIT_EVENT_LIST count equals A's own `SEC_AUDIT_LOG` rows |
+| tenant isolation (user list of A excludes B) | `coreReports_seeOnlyTheCallersTenant`: SEC_USER_LIST as JSON (totalRows 2) and as CSV; NOTIF_LOG_SUMMARY totals A = 3, B = 5; AUDIT_EVENT_LIST (`CORE_AUDIT_EVENT`): A's `LOGIN` count and total equal A's own rows (fewer than all tenants'), and B's CSV has exactly B's `LOGIN` rows |
 | export cap enforced | `exportCap_isEnforced` (cap 5: 5 rows → 200, 6 → 422 `REPORT_EXPORT_TOO_LARGE`) |
 
 Also covered: JSON export (`jsonExport_...`, plus bad format → 400), unknown code → 404, and a customer
@@ -266,13 +267,8 @@ Failed attempts on the way (all fixed):
 
 ## Notes for later steps
 
-- **Step 10 (audit), on rebase or right after.**
-  - Move `com.erp.sec.report.AuditEventListReport` to `com.erp.audit` and query `CORE_AUDIT_EVENT`
-    through the audit repository + `SpecBuilder`.
-  - Keep `code = AUDIT_EVENT_LIST` and `moduleCode = AUDIT`, so the permission `AUDIT:REPORT:AUDIT_EVENT_LIST`
-    is unchanged.
-  - Step 10's `AuditPermissions` may declare the `AUDIT` module with bilingual names; the synchronizer
-    then renames the code-as-name row.
+- **Audit report:** done in the rebase (`com.erp.audit.report.AuditEventListReport`). `AUDIT:EVENT:READ`
+  and `AUDIT:REPORT:AUDIT_EVENT_LIST` are independent grants.
 - **Writing a report (any module or app).**
   - Expose a `ReportProvider` bean. Query with JPA/`SpecBuilder` only, or with native SQL that includes
     `TENANT_ID`.
@@ -293,3 +289,42 @@ Failed attempts on the way (all fixed):
   `PermissionCatalogIntegrationTest`, `ReferenceApplicationSmokeTest`, `docs/DEVIATIONS.md`.
 - **Tests that provision tenants must not name the first administrator `admin`**
   (`BootstrapAdminPasswordIntegrationTest`).
+
+## Rebase onto 08/09/10
+
+`git rebase main` (main at `9b2ebfb`, which contains the merges of steps 08, 09 and 10; step 10's merge
+is `779c012`). Conflicts and how each was resolved, keeping every step:
+
+| File | Resolution |
+|---|---|
+| `ErpCoreAutoConfiguration.CORE_PACKAGE_LIST` | `... ,com.erp.events ,com.erp.sequence ,com.erp.audit ,com.erp.report` |
+| `ErpCoreProperties` | fields `events`, `notif`, `audit`, then `report`; classes `Events`, `Notif`, `Audit`, then `Report` |
+| `messages.properties`, `messages_ar.properties` | blocks in the order 08, 09, 10, then 11 |
+| `docs/DEVIATIONS.md` | entries 08, 09, 10, then 11 |
+| `CrossModuleBoundaryArchTest.MODULES` | events, sequence, audit, then `com.erp.report` (root package public) |
+| `ErpCoreAutoConfigurationTest` | the expected package list ends `events, sequence, audit, report` |
+| `PermissionCatalogIntegrationTest` | combines 09's `NOT_SEEDED_AUTHORITIES`/`NOT_SEEDED_SCREENS`, 10's `com.erp.audit.` contributor exclusion and 11's report-contributor and `*_REPORTS` exclusion; the 41/18 assertions are unchanged |
+| `ReferenceApplicationSmokeTest` | auto-merged: Flyway `2..15, 1000` (from main) plus this step's report test |
+
+**Audit report move.**
+- `com.erp.sec.report.AuditEventListReport` (interim, over `SEC_AUDIT_LOG`) was deleted.
+- `com.erp.audit.report.AuditEventListReport` was created. It keeps code `AUDIT_EVENT_LIST`, module
+  `AUDIT` and permission `AUDIT:REPORT:AUDIT_EVENT_LIST`.
+- It reads `AuditEvent` (`@Immutable`) through `AuditEventRepository` + `SpecBuilder`: parameters action,
+  entityType, entityId, actor, occurredFrom/To; newest first.
+- Module consistency: `ReportPermissions` declares no module, so `SEC_MODULE_REG` keeps exactly one
+  `AUDIT` row named by `AuditPermissions` ("Audit Log"). Its screens are `AUDIT_EVENTS` (step 10) and
+  `AUDIT_REPORTS` (step 11), asserted in `ReportApiIntegrationTest.definitions_listTheThreeCoreReports_forASuperRole`.
+- The tenant-isolation test now uses generic audit rows:
+  - A's `LOGIN` rows and A's whole total equal A's own `CORE_AUDIT_EVENT` count (fewer than all rows);
+  - B's CSV has exactly B's `LOGIN` rows.
+- The `[11]` DEVIATIONS entry was rewritten to match.
+
+**Verification after the rebase:**
+
+```
+$ rm -rf target erp-core/target erp-app-reference/target; mvn -q -o verify
+EXIT=0 secs=214
+erp-core tests=336 failures=0 errors=0 skipped=0      (report classes 9+4+3+4, CrossModuleBoundaryArchTest 5, PermissionCatalogIntegrationTest 4)
+erp-app-reference tests=10 failures=0 errors=0 skipped=0   (ReferenceApplicationSmokeTest 10)
+```

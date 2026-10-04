@@ -129,6 +129,15 @@ class ReportApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(one.statusCode()).isEqualTo(200);
         assertThat((String) JsonPath.read(one.body(), "$.data.moduleCode")).isEqualTo("AUDIT");
         assertThat((String) JsonPath.read(one.body(), "$.data.titleEn")).isEqualTo("Audit event list");
+
+        // the report screen joins step 10's AUDIT module row (named by AuditPermissions), no second module row
+        assertThat(jdbcTemplate.queryForList("SELECT name_en FROM sec_module_reg WHERE code = 'AUDIT'", String.class))
+            .containsExactly("Audit Log");
+        assertThat(jdbcTemplate.queryForList("SELECT s.page_code FROM sec_screen_reg s JOIN sec_module_reg m"
+            + " ON m.module_reg_pk = s.module_id WHERE m.code = 'AUDIT' ORDER BY s.page_code", String.class))
+            .containsExactly("AUDIT_EVENTS", "AUDIT_REPORTS");
+        assertThat(jdbcTemplate.queryForObject("SELECT a.action_code FROM sec_action_reg a"
+            + " WHERE a.permission_code = 'AUDIT:REPORT:AUDIT_EVENT_LIST'", String.class)).isEqualTo("AUDIT_EVENT_LIST");
     }
 
     @Test
@@ -334,15 +343,28 @@ class ReportApiIntegrationTest extends AbstractIntegrationTest {
         HttpResponse<String> summaryB = http.post(tokenB, "/api/v1/report/NOTIF_LOG_SUMMARY/run", "{}");
         assertThat((Integer) JsonPath.read(summaryB.body(), "$.data.totals.count")).isEqualTo(5);
 
-        // AUDIT_EVENT_LIST: A's admin login is there, B's admin is not
+        // AUDIT_EVENT_LIST (generic CORE_AUDIT_EVENT, step 10): A's admin LOGIN is there, B's never is
         HttpResponse<String> auditA = http.post(tokenA, "/api/v1/report/AUDIT_EVENT_LIST/run",
-            "{\"params\":{\"eventType\":\"LOGIN_SUCCESS\"}}");
+            "{\"params\":{\"action\":\"login\"},\"size\":200}");
         assertThat(auditA.statusCode()).as(auditA.body()).isEqualTo(200);
-        assertThat((List<String>) JsonPath.read(auditA.body(), "$.data.rows[*].eventType")).isNotEmpty()
-            .containsOnly("LOGIN_SUCCESS");
-        long auditRowsOfA = jdbcTemplate.queryForObject("SELECT count(*) FROM SEC_AUDIT_LOG WHERE TENANT_ID = ?"
-            + " AND EVENT_TYPE_CODE = 'LOGIN_SUCCESS'", Long.class, tenantA);
-        assertThat(((Number) JsonPath.read(auditA.body(), "$.data.totalRows")).longValue()).isEqualTo(auditRowsOfA);
+        assertThat((List<String>) JsonPath.read(auditA.body(), "$.data.rows[*].action")).isNotEmpty()
+            .containsOnly("LOGIN");
+        assertThat((List<String>) JsonPath.read(auditA.body(), "$.data.rows[*].actor")).contains(ReportHttp.TENANT_ADMIN);
+        long loginRowsOfA = jdbcTemplate.queryForObject("SELECT count(*) FROM CORE_AUDIT_EVENT WHERE TENANT_ID = ?"
+            + " AND ACTION = 'LOGIN'", Long.class, tenantA);
+        assertThat(((Number) JsonPath.read(auditA.body(), "$.data.totalRows")).longValue()).isEqualTo(loginRowsOfA);
+        long allRowsOfA = jdbcTemplate.queryForObject("SELECT count(*) FROM CORE_AUDIT_EVENT WHERE TENANT_ID = ?",
+            Long.class, tenantA);
+        HttpResponse<String> allOfA = http.post(tokenA, "/api/v1/report/AUDIT_EVENT_LIST/run", "{}");
+        assertThat(((Number) JsonPath.read(allOfA.body(), "$.data.totalRows")).longValue()).isEqualTo(allRowsOfA);
+        assertThat(allRowsOfA).isLessThan(jdbcTemplate.queryForObject("SELECT count(*) FROM CORE_AUDIT_EVENT",
+            Long.class));
+        HttpResponse<byte[]> auditCsvB = http.postBytes(tokenB, "/api/v1/report/AUDIT_EVENT_LIST/export?format=csv",
+            "{\"params\":{\"action\":\"LOGIN\"}}", "en");
+        assertThat(auditCsvB.statusCode()).isEqualTo(200);
+        String csvB = new String(auditCsvB.body(), StandardCharsets.UTF_8);
+        assertThat(csvB.lines().count()).isEqualTo(1L + jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM CORE_AUDIT_EVENT WHERE TENANT_ID = ? AND ACTION = 'LOGIN'", Integer.class, tenantB));
     }
 
     private void insertNotificationLogs(long tenantId, String channel, String status, int count) {
