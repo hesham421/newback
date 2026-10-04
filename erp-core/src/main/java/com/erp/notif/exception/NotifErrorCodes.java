@@ -45,4 +45,14 @@ public final class NotifErrorCodes {
 
     /** ERR-0004 (PLATFORM-STD) — unknown lookupKey (API-NOTIF-006). */
     public static final String NOTIF_LOOKUP_KEY_UNKNOWN = "NOTIF_LOOKUP_KEY_UNKNOWN";
+
+    /**
+     * erp-core step 08 — the channel cannot serve this caller/message: thrown (403) when the in-app
+     * inbox is used by a principal that is no user account, and recorded as the reason of a
+     * {@code SKIPPED_NO_PROVIDER} log row (no {@code ChannelProvider} handles the channel).
+     */
+    public static final String NOTIF_CHANNEL_UNAVAILABLE = "NOTIF_CHANNEL_UNAVAILABLE";
+
+    /** erp-core step 08 — inbox item not found, or not the caller's own (never revealed which). */
+    public static final String INBOX_ITEM_NOT_FOUND = "INBOX_ITEM_NOT_FOUND";
 }

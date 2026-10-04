@@ -44,7 +44,8 @@ public class CrossModuleBoundaryArchTest {
             // erp-core step 06: com.erp.sec.permission (exact) is SEC's permission-catalog SPI
             // (PermissionContributor, PermissionDef, ...) that every module's XxxPermissions implements.
             new Module("com.erp.sec", "com.erp.sec.crossmodule", "com.erp.sec.permission"),
-            new Module("com.erp.notif", "com.erp.notif.crossmodule"),
+            // erp-core step 08: com.erp.notif.channel (the ChannelProvider SPI) is public too
+            new Module("com.erp.notif", "com.erp.notif.crossmodule", "com.erp.notif.channel"),
             new Module("com.erp.file", "com.erp.file.crossmodule"),
             new Module("com.erp.cu", "com.erp.cu.crossmodule"),
             new Module("com.erp.mdl", "com.erp.mdl.crossmodule"),
@@ -52,7 +53,11 @@ public class CrossModuleBoundaryArchTest {
             // TenantContext, TenantConstants and the provisioning SPI (TenantProvisioning,
             // TenantProvisioningContributor), which every module may use. Its entity, repository,
             // service, controller and filter stay internal (com.erp.autoconfigure wires the filter).
-            new Module("com.erp.tenant", "com.erp.tenant.crossmodule", "com.erp.tenant")
+            new Module("com.erp.tenant", "com.erp.tenant.crossmodule", "com.erp.tenant"),
+            // erp-core step 08: the event bus's public surface is its ROOT package — DomainEvent,
+            // DomainEventPublisher, ErpCoreEvents and the core event classes, which every module may
+            // publish or listen to. com.erp.events.support (publisher impl, task decorator) is internal.
+            new Module("com.erp.events", "com.erp.events.crossmodule", "com.erp.events")
     );
 
     /**

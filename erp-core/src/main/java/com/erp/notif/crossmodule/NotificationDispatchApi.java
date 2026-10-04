@@ -14,8 +14,13 @@ public interface NotificationDispatchApi {
 
     /**
      * Dispatches per RULE-NOTIF-001..007 (fan-out one log per channel; skip inactive recipient;
-     * disabled channel → CHANNEL_DISABLED; retry ≤5 then FAILED). Returns the created log ids —
-     * empty when the recipient is inactive (RULE-NOTIF-007).
+     * disabled channel → CHANNEL_DISABLED). Returns the created log ids — empty when the recipient is
+     * inactive (RULE-NOTIF-007).
+     *
+     * <p>Asynchronous since erp-core step 08: an enabled channel's row is persisted {@code QUEUED} and
+     * delivered by NOTIF's event-driven worker after the caller's transaction commits (retried with
+     * exponential backoff, then {@code SENT}, {@code FAILED} or {@code SKIPPED_NO_PROVIDER}). This call
+     * never waits for a send. The signature is unchanged.
      */
     List<Long> dispatch(DispatchCommand command);
 

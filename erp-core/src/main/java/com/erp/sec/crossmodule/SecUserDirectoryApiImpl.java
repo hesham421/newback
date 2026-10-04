@@ -26,4 +26,9 @@ public class SecUserDirectoryApiImpl implements SecUserDirectoryApi {
     public List<Long> findUserIdsHoldingPermission(String permissionCode) {
         return userService.findUserIdsHoldingPermission(permissionCode).getData();
     }
+
+    @Override
+    public Optional<Long> findCurrentUserId() {
+        return userService.findCurrentUserId().getData();
+    }
 }

@@ -9,6 +9,8 @@ import com.erp.common.search.PageableBuilder;
 import com.erp.common.search.SearchRequest;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.common.util.TokenHasher;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.FileDocumentPublishedEvent;
 import com.erp.file.domain.FileAccessTokenDomainService;
 import com.erp.file.domain.FileDocumentDomain;
 import com.erp.file.domain.FileValidationDomainService;
@@ -83,6 +85,7 @@ public class FileService {
     private final PublicFileUrls publicFileUrls;
     /** Upload size limits ({@code erp.core.files.max-content-bytes} / {@code max-request-bytes}). */
     private final ErpCoreProperties erpCoreProperties;
+    private final DomainEventPublisher eventPublisher;
 
     /** Owner-list sort whitelist (entity property names) per API-FILE-005. */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("fileName", "createdAt", "fileSize");
@@ -155,6 +158,9 @@ public class FileService {
         saved.setStorageRef(stored.storageRef());
         deleteOnRollback(provider, stored.storageRef());
         log.info("Stored file ID: {} ({} bytes, {}) with provider {}", saved.getId(), size, contentType, provider.key());
+        eventPublisher.publish(new FileDocumentPublishedEvent(saved.getId(), saved.getModuleCode(),
+            saved.getOwnerType(), saved.getOwnerId(), saved.getFileName(), saved.getContentType(),
+            FileDocumentPublishedEvent.VISIBILITY_PRIVATE));
 
         return ServiceResult.success(mapper.toMetadataResponse(saved, null), Status.CREATED);
     }
@@ -331,6 +337,12 @@ public class FileService {
 
         FileDocument saved = repository.save(entity);
         log.info("File ID: {} visibility is now {}", saved.getId(), saved.getVisibility());
+        if (FileDocumentDomain.VISIBILITY_PUBLIC.equals(saved.getVisibility())) {
+            // erp-core step 08 — the document is now served on its public URL
+            eventPublisher.publish(new FileDocumentPublishedEvent(saved.getId(), saved.getModuleCode(),
+                saved.getOwnerType(), saved.getOwnerId(), saved.getFileName(), saved.getContentType(),
+                FileDocumentPublishedEvent.VISIBILITY_PUBLIC));
+        }
 
         return ServiceResult.success(
             mapper.toMetadataResponse(saved, publicFileUrls.of(saved).orElse(null)), Status.UPDATED);

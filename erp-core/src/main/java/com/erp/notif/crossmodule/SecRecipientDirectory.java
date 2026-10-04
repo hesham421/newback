@@ -2,6 +2,7 @@ package com.erp.notif.crossmodule;
 
 import com.erp.sec.crossmodule.SecUserDirectoryApi;
 import com.erp.sec.crossmodule.UserContact;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,5 +20,10 @@ public class SecRecipientDirectory implements RecipientDirectory {
     @Override
     public boolean isActive(Long recipientId) {
         return secUserDirectoryApi.findContact(recipientId).map(UserContact::active).orElse(false);
+    }
+
+    @Override
+    public Optional<Long> currentRecipientId() {
+        return secUserDirectoryApi.findCurrentUserId();
     }
 }

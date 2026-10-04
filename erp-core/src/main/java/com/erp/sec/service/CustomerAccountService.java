@@ -6,6 +6,9 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.common.util.TokenHasher;
+import com.erp.events.CustomerRegisteredEvent;
+import com.erp.events.CustomerVerifiedEvent;
+import com.erp.events.DomainEventPublisher;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
 import com.erp.sec.domain.CustomerVerifyTokenDomain;
@@ -111,6 +114,7 @@ public class CustomerAccountService {
     private final LoginRateLimiter loginRateLimiter;
     private final NotificationDispatchApi notificationDispatchApi;
     private final ErpCoreProperties properties;
+    private final DomainEventPublisher eventPublisher;
 
     /** {@code POST /api/v1/public/customers/register} — 201 with the new, unverified account. */
     @Transactional
@@ -131,6 +135,9 @@ public class CustomerAccountService {
             properties.getFrontend().getCustomerVerifyPath(), VERIFY_CTA_EN, VERIFY_CTA_AR);
 
         log.info("Registered customer User ID: {}", saved.getUserPk());
+        // erp-core step 08 — anonymous endpoint: the customer itself is the actor
+        eventPublisher.publish(new CustomerRegisteredEvent(TenantContext.current(), saved.getUsername(),
+            saved.getUserPk(), saved.getEmail()));
         return ServiceResult.success(mapper.toResponse(saved), Status.CREATED);
     }
 
@@ -153,6 +160,7 @@ public class CustomerAccountService {
         }
 
         log.info("Verified customer User ID: {}", user.getUserPk());
+        eventPublisher.publish(new CustomerVerifiedEvent(TenantContext.current(), user.getUsername(), user.getUserPk()));
         return ServiceResult.success(mapper.toResponse(user), Status.UPDATED);
     }
 

@@ -48,12 +48,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
-        <!-- Optional: SMTP for NOTIF's EMAIL channel. Without it (or without spring.mail.host) an EMAIL
-             dispatch is recorded as FAILED with reason NO_MAIL_SENDER. -->
+        <!-- Optional: SMTP for NOTIF's EMAIL channel. Without it (or without spring.mail.host) no
+             EmailChannelProvider exists and an EMAIL dispatch ends SKIPPED_NO_PROVIDER (step 08). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
             <optional>true</optional>
+        </dependency>
+        <!-- erp-core step 08: Spring Retry drives NOTIF's asynchronous delivery retries (@Retryable,
+             exponential backoff). Not managed by Spring Boot 4, hence the explicit version. -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+            <version>2.0.11</version>
         </dependency>
         <!-- Optional: Redis-backed FILE download tokens. Without it the in-memory store is used. -->
         <dependency>

@@ -16,6 +16,7 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -84,6 +85,25 @@ public class NotificationLog extends AuditableEntity {
 
     @Column(name = "SENT_AT")
     private LocalDateTime sentAt;
+
+    // --- asynchronous delivery queue (erp-core step 08, V13) ---------------------------------
+
+    /** Delivery attempts made by the asynchronous worker. */
+    @Column(name = "ATTEMPTS", nullable = false)
+    @Builder.Default
+    private Integer attempts = 0;
+
+    /** When the next retry is due while QUEUED; {@code null} otherwise. */
+    @Column(name = "NEXT_ATTEMPT_AT")
+    private Instant nextAttemptAt;
+
+    /** Error of the most recent failed attempt. */
+    @Column(name = "LAST_ERROR", columnDefinition = "TEXT")
+    private String lastError;
+
+    /** Dispatch variables (JSON object), kept only while QUEUED — cleared on every final status. */
+    @Column(name = "VARIABLES_JSON", columnDefinition = "TEXT")
+    private String variablesJson;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "TEMPLATE_FK", nullable = false,

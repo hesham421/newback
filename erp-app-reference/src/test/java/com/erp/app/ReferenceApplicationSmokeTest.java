@@ -1,6 +1,7 @@
 package com.erp.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.erp.tenant.TenantConstants;
 import com.erp.testsupport.TestPostgres;
@@ -10,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(classes = ReferenceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
-@Import(TestcontainersPostgresConfiguration.class)
+@Import({TestcontainersPostgresConfiguration.class, UserCreatedEventProbe.Config.class})
 class ReferenceApplicationSmokeTest {
 
     @DynamicPropertySource
@@ -56,15 +58,18 @@ class ReferenceApplicationSmokeTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private UserCreatedEventProbe userCreatedEventProbe;
+
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Test
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V12 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
-        // V12 = file storage), then the application's own V1000
-        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "1000");
+        // core V2..V13 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
+        // V12 = file storage, V13 = notif async + inbox), then the application's own V1000
+        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "1000");
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from flyway_schema_history where not success", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("select to_regclass('public.app_smoke')::text", String.class))
@@ -138,6 +143,39 @@ class ReferenceApplicationSmokeTest {
         // the same "admin" username in the PLATFORM tenant keeps its own password
         assertThat(login(TenantConstants.PLATFORM_TENANT_CODE, "admin", "Smoke-Tenant-Passw0rd!").statusCode())
             .isEqualTo(401);
+    }
+
+    /**
+     * erp-core step 08 acceptance — the application-side extension door: a test-only application
+     * listener ({@link UserCreatedEventProbe}) receives the core {@code UserCreatedEvent} after the
+     * user-creating transaction commits, on the core event executor, as the creating tenant.
+     */
+    @Test
+    void anApplicationListener_receivesTheCoreUserCreatedEvent() throws Exception {
+        String platformToken = JsonPath.read(login(BOOTSTRAP_ADMIN_PASSWORD).body(), "$.data.accessToken");
+
+        HttpResponse<String> created = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/sec/users"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + platformToken)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"event-door-user\","
+                    + "\"email\":\"event-door-user@smoke.test\",\"fullNameAr\":\"مستخدم\","
+                    + "\"fullNameEn\":\"Event door user\",\"password\":\"Event-Door-Passw0rd!\"}",
+                    java.nio.charset.StandardCharsets.UTF_8))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+        long userId = ((Number) JsonPath.read(created.body(), "$.data.userPk")).longValue();
+
+        UserCreatedEventProbe.Received received = await().atMost(Duration.ofSeconds(20)).until(
+            () -> userCreatedEventProbe.received().stream()
+                .filter(r -> r.event().getUserId() == userId).findFirst().orElse(null),
+            r -> r != null);
+        assertThat(received.event().getUsername()).isEqualTo("event-door-user");
+        assertThat(received.event().getTenantId()).isEqualTo(TenantConstants.PLATFORM_TENANT_ID);
+        assertThat(received.event().getActor()).isEqualTo("admin");
+        assertThat(received.tenantInThread()).isEqualTo(TenantConstants.PLATFORM_TENANT_ID);
+        assertThat(received.threadName()).startsWith("erp-event-");
     }
 
     @Test

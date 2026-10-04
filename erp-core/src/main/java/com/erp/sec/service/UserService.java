@@ -9,6 +9,9 @@ import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
+import com.erp.events.DomainEventPublisher;
+import com.erp.events.UserCreatedEvent;
+import com.erp.events.UserStatusChangedEvent;
 import com.erp.sec.crossmodule.UserContact;
 import com.erp.sec.domain.ActiveSessionDomain;
 import com.erp.sec.domain.UserDomain;
@@ -28,6 +31,7 @@ import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.RoleActionGrantRepository;
 import com.erp.sec.repository.UserRepository;
+import com.erp.sec.security.AuthRealm;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +72,7 @@ public class UserService {
     private final UserMapper mapper;
     private final UserRoleService userRoleService;
     private final PasswordEncoder passwordEncoder;
+    private final DomainEventPublisher eventPublisher;
 
     /**
      * API-SEC-006. SRS A6 defines no AUDIT_EVENT_TYPE for plain user creation, so no audit row is
@@ -103,6 +109,9 @@ public class UserService {
         // so a half-configured account cannot survive a failed assignment.
         List<RoleSummaryResponse> roles =
             assigningRoles ? userRoleService.replaceAssignments(saved, roleIds) : List.of();
+
+        // erp-core step 08 — delivered to AFTER_COMMIT listeners only if this transaction commits
+        eventPublisher.publish(new UserCreatedEvent(saved.getUserPk(), saved.getUsername()));
 
         return ServiceResult.success(mapper.toResponse(saved, roles), Status.CREATED);
     }
@@ -155,6 +164,8 @@ public class UserService {
         }
         activeSessionRepository.saveAll(openSessions);
         log.info("Deactivated User ID: {}, terminated sessions: {}", saved.getUserPk(), openSessions.size());
+        eventPublisher.publish(new UserStatusChangedEvent(saved.getUserPk(), saved.getUsername(),
+            saved.getStatusCode(), Boolean.TRUE.equals(saved.getIsActiveFl())));
 
         return ServiceResult.success(mapper.toStatusResponse(saved), Status.UPDATED);
     }
@@ -171,6 +182,8 @@ public class UserService {
         entity.activate();
         User saved = repository.save(entity);
         log.info("Reactivated User ID: {}", saved.getUserPk());
+        eventPublisher.publish(new UserStatusChangedEvent(saved.getUserPk(), saved.getUsername(),
+            saved.getStatusCode(), Boolean.TRUE.equals(saved.getIsActiveFl())));
 
         return ServiceResult.success(mapper.toStatusResponse(saved), Status.UPDATED);
     }
@@ -229,6 +242,28 @@ public class UserService {
         log.debug("Resolving the cross-module contact of User ID: {}", userPk);
 
         return ServiceResult.success(repository.findById(userPk).map(UserService::toContact));
+    }
+
+    /**
+     * erp-core step 08 — the {@code SEC_USER} id of the authenticated caller, reached only through
+     * {@code SecUserDirectoryApi.findCurrentUserId} (NOTIF's in-app inbox). Resolved by the principal
+     * name within the current tenant <em>and the caller's realm</em> (usernames are unique per tenant
+     * and realm since step 06): a CUSTOMER token ({@link AuthRealm} details) resolves to the
+     * customer's row, a STAFF token — or an authentication without realm details, such as an
+     * in-process caller — to the staff row. Empty when the principal is not a user account of that
+     * realm (e.g. a synthetic internal caller).
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public ServiceResult<Optional<Long>> findCurrentUserId() {
+        String username = SecurityContextHelper.getCurrentUsername();
+        String realm = AuthRealm.of(SecurityContextHolder.getContext().getAuthentication());
+        log.debug("Resolving the user id of the current principal: {} (realm {})", username, realm);
+
+        Optional<User> user = User.REALM_CUSTOMER.equals(realm)
+            ? repository.findByUsernameAndRealm(username, User.REALM_CUSTOMER)
+            : repository.findByUsername(username);
+        return ServiceResult.success(user.map(User::getUserPk));
     }
 
     /**
