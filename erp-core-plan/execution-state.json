@@ -1,0 +1,434 @@
+{
+  "plan": "erp-core-technical",
+  "plan_readme": "erp-core-plan/00-README-EXECUTION-PLAN.md",
+  "generated_at": "2026-10-04T12:51:46Z",
+  "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
+  "main_branch": "main",
+  "current_step": "01",
+  "max_parallel": 3,
+  "steps": [
+    {
+      "id": "01",
+      "slug": "decouple-fin",
+      "file": "erp-core-plan/01-STEP-decouple-fin.md",
+      "branch": "step/01-decouple-fin",
+      "depends_on": [],
+      "parallel_group": null,
+      "migrations": [],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q -DskipTests package",
+        "grep -rniE \"com\\.erp\\.fin|PERM_FIN\" src || echo OK-no-fin-refs",
+        "ls src/main/resources/db/migration | sort -V"
+      ],
+      "acceptance": [
+        "`grep -ri \"fin\" src/main/java --include=*.java -l | xargs grep -l -E \"com\\.erp\\.fin|PERM_FIN|\\\"FIN\\\"\"` returns nothing.",
+        "`ls src/main/resources/db/migration | grep -i fin` returns nothing; versions are contiguous `V1..Vn` with no gaps.",
+        "`mvn -q -DskipTests package` succeeds.",
+        "Application starts against an empty PostgreSQL 16 database (`docker run -e POSTGRES_PASSWORD=erp -p 5432:5432 postgres:16`) with the `dev` profile: Flyway applies `V1..Vn` with no errors; `GET /actuator/health` returns `UP`.",
+        "`GET /v3/api-docs` lists no `fin` paths."
+      ]
+    },
+    {
+      "id": "02",
+      "slug": "test-infrastructure",
+      "file": "erp-core-plan/02-STEP-test-infrastructure.md",
+      "branch": "step/02-test-infrastructure",
+      "depends_on": [
+        "01"
+      ],
+      "parallel_group": null,
+      "migrations": [],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify",
+        "grep -rn \"ActiveProfiles(\\\"dev\\\")\" src/test || echo OK"
+      ],
+      "acceptance": [
+        "`mvn -q verify` green with Docker available and no local PostgreSQL/Redis/SMTP running.",
+        "Running a single test works: `mvn -q -Dtest=SecLogoutIntegrationTest test`.",
+        "No test class references `ActiveProfiles(\"dev\")` or `ErpMainApplication` explicitly.",
+        "`grep -rn \"StringRedisTemplate\\|RedisTemplate\" src/main/java` appears only inside `RedisDownloadTokenStore` (and cache config if any)."
+      ]
+    },
+    {
+      "id": "03",
+      "slug": "library-split-and-autoconfig",
+      "file": "erp-core-plan/03-STEP-library-split-and-autoconfig.md",
+      "branch": "step/03-library-split",
+      "depends_on": [
+        "02"
+      ],
+      "parallel_group": null,
+      "migrations": [],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify",
+        "unzip -l erp-core/target/erp-core-*.jar | grep -E \"AutoConfiguration.imports|com/erp/main|application.properties\""
+      ],
+      "acceptance": [
+        "`mvn -q verify` green at root (both modules).",
+        "`erp-core/target/erp-core-1.0.0-SNAPSHOT.jar` contains no `com/erp/main`, no `application.properties`, has `META-INF/spring/...AutoConfiguration.imports`.",
+        "Reference app starts with only `DB_*`, `JWT_SECRET`, `FILE_TOKEN_SECRET` env vars (no Redis, no SMTP).",
+        "`grep -rn \"@Value(\\\"\\${app\\.\\|@Value(\\\"\\${file\\.\" erp-core/src/main` returns nothing.",
+        "JDK 21 build."
+      ]
+    },
+    {
+      "id": "04",
+      "slug": "flyway-core-chain",
+      "file": "erp-core-plan/04-STEP-flyway-core-chain.md",
+      "branch": "step/04-flyway-core-chain",
+      "depends_on": [
+        "03"
+      ],
+      "parallel_group": null,
+      "migrations": [
+        "V1__core_common.sql",
+        "V2__cu_schema.sql",
+        "V3__mdl_schema.sql",
+        "V4__sec_schema.sql",
+        "V5__file_schema.sql",
+        "V6__notif_schema.sql",
+        "V7__sec_seed.sql",
+        "V8__mdl_seed.sql",
+        "V9__notif_seed.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify",
+        "ls erp-core/src/main/resources/db/migration/core | sort -V"
+      ],
+      "acceptance": [
+        "Fresh database from the core chain: `V1..V9` apply with no errors; all existing integration tests green.",
+        "Reference app smoke test green (`V1000` applied after core).",
+        "`MigrationNamingTest` green; adding a file `V1000__x.sql` to core makes it fail (verify manually, then remove).",
+        "`pg_dump --schema-only` of the new chain and of the old chain differ only in constraint/sequence names and comments (compare with `diff` after normalizing; record the diff summary in the report)."
+      ]
+    },
+    {
+      "id": "05",
+      "slug": "multi-tenancy",
+      "file": "erp-core-plan/05-STEP-multi-tenancy.md",
+      "branch": "step/05-multi-tenancy",
+      "depends_on": [
+        "04"
+      ],
+      "parallel_group": null,
+      "migrations": [
+        "V10__tenant_schema.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify",
+        "grep -rn \"nativeQuery = true\\|JdbcTemplate\" erp-core/src/main || echo OK-no-raw-sql"
+      ],
+      "acceptance": [
+        "All tests green including the isolation tests.",
+        "`grep -rn \"extends AuditableEntity\" erp-core/src/main` covers every `@Entity` except the three `Sec*Reg` (which extend `GlobalAuditableEntity`) and `Tenant`.",
+        "Every scoped table has `TENANT_ID NOT NULL` without default (verify with a test that inspects `information_schema.columns`).",
+        "No query path exists that bypasses Hibernate with raw SQL lacking `tenant_id` (grep for `nativeQuery = true` and `JdbcTemplate`; each occurrence must include the tenant predicate or be in `tenant`/platform code)."
+      ]
+    },
+    {
+      "id": "06",
+      "slug": "auth-realms-and-permission-registry",
+      "file": "erp-core-plan/06-STEP-auth-realms-and-permission-registry.md",
+      "branch": "step/06-auth-realms",
+      "depends_on": [
+        "05"
+      ],
+      "parallel_group": "A",
+      "migrations": [
+        "V11__sec_realms.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify",
+        "grep -rn \"PermissionConstants\" erp-core/src || echo OK"
+      ],
+      "acceptance": [
+        "All tests green; `PermissionConstants.java` does not exist; `grep -rn \"PermissionConstants\" erp-core` is empty.",
+        "Every `@PreAuthorize` references a constant class inside its own module.",
+        "OpenAPI shows customer endpoints under group `sec` (or a new group `customers`)."
+      ]
+    },
+    {
+      "id": "07",
+      "slug": "file-storage-and-public-urls",
+      "file": "erp-core-plan/07-STEP-file-storage-and-public-urls.md",
+      "branch": "step/07-file-storage",
+      "depends_on": [
+        "05"
+      ],
+      "parallel_group": "A",
+      "migrations": [
+        "V12__file_storage.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "Tests green for both providers; app starts with `erp.core.files.storage=LOCAL` and a temp root.",
+        "Public URL works in a plain `curl` without headers.",
+        "`grep -rn \"FILE_CONTENT\" erp-core/src/main/java` appears only in `DbStorageProvider` and the entity."
+      ]
+    },
+    {
+      "id": "08",
+      "slug": "events-and-async-notifications",
+      "file": "erp-core-plan/08-STEP-events-and-async-notifications.md",
+      "branch": "step/08-events-notifications",
+      "depends_on": [
+        "05"
+      ],
+      "parallel_group": "A",
+      "migrations": [
+        "V13__notif_async_inbox.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "All tests green; `grep -rn \"Thread.sleep\" erp-core/src/main` is empty (old retry loop removed).",
+        "Calling `NotificationDispatchApi.dispatch` returns in < 50 ms in tests (no synchronous send).",
+        "A test-only listener in `erp-app-reference` receives `UserCreatedEvent` (proves the app-side extension door)."
+      ]
+    },
+    {
+      "id": "09",
+      "slug": "sequences-and-settings-api",
+      "file": "erp-core-plan/09-STEP-sequences-and-settings-api.md",
+      "branch": "step/09-sequences-settings",
+      "depends_on": [
+        "05"
+      ],
+      "parallel_group": "A",
+      "migrations": [
+        "V14__sequence_and_settings.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "Tests green; concurrency test stable across 3 consecutive runs.",
+        "`NumberSeriesApi` and `SettingsApi` are in `crossmodule` packages and allowed by the ArchUnit rules."
+      ]
+    },
+    {
+      "id": "10",
+      "slug": "generic-audit-log",
+      "file": "erp-core-plan/10-STEP-generic-audit-log.md",
+      "branch": "step/10-audit-log",
+      "depends_on": [
+        "05",
+        "08"
+      ],
+      "parallel_group": "A",
+      "migrations": [
+        "V15__audit_schema.sql"
+      ],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "Tests green; every `@Audited` entity has a corresponding row in tests.",
+        "No sensitive field name appears in any `CHANGES` JSON in tests (assert with a denylist scan)."
+      ]
+    },
+    {
+      "id": "11",
+      "slug": "reporting-minimal",
+      "file": "erp-core-plan/11-STEP-reporting-minimal.md",
+      "branch": "step/11-reporting",
+      "depends_on": [
+        "05"
+      ],
+      "parallel_group": "A",
+      "migrations": [],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "Tests green; `GET /api/v1/report/definitions` returns the 3 core reports (+1 in the reference app).",
+        "Opening an exported CSV with Arabic headers in Excel shows correct characters (manual check noted in the report)."
+      ]
+    },
+    {
+      "id": "12",
+      "slug": "arch-rules-ci-and-release",
+      "file": "erp-core-plan/12-STEP-arch-rules-ci-and-release.md",
+      "branch": "step/12-release",
+      "depends_on": [
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11"
+      ],
+      "parallel_group": null,
+      "migrations": [],
+      "touches_external_repos": false,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "CI green on `main`; `v1.0.0` tag published; `consume-published` job green.",
+        "ArchUnit tests fail when intentionally violated (verify each rule once with a throwaway change, then revert; note in the report).",
+        "JaCoCo ≥ 60% on `erp-core`."
+      ]
+    },
+    {
+      "id": "13",
+      "slug": "factory-registration-as-given",
+      "file": "erp-core-plan/13-STEP-factory-registration-as-given.md",
+      "branch": "step/13-erp-core-given",
+      "depends_on": [
+        "12"
+      ],
+      "parallel_group": null,
+      "migrations": [],
+      "touches_external_repos": true,
+      "status": "PENDING",
+      "worktree": null,
+      "attempts": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "merged_commit": null,
+      "report": null,
+      "deviations": [],
+      "verification": [
+        "mvn -q verify"
+      ],
+      "acceptance": [
+        "Running the factory's `analyze`/`lint` on the project repo passes with zero governed modules and one platform dependency.",
+        "A dry run of the pipeline on a toy app module (e.g. `PARTY` stub used only for this test, then removed) shows the engines reading `erp-core` contracts as inputs and generating **no** stage for core modules.",
+        "Both repos' changes are committed on branches named `step/13-erp-core-given`, with the report in this repo's `docs/steps/13-report.md`."
+      ]
+    }
+  ],
+  "later": [
+    {
+      "id": "99",
+      "file": "erp-core-plan/99-LATER-per-module-docs.md",
+      "status": "NOT_SCHEDULED"
+    }
+  ],
+  "halts": [],
+  "log": []
+}
