@@ -330,15 +330,15 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-07",
       "attempts": 3,
       "implementer_agent": "a49feaa002168f461",
       "reviewer_agent": "a0d63958cc103b106",
       "review": {
-        "verdict": "FAIL",
-        "round": 1,
-        "evidence": "3/3 acceptance + probes a-i pass; blocking: public files served inline with stored content-type -> anonymous stored XSS (text/html, svg) on platform origin, reproduced live",
+        "verdict": "PASS",
+        "round": 2,
+        "evidence": "core 177/app 8; live: html/svg attachment+nosniff+CSP, png inline; curl no headers 200; GET/HEAD only; no duplicate catalog row; staff chain no longer exposes path",
         "checked_at": "2026-10-04"
       },
       "merged_commit": null,
@@ -788,6 +788,12 @@
       "step": "08",
       "event": "reported",
       "note": "rebased onto 06 at 8f7a5c4 (realm-aware inbox, customer events, 06 test awaits async FAILED); core 167/app 8; awaiting 07 merge -> final rebase -> reviewer re-verify"
+    },
+    {
+      "at": "2026-10-04T18:33:31Z",
+      "step": "07",
+      "event": "review",
+      "note": "PASS round 2 (after XSS fix + rebase onto 06)"
     }
   ]
 }
