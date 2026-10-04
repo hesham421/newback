@@ -72,7 +72,7 @@ public class LookupTypeService {
      * resolved here and delegated to {@link LookupTypeDomain#create} for the actual decision.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_CREATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_CREATE)")
     public ServiceResult<LookupTypeResponse> create(LookupTypeCreateRequest request) {
         log.info("Creating LookupType with key: {}", request.getKey());
 
@@ -98,7 +98,7 @@ public class LookupTypeService {
      * here: {@code key} is structurally absent from {@link LookupTypeUpdateRequest}.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_UPDATE)")
     public ServiceResult<LookupTypeResponse> update(Long id, LookupTypeUpdateRequest request) {
         log.info("Updating LookupType ID: {}", id);
 
@@ -118,7 +118,7 @@ public class LookupTypeService {
      * consumer read, API-MDL-011 — not a write-time guard here).
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_UPDATE)")
     public ServiceResult<LookupTypeResponse> deactivate(Long id) {
         log.info("Deactivating LookupType ID: {}", id);
 
@@ -142,7 +142,7 @@ public class LookupTypeService {
      * (governance/project-artifacts/sec-implementation-notes.md §8).
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_VIEW)")
     public ServiceResult<Page<LookupTypeResponse>> search(LookupTypeSearchRequest searchRequest) {
         log.debug("Searching LookupType");
 
@@ -171,7 +171,7 @@ public class LookupTypeService {
      * {@code sortField} on {@link LookupTypeByOwnerSearchRequest} are inherited but unused.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_TYPE_REGISTRY_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_TYPE_REGISTRY_VIEW)")
     public ServiceResult<List<OwnerGroupResponse>> browseByOwner(LookupTypeByOwnerSearchRequest searchRequest) {
         log.debug("Browsing LookupType registry by owner");
 

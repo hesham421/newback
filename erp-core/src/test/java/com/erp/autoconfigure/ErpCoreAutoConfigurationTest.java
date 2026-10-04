@@ -62,6 +62,7 @@ class ErpCoreAutoConfigurationTest {
         runner.withPropertyValues(JWT_SECRET, FILE_SECRET).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasBean(ErpCoreSecurityAutoConfiguration.FILTER_CHAIN_BEAN_NAME);
+            assertThat(context).hasBean(ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_BEAN_NAME);
             assertThat(context).getBeanNames(StringRedisTemplate.class).isEmpty();
             assertThat(context).getBeanNames(JavaMailSender.class).isEmpty();
             assertThat(context.getBean(DownloadTokenStore.class)).isInstanceOf(InMemoryDownloadTokenStore.class);
@@ -86,8 +87,45 @@ class ErpCoreAutoConfigurationTest {
             .run(context -> {
                 assertThat(context).hasNotFailed();
                 assertThat(context.getBean(ErpCoreSecurityAutoConfiguration.FILTER_CHAIN_BEAN_NAME)).isSameAs(own);
-                assertThat(context).getBeans(SecurityFilterChain.class).hasSize(1);
+                // erp-core step 06: the only other chain is the core customer chain (own bean name)
+                assertThat(context).getBeans(SecurityFilterChain.class).containsOnlyKeys(
+                    ErpCoreSecurityAutoConfiguration.FILTER_CHAIN_BEAN_NAME,
+                    ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_BEAN_NAME);
             });
+    }
+
+    /** erp-core step 06 — the customer chain backs off by its own bean name, the staff chain stays. */
+    @Test
+    void coreCustomerSecurityFilterChain_backsOff_whenTheApplicationDefinesOneWithTheSameName() {
+        runner.withPropertyValues(JWT_SECRET, FILE_SECRET)
+            .withUserConfiguration(OwnCustomerChain.class)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context.getBean(ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_BEAN_NAME))
+                    .isSameAs(OwnCustomerChain.OWN);
+                assertThat(context).getBeans(SecurityFilterChain.class).containsOnlyKeys(
+                    ErpCoreSecurityAutoConfiguration.FILTER_CHAIN_BEAN_NAME,
+                    ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_BEAN_NAME);
+                assertThat(context.getBean(ErpCoreProperties.class).getSecurity().getCustomerPublicPaths())
+                    .containsExactlyElementsOf(ErpCoreProperties.Security.DEFAULT_CUSTOMER_PUBLIC_PATHS);
+            });
+    }
+
+    /**
+     * An application's replacement customer chain. It must be ordered before the core staff chain,
+     * which matches every request (Spring Security rejects an unreachable chain).
+     */
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class OwnCustomerChain {
+
+        static final SecurityFilterChain OWN = new DefaultSecurityFilterChain(
+            request -> request.getRequestURI().startsWith("/api/v1/customers/"), List.of());
+
+        @org.springframework.context.annotation.Bean(ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_BEAN_NAME)
+        @org.springframework.core.annotation.Order(ErpCoreSecurityAutoConfiguration.CUSTOMER_FILTER_CHAIN_ORDER)
+        SecurityFilterChain erpCoreCustomerSecurityFilterChain() {
+            return OWN;
+        }
     }
 
     @Test

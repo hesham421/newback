@@ -30,8 +30,8 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "SEC_USER",
     uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_SEC_USER_USERNAME", columnNames = {"TENANT_ID", "USERNAME"}),
-        @UniqueConstraint(name = "UQ_SEC_USER_EMAIL", columnNames = {"TENANT_ID", "EMAIL"})
+        @UniqueConstraint(name = "UQ_SEC_USER_USERNAME", columnNames = {"TENANT_ID", "REALM", "USERNAME"}),
+        @UniqueConstraint(name = "UQ_SEC_USER_EMAIL", columnNames = {"TENANT_ID", "REALM", "EMAIL"})
     },
     indexes = {
         @Index(name = "IDX_SEC_USER_STATUS", columnList = "STATUS_CODE")
@@ -47,6 +47,13 @@ public class User extends AuditableEntity {
      */
     public static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_DISABLED = "DISABLED";
+
+    /** erp-core step 06 — a self-registered customer whose e-mail is not verified yet. */
+    public static final String STATUS_PENDING_VERIFICATION = "PENDING_VERIFICATION";
+
+    /** erp-core step 06 — auth realms (CHK_SEC_USER_REALM). */
+    public static final String REALM_STAFF = "STAFF";
+    public static final String REALM_CUSTOMER = "CUSTOMER";
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sec_user_seq")
@@ -87,6 +94,14 @@ public class User extends AuditableEntity {
     @Column(name = "STATUS_CODE", length = 20, nullable = false)
     private String statusCode;
 
+    /**
+     * erp-core step 06 — auth realm, {@link #REALM_STAFF} or {@link #REALM_CUSTOMER}; immutable after
+     * create. Usernames and e-mails are unique per (tenant, realm).
+     */
+    @Size(max = 16, message = "{validation.size}")
+    @Column(name = "REALM", length = 16, nullable = false, updatable = false)
+    private String realm;
+
     @Column(name = "LAST_LOGIN_AT")
     private Instant lastLoginAt;
 
@@ -112,11 +127,19 @@ public class User extends AuditableEntity {
         if (statusCode == null) {
             statusCode = STATUS_ACTIVE;
         }
+        if (realm == null) {
+            realm = REALM_STAFF;
+        }
     }
 
     /** Field mutation only — the decision to (re)activate belongs to the service/API (API-SEC-010). */
     public void activate() {
         this.isActiveFl = Boolean.TRUE;
+        this.statusCode = STATUS_ACTIVE;
+    }
+
+    /** Field mutation only — a verified customer becomes ACTIVE (erp-core step 06). */
+    public void markVerified() {
         this.statusCode = STATUS_ACTIVE;
     }
 

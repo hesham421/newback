@@ -68,7 +68,7 @@ public class AuditLogService {
 
     /** API-SEC-023 — rows are returned exactly as stored (REQ-SEC-025, "without altering any of them"). */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_AUDIT_LOG_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_AUDIT_LOG_VIEW)")
     public ServiceResult<Page<AuditLogEntryResponse>> search(AuditLogEntrySearchRequest searchRequest) {
         log.debug("Searching audit log");
 
@@ -94,7 +94,7 @@ public class AuditLogService {
      * {@code text/csv} rather than wrapping it in the JSON envelope (Response line).
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_AUDIT_LOG_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_AUDIT_LOG_VIEW)")
     public ServiceResult<String> export(String eventTypeCode,
                                         Long actorUserId,
                                         Instant occurredFrom,

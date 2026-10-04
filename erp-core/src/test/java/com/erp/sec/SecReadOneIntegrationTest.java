@@ -11,7 +11,7 @@ import com.erp.sec.dto.UserResponse;
 import com.erp.sec.entity.Role;
 import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.PasswordResetTokenRepository;
 import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
@@ -76,7 +76,7 @@ class SecReadOneIntegrationTest extends AbstractIntegrationTest {
     @Test
     void roleGetById_returnsTheSameRowTheSearchWouldReturn() {
         Role role = persistRole();
-        setAuthenticatedPrincipal("role-reader", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-reader", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         RoleResponse response = roleService.getById(role.getRolePk()).getData();
 
@@ -87,7 +87,7 @@ class SecReadOneIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void roleGetById_unknownId_raisesSec404Role() {
-        setAuthenticatedPrincipal("role-reader", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-reader", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         assertThatThrownBy(() -> roleService.getById(-1L))
             .isInstanceOf(LocalizedException.class)
@@ -100,7 +100,7 @@ class SecReadOneIntegrationTest extends AbstractIntegrationTest {
         User user = persistUser("readone");
         Role role = persistRole();
         setAuthenticatedPrincipal("user-admin",
-            PermissionConstants.PERM_SEC_USERS_VIEW, PermissionConstants.PERM_SEC_USERS_UPDATE);
+            SecPermissions.PERM_SEC_USERS_VIEW, SecPermissions.PERM_SEC_USERS_UPDATE);
         userRoleService.assign(user.getUserPk(),
             UserRoleAssignmentRequest.builder().roleIds(List.of(role.getRolePk())).build());
 
@@ -113,7 +113,7 @@ class SecReadOneIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void userGetById_unknownId_raisesSec404User() {
-        setAuthenticatedPrincipal("user-admin", PermissionConstants.PERM_SEC_USERS_VIEW);
+        setAuthenticatedPrincipal("user-admin", SecPermissions.PERM_SEC_USERS_VIEW);
 
         assertThatThrownBy(() -> userService.getById(-1L))
             .isInstanceOf(LocalizedException.class)

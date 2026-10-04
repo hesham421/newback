@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -35,4 +36,12 @@ public interface RoleRepository
         + "FROM Role r LEFT JOIN UserRoleAssignment ura ON ura.role = r "
         + "GROUP BY r.rolePk, r.code, r.nameAr, r.nameEn ORDER BY r.code")
     List<RoleUserCountProjection> findUserCountsPerRole();
+
+    /**
+     * erp-core step 06 — whether the user holds an active super role ({@code IS_SUPER}), which grants
+     * every catalog permission without per-permission grants (MenuService).
+     */
+    @Query("SELECT COUNT(ura) > 0 FROM UserRoleAssignment ura "
+        + "WHERE ura.user.userPk = :userPk AND ura.role.isActiveFl = TRUE AND ura.role.isSuper = TRUE")
+    boolean holdsActiveSuperRole(@Param("userPk") Long userPk);
 }

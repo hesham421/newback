@@ -42,8 +42,12 @@ public class SecSecurityErrorHandler implements AuthenticationEntryPoint, Access
             SecErrorCodes.SEC_403_FORBIDDEN);
     }
 
-    private void write(HttpServletRequest request, HttpServletResponse response,
-                       int status, String errorCode) throws IOException {
+    /**
+     * The same envelope for any other filter-level refusal of the SEC chains (erp-core step 06:
+     * {@link RealmEnforcementFilter}'s 403 {@code REALM_MISMATCH}).
+     */
+    public void write(HttpServletRequest request, HttpServletResponse response,
+                      int status, String errorCode) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

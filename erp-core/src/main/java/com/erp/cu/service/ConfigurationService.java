@@ -54,7 +54,7 @@ public class ConfigurationService {
     );
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
         + ".CONFIG_CREATE)")
     public ServiceResult<ConfigurationResponse> create(ConfigurationCreateRequest request) {
         log.info("Creating Configuration with key: {}", request.getConfigKey());
@@ -77,7 +77,7 @@ public class ConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
         + ".CONFIG_VIEW)")
     public ServiceResult<Page<ConfigurationResponse>> search(ConfigurationSearchRequest searchRequest) {
         log.debug("Searching Configuration");
@@ -95,7 +95,7 @@ public class ConfigurationService {
     }
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
         + ".CONFIG_UPDATE)")
     public ServiceResult<ConfigurationResponse> update(String configKey, ConfigurationUpdateRequest request) {
         log.info("Updating Configuration key: {}", configKey);
@@ -124,7 +124,7 @@ public class ConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
         + ".CONFIG_VIEW)")
     public ServiceResult<ConfigurationResponse> getByKey(String configKey) {
         log.debug("Fetching Configuration key: {}", configKey);
@@ -145,7 +145,7 @@ public class ConfigurationService {
      * schema can ever reference this entity (ROOT module, single table, no children).
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.cu.permission.CuPermissions)"
         + ".CONFIG_DEACTIVATE)")
     public void deactivate(String configKey) {
         log.info("Deactivating Configuration key: {}", configKey);

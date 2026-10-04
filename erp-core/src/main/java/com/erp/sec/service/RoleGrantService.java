@@ -102,7 +102,7 @@ public class RoleGrantService {
      * thing worth finding.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_VIEW)")
     public ServiceResult<RoleGrantTreeResponse> grantsOf(Long roleId) {
         log.debug("Reading the grant tree of Role ID: {}", roleId);
 
@@ -159,7 +159,7 @@ public class RoleGrantService {
 
     /** API-SEC-014 — an inactive role or module resolves as a load-time not-found (no code of its own). */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
     public ServiceResult<RoleModuleGrantResponse> grantModule(Long roleId, RoleModuleGrantRequest request) {
         log.info("Granting module {} to Role ID: {}", request.getModuleId(), roleId);
 
@@ -191,7 +191,7 @@ public class RoleGrantService {
 
     /** API-SEC-015 — RULE-SEC-003: the dependent screen and action grants go with the module grant. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
     public ServiceResult<ModuleGrantRevokeResponse> revokeModule(Long roleId, Long moduleId) {
         log.info("Revoking module {} from Role ID: {}", moduleId, roleId);
 
@@ -232,7 +232,7 @@ public class RoleGrantService {
 
     /** API-SEC-016 — RULE-SEC-001 (QR-SEC-028) then the duplication guard, both in the Domain. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
     public ServiceResult<RoleScreenGrantResponse> grantScreen(Long roleId, RoleScreenGrantRequest request) {
         log.info("Granting screen {} to Role ID: {}", request.getScreenId(), roleId);
 
@@ -265,7 +265,7 @@ public class RoleGrantService {
 
     /** API-SEC-017 — RULE-SEC-002 (QR-SEC-029), RULE-SEC-007 (QR-SEC-030), RULE-SEC-005 (QR-SEC-031). */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
     public ServiceResult<RoleActionGrantResponse> grantAction(Long roleId, RoleActionGrantRequest request) {
         log.info("Granting action {} to Role ID: {}", request.getActionId(), roleId);
 

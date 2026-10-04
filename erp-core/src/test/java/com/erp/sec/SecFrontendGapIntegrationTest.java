@@ -21,7 +21,7 @@ import com.erp.sec.entity.RoleModuleGrant;
 import com.erp.sec.entity.RoleScreenGrant;
 import com.erp.sec.entity.ScreenRegistry;
 import com.erp.sec.entity.SignupRequest;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActionRegistryRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.ModuleRegistryRepository;
@@ -102,7 +102,7 @@ class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
         SignupRequest pending = persistSignupRequest("PENDING");
         persistSignupRequest("REJECTED");
 
-        setAuthenticatedPrincipal("signup-reviewer", PermissionConstants.PERM_SEC_USERS_VIEW);
+        setAuthenticatedPrincipal("signup-reviewer", SecPermissions.PERM_SEC_USERS_VIEW);
 
         ServiceResult<Page<SignupRequestResponse>> result = signupRequestService.search(
             SignupRequestSearchRequest.builder()
@@ -148,7 +148,7 @@ class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
         roleActionGrantRepository.save(RoleActionGrant.builder()
             .role(role).action(action).grantedBy("SecFrontendGapIntegrationTest").build());
 
-        setAuthenticatedPrincipal("role-auditor", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-auditor", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         RoleGrantTreeResponse tree = roleGrantService.grantsOf(role.getRolePk()).getData();
 
@@ -175,7 +175,7 @@ class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
     void roleGrantTree_isEmptyForARoleHoldingNothing_soAnUncheckedBoxMeansNotGranted() {
         Role role = persistRole();
 
-        setAuthenticatedPrincipal("role-auditor", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-auditor", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         assertThat(roleGrantService.grantsOf(role.getRolePk()).getData().getModules()).isEmpty();
     }
@@ -189,7 +189,7 @@ class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
         Role role = persistRole();
         String originalCode = role.getCode();
 
-        setAuthenticatedPrincipal("role-editor", PermissionConstants.PERM_SEC_ROLES_UPDATE);
+        setAuthenticatedPrincipal("role-editor", SecPermissions.PERM_SEC_ROLES_UPDATE);
 
         RoleResponse updated = roleService.update(role.getRolePk(), RoleUpdateRequest.builder()
             .nameAr("اسم مصحّح")
@@ -222,7 +222,7 @@ class SecFrontendGapIntegrationTest extends AbstractIntegrationTest {
             .detailsEn("Failed login attempt")
             .build());
 
-        setAuthenticatedPrincipal("audit-reader", PermissionConstants.PERM_SEC_AUDIT_LOG_VIEW);
+        setAuthenticatedPrincipal("audit-reader", SecPermissions.PERM_SEC_AUDIT_LOG_VIEW);
 
         String csv = auditLogService.export(eventTypeCode, null, null, null).getData();
 

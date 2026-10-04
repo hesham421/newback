@@ -53,6 +53,7 @@ public class RoleMapper {
             .descriptionAr(entity.getDescriptionAr())
             .descriptionEn(entity.getDescriptionEn())
             .isActiveFl(Boolean.TRUE.equals(entity.getIsActiveFl()))
+            .isSuper(Boolean.TRUE.equals(entity.getIsSuper()))
             .createdAt(entity.getCreatedAt())
             .createdBy(entity.getCreatedBy())
             .updatedAt(entity.getUpdatedAt())

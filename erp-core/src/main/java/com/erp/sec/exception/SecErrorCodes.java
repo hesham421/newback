@@ -173,4 +173,24 @@ public final class SecErrorCodes {
      * API: every search API. HTTP 400.
      */
     public static final String SEC_400_INVALID_SORT = "SEC-400-INVALID-SORT";
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // erp-core step 06 — auth realms / customer accounts. The step file's literal codes (like the
+    // TENANT_* codes of step 05), not the SEC-<status>-<CODE> shape of the codes above.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+
+    /** A token of one realm used on the other realm's endpoints (staff ↔ customer). HTTP 403. */
+    public static final String REALM_MISMATCH = "REALM_MISMATCH";
+
+    /** Customer registration with an e-mail that already has a customer account in the tenant. HTTP 409. */
+    public static final String CUSTOMER_EMAIL_TAKEN = "CUSTOMER_EMAIL_TAKEN";
+
+    /** Customer login before the e-mail was verified. HTTP 403. */
+    public static final String CUSTOMER_NOT_VERIFIED = "CUSTOMER_NOT_VERIFIED";
+
+    /** Unknown, expired or already used verification (or customer reset) token. HTTP 409. */
+    public static final String VERIFY_TOKEN_INVALID = "VERIFY_TOKEN_INVALID";
+
+    /** Too many customer login attempts for one tenant:realm:username key (bucket4j). HTTP 429. */
+    public static final String CUSTOMER_LOGIN_RATE_LIMITED = "CUSTOMER_LOGIN_RATE_LIMITED";
 }

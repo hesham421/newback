@@ -68,6 +68,14 @@ public class Role extends AuditableEntity {
     @Builder.Default
     private Boolean isActiveFl = Boolean.TRUE;
 
+    /**
+     * erp-core step 06 — a super role holds every catalog permission without per-permission grants
+     * (MenuService). Native BOOLEAN, DB DEFAULT FALSE; seeded TRUE for SYS_ADMIN, never set by the API.
+     */
+    @Column(name = "IS_SUPER", nullable = false)
+    @Builder.Default
+    private Boolean isSuper = Boolean.FALSE;
+
     @PrePersist
     protected void onCreate() {
         if (isActiveFl == null) {

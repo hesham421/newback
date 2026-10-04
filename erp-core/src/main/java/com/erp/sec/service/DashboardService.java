@@ -13,7 +13,7 @@ import com.erp.sec.dto.RolesPermissionsSummaryResponse;
 import com.erp.sec.dto.UsersOverviewResponse;
 import com.erp.sec.mapper.AuditLogEntryMapper;
 import com.erp.sec.mapper.RoleMapper;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.RoleActionGrantRepository;
@@ -68,7 +68,7 @@ public class DashboardService {
      * rules — there is no permit/deny decision here, so no Domain object is involved.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_DASHBOARD_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_DASHBOARD_VIEW)")
     public ServiceResult<DashboardResponse> summary() {
         log.debug("Composing the security dashboard summary");
 
@@ -76,18 +76,18 @@ public class DashboardService {
         Instant now = Instant.now();
         DashboardResponse.DashboardResponseBuilder summary = DashboardResponse.builder();
 
-        if (permissions.contains(PermissionConstants.PERM_SEC_USERS_VIEW)) {
+        if (permissions.contains(SecPermissions.PERM_SEC_USERS_VIEW)) {
             summary.usersOverview(usersOverview());
             summary.onboardingFunnel(onboardingFunnel(now));
         }
-        if (permissions.contains(PermissionConstants.PERM_SEC_AUDIT_LOG_VIEW)) {
+        if (permissions.contains(SecPermissions.PERM_SEC_AUDIT_LOG_VIEW)) {
             summary.failedLogins24h(failedLogins24h(now));
             summary.recentActivity(recentActivity());
         }
-        if (permissions.contains(PermissionConstants.PERM_SEC_SESSIONS_VIEW)) {
+        if (permissions.contains(SecPermissions.PERM_SEC_SESSIONS_VIEW)) {
             summary.activeSessions(activeSessions());
         }
-        if (permissions.contains(PermissionConstants.PERM_SEC_ROLES_VIEW)) {
+        if (permissions.contains(SecPermissions.PERM_SEC_ROLES_VIEW)) {
             summary.rolesPermissionsSummary(rolesPermissionsSummary());
         }
 

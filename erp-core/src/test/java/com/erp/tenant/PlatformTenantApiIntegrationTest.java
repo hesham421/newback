@@ -66,8 +66,9 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
             String.class, tenantId)).containsExactly("CU_ADMIN", "FILE_ADMIN", "NOTIF_ADMIN", "SYS_ADMIN");
         assertThat(jdbcTemplate.queryForObject("select count(*) from mdl_lookup_type where tenant_id = ?",
             Integer.class, tenantId)).isEqualTo(4);
+        // PASSWORD_RESET, ACCOUNT_ACTIVATION (V9) + CUSTOMER_VERIFY_EMAIL, CUSTOMER_PASSWORD_RESET (V11, step 06)
         assertThat(jdbcTemplate.queryForObject("select count(*) from notif_template where tenant_id = ?",
-            Integer.class, tenantId)).isEqualTo(2);
+            Integer.class, tenantId)).isEqualTo(4);
 
         // ... but never PLATFORM_TENANT_MANAGE: the platform API stays closed to it
         assertThat(jdbcTemplate.queryForObject("select count(*) from sec_role_action_grant g"

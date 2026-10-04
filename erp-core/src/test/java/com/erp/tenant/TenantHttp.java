@@ -52,8 +52,8 @@ final class TenantHttp {
     private static String createOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
         String username = "platform-op-" + UUID.randomUUID().toString().substring(0, 8);
         jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
-                + " FULL_NAME_EN, STATUS_CODE, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
-                + " VALUES (nextval('SEQ_SEC_USER'), 1, ?, ?, ?, 'مشغل المنصة', 'Platform operator', 'ACTIVE', TRUE,"
+                + " FULL_NAME_EN, STATUS_CODE, REALM, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
+                + " VALUES (nextval('SEQ_SEC_USER'), 1, ?, ?, ?, 'مشغل المنصة', 'Platform operator', 'ACTIVE', 'STAFF', TRUE,"
                 + " 'test', now())",
             username, username + "@platform.test", encoder.encode(PASSWORD));
         jdbc.update("INSERT INTO SEC_USER_ROLE (USER_ROLE_PK, TENANT_ID, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT)"

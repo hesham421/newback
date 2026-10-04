@@ -20,6 +20,7 @@ public final class UserDomain {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_DISABLED = "DISABLED";
     private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PENDING_VERIFICATION = "PENDING_VERIFICATION";
 
     /**
      * PASSWORD_HASH the core seed ({@code V7__sec_seed.sql}) gives the bootstrap {@code admin}
@@ -64,6 +65,20 @@ public final class UserDomain {
         return new UserDomain(username, email, STATUS_ACTIVE, true);
     }
 
+    /**
+     * erp-core step 06 — customer self-registration: the e-mail must not have a customer account in
+     * the tenant yet (the same person may still hold a staff account). The new account starts
+     * {@code PENDING_VERIFICATION}.
+     *
+     * @throws LocalizedException {@code CUSTOMER_EMAIL_TAKEN} (Status.ALREADY_EXISTS → 409)
+     */
+    public static UserDomain createCustomer(String email, boolean customerEmailTaken) {
+        if (customerEmailTaken) {
+            throw new LocalizedException(Status.ALREADY_EXISTS, SecErrorCodes.CUSTOMER_EMAIL_TAKEN);
+        }
+        return new UserDomain(email, email, STATUS_PENDING_VERIFICATION, true);
+    }
+
     /** {@code SEC-409-USER-DUP}, attributed to whichever field(s) were already taken. */
     private static LocalizedException duplicate(boolean usernameAlreadyTaken,
                                                 boolean emailAlreadyTaken) {
@@ -93,6 +108,32 @@ public final class UserDomain {
     public static boolean awaitsBootstrapPassword(User entity) {
         return STATUS_PENDING.equals(entity.getStatusCode())
             && BOOTSTRAP_PASSWORD_PLACEHOLDER.equals(entity.getPasswordHash());
+    }
+
+    /**
+     * erp-core step 06 — a customer whose password matched may log in only once the e-mail is verified.
+     * Called after the credential check, so the code never reveals an account to a wrong password.
+     *
+     * @throws LocalizedException {@code CUSTOMER_NOT_VERIFIED} (Status.FORBIDDEN → 403)
+     */
+    public void assertCustomerVerified() {
+        if (STATUS_PENDING_VERIFICATION.equals(statusCode)) {
+            throw new LocalizedException(Status.FORBIDDEN, SecErrorCodes.CUSTOMER_NOT_VERIFIED);
+        }
+    }
+
+    /** erp-core step 06 — whether the account still awaits its e-mail verification. */
+    public boolean awaitsVerification() {
+        return STATUS_PENDING_VERIFICATION.equals(statusCode);
+    }
+
+    /**
+     * Whether the account may receive notifications (REQ-SEC-034's {@code UserContact.active}): an
+     * ACTIVE account, and since erp-core step 06 a customer awaiting its e-mail verification — the
+     * verification mail is exactly what it must receive.
+     */
+    public boolean canReceiveNotifications() {
+        return STATUS_ACTIVE.equals(statusCode) || STATUS_PENDING_VERIFICATION.equals(statusCode);
     }
 
     /**

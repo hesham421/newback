@@ -88,7 +88,7 @@ public class SignupRequestService {
      * that follows it is already gated on the SEC_USERS screen's UPDATE.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_VIEW)")
     public ServiceResult<Page<SignupRequestResponse>> search(SignupRequestSearchRequest searchRequest) {
         log.debug("Searching SignupRequest");
 
@@ -123,7 +123,7 @@ public class SignupRequestService {
      * password until its owner completes API-SEC-003/004, and none is transmitted anywhere.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<Object> decide(Long id, SignupDecisionRequest request) {
         log.info("Deciding SignupRequest ID: {}, decision: {}", id, request.getDecision());
 

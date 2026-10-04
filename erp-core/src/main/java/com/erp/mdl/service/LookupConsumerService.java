@@ -45,7 +45,7 @@ public class LookupConsumerService {
      * active values.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_VIEW)")
     public ServiceResult<List<LookupValueResponse>> readByKey(String key) {
         log.debug("Resolving LookupType by key: {}", key);
 

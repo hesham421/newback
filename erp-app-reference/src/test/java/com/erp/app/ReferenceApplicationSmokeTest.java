@@ -62,8 +62,9 @@ class ReferenceApplicationSmokeTest {
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V10 (V1 is reserved and not shipped; V10 = tenant schema), then the application's own V1000
-        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "1000");
+        // core V2..V11 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms), then the
+        // application's own V1000
+        assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "1000");
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from flyway_schema_history where not success", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("select to_regclass('public.app_smoke')::text", String.class))

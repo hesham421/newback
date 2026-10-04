@@ -23,7 +23,7 @@ import com.erp.sec.entity.AuditLogEntry;
 import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
 import com.erp.sec.mapper.UserMapper;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.RoleActionGrantRepository;
@@ -80,7 +80,7 @@ public class UserService {
      * depends on the request body.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_CREATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_CREATE)")
     public ServiceResult<UserResponse> create(UserCreateRequest request) {
         log.info("Creating User with username: {}", request.getUsername());
 
@@ -109,7 +109,7 @@ public class UserService {
 
     /** API-SEC-007 — username is immutable, so only email uniqueness is re-checked (QR-SEC-033). */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<UserResponse> update(Long id, UserUpdateRequest request) {
         log.info("Updating User ID: {}", id);
 
@@ -131,7 +131,7 @@ public class UserService {
      * second half), one SESSION_TERMINATED audit row per session, all in this transaction.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<UserStatusResponse> deactivate(Long id) {
         log.info("Deactivating User ID: {}", id);
 
@@ -161,7 +161,7 @@ public class UserService {
 
     /** API-SEC-010 — only a DISABLED user may be reactivated (A7 lifecycle, UserDomain decides). */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<UserStatusResponse> reactivate(Long id) {
         log.info("Reactivating User ID: {}", id);
 
@@ -181,7 +181,7 @@ public class UserService {
      * included, so a client can resolve a user it holds only an id for without having listed it.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_VIEW)")
     public ServiceResult<UserResponse> getById(Long id) {
         log.debug("Fetching User ID: {}", id);
 
@@ -192,7 +192,7 @@ public class UserService {
 
     /** API-SEC-005 — an empty match is success with empty content, never a 404 (CORE search contract). */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_VIEW)")
     public ServiceResult<Page<UserResponse>> search(UserSearchRequest searchRequest) {
         log.debug("Searching User");
 
@@ -259,7 +259,7 @@ public class UserService {
 
     /** The body-dependent half of API-SEC-006's gate; SEC-403-FORBIDDEN is the module's denial. */
     private void assertMayAssignRoles() {
-        if (!SecurityContextHelper.hasAuthority(PermissionConstants.PERM_SEC_USERS_UPDATE)) {
+        if (!SecurityContextHelper.hasAuthority(SecPermissions.PERM_SEC_USERS_UPDATE)) {
             throw new LocalizedException(Status.FORBIDDEN, SecErrorCodes.SEC_403_FORBIDDEN);
         }
     }
@@ -272,8 +272,9 @@ public class UserService {
 
     /** DBF-SEC-001/003/005/006 only; {@code active} derived from DBF-SEC-007 (never the hash). */
     private static UserContact toContact(User user) {
+        // erp-core step 06: a customer awaiting e-mail verification must receive the verification mail.
         return new UserContact(user.getUserPk(), user.getEmail(), user.getFullNameAr(),
-            user.getFullNameEn(), User.STATUS_ACTIVE.equals(user.getStatusCode()));
+            user.getFullNameEn(), UserDomain.from(user).canReceiveNotifications());
     }
 
     /** DBF-SEC-085 is nullable — an actor the token cannot resolve is recorded as null. */

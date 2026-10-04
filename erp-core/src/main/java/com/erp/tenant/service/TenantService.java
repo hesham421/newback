@@ -63,7 +63,7 @@ public class TenantService {
     private final ObjectProvider<TenantProvisioningContributor> contributors;
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PLATFORM_TENANT_MANAGE)")
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantResponse> create(TenantCreateRequest request) {
         log.info("Creating tenant with code: {}", request.getCode());
 
@@ -97,7 +97,7 @@ public class TenantService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PLATFORM_TENANT_MANAGE)")
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantResponse> getById(Long id) {
         log.debug("Fetching tenant ID: {}", id);
 
@@ -108,7 +108,7 @@ public class TenantService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PLATFORM_TENANT_MANAGE)")
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<Page<TenantResponse>> search(TenantSearchRequest searchRequest) {
         log.debug("Searching tenants");
 
@@ -126,14 +126,14 @@ public class TenantService {
 
     /** {@code GET /api/v1/platform/tenants}: one page of all tenants, unfiltered, in id order. */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PLATFORM_TENANT_MANAGE)")
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<Page<TenantResponse>> list(int page, int size) {
         log.debug("Listing tenants, page {} size {}", page, size);
         return search(TenantSearchRequest.builder().sortField("id").page(page).size(size).build());
     }
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PLATFORM_TENANT_MANAGE)")
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantResponse> updateStatus(Long id, TenantStatusUpdateRequest request) {
         log.info("Changing status of tenant ID: {} to {}", id, request.getStatusCode());
 
