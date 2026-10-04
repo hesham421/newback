@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "04",
+  "current_step": "05",
   "max_parallel": 3,
   "steps": [
     {
@@ -229,8 +229,8 @@
         "V10__tenant_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-05",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -612,6 +612,12 @@
       "step": "04",
       "event": "merged",
       "note": "merged 4a08319 (pure replay); core 69/app 5 on branch+main; pushed"
+    },
+    {
+      "at": "2026-10-04T16:15:49Z",
+      "step": "05",
+      "event": "dispatched",
+      "note": "implementer dispatched"
     }
   ]
 }
