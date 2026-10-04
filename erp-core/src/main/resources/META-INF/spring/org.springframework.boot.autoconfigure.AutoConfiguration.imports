@@ -1,0 +1,5 @@
+com.erp.autoconfigure.ErpCoreAutoConfiguration
+com.erp.autoconfigure.ErpCoreSecurityAutoConfiguration
+com.erp.autoconfigure.ErpCoreFlywayAutoConfiguration
+com.erp.autoconfigure.ErpCoreOpenApiAutoConfiguration
+com.erp.autoconfigure.DownloadTokenStoreAutoConfiguration
