@@ -377,9 +377,9 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-08",
-      "attempts": 2,
+      "attempts": 3,
       "implementer_agent": "a610cba22aa4f49f5",
       "reviewer_agent": "a798b3445c7335bfb",
       "review": {
@@ -812,6 +812,12 @@
       "step": "11",
       "event": "dispatched",
       "note": "implementer dispatched (slot freed by 07)"
+    },
+    {
+      "at": "2026-10-04T18:46:55Z",
+      "step": "08",
+      "event": "reported",
+      "note": "final rebase onto 07 at fc0bc85; core 206/app 9; reviewer post-rebase re-verify requested"
     }
   ]
 }
