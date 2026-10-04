@@ -23,7 +23,7 @@ public interface MdlLookupApi {
      * — rather than returning an empty list. Keeping the cross-module contract identical to the
      * HTTP one lets each consumer decide its own translation (e.g. falling back to a hardcoded
      * default vs. propagating a 404) instead of MDL silently masking a configuration error (a
-     * NOTIF/FILE deploy that races ahead of the V20 seed migration, or a typo'd key) as a valid,
+     * NOTIF/FILE deploy that races ahead of the V8__mdl_seed.sql seed migration, or a typo'd key) as a valid,
      * empty answer. Values are ordered by {@code sortOrder} (QR-MDL-011); an active type with
      * zero active values legitimately returns an empty list.
      *

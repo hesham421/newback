@@ -67,8 +67,8 @@ public final class PermissionConstants {
     // CU — Common Utilities. Backend-only module: CU/SEC-BE.md declares "no screens", so these
     // four codes deliberately DEVIATE from PERM_<PAGE_CODE>_<ACTION> and are the literal strings
     // ConfigurationService's @PreAuthorize gates resolve. That deviation is a recorded, already-
-    // made decision — see V11__cu_security_seed.sql's header ("Do NOT rename them"), re-applied
-    // against the current SEC schema by V19__cu_notif_file_security_seed.sql, which anchors them
+    // made decision ("Do NOT rename them"), carried into the squashed core seed
+    // V7__sec_seed.sql (erp-core step 04), which anchors them
     // to the backend-only holder screen CU_CONFIGURATIONS (SEC_ACTION_REG.SCREEN_ID is NOT NULL).
     // ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ public final class PermissionConstants {
 
     /**
      * API-CU-005 (deactivate configuration) — screen CU_CONFIGURATIONS. CU names its soft-delete
-     * authority DEACTIVATE rather than DELETE; V13 typed it DELETE-class and the row keeps the
+     * authority DEACTIVATE rather than DELETE; it is DELETE-class, and the V7__sec_seed.sql row keeps the
      * action code DEACTIVATE so the permission code stays exactly this string.
      */
     public static final String CONFIG_DEACTIVATE = "CONFIG_DEACTIVATE";

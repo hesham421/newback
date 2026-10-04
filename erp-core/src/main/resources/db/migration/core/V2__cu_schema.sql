@@ -1,7 +1,8 @@
 -- ============================================================
--- V1 — Common Utils (CU) — CU_APP_CONFIGURATION schema
--- Source: governance/modules/CU/P2/db-script.md SECTION 4 (FULL_DATABASE_SCRIPT)
--- DBS-ID: DBS-CU-001 | Target: POSTGRESQL_16
+-- V2 — Common Utils (CU) — schema: CU_APP_CONFIGURATION
+-- Source: governance/modules/CU/P2/db-script.md SECTION 4 (FULL_DATABASE_SCRIPT), DBS-CU-001
+-- Target: POSTGRESQL_16 | 1 table, 1 sequence | schema only (CU seeds no data).
+-- Squashed in erp-core step 04 from: old V1__cu_app_configuration_schema.sql (unchanged DDL).
 -- ============================================================
 
 -- ============================================================

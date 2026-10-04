@@ -1,21 +1,15 @@
 -- ============================================================
--- V18 — Master Data Lookup (MDL) — full module schema (first MDL migration)
+-- V3 — Master Data Lookup (MDL) — schema: MDL_LOOKUP_TYPE, MDL_LOOKUP_VALUE
 -- Source: governance/modules/MDL/P2/db-script-mdl.md §3 FULL_DATABASE_SCRIPT (BLOCK 2/3/5/7)
 -- Target: POSTGRESQL_16 | 2 tables, 2 sequences | 21 DBF-IDs | 1 XM (SOFT-READ -> SEC, no FK)
+-- Squashed in erp-core step 04 from: old V15__mdl_sequences.sql (DDL only; unchanged).
+-- Seed data: V8__mdl_seed.sql.
 --
--- Named "*_sequences" per this repo's naming convention for the module's first migration, but
--- also creates the two tables themselves: MDL_LOOKUP_TYPE/MDL_LOOKUP_VALUE do not exist in any
--- prior migration (grepped — both tables are new to this migration; MDL is a never-before-migrated
--- module).
---
--- DEVIATION from db-script §3 BLOCK 1/2/3 (same deviation V1/V2/V6/V8/V16 all apply):
--- the db-script declares every PK as `GENERATED ALWAYS AS IDENTITY` with "BLOCK 1 — none".
--- This repo's entity contract mandates GenerationType.SEQUENCE + @SequenceGenerator
--- (build-create-entity A.1.3/A.1.4; GenerationType.IDENTITY is an automatic rejection
--- trigger), so PK columns are plain BIGINT NOT NULL, fed by the sequences created in BLOCK 1
--- below (no DB-level DEFAULT nextval() on the column — Hibernate calls nextval() itself via
--- the sequence generator, matching V1/V2/V6/V8/V16's idiom). Every table/column/constraint/
--- index name is otherwise verbatim from the db-script.
+-- Deviation from the db-script (shared by every core schema script): the db-script declares
+-- every PK as `GENERATED ALWAYS AS IDENTITY`. The entity contract mandates
+-- GenerationType.SEQUENCE + @SequenceGenerator (build-create-entity A.1.3/A.1.4), so PK columns
+-- are plain BIGINT NOT NULL fed by the SEQ_<TABLE> sequences in BLOCK 1 (no DB-level DEFAULT
+-- nextval(); Hibernate calls nextval() itself). Every other name is verbatim from the db-script.
 -- ============================================================
 
 -- ============================================================

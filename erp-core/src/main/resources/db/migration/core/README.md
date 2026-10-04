@@ -1,57 +1,59 @@
-# Flyway migrations — `classpath:db/migration/core`
+# erp-core Flyway chain — `classpath:db/migration/core`
 
-Spring Boot's `FlywayAutoConfiguration` runs every `V{n}__{description}.sql`
-file in this folder, in order, against the configured datasource at
-application startup. Since erp-core step 03 this folder ships inside the
-erp-core library jar, and `com.erp.autoconfigure.ErpCoreFlywayAutoConfiguration`
-prepends `classpath:db/migration/core` to whatever `spring.flyway.locations`
-the consuming application configures for its own scripts.
+This folder ships inside the erp-core jar. `com.erp.autoconfigure.ErpCoreFlywayAutoConfiguration`
+prepends `classpath:db/migration/core` to whatever `spring.flyway.locations` the consuming
+application configures, so Spring Boot's Flyway run applies the core chain first and the
+application's own scripts after it.
 
-## The chain (cleaned in erp-core step 01)
+## Version ranges
 
-The chain is contiguous, `V1..V20`, and contains only the core modules
-(`cu`, `sec`, `notif`, `file`, `mdl`). The former `fin` module's migrations
-were deleted outright (not reverted by a later migration) and the remaining
-files were renumbered in place, preserving their relative order. This was
-possible because erp-core is a new project with no deployed database: every
-environment is created from scratch, so Flyway checksums of the old numbers
-are irrelevant.
-
-| Version | File | Module |
+| Range | Owner | Where |
 |---|---|---|
-| V1  | `V1__cu_app_configuration_schema.sql`        | cu |
-| V2  | `V2__sec_security_schema.sql`                | sec (legacy schema, dropped by V12) |
-| V3  | `V3__sec_security_seed.sql`                  | sec (legacy) |
-| V4  | `V4__notif_schema.sql`                       | notif |
-| V5  | `V5__notif_security_seed.sql`                | notif (legacy sec rows) |
-| V6  | `V6__file_schema.sql`                        | file |
-| V7  | `V7__file_security_seed.sql`                 | file (legacy sec rows) |
-| V8  | `V8__sec_bootstrap_admin_user.sql`           | sec (legacy) |
-| V9  | `V9__notif_email_channel_seed.sql`           | notif |
-| V10 | `V10__notif_email_templates_action_link.sql` | notif |
-| V11 | `V11__cu_security_seed.sql`                  | cu (legacy sec rows) |
-| V12 | `V12__drop_legacy_security_schema.sql`       | sec |
-| V13 | `V13__sec_schema.sql`                        | sec (current schema) |
-| V14 | `V14__sec_security_seed.sql`                 | sec |
-| V15 | `V15__mdl_sequences.sql`                     | mdl |
-| V16 | `V16__mdl_security_seed.sql`                 | mdl |
-| V17 | `V17__notif_file_lookup_data_migration.sql`  | notif / file → mdl lookups |
-| V18 | `V18__mdl_role_grants.sql`                   | mdl |
-| V19 | `V19__cu_notif_file_security_seed.sql`       | cu / notif / file |
-| V20 | `V20__notif_password_reset_copy.sql`         | notif |
+| `V1` .. `V999` | **erp-core** | this folder |
+| `V1000` and up | **applications** | the application's own location (default `classpath:db/migration`) |
 
-Comments inside the files predate the renumbering and may cite the old
-version numbers (e.g. "V16 schema" now means `V13__sec_schema.sql`). Full
-file-name references were updated; bare `V<n>` mentions were left as written.
-Old → new mapping: V1–V3 unchanged; V6→V4, V7→V5, V8→V6, V9→V7, V10→V8,
-V11→V9, V12→V10, V13→V11, V14→V12, V16→V13, V17→V14, V18→V15, V19→V16,
-V20→V17, V21→V18, V31→V19, V32→V20 (V4, V5, V15 never existed; V22–V30 and
-V33–V41 were `fin` and are deleted).
+An application never adds a script below `V1000`, and erp-core never ships one at `V1000` or above.
 
-## Rules
+## Naming
 
-- One forward-only `V{n}__{module}_{summary}.sql` per logical change; derive
-  `n` as the current highest version + 1. Never edit a migration after it has
-  run anywhere (Flyway checksums them).
-- Do not add a manual baseline; `spring.flyway.baseline-on-migrate=true`
-  already lets Flyway adopt a non-empty database.
+`V<n>__<module>_<slug>.sql`, where `<module>` is one of
+`core, cu, mdl, sec, file, notif, tenant, audit, events, sequence, report` and `<slug>` is
+lower-case snake case. `MigrationNamingTest` (erp-core tests) fails the build on a version ≥ 1000,
+a name outside this pattern, or a duplicate version. This README is the only other file allowed here.
+
+## Additive only
+
+The chain was squashed once, in erp-core step 04, into one schema script and one seed script per
+module. **From then on core scripts are additive only**:
+
+- a new table;
+- a new column that is nullable or has a default;
+- a new index or constraint that existing data already satisfies;
+- new seed rows.
+
+No core script renames or drops a table or column, changes a column type, or edits or renumbers an
+existing script (Flyway checksums applied scripts). A mistake is fixed forward by a new script.
+Each plan step reserves its version numbers (e.g. step 05 = `V10`, step 06 = `V11`, ...).
+
+## The chain
+
+| Version | Script | Content |
+|---|---|---|
+| — | `V1__core_common.sql` | not shipped: there are no shared sequences or functions (`V1` stays free) |
+| V2 | `V2__cu_schema.sql` | `CU_APP_CONFIGURATION` |
+| V3 | `V3__mdl_schema.sql` | `MDL_LOOKUP_TYPE`, `MDL_LOOKUP_VALUE` |
+| V4 | `V4__sec_schema.sql` | the 13 `SEC_*` tables |
+| V5 | `V5__file_schema.sql` | `FILE_CATEGORY`, `FILE_DOCUMENT` |
+| V6 | `V6__notif_schema.sql` | `NOTIF_TEMPLATE`, `NOTIF_CHANNEL_CONFIG`, `NOTIF_LOG` |
+| V7 | `V7__sec_seed.sql` | module/screen/action registry of SEC, MDL, NOTIF, FILE, CU; roles; grants; bootstrap `admin` (no usable password) |
+| V8 | `V8__mdl_seed.sql` | lookup types/values `NOTIF_CHANNEL`, `NOTIF_STATUS`, `FILE_FILE_STATUS`, `FILE_FILE_TYPE` |
+| V9 | `V9__notif_seed.sql` | `EMAIL` channel config; `PASSWORD_RESET` / `ACCOUNT_ACTIVATION` templates |
+
+## Bootstrap admin
+
+`V7__sec_seed.sql` creates the account `admin` (role `SYS_ADMIN`) with status `PENDING` and a
+placeholder instead of a password hash, so it cannot log in. Set
+`erp.core.security.bootstrap-admin-password` (the reference app maps it to the optional
+environment variable `ERP_BOOTSTRAP_ADMIN_PASSWORD`) and, on the first start,
+`com.erp.sec.security.BootstrapAdminPasswordRunner` hashes it into the account and activates it.
+Once the account is initialised the property is ignored.

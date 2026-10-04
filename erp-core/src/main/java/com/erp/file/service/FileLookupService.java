@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * API-FILE-008 — runtime resolution of the FILE-local LOVs (LOV-FILE-001 FILE_FILE_TYPE,
  * LOV-FILE-002 FILE_FILE_STATUS). These options and their bilingual labels (SRS A5) are now owned
- * by MDL (seeded by V20) and read live via {@link MdlLookupApi} — this service only guards which
+ * by MDL (seeded by V8__mdl_seed.sql) and read live via {@link MdlLookupApi} — this service only guards which
  * keys it is responsible for and translates MDL's own not-found into this module's ERR-0006
  * NOT_FOUND, per the cross-module rule (never let {@code MDL_404_TYPE_KEY} leak out of this API).
  *

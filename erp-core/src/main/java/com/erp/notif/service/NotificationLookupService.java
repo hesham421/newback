@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * API-NOTIF-006 — runtime resolution of the NOTIF-local LOVs (LOV-NOTIF-001 NOTIF_CHANNEL,
  * LOV-NOTIF-002 NOTIF_STATUS). These options and their bilingual labels (SRS A5) are now owned by
- * MDL (seeded by V20) and read live via {@link MdlLookupApi} — this service only guards which keys
+ * MDL (seeded by V8__mdl_seed.sql) and read live via {@link MdlLookupApi} — this service only guards which keys
  * it is responsible for and translates MDL's own not-found into this module's ERR-0004 NOT_FOUND,
  * per the cross-module rule (never let {@code MDL_404_TYPE_KEY} leak out of this API).
  *

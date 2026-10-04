@@ -1,6 +1,9 @@
 # =====================================================================
 # erp-app-reference — dev-style configuration.
 # Required environment: DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, FILE_TOKEN_SECRET.
+# Optional: ERP_BOOTSTRAP_ADMIN_PASSWORD - password given to the seeded 'admin' account (role
+# SYS_ADMIN) on the first start; erp-core seeds it without a usable password, so without this
+# variable nobody can log in as admin. Ignored once the account has been initialised.
 # Redis and SMTP are optional and NOT configured here: without Redis, FILE download
 # tokens use the in-memory store; without spring.mail.host, EMAIL notifications are
 # recorded as FAILED (NO_MAIL_SENDER). Add spring-boot-starter-data-redis /
@@ -41,6 +44,8 @@ erp:
     security:
       jwt:
         secret: ${JWT_SECRET}
+      # Optional (see the header). Empty = leave the bootstrap admin untouched.
+      bootstrap-admin-password: ${ERP_BOOTSTRAP_ADMIN_PASSWORD:}
     files:
       access-token-secret: ${FILE_TOKEN_SECRET}
     frontend:

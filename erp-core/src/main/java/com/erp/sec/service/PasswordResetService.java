@@ -53,7 +53,7 @@ public class PasswordResetService {
     private static final String EVENT_PASSWORD_RESET_COMPLETED = "PASSWORD_RESET_COMPLETED";
     private static final String EVENT_SESSION_TERMINATED = "SESSION_TERMINATED";
 
-    /** Seeded by V9__notif_email_channel_seed.sql / updated by V12 — never invented here. */
+    /** Seeded by V9__notif_seed.sql — never invented here. */
     private static final String TEMPLATE_PASSWORD_RESET = "PASSWORD_RESET";
     private static final String CHANNEL_EMAIL = "EMAIL";
     private static final String MODULE_CODE = "SEC";
