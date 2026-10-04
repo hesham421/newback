@@ -16,8 +16,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-01",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "a52423e37028cd885",
       "reviewer_agent": "a76d643bb593a74e4",
@@ -27,7 +27,7 @@
         "evidence": "reviewer re-ran 3 verification cmds + live app on fresh PG16 (20 migrations, health UP, 60 paths 0 fin); diff review clean",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "e91e4e1b2f1aa520bf9726dd476e7e90260a36e5",
       "report": "docs/steps/01-report.md",
       "deviations": [
         "Docker unavailable -> native PostgreSQL 16.15 for app-start check",
@@ -463,6 +463,12 @@
       "step": "01",
       "event": "review",
       "note": "PASS round 1; merge gate for step 01 = mvn -q -DskipTests package (step file precondition: tests runnable from step 02)"
+    },
+    {
+      "at": "2026-10-04T14:11:42Z",
+      "step": "01",
+      "event": "merged",
+      "note": "merged e91e4e1, clean replay, package green on branch+main, pushed"
     }
   ]
 }
