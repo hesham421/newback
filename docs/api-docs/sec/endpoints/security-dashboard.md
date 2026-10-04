@@ -5,7 +5,7 @@
 
 **Get the dashboard summary**
 
-عرض أرقام لوحة تحكم الأمان محسوبة حيًا
+User and session counts cover STAFF accounts only - عرض أرقام لوحة تحكم الأمان محسوبة حيًا (أعداد المستخدمين والجلسات للموظفين فقط)
 
 Operation ID: `summary`
 
@@ -22,14 +22,14 @@ Shape: `DashboardResponse`
 | Field | Type | Required | Constraints | Description | Example |
 |---|---|---|---|---|---|
 | usersOverview | UsersOverviewResponse | No |  | Users overview widget - عنصر نظرة عامة على المستخدمين |  |
-| usersOverview.total | integer (int64) | No |  | Total users - إجمالي المستخدمين | 120 |
-| usersOverview.active | integer (int64) | No |  | Users with statusCode ACTIVE - المستخدمون النشطون | 100 |
-| usersOverview.disabled | integer (int64) | No |  | Users with statusCode DISABLED - المستخدمون المعطَّلون | 20 |
+| usersOverview.total | integer (int64) | No |  | Total staff (STAFF realm) users; customers are not counted - إجمالي المستخدمين الموظفين (دون العملاء) | 120 |
+| usersOverview.active | integer (int64) | No |  | Staff users with statusCode ACTIVE - الموظفون النشطون | 100 |
+| usersOverview.disabled | integer (int64) | No |  | Staff users with statusCode DISABLED - الموظفون المعطَّلون | 20 |
 | usersOverview.pendingSignups | integer (int64) | No |  | Sign-up requests still PENDING - طلبات التسجيل المعلّقة | 3 |
 | failedLogins24h | FailedLoginsResponse | No |  | Failed logins in the last 24 hours - عنصر محاولات الدخول الفاشلة خلال ٢٤ ساعة |  |
 | failedLogins24h.count | integer (int64) | No |  | LOGIN_FAILED entries in the last 24 hours - عدد محاولات الدخول الفاشلة | 7 |
 | activeSessions | ActiveSessionsCountResponse | No |  | Active sessions widget - عنصر الجلسات النشطة |  |
-| activeSessions.count | integer (int64) | No |  | Sessions with terminatedAt IS NULL - عدد الجلسات غير المنتهية | 14 |
+| activeSessions.count | integer (int64) | No |  | Staff (STAFF realm) sessions with terminatedAt IS NULL - عدد جلسات الموظفين غير المنتهية | 14 |
 | recentActivity | array<AuditLogEntryResponse> | No |  | Most recent audit entries, requires SEC_AUDIT_LOG VIEW - آخر الأحداث — Audit log entry - قيد سجل التدقيق |  |
 | recentActivity[].auditLogPk | integer (int64) | No |  | Unique identifier - المعرف الفريد | 1 |
 | recentActivity[].eventTypeCode | string | No |  | AUDIT_EVENT_TYPE code - رمز نوع الحدث | LOGIN_FAILED |

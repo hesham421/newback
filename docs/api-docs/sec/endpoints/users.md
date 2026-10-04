@@ -133,7 +133,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Search users**
 
-بحث المستخدمين
+STAFF accounts only; customer accounts are never listed - بحث المستخدمين (حسابات الموظفين فقط، لا تظهر حسابات العملاء)
 
 Operation ID: `search_1`
 
@@ -225,7 +225,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.search`, `UserService.search`, `UserSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `UserSearchRequest.getFullName`, `UserService.fullNameMatches`, `UserRoleService.rolesByUser`, `UserMapper.toResponse`, `UserSearchRequest.extractStringFilter`, `RoleMapper.toSummaryResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.search`, `UserService.search`, `UserSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `UserSearchRequest.getFullName`, `UserService.fullNameMatches`, `UserService.staffRealm`, `UserRoleService.rolesByUser`, `UserMapper.toResponse`, `UserSearchRequest.extractStringFilter`, `RoleMapper.toSummaryResponse`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -244,7 +244,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Get user by ID**
 
-جلب مستخدم بالمعرّف
+STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id - جلب مستخدم بالمعرّف (حسابات الموظفين فقط)
 
 Operation ID: `getById_1`
 
@@ -332,7 +332,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Update user**
 
-تحديث مستخدم
+STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id - تحديث مستخدم (حسابات الموظفين فقط)
 
 Operation ID: `update_1`
 
@@ -443,7 +443,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Reactivate user**
 
-إعادة تفعيل مستخدم معطَّل
+STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id - إعادة تفعيل مستخدم معطَّل (حسابات الموظفين فقط)
 
 Operation ID: `reactivate`
 
@@ -498,7 +498,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Deactivate user**
 
-تعطيل مستخدم وإنهاء جلساته النشطة
+STAFF accounts only; a customer account id answers 404 SEC-404-USER, like an unknown id - تعطيل مستخدم وإنهاء جلساته النشطة (حسابات الموظفين فقط)
 
 Operation ID: `deactivate_1`
 
@@ -553,7 +553,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Assign roles to user**
 
-إسناد أدوار إلى مستخدم
+STAFF accounts only (customers hold no roles); a customer account id answers 404 SEC-404-USER, like an unknown id - إسناد أدوار إلى مستخدم (حسابات الموظفين فقط)
 
 Operation ID: `assignRoles`
 

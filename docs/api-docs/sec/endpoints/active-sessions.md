@@ -10,7 +10,7 @@
 
 **List active sessions**
 
-عرض الجلسات غير المنتهية
+Sessions of STAFF accounts only; customer sessions are never listed - عرض الجلسات غير المنتهية (جلسات الموظفين فقط)
 
 Operation ID: `search_3`
 
@@ -74,7 +74,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `SessionController.search`, `SessionService.search`, `ActiveSessionSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `ActiveSessionSearchRequest.getUserId`, `SessionService.belongsTo`, `ActiveSessionSearchRequest.getUsernameFilter`, `SessionService.usernameMatches`, `SessionService.notTerminated`, `ActiveSessionMapper.toResponse`, `SessionService.usernamePath`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `SessionController.search`, `SessionService.search`, `ActiveSessionSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `ActiveSessionSearchRequest.getUserId`, `SessionService.belongsTo`, `ActiveSessionSearchRequest.getUsernameFilter`, `SessionService.usernameMatches`, `SessionService.notTerminated`, `SessionService.staffSessions`, `ActiveSessionMapper.toResponse`, `SessionService.usernamePath`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -95,7 +95,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Terminate session**
 
-إنهاء جلسة نشطة
+Sessions of STAFF accounts only; a customer session id answers 404 SEC-404-SESSION, like an unknown id - إنهاء جلسة نشطة (جلسات الموظفين فقط)
 
 Operation ID: `terminate`
 

@@ -27,11 +27,9 @@ Schema: `DispatchRequest` (application/json)
 | moduleCode | string | Yes | maxLength: 50 | Sending module code - رمز الموديول المُرسِل | SEC |
 | referenceId | integer (int64) | No |  | Source entity reference id - معرّف المرجع | 1001 |
 | referenceType | string | No | maxLength: 100 | Source entity reference type - نوع المرجع | USER_ACCOUNT |
-| variables | object | No |  | Template placeholder variables - متغيرات القالب |  |
+| variables | object | No |  | Template placeholder variables. For the EMAIL channel, the optional `email` entry overrides the destination address; without it the recipient's account e-mail is used, and an EMAIL with no address at all ends FAILED after one attempt (no retry) - متغيرات القالب؛ في قناة البريد الإلكتروني يحدد المفتاح الاختياري email عنوان المستلم بدلًا من بريد حسابه، وإذا لم يتوفر أي عنوان ينتهي الإشعار بحالة FAILED بعد محاولة واحدة دون إعادة | {"actionLink": "https://app.example/reset?token=abc", "email": "someone@example.com"} |
 
 **Request Example**
-
-_(partial — only fields with a documented example are shown)_
 
 ```json
 {
@@ -43,7 +41,11 @@ _(partial — only fields with a documented example are shown)_
   ],
   "moduleCode": "SEC",
   "referenceId": 1001,
-  "referenceType": "USER_ACCOUNT"
+  "referenceType": "USER_ACCOUNT",
+  "variables": {
+    "actionLink": "https://app.example/reset?token=abc",
+    "email": "someone@example.com"
+  }
 }
 ```
 
@@ -57,7 +59,7 @@ Shape: `DispatchResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `DispatchController.dispatch`, `DispatchService.dispatch`, `DispatchService.doDispatch`, `DispatchService.normalize`, `NotificationTemplateDomain.from`, `DispatchVariables.write`, `NotificationChannelConfigDomain.from`, `DispatchService.newPendingLog`, `DispatchService.transitionTo`, `NotificationTemplateDomain.assertDispatchable`, `NotificationChannelConfigDomain.isEnabledForDispatch`, `new NotificationTemplateDomain()`, `new NotificationChannelConfigDomain()`, `NotificationLogDomain.from`, `NotificationLogDomain.assertCanTransitionTo`, `new NotificationLogDomain()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `DispatchController.dispatch`, `DispatchService.dispatch`, `DispatchService.doDispatch`, `DispatchService.normalize`, `NotificationTemplateDomain.from`, `DispatchVariables.write`, `NotificationChannelConfigDomain.from`, `DispatchService.newPendingLog`, `DispatchService.transitionTo`, `DispatchService.withRecipientEmail`, `NotificationTemplateDomain.assertDispatchable`, `NotificationChannelConfigDomain.isEnabledForDispatch`, `new NotificationTemplateDomain()`, `new NotificationChannelConfigDomain()`, `NotificationLogDomain.from`, `NotificationLogDomain.assertCanTransitionTo`, `new NotificationLogDomain()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
