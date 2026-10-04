@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.erp</groupId>
         <artifactId>erp-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>erp-core</artifactId>
@@ -21,6 +21,14 @@
     configured through erp.core.* properties. Module boundaries (com.erp.sec, com.erp.notif,
     com.erp.file, com.erp.cu, com.erp.mdl) are enforced by the ArchUnit suite in
     src/test/java/com/erp/architecture.</description>
+
+    <properties>
+        <!-- erp-core step 12: always fork, also on Windows (overrides the root windows-tests-no-fork
+             profile, like erp-app-reference): the JaCoCo agent of the coverage gate attaches only to a
+             forked test JVM; with forkCount=0 the gate would silently find no execution data. The full
+             suite was verified green forked on Windows (docs/steps/12-report.md). -->
+        <surefire.forkCount>1</surefire.forkCount>
+    </properties>
 
     <dependencies>
         <!-- Spring Boot -->
@@ -212,6 +220,51 @@
                                 <include>com/erp/testsupport/TestPostgres*.class</include>
                                 <include>com/erp/testsupport/TestcontainersPostgresConfiguration*.class</include>
                             </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- erp-core step 12, task 9: line coverage of erp-core must stay >= 60 % (`verify` fails
+                 below). The agent rides on surefire's @{argLine}; tests must run in a forked JVM for it
+                 to attach (see the surefire.forkCount note in the root pom). -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <haltOnFailure>true</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.60</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
                         </configuration>
                     </execution>
                 </executions>
