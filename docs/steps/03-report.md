@@ -17,7 +17,8 @@ The single `com.erp:erp-system` application is now a two-module Maven build:
 
 - `ErpCoreAutoConfiguration`: scans exactly the core packages and relies on Boot's
   `HibernateJpaAutoConfiguration` (dialect auto-detected, no `default_schema`). It also contributes
-  the i18n `messageSource`.
+  the i18n `messageSource`. Its repository registration backs off per repository and collapses
+  overlapping packages (review round 1).
 - `ErpCoreSecurityAutoConfiguration`: the `erpCoreSecurityFilterChain` bean, `@Order(100)`, which
   backs off on a same-named bean. Public paths come from `erp.core.security.public-paths`.
   `PasswordEncoder` is `@ConditionalOnMissingBean`.
@@ -34,8 +35,8 @@ Optional dependencies: Redis, mail, springdoc and the PostgreSQL driver are opti
 Build and runtime evidence:
 - The build runs on **JDK 21** (`maven.compiler.release=21`, enforcer `[21,)`). Spring Boot stays
   at 4.0.1 and no JDK-25-only API was found.
-- `mvn -q verify` is green: erp-core has 55 tests (the 51 existing ones, all passing, plus 4 new);
-  erp-app-reference has 4.
+- `mvn -q verify` is green: erp-core has 60 tests (the 51 existing ones, all passing, plus 9 new:
+  4 from the first round, 5 from review round 1); erp-app-reference has 4.
 - The reference jar, which contains no Redis or mail jars, started against a fresh PostgreSQL 16
   with only the five documented environment variables:
   - Flyway applied V1..V20 + V1000.
@@ -132,7 +133,7 @@ These mirror the 18 `[03]` entries in `docs/DEVIATIONS.md` (the full text is the
 
 1. **`.claude/` stays at the repository root** (orchestrator decision). `depoymentssh` does not exist. The other root dotfiles stay, and `.sdkmanrc` moves to JDK 21.
 2. **`CORE_PACKAGES`.** An annotation cannot take a `String[]` constant. `CORE_PACKAGE_LIST` (a comma-separated `String` that `@ComponentScan` tokenizes) is the single place to edit, and `CORE_PACKAGES` is derived from it. Entity scan and JPA repositories are registered programmatically from `CORE_PACKAGES`.
-3. **Application packages are scanned too.** The application's `AutoConfigurationPackages` are added to entity and repository scanning, so apps keep finding their own entities and repositories.
+3. **Application packages are scanned too, with back-off.** The application's `AutoConfigurationPackages` are added to entity scanning, and to repository scanning only when the app registers no repositories itself. Overlapping packages are collapsed, and an already-registered repository is never registered again (review round 1).
 4. **Core contributes the `messageSource`.** Application bundles come first, then `i18n/messages`; UTF-8; no system-locale fallback.
 5. **`JwtAuthenticationFilter`** is a `@Bean` of the security auto-configuration, not a `@Component`. That auto-configuration is ordered before Boot's web-security auto-configurations.
 6. **Public paths are method-agnostic.** The old config allowed POST only on the four auth endpoints.
@@ -148,13 +149,56 @@ These mirror the 18 `[03]` entries in `docs/DEVIATIONS.md` (the full text is the
 16. **The ArchUnit exemption moved from `com.erp.main` to `com.erp.autoconfigure`.**
 17. **The reference start check ran against the native PostgreSQL 16** (scratch DB, dropped), with `env -i` plus the five variables.
 
+### Review round 1 fixes
+
+The reviewer found one blocking issue. The core JPA repository registrar never backed off and never
+collapsed overlapping packages. As a result, startup crashed with `BeanDefinitionOverrideException`
+in two cases:
+
+- **Case A:** an app in `com.acme` with its own `@EnableJpaRepositories("com.acme")`.
+- **Case B:** an app whose configuration lives in `com.erp`.
+
+Fixed in `erp-core/src/main/java/com/erp/autoconfigure/ErpCoreAutoConfiguration.java`:
+
+- **Package collapse.** `collapsePackages(...)` drops exact duplicates and every package covered by
+  another entry (prefix + `.`). Both the entity-scan registrar and the repository registrar use it.
+- **Repository registrar back-off.** `CoreJpaRepositoriesRegistrar` now builds its own
+  `AnnotationRepositoryConfigurationSource` and `RepositoryConfigurationDelegate` instead of
+  extending Boot's `AbstractRepositoryConfigurationSourceSupport`. It works in three steps:
+  - It reads the repository interfaces already defined in the registry (application configuration
+    is processed before auto-configurations).
+  - It adds the application's auto-configuration packages only when there are none. This mirrors
+    Boot's `DataJpaRepositoriesAutoConfiguration` back-off.
+  - It filters out every candidate whose interface is already registered.
+- **Result:** each core repository is registered exactly once. This holds when the app's
+  `@EnableJpaRepositories` covers only its own package, and also when it covers `com.erp`.
+
+Tests added to `ErpCoreAutoConfigurationTest`. The fixtures are test-only classes `com.acme.widget.{Widget,WidgetRepository}`,
+`com.acme.{AcmeAppWithOwnRepositories,AcmeAppCoveringCorePackages,AcmeAppWithoutRepositoryConfig}`
+and `com.erp.ErpRootConsumerApplication`.
+
+- `appWithItsOwnEnableJpaRepositories_coreRepositoriesStillRegisteredOnce_appRepositoryOnce` (case A)
+- `appWhoseEnableJpaRepositoriesCoversCorePackages_coreDoesNotRegisterThemAgain`
+- `appWithoutRepositoryConfig_getsItsOwnRepositoriesAndEntitiesFromItsPackage` (the entity scan includes `com.acme` + core)
+- `appConfigurationInAParentOfTheCorePackages_collapsesOverlappingPackages` (case B; the entity scan is exactly `com.erp`)
+- `collapsePackages_dropsPackagesCoveredByAnotherEntry`
+
+Each context test asserts:
+- the context starts;
+- `hasSingleBean` holds for the app and core repositories;
+- every repository interface is backed by exactly one Spring Data factory bean.
+
+The `[03]` deviation entry in `docs/DEVIATIONS.md` was updated to match. The reviewer's
+non-blocking note (Boot's "Using generated security password" warning) was left as is: backing off
+`UserDetailsServiceAutoConfiguration` would require core to define an authentication bean.
+
 ## Acceptance checklist
 
 5/5 ✅. Each item with its evidence:
 
 - ✅ **`mvn -q verify` green at root (both modules).**
   - `EXIT=0` under JDK 21.0.7, Maven 3.9.10, after deleting all `target/` directories.
-  - erp-core: tests=55, failures=0, errors=0, skipped=0. erp-app-reference: tests=4, failures=0, errors=0, skipped=0.
+  - erp-core: tests=60, failures=0, errors=0, skipped=0. erp-app-reference: tests=4, failures=0, errors=0, skipped=0 (re-run after review round 1).
   - Both modules used the embedded backend (no Docker).
 - ✅ **`erp-core/target/erp-core-1.0.0-SNAPSHOT.jar` contains no `com/erp/main`, no `application.properties`, and has `META-INF/spring/...AutoConfiguration.imports`.**
   - `unzip -l` lists only `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
@@ -177,14 +221,14 @@ $ mvn -v
 Apache Maven 3.9.10 (5f519b97e944483d878815739f519b2eade0a91d)
 
 $ rm -rf target erp-core/target erp-app-reference/target; mvn -q verify
-EXIT=0 secs=121
+EXIT=0 secs=131      (re-run after review round 1, all target/ deleted first)
 [TestPostgres] integration-test database backend: EMBEDDED      (printed twice: once per module JVM)
 
 surefire totals (target/surefire-reports/TEST-*.xml):
 == erp-core
 com.erp.architecture.CrossModuleBoundaryArchTest              2 0 0 0
 com.erp.autoconfigure.DownloadTokenStoreAutoConfigurationTest 2 0 0 0
-com.erp.autoconfigure.ErpCoreAutoConfigurationTest            4 0 0 0   (new)
+com.erp.autoconfigure.ErpCoreAutoConfigurationTest            9 0 0 0   (new: 4 + 5 from review round 1)
 com.erp.file.service.InMemoryDownloadTokenStoreTest           3 0 0 0
 com.erp.notif.service.DefaultChannelProviderTest              2 0 0 0
 com.erp.sec.MenuServiceGatewayIntegrationTest                 2 0 0 0
@@ -195,7 +239,7 @@ com.erp.sec.SecReadOneIntegrationTest                         6 0 0 0
 com.erp.sec.SecSearchFilterIntegrationTest                   10 0 0 0
 com.erp.sec.UserRolesInResponseIntegrationTest                8 0 0 0
 com.erp.testsupport.TestProfileWiringIntegrationTest          2 0 0 0
-erp-core tests=55 failures=0 errors=0 skipped=0
+erp-core tests=60 failures=0 errors=0 skipped=0
 == erp-app-reference
 com.erp.app.ReferenceApplicationSmokeTest                     4 0 0 0   (new)
 erp-app-reference tests=4 failures=0 errors=0 skipped=0

@@ -4,10 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.erp.file.service.DownloadTokenStore;
 import com.erp.file.service.InMemoryDownloadTokenStore;
+import com.acme.AcmeAppCoveringCorePackages;
+import com.acme.AcmeAppWithOwnRepositories;
+import com.acme.AcmeAppWithoutRepositoryConfig;
+import com.acme.widget.WidgetRepository;
+import com.erp.ErpRootConsumerApplication;
+import com.erp.mdl.repository.LookupTypeRepository;
+import com.erp.sec.repository.UserRepository;
 import com.erp.testsupport.TestPostgres;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.persistence.autoconfigure.EntityScanPackages;
+import org.springframework.data.repository.core.support.RepositoryFactoryBeanSupport;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
@@ -35,16 +44,18 @@ class ErpCoreAutoConfigurationTest {
     static class ConsumerApplication {
     }
 
-    private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
+    /** No user configuration yet: each test (or {@link #runner}) adds the consumer it needs. */
+    private final WebApplicationContextRunner baseRunner = new WebApplicationContextRunner()
         .withClassLoader(new FilteredClassLoader("org.springframework.data.redis", "org.springframework.mail",
             "jakarta.mail"))
-        .withUserConfiguration(ConsumerApplication.class)
         .withPropertyValues(
             "spring.datasource.url=" + TestPostgres.jdbcUrl(),
             "spring.datasource.username=" + TestPostgres.username(),
             "spring.datasource.password=" + TestPostgres.password(),
             "spring.jpa.open-in-view=false",
             "logging.level.root=WARN");
+
+    private final WebApplicationContextRunner runner = baseRunner.withUserConfiguration(ConsumerApplication.class);
 
     @Test
     void contextLoads_withRequiredPropertiesOnly_noRedis_noMail() {
@@ -87,6 +98,84 @@ class ErpCoreAutoConfigurationTest {
                 .rootCause()
                 .hasMessageContaining("erp.core.security.jwt.secret must be set");
         });
+    }
+
+    // --- Review round 1: repository / entity scan back-off and package overlap -------------------
+
+    @Test
+    void appWithItsOwnEnableJpaRepositories_coreRepositoriesStillRegisteredOnce_appRepositoryOnce() {
+        // Case A: consumer in com.acme declares @EnableJpaRepositories("com.acme").
+        baseRunner.withUserConfiguration(AcmeAppWithOwnRepositories.class)
+            .withPropertyValues(JWT_SECRET, FILE_SECRET)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(WidgetRepository.class);
+                assertThat(context).hasSingleBean(UserRepository.class);
+                assertThat(context).hasSingleBean(LookupTypeRepository.class);
+                assertSingleFactoryBeanPerRepository(context);
+            });
+    }
+
+    @Test
+    void appWhoseEnableJpaRepositoriesCoversCorePackages_coreDoesNotRegisterThemAgain() {
+        baseRunner.withUserConfiguration(AcmeAppCoveringCorePackages.class)
+            .withPropertyValues(JWT_SECRET, FILE_SECRET)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(WidgetRepository.class);
+                assertThat(context).hasSingleBean(UserRepository.class);
+                assertSingleFactoryBeanPerRepository(context);
+            });
+    }
+
+    @Test
+    void appWithoutRepositoryConfig_getsItsOwnRepositoriesAndEntitiesFromItsPackage() {
+        baseRunner.withUserConfiguration(AcmeAppWithoutRepositoryConfig.class)
+            .withPropertyValues(JWT_SECRET, FILE_SECRET)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(WidgetRepository.class);
+                assertThat(context).hasSingleBean(UserRepository.class);
+                assertThat(EntityScanPackages.get(context.getBeanFactory()).getPackageNames())
+                    .contains("com.acme").contains(ErpCoreAutoConfiguration.CORE_PACKAGES);
+                assertSingleFactoryBeanPerRepository(context);
+            });
+    }
+
+    @Test
+    void appConfigurationInAParentOfTheCorePackages_collapsesOverlappingPackages() {
+        // Case B: consumer configuration in com.erp, which covers every core package.
+        baseRunner.withUserConfiguration(ErpRootConsumerApplication.class)
+            .withPropertyValues(JWT_SECRET, FILE_SECRET)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(UserRepository.class);
+                assertThat(context).hasSingleBean(LookupTypeRepository.class);
+                assertThat(EntityScanPackages.get(context.getBeanFactory()).getPackageNames())
+                    .containsExactly("com.erp");
+                assertSingleFactoryBeanPerRepository(context);
+            });
+    }
+
+    @Test
+    void collapsePackages_dropsPackagesCoveredByAnotherEntry() {
+        assertThat(ErpCoreAutoConfiguration.collapsePackages(List.of(
+            "com.erp.common", "com.erp.sec", "com.erp", "com.erp.sec", "com.acme", "com.acmeplus", "com.acme.widget")))
+            .containsExactly("com.erp", "com.acme", "com.acmeplus");
+        assertThat(ErpCoreAutoConfiguration.collapsePackages(List.of(ErpCoreAutoConfiguration.CORE_PACKAGES)))
+            .containsExactly(ErpCoreAutoConfiguration.CORE_PACKAGES);
+    }
+
+    /** Every repository interface is backed by exactly one Spring Data factory bean definition. */
+    private static void assertSingleFactoryBeanPerRepository(
+            org.springframework.boot.test.context.assertj.AssertableWebApplicationContext context) {
+        String[] factoryBeans = context.getBeanFactory().getBeanNamesForType(RepositoryFactoryBeanSupport.class, true, false);
+        assertThat(factoryBeans).isNotEmpty();
+        List<String> interfaces = java.util.Arrays.stream(factoryBeans)
+            .map(name -> context.getBeanFactory().getBean("&" + name, RepositoryFactoryBeanSupport.class)
+                .getObjectType().getName())
+            .toList();
+        assertThat(interfaces).doesNotHaveDuplicates();
     }
 
     @Test
