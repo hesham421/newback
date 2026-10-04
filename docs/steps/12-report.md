@@ -294,3 +294,17 @@ The local repository was cleaned of the `1.0.0` entries and the scratch reposito
   - `MigrationNamingTest`, which moved package.
   - Not touched: `CrossModuleBoundaryArchTest`, `ErpCoreProperties`, `CORE_PACKAGE_LIST`, the i18n
     bundles, `AutoConfiguration.imports`, `TenantSchemaIntegrationTest`.
+
+## Release commits
+
+- **`a02e500bc3c5a737cfe3a90839012969430c6be3`**, `step(12): release 1.0.0 — ...`. Every pom is at
+  `1.0.0`, and the commit contains all step-12 code and docs. **Tag this commit `v1.0.0`.**
+- The next commit, `step(12): bump to 1.1.0-SNAPSHOT`, sets every pom to `1.1.0-SNAPSHOT` and adds this
+  section. Re-verified:
+  ```
+  $ rm -rf target erp-core/target erp-app-reference/target; mvn -q verify
+  EXIT=0 secs=236
+  erp-core          tests=350 failures=0 errors=0 skipped=0
+  erp-app-reference tests=10  failures=0 errors=0 skipped=0
+  artifacts: erp-core-1.1.0-SNAPSHOT.jar, erp-core-1.1.0-SNAPSHOT-tests.jar
+  ```
