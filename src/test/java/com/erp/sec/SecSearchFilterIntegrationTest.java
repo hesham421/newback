@@ -10,7 +10,6 @@ import com.erp.common.exception.ErrorDetail;
 import com.erp.common.exception.LocalizedException;
 import com.erp.common.search.SearchFilter;
 import com.erp.common.search.SearchOperator;
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.dto.ActiveSessionResponse;
 import com.erp.sec.dto.ActiveSessionSearchRequest;
 import com.erp.sec.dto.RoleResponse;
@@ -27,6 +26,7 @@ import com.erp.sec.repository.UserRepository;
 import com.erp.sec.service.RoleService;
 import com.erp.sec.service.SessionService;
 import com.erp.sec.service.UserService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -34,13 +34,11 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -57,13 +55,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Plus the shared guard that stops (1) and (2) recurring anywhere: a filter field the search
  * does not support is now a 400 naming it, not a silently unfiltered page.
  *
- * <p>Same posture as {@link SecFrontendGapIntegrationTest}: real dev Postgres/Redis, {@code dev}
+ * <p>Same posture as {@link SecFrontendGapIntegrationTest}: shared test database, {@code test}
  * profile, every write rolled back by the class-level {@link Transactional}.
  */
-@SpringBootTest(classes = ErpMainApplication.class)
-@ActiveProfiles("dev")
 @Transactional
-class SecSearchFilterIntegrationTest {
+class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private SessionService sessionService;

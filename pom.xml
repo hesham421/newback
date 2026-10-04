@@ -54,6 +54,9 @@
              silent false-pass. 1.4.2+ adds Java 25/26 support; confirmed directly in this
              session before bumping. -->
         <archunit.version>1.4.2</archunit.version>
+        <!-- Test-only embedded PostgreSQL fallback (step 02) -->
+        <embedded-postgres.version>2.1.0</embedded-postgres.version>
+        <embedded-postgres-binaries.version>16.4.0</embedded-postgres-binaries.version>
 
         <!-- Default: allow forking on non-Windows environments (see the windows-tests-no-fork
              profile below, moved here from the old erp-finance-gl module). -->
@@ -67,6 +70,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Pins the zonky embedded PostgreSQL binaries (test fallback) to major 16, matching
+                 the Testcontainers image and the README's database default. -->
+            <dependency>
+                <groupId>io.zonky.test.postgres</groupId>
+                <artifactId>embedded-postgres-binaries-bom</artifactId>
+                <version>${embedded-postgres-binaries.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -189,9 +201,31 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Step 02 — tests run against a real PostgreSQL 16, never a localhost service and never
+             H2 (the migrations use PostgreSQL idioms). Primary path: Testcontainers (Docker).
+             Testcontainers 2.x (managed by Boot 4) renamed the modules to testcontainers-*. -->
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Docker-free fallback: an in-process PostgreSQL 16 (zonky binaries, version pinned by the
+             embedded-postgres-binaries-bom import above). Selected by com.erp.testsupport.TestPostgres
+             only when Docker is unavailable or -Derp.test.db=embedded is passed. -->
+        <dependency>
+            <groupId>io.zonky.test</groupId>
+            <artifactId>embedded-postgres</artifactId>
+            <version>${embedded-postgres.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -254,8 +288,13 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <!-- JUnit 5 via spring-boot-starter-test (junit-jupiter); -Dtest= filtering works.
+                     reuseForks keeps one JVM for all test classes, so the per-JVM test database
+                     (com.erp.testsupport.TestPostgres) is started once and Spring's context cache
+                     is shared. On Windows the profile below runs in-process (forkCount=0). -->
                 <configuration>
                     <forkCount>${surefire.forkCount}</forkCount>
+                    <reuseForks>true</reuseForks>
                     <argLine>-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>

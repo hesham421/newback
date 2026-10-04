@@ -31,7 +31,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,11 +44,12 @@ import org.springframework.web.multipart.MultipartFile;
  * token crypto to {@link FileAccessTokenDomainService} (RULE-FILE-003), the lifecycle state machine
  * to {@link FileDocumentDomain} (RULE-FILE-006). Metadata reads use the bytes-excluded projection
  * (DRV-003); only download loads the BYTEA content. Single-use of the download token is enforced
- * here via a Redis key consumed on download.
+ * here via a {@link DownloadTokenStore} entry consumed on download (Redis when configured, otherwise
+ * in-memory).
  *
  * <p>No caching annotations — FILE is absent from the caching approved-register, so per
  * gov-enforce-caching-rules this service carries zero {@code @Cacheable}/{@code @CacheEvict}. The
- * Redis access below is a direct single-use token store, not the Spring cache abstraction.
+ * {@link DownloadTokenStore} below is a single-use token store, not the Spring cache abstraction.
  */
 @Service
 @RequiredArgsConstructor
@@ -60,7 +60,7 @@ public class FileService {
     private final FileCategoryRepository categoryRepository;
     private final FileMapper mapper;
     private final FileAccessTokenDomainService accessTokenService;
-    private final StringRedisTemplate redisTemplate;
+    private final DownloadTokenStore tokenStore;
 
     /** Owner-list sort whitelist (entity property names) per API-FILE-005. */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("fileName", "createdAt", "fileSize");
@@ -115,7 +115,7 @@ public class FileService {
         return ServiceResult.success(mapper.toMetadataResponse(saved), Status.CREATED);
     }
 
-    /** API-FILE-002 — issue a fresh single-use download token; store its nonce in Redis for the TTL. */
+    /** API-FILE-002 — issue a fresh single-use download token; store its nonce in the token store for the TTL. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
         + ".PERM_FILE_BROWSER_VIEW)")
@@ -136,7 +136,7 @@ public class FileService {
         Instant expiresAt = Instant.now().plus(FileAccessTokenDomainService.TOKEN_TTL);
         // Bind the single-use token to the issuing user so a leaked/shared token cannot be replayed
         // by a different authenticated caller (retrieve verifies this identity before serving bytes).
-        redisTemplate.opsForValue().set(tokenKey(token),
+        tokenStore.put(tokenKey(token),
             SecurityContextHelper.getCurrentUsername(), FileAccessTokenDomainService.TOKEN_TTL);
 
         return ServiceResult.success(
@@ -154,7 +154,7 @@ public class FileService {
 
         // Verify the token belongs to the current caller BEFORE consuming it: a mismatched (leaked or
         // shared) token is rejected without burning the grant, so the rightful owner can still use it.
-        String boundUser = redisTemplate.opsForValue().get(key);
+        String boundUser = tokenStore.get(key);
         if (boundUser == null || !boundUser.equals(SecurityContextHelper.getCurrentUsername())) {
             throw new LocalizedException(Status.UNAUTHORIZED, FileErrorCodes.FILE_ACCESS_TOKEN_INVALID);
         }
@@ -171,8 +171,7 @@ public class FileService {
         }
 
         // Single-use: delete returns true only for the first consumer; a gone/expired key ⇒ ERR-0003.
-        Boolean consumed = redisTemplate.delete(key);
-        if (!Boolean.TRUE.equals(consumed)) {
+        if (!tokenStore.consume(key)) {
             throw new LocalizedException(Status.UNAUTHORIZED, FileErrorCodes.FILE_ACCESS_TOKEN_INVALID);
         }
 

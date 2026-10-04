@@ -7,7 +7,6 @@ import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.exception.LocalizedException;
 import com.erp.common.search.SearchFilter;
 import com.erp.common.search.SearchOperator;
-import com.erp.main.ErpMainApplication;
 import com.erp.sec.dto.RoleSummaryResponse;
 import com.erp.sec.dto.UserCreateRequest;
 import com.erp.sec.dto.UserResponse;
@@ -24,6 +23,7 @@ import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.repository.UserRoleAssignmentRepository;
 import com.erp.sec.service.UserService;
+import com.erp.testsupport.AbstractIntegrationTest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.List;
@@ -34,14 +34,13 @@ import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,17 +50,14 @@ import org.springframework.transaction.annotation.Transactional;
  * visible was the response to the write that set them. These tests pin the read paths, the batch
  * (non-N+1) load behind the search page, and API-SEC-006's new optional {@code roleIds}.
  *
- * <p>Runs against the real dev Postgres/Redis the same way {@code SecCoverageIntegrationTest} does;
+ * <p>Runs on the shared test database the same way {@code SecCoverageIntegrationTest} does;
  * the class-level {@link Transactional} rolls every write back. The two rollback/denial cases opt
  * out of it with {@link Propagation#NOT_SUPPORTED}, because "the user was never created" is only
  * observable once the service owns its own transaction — they leave nothing behind by construction.
  */
-@SpringBootTest(
-    classes = ErpMainApplication.class,
-    properties = "spring.jpa.properties.hibernate.generate_statistics=true")
-@ActiveProfiles("dev")
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @Transactional
-class UserRolesInResponseIntegrationTest {
+class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private UserService userService;

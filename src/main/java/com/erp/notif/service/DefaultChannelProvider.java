@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -24,6 +25,11 @@ import org.springframework.stereotype.Component;
  * HTML-escaped in the HTML part. Every other channel type (SMS/WHATSAPP/PUSH/INTERNAL) remains the original
  * provider-agnostic stub — logs the send and reports success — until its own concrete provider is
  * chosen (OQ-NOTIF-001, still open for those channels).
+ *
+ * <p>The {@link JavaMailSender} is optional (resolved through an {@link ObjectProvider}): with no
+ * mail sender configured, an EMAIL dispatch is not attempted over SMTP — it is logged and reported
+ * as a failure with reason {@link #NO_MAIL_SENDER}, which {@code DispatchService} records on the
+ * NOTIF_LOG row as {@code FAILED} (errorMessage) like any other send failure.
  */
 @Component
 @RequiredArgsConstructor
@@ -34,7 +40,10 @@ public class DefaultChannelProvider implements ChannelProvider {
     private static final String EMAIL_CHANNEL = "EMAIL";
     private static final String ARABIC_LANG = "AR";
 
-    private final JavaMailSender mailSender;
+    /** NOTIF_LOG failure reason when no {@link JavaMailSender} bean is configured. */
+    public static final String NO_MAIL_SENDER = "NO_MAIL_SENDER";
+
+    private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
     @Value("${spring.mail.username:}")
     private String fromAddress;
@@ -56,6 +65,12 @@ public class DefaultChannelProvider implements ChannelProvider {
         if (to == null || to.isBlank()) {
             log.warn("EMAIL dispatch to recipient {} has no 'email' variable — cannot send", recipientId);
             return ChannelSendResult.failure("missing recipient email address");
+        }
+
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        if (mailSender == null) {
+            log.warn("EMAIL dispatch to recipient {} not sent — no JavaMailSender is configured", recipientId);
+            return ChannelSendResult.failure(NO_MAIL_SENDER);
         }
 
         boolean rtl = ARABIC_LANG.equalsIgnoreCase(variables.get("lang"));
