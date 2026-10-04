@@ -471,12 +471,17 @@
         "V15__audit_schema.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "MERGING",
       "worktree": ".worktrees/step-10",
       "attempts": 1,
       "implementer_agent": "a4485201235fdf72f",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "accb4e5faa83c0419",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 316/app 9; 10 @Audited entities covered; live: rollback atomic, JSON/SQL injection-safe, no secrets in CHANGES (52 rows scanned), authz+isolation, platform settings under tenant 1",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/10-report.md",
       "deviations": [
@@ -923,6 +928,12 @@
       "step": "10",
       "event": "reported",
       "note": "rebased onto 09 at 50205b4 (NumberSeries audited ignoring nextValue; platform settings audited under acting tenant); core 316/app 9"
+    },
+    {
+      "at": "2026-10-04T19:57:56Z",
+      "step": "10",
+      "event": "review",
+      "note": "PASS round 1; notes: page=MAX_INT 500 (shared PageableBuilder), ip/userAgent not truncated, AuditEntry.tenantId trust boundary"
     }
   ]
 }
