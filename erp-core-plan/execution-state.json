@@ -330,8 +330,8 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-07",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 3,
       "implementer_agent": "a49feaa002168f461",
       "reviewer_agent": "a0d63958cc103b106",
@@ -341,7 +341,7 @@
         "evidence": "core 177/app 8; live: html/svg attachment+nosniff+CSP, png inline; curl no headers 200; GET/HEAD only; no duplicate catalog row; staff chain no longer exposes path",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "6c0eae15666df7446c80285e7ea7a411acce78cc",
       "report": "docs/steps/07-report.md",
       "deviations": [
         "visibility endpoint PATCH /api/v1/files/{id}/visibility",
@@ -377,7 +377,7 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "FIXING",
       "worktree": ".worktrees/step-08",
       "attempts": 2,
       "implementer_agent": "a610cba22aa4f49f5",
@@ -483,8 +483,8 @@
       "parallel_group": "A",
       "migrations": [],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-11",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -794,6 +794,24 @@
       "step": "07",
       "event": "review",
       "note": "PASS round 2 (after XSS fix + rebase onto 06)"
+    },
+    {
+      "at": "2026-10-04T18:40:56Z",
+      "step": "07",
+      "event": "merged",
+      "note": "merged 6c0eae1 (pure replay); core 177/app 8 on branch+main; pushed"
+    },
+    {
+      "at": "2026-10-04T18:40:56Z",
+      "step": "08",
+      "event": "fix",
+      "note": "final rebase onto main (07 merged) requested"
+    },
+    {
+      "at": "2026-10-04T18:40:57Z",
+      "step": "11",
+      "event": "dispatched",
+      "note": "implementer dispatched (slot freed by 07)"
     }
   ]
 }
