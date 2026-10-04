@@ -560,8 +560,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-12",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "a1a8b6db63498139f",
       "reviewer_agent": "a6dda31a13a804c33",
@@ -571,7 +571,7 @@
         "evidence": "HEAD + tagged tree a02e500 both verify green (350/10); JaCoCo 75.21% and gate proven to fail on Windows; all ArchUnit rules + migration guard reproduced failing in scratch; ci.yml statically reviewed; named gaps: CI/publish/consume/docker not run locally",
         "checked_at": "2026-10-05"
       },
-      "merged_commit": null,
+      "merged_commit": "eb4dd2889bff056391e03e5a6d4ad21e152040bd",
       "report": "docs/steps/12-report.md",
       "deviations": [
         "tag by merger; release + bump commits",
@@ -1001,6 +1001,12 @@
       "step": "12",
       "event": "review",
       "note": "PASS round 1 with named gaps (publish/consume run in Actions on tag push)"
+    },
+    {
+      "at": "2026-10-04T21:18:23Z",
+      "step": "12",
+      "event": "merged",
+      "note": "merged eb4dd28 (pure replay); core 350/app 10 on branch+main; tag v1.0.0 -> 2eb6c39 pushed; CI runs 37235529649 (main) and 37235531822 (tag) started"
     }
   ]
 }
