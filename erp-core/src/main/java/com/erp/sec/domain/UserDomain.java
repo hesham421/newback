@@ -19,6 +19,13 @@ public final class UserDomain {
     /** USER_STATUS codes (A6 closed set, CHK_SEC_USER_STATUS). */
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_DISABLED = "DISABLED";
+    private static final String STATUS_PENDING = "PENDING";
+
+    /**
+     * PASSWORD_HASH the core seed ({@code V7__sec_seed.sql}) gives the bootstrap {@code admin}
+     * account. It is not a BCrypt hash, so no password matches it; the two must stay identical.
+     */
+    public static final String BOOTSTRAP_PASSWORD_PLACEHOLDER = "BOOTSTRAP-PASSWORD-NOT-SET";
 
     /** Request-body field names as UserCreateRequest/UserUpdateRequest spell them. */
     private static final String FIELD_USERNAME = "username";
@@ -75,6 +82,17 @@ public final class UserDomain {
     public static UserDomain from(User entity) {
         return new UserDomain(entity.getUsername(), entity.getEmail(), entity.getStatusCode(),
             Boolean.TRUE.equals(entity.getIsActiveFl()));
+    }
+
+    /**
+     * Whether {@code entity} is still the un-initialised bootstrap account of the core seed:
+     * status {@code PENDING} and exactly the seed's placeholder hash. Only such an account may
+     * receive the configured bootstrap password; once it has a real hash (or any other status) it
+     * is never touched again, so the bootstrap property cannot overwrite a password later.
+     */
+    public static boolean awaitsBootstrapPassword(User entity) {
+        return STATUS_PENDING.equals(entity.getStatusCode())
+            && BOOTSTRAP_PASSWORD_PLACEHOLDER.equals(entity.getPasswordHash());
     }
 
     /**

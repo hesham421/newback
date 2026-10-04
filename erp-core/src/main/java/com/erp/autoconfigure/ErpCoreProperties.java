@@ -64,6 +64,16 @@ public class ErpCoreProperties {
          * needs a valid bearer token. Setting this replaces the whole list.
          */
         private List<String> publicPaths = new ArrayList<>(DEFAULT_PUBLIC_PATHS);
+
+        /**
+         * Password for the seeded bootstrap {@code admin} account. The core seed ships that account
+         * with no usable password (status {@code PENDING}); when this property is set, the
+         * {@code BootstrapAdminPasswordRunner} sets it as the admin's password and activates the
+         * account on the first start. Ignored once the account has been initialised (a later
+         * change of the property never overwrites a password). Optional: without it the admin
+         * account stays unusable.
+         */
+        private String bootstrapAdminPassword;
     }
 
     /** Access-token (JWT) settings. */

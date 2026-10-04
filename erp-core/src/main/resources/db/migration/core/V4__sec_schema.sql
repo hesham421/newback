@@ -1,23 +1,20 @@
 -- ============================================================
--- V16 — Security (SEC) — full module schema (ground-up rebuild)
+-- V4 — Security (SEC) — schema: the 13 SEC_* tables
 -- Source: governance/modules/SEC/P2/db-script-sec.md §3 FULL_DATABASE_SCRIPT (BLOCK 1..7)
 -- Target: POSTGRESQL_16 | 13 tables, 13 sequences | 104 DBF-IDs | 0 XM (SEC is ROOT)
--- Replaces the legacy SEC schema dropped by V14 (V2/V3 are never edited — forward-fix only).
--- Schema only — no seed data (SEC-BE phase owns the SEC self-registration seed).
--- Flyway wraps this migration in its own transaction (no explicit COMMIT — matches every earlier migration).
+-- Squashed in erp-core step 04 from: old V13__sec_schema.sql (the final SEC shape; the legacy
+--   SEC schema of old V2, dropped again by old V12, is gone and never created). DDL unchanged.
+-- Seed data: V7__sec_seed.sql.
 --
--- DEVIATION from db-script §3 BLOCK 1/2/3 (deliberate, decided at DATA-DOM-MASTER):
---   the db-script declares every PK as `GENERATED ALWAYS AS IDENTITY` with "BLOCK 1 — none".
---   This repo's entity contract mandates GenerationType.SEQUENCE + @SequenceGenerator
---   (build-create-entity A.1.3/A.1.4; GenerationType.IDENTITY is an automatic rejection
---   trigger), and every other module here (CU/NOTIF/FILE, and the old SEC V2) uses explicit
---   SEQ_<TABLE> sequences. PK columns are therefore plain BIGINT NOT NULL, fed by the
---   sequences created in BLOCK 1 below. Every table/column/constraint/index name is otherwise
---   verbatim from the db-script.
+-- Deviation from the db-script (shared by every core schema script): the db-script declares
+-- every PK as `GENERATED ALWAYS AS IDENTITY`. The entity contract mandates
+-- GenerationType.SEQUENCE + @SequenceGenerator (build-create-entity A.1.3/A.1.4), so PK columns
+-- are plain BIGINT NOT NULL fed by the SEQ_<TABLE> sequences in BLOCK 1. Every
+-- table/column/constraint/index name is otherwise verbatim from the db-script.
 -- ============================================================
 
 -- ============================================================
--- BLOCK 1: SEQUENCES (one per table; SEQ_<TABLE>, matching V1/V2/V6/V8 style)
+-- BLOCK 1: SEQUENCES (one per table; SEQ_<TABLE>, the style of every core schema script)
 -- ============================================================
 CREATE SEQUENCE SEQ_SEC_USER              START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
 CREATE SEQUENCE SEQ_SEC_ROLE              START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;

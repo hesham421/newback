@@ -1,9 +1,10 @@
 -- ============================================================
--- V6 — Notification Service (NOTIF) — full module schema
+-- V6 — Notification Service (NOTIF) — schema: NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG, NOTIF_LOG
 -- Source: governance/modules/NOTIF/P2/db-script.md SECTION 4 (FULL_DATABASE_SCRIPT), DBS-NOTIF-001
 -- Target: POSTGRESQL_16 | 3 tables, 3 sequences | 25 DBF-IDs, 2 SOFT-READ XM (SEC, FILE)
--- Schema only — NO seed data (LOV-NOTIF-001/002 are runtime-loaded codes; no MD_MASTER_LOOKUP).
--- Flyway wraps this migration in its own transaction (no explicit COMMIT — matches every earlier migration).
+-- Squashed in erp-core step 04 from: old V4__notif_schema.sql (unchanged DDL).
+-- Seed data: V9__notif_seed.sql (channel config + templates); NOTIF's lookup values
+--   (NOTIF_CHANNEL, NOTIF_STATUS) live in MDL (V8__mdl_seed.sql).
 -- ============================================================
 
 -- ============================================================

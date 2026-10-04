@@ -482,7 +482,7 @@ class SecCoverageIntegrationTest extends AbstractIntegrationTest {
         return userRepository.save(user);
     }
 
-    /** Looks up an ActionRegistry row seeded by V14__sec_security_seed.sql by its permission code. */
+    /** Looks up an ActionRegistry row seeded by V7__sec_seed.sql by its permission code. */
     private void grantExistingSeededPermission(Role role, String permissionCode) {
         Specification<ActionRegistry> byPermissionCode =
             (root, query, cb) -> cb.equal(root.get("permissionCode"), permissionCode);

@@ -13,8 +13,11 @@ import org.springframework.context.annotation.Bean;
 /**
  * Puts the core migration chain ({@value #CORE_LOCATION}) in front of whatever Flyway locations the
  * application configured ({@code spring.flyway.locations}, default {@code classpath:db/migration}),
- * so an application keeps that property for its own scripts. Version ranges (core {@code V1..V999},
- * applications {@code V1000+}) are enforced in step 04.
+ * so an application keeps that property for its own scripts. Flyway sorts the locations and drops
+ * one nested in another (it scans recursively), so with the default {@code classpath:db/migration}
+ * the core folder is found through its parent. Scripts are applied in version order whatever their
+ * location: core owns {@code V1..V999} and applications {@code V1000+} (see the folder's
+ * {@code README.md}; the core side is enforced by {@code MigrationNamingTest}).
  */
 @AutoConfiguration(before = FlywayAutoConfiguration.class)
 @ConditionalOnClass(Flyway.class)

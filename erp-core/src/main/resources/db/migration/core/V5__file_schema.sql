@@ -1,9 +1,9 @@
 -- ============================================================
--- V8 — File Service (FILE) — full module schema
+-- V5 — File Service (FILE) — schema: FILE_CATEGORY, FILE_DOCUMENT
 -- Source: governance/modules/FILE/P2/db-script.md SECTION 4 (FULL_DATABASE_SCRIPT), DBS-FILE-001
 -- Target: POSTGRESQL_16 | 2 tables, 2 sequences | 18 DBF-IDs, 1 SOFT-READ XM (SEC)
--- Schema only — NO seed data (LOV-FILE-001/002 are runtime-loaded codes; no MD_MASTER_LOOKUP).
--- Flyway wraps this migration in its own transaction (no explicit COMMIT — matches V1..V7).
+-- Squashed in erp-core step 04 from: old V6__file_schema.sql (unchanged DDL).
+-- Schema only — FILE's lookup values (FILE_FILE_STATUS, FILE_FILE_TYPE) live in MDL (V8__mdl_seed.sql).
 -- ============================================================
 
 -- ============================================================
