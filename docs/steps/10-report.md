@@ -24,7 +24,7 @@ One cross-module, tenant-scoped audit store, `CORE_AUDIT_EVENT`, now exists. Any
 - **Entity listener.** `AuditedEntityListener` handles Hibernate `POST_INSERT`, `POST_UPDATE` and `POST_DELETE`. It is registered by `AuditHibernateConfiguration`, a `HibernatePropertiesCustomizer` that sets `hibernate.integrator_provider` to an Integrator, which appends the listener to the `EventListenerRegistry`.
   - It writes CREATE, UPDATE (changed fields only; nothing if no recordable field changed) and DELETE rows.
   - It never records: the `ignore` fields, the global denylist (`password, secret, token, hash` plus `credential, apikey, privatekey, salt`), the audit columns, `version`, `tenantId`, collections and binary values.
-- **Annotated entities:** `User` (ignores `passwordHash` and `lastLoginAt`), `Role`, `Tenant`, `FileDocument`, `FileCategory`, `NotificationTemplate`, `LookupType`, `LookupValue`, `AppConfiguration`. `NumberSeries` comes with step 09.
+- **Annotated entities:** `User` (ignores `passwordHash` and `lastLoginAt`), `Role`, `Tenant`, `FileDocument`, `FileCategory`, `NotificationTemplate`, `LookupType`, `LookupValue`, `AppConfiguration` and, since the rebase onto step 09, `NumberSeries` (ignores `nextValue`).
 - **SEC.** `SEC_AUDIT_LOG` stays unchanged. SEC additionally writes:
   - `LOGIN` for staff and customer logins;
   - `LOGOUT` for staff;
@@ -149,6 +149,38 @@ Failed attempt on the way (fixed):
   assertion is untouched.
 ```
 
+## Rebase onto 09
+
+Rebased onto `main` at `c627305`, which contains the step 09 merge `71542d3`.
+
+**Conflicts and resolutions** (both steps' behaviour kept, step 09 first):
+- `ErpCoreAutoConfiguration.CORE_PACKAGE_LIST`: `..., com.erp.events, com.erp.sequence, com.erp.audit`.
+- `cu/entity/AppConfiguration`: step 09's `@Table(name = "CU_APP_CONFIGURATION")` (its unique is now an expression index), plus `@Audited`.
+- `i18n/messages*.properties`, `docs/DEVIATIONS.md`, `db/migration/core/README.md`: the 09 block, then the 10 block (V14 row, then V15).
+- `CrossModuleBoundaryArchTest`: the `sequence` module, then the `audit` module. Step 09's new rule is kept.
+- `TenantSchemaIntegrationTest`: 22 `tenant_id` columns (09's 21 + `CORE_AUDIT_EVENT`) and 21 tenant entities (09's 20 + `AuditEvent`). Unique constraints stay 14. Confirmed by the run.
+- `ErpCoreAutoConfigurationTest`: the package list ends with `com.erp.sequence`, `com.erp.audit`.
+- `PermissionCatalogIntegrationTest`: step 09's skip of its not-seeded authorities and screens, plus the `com.erp.audit` contributor exclusion. Counts 41/18 unchanged.
+- `ReferenceApplicationSmokeTest`: Flyway `2..15, 1000`.
+- `ErpCoreProperties` merged without conflicts.
+
+**Changes made after the rebase:**
+- **`NumberSeries`** gets `@Audited(entityType = "CORE_NUMBER_SERIES", ignore = {"nextValue"})`.
+  - Configuration changes are audited; number allocation is not.
+  - Without the ignore, every `NumberSeriesApi.next` would add an UPDATE row.
+  - `nextValue` cannot be edited after creation, so no admin change is lost.
+- **`AppConfiguration` is now global**, with `TENANT_ID` NULL for a platform default. No code change was needed: the listener takes the row tenant only from `AuditableEntity`, so settings writes are recorded under the acting tenant, and a platform default written by the PLATFORM tenant is recorded in tenant 1. `CORE_AUDIT_EVENT.TENANT_ID` stays NOT NULL.
+- **New and changed coverage cases** in `AuditedEntitiesCoverageIntegrationTest` (7 → 9 tests):
+  - `cuAppConfiguration_platformDefault_isRecordedUnderTheActingPlatformTenant`: `scope=PLATFORM` create, update and deactivate. The setting row has `TENANT_ID` NULL; its audit rows (CREATE, UPDATE, UPDATE `isActive`) have tenant 1.
+  - `cuAppConfiguration_tenantOverride`: also reads the value back through step 09's settings cache after the audited update. It returns the new value, so eviction is unaffected.
+  - `sequenceNumberSeries_configIsAudited_allocationIsNot`: CREATE plus an UPDATE of `prefix`. Two `next()` calls write no further row.
+- **Test isolation.** The MDL, NOTIF, CU-override and sequence cases run in the test's own provisioned tenant, because tenant provisioning copies PLATFORM's lookup types, templates and number series.
+- **`docs/DEVIATIONS.md`:** the `[10]` Task 3 entry now names all ten entities, and three `[10]` rebase entries were added (20 `[10]` entries in all).
+
+**Verification after the rebase:** `rm -rf target erp-core/target erp-app-reference/target; mvn -o -q verify` returned EXIT=0 in 207 s.
+- erp-core: 316 tests, 0 failures, 0 errors, 0 skipped.
+- erp-app-reference: 9 tests, 0 failures, 0 errors, 0 skipped.
+
 ## Skills checked
 
 - **`build-create-entity`:** `AuditEvent` is compliant except named items.
@@ -177,11 +209,8 @@ Failed attempt on the way (fixed):
 
 ## Notes for later steps
 
-- **Rebase onto step 09.**
-  - Annotate `NumberSeries` with `@Audited(entityType = "<its table>")` and add a create/update case to `AuditedEntitiesCoverageIntegrationTest`. If 09's settings entity is the step's `AppConfiguration`, it is already annotated.
-  - Smoke-test Flyway list → `..., "13", "14", "15", "1000"`.
-  - `TenantSchemaIntegrationTest` counts → 09's numbers + 1.
-  - If 09 adds a `PermissionContributor` that no migration seeds, exclude it in `PermissionCatalogIntegrationTest` the same way.
+- **The rebase onto step 09 is done** (see "Rebase onto 09").
+- **Allocating numbers with `NumberSeriesApi.next` writes no audit row.** Audit the document that receives the number instead.
 - **Auditing new entities (apps, Phase 4).** Annotate an entity with `@Audited(entityType = "TABLE", ignore = {...})`. Explicit facts (approvals, status changes, exports) go through `AuditApi.record(AuditEntry.builder().action(...)...)`, inside the business transaction.
 - **Tests that create reference data in PLATFORM** (lookup types, templates, channels) change what newly provisioned tenants receive. Create them in your own provisioned tenant instead.
 - **The audit row of a global entity** (`CORE_TENANT`) belongs to the acting tenant.

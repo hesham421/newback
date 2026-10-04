@@ -1,5 +1,6 @@
 package com.erp.sequence.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import com.erp.sequence.domain.ResetPolicy;
 import jakarta.persistence.Column;
@@ -37,6 +38,7 @@ import lombok.experimental.SuperBuilder;
  * code; the service keeps them in step.
  */
 @Entity
+@Audited(entityType = "CORE_NUMBER_SERIES", ignore = {"nextValue"})
 @Table(name = "CORE_NUMBER_SERIES",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_CORE_NUMBER_SERIES_CODE_PERIOD", columnNames = {"TENANT_ID", "CODE", "PERIOD_KEY"})

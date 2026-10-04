@@ -172,6 +172,10 @@ final class AuditHttp {
         return send(authorized(json(path), token).PUT(body(jsonBody)));
     }
 
+    HttpResponse<String> delete(String token, String path) {
+        return send(authorized(json(path), token).DELETE());
+    }
+
     HttpResponse<String> patch(String token, String path, String jsonBody) {
         return send(authorized(json(path), token).method("PATCH", body(jsonBody)));
     }

@@ -2,6 +2,8 @@ package com.erp.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.erp.sequence.crossmodule.NumberSeriesApi;
+import com.erp.tenant.TenantContext;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.net.http.HttpResponse;
@@ -20,8 +22,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * (and, where its API allows, updated) over HTTP and its {@code CREATE} (and {@code UPDATE}) row is
  * asserted. After each test the whole table is scanned for sensitive field names.
  *
- * <p>{@code NumberSeries} (named by the step) belongs to step 09, which is not merged on this branch;
- * it gets its annotation and its row here when step 10 is rebased onto step 09.
+ * <p>Since the rebase onto step 09 this includes {@code NumberSeries} (number allocation itself is not
+ * audited: {@code nextValue} is ignored) and both scopes of {@code AppConfiguration}, which step 09 made a
+ * global entity whose platform defaults carry {@code TENANT_ID NULL}.
  */
 class AuditedEntitiesCoverageIntegrationTest extends AbstractIntegrationTest {
 
@@ -31,6 +34,8 @@ class AuditedEntitiesCoverageIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbc;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private NumberSeriesApi numberSeriesApi;
 
     private AuditHttp http;
     private String token;
@@ -150,15 +155,64 @@ class AuditedEntitiesCoverageIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void cuAppConfiguration() {
+    void cuAppConfiguration_tenantOverride() {
+        String tenantToken = ownTenantToken();
         String key = "audit.coverage." + AuditHttp.unique("k").toLowerCase();
-        HttpResponse<String> created = http.post(token, "/api/v1/common/configurations",
+        HttpResponse<String> created = http.post(tenantToken, "/api/v1/common/configurations",
             "{\"configKey\":\"" + key + "\",\"configValue\":\"one\"}");
         AuditHttp.expect(created, 201, "create configuration");
         long id = AuditHttp.id(created, "$.data.id");
-        AuditHttp.expect(http.put(token, "/api/v1/common/configurations/" + key,
+        AuditHttp.expect(http.put(tenantToken, "/api/v1/common/configurations/" + key,
             "{\"configValue\":\"two\"}"), 200, "update configuration");
         assertCreateAndUpdate("CU_APP_CONFIGURATION", id, List.of("configValue"));
+        assertThat(AuditRows.of(jdbc, "CU_APP_CONFIGURATION", id))
+            .allSatisfy(row -> assertThat(row).containsEntry("tenant_id", ownTenantId));
+        // the override is read through the step-09 settings cache: the audited write still evicts it
+        HttpResponse<String> read = http.get(tenantToken, "/api/v1/common/configurations/" + key);
+        AuditHttp.expect(read, 200, "read configuration");
+        assertThat(JsonPath.<String>read(read.body(), "$.data.configValue")).isEqualTo("two");
+    }
+
+    @Test
+    void cuAppConfiguration_platformDefault_isRecordedUnderTheActingPlatformTenant() {
+        String key = "audit.coverage.platform." + AuditHttp.unique("k").toLowerCase();
+        HttpResponse<String> created = http.post(token, "/api/v1/common/configurations?scope=PLATFORM",
+            "{\"configKey\":\"" + key + "\",\"configValue\":\"one\"}");
+        AuditHttp.expect(created, 201, "create platform default");
+        long id = AuditHttp.id(created, "$.data.id");
+        assertThat(jdbc.queryForObject("SELECT tenant_id FROM cu_app_configuration WHERE id = ?", Long.class, id))
+            .as("platform default row").isNull();
+        AuditHttp.expect(http.put(token, "/api/v1/common/configurations/" + key + "?scope=PLATFORM",
+            "{\"configValue\":\"two\"}"), 200, "update platform default");
+        AuditHttp.expect(http.delete(token, "/api/v1/common/configurations/" + key + "?scope=PLATFORM"),
+            204, "deactivate platform default");
+
+        // TENANT_ID NULL on the setting, PLATFORM (1) on its audit rows; the deactivation is an UPDATE
+        assertThat(AuditRows.of(jdbc, "CU_APP_CONFIGURATION", id)).extracting(row -> row.get("action"))
+            .containsExactly("CREATE", "UPDATE", "UPDATE");
+        assertThat(AuditRows.of(jdbc, "CU_APP_CONFIGURATION", id))
+            .allSatisfy(row -> assertThat(row).containsEntry("tenant_id", 1L));
+        assertThat(AuditRows.changedFields(AuditRows.of(jdbc, "CU_APP_CONFIGURATION", id, "UPDATE").get(1)))
+            .containsExactly("isActive");
+    }
+
+    @Test
+    void sequenceNumberSeries_configIsAudited_allocationIsNot() {
+        String tenantToken = ownTenantToken();
+        String code = AuditHttp.unique("COV_SER_");
+        HttpResponse<String> created = http.post(tenantToken, "/api/v1/sequence/series",
+            "{\"code\":\"" + code + "\",\"prefix\":\"INV\",\"pattern\":\"{PREFIX}-{SEQ:5}\",\"resetPolicy\":\"NEVER\"}");
+        AuditHttp.expect(created, 201, "create number series");
+        long id = AuditHttp.id(created, "$.data.id");
+        AuditHttp.expect(http.put(tenantToken, "/api/v1/sequence/series/" + id,
+            "{\"prefix\":\"FAC\",\"pattern\":\"{PREFIX}-{SEQ:5}\"}"), 200, "update number series");
+        assertCreateAndUpdate("CORE_NUMBER_SERIES", id, List.of("prefix"));
+
+        // consuming numbers changes only nextValue (ignored): no further audit row
+        String first = TenantContext.callAs(ownTenantId, () -> numberSeriesApi.next(code));
+        String second = TenantContext.callAs(ownTenantId, () -> numberSeriesApi.next(code));
+        assertThat(List.of(first, second)).containsExactly("FAC-00001", "FAC-00002");
+        assertThat(AuditRows.of(jdbc, "CORE_NUMBER_SERIES", id)).hasSize(2);
     }
 
     private String ownTenantToken() {
