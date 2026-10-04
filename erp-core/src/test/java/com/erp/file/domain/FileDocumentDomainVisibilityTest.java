@@ -40,6 +40,28 @@ class FileDocumentDomainVisibilityTest {
     }
 
     @Test
+    void isInlineSafe_onlyRasterImagesAndPdf_neverHtmlOrSvg() {
+        for (String safe : new String[] {"image/png", "IMAGE/JPEG", "image/gif", "image/webp", "image/avif",
+                "image/bmp", "application/pdf", "image/png; charset=binary"}) {
+            assertThat(FileDocumentDomain.isInlineSafe(safe)).as(safe).isTrue();
+        }
+        for (String unsafe : new String[] {"text/html", "image/svg+xml", "application/xml", "text/xml",
+                "application/javascript", "text/plain", "application/octet-stream", "", null}) {
+            assertThat(FileDocumentDomain.isInlineSafe(unsafe)).as(String.valueOf(unsafe)).isFalse();
+        }
+    }
+
+    @Test
+    void isPubliclyServable_requiresPublicSlugActiveAndAllowingCategory() {
+        assertThat(FileDocumentDomain.isPubliclyServable("PUBLIC", "s", "ACTIVE", true)).isTrue();
+        assertThat(FileDocumentDomain.isPubliclyServable("PRIVATE", null, "ACTIVE", true)).isFalse();
+        assertThat(FileDocumentDomain.isPubliclyServable("PUBLIC", "s", "ARCHIVED", true)).isFalse();
+        assertThat(FileDocumentDomain.isPubliclyServable("PUBLIC", "s", "DELETED", true)).isFalse();
+        assertThat(FileDocumentDomain.isPubliclyServable("PUBLIC", "s", "ACTIVE", false)).isFalse();
+        assertThat(FileDocumentDomain.isPubliclyServable("PUBLIC", "s", "ACTIVE", null)).isFalse();
+    }
+
+    @Test
     void entityHelpers_publishSetsSlugAndVisibility_unpublishClearsBoth_newDocumentsArePrivate() {
         FileDocument document = document(FileDocumentDomain.STATUS_ACTIVE);
         assertThat(document.getVisibility()).isEqualTo(FileDocumentDomain.VISIBILITY_PRIVATE);

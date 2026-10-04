@@ -42,11 +42,14 @@ public class PublicFileUrls {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /** The public URL of {@code view} in the current tenant, or empty unless it is PUBLIC and not deleted. */
+    /**
+     * The public URL of {@code view} in the current tenant, or empty unless the public endpoint would
+     * actually serve it ({@link FileDocumentDomain#isPubliclyServable}: PUBLIC, ACTIVE, category allows
+     * public files).
+     */
     public Optional<String> of(FileMetadataView view) {
-        if (view == null || !FileDocumentDomain.VISIBILITY_PUBLIC.equals(view.getVisibility())
-                || view.getPublicSlug() == null
-                || FileDocumentDomain.STATUS_DELETED.equals(view.getFileStatusId())) {
+        if (view == null || !FileDocumentDomain.isPubliclyServable(view.getVisibility(), view.getPublicSlug(),
+                view.getFileStatusId(), view.getCategoryAllowPublic())) {
             return Optional.empty();
         }
         Optional<String> direct = storageProviders.forKey(view.getStorageProvider()).publicUrl(view.getStorageRef());

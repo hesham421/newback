@@ -107,6 +107,9 @@ abstract class AbstractFileStorageIntegrationTest extends AbstractIntegrationTes
         assertThat(anonymous.headers().firstValue("Cache-Control")).hasValue("max-age=86400, public");
         assertThat(anonymous.headers().firstValue("ETag")).hasValue("\"" + sha256(content) + "\"");
         assertThat(anonymous.headers().firstValue("Content-Type")).hasValue("image/png");
+        assertThat(anonymous.headers().firstValue("Content-Disposition").orElseThrow()).startsWith("inline;");
+        assertThat(anonymous.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
+        assertThat(anonymous.headers().firstValue("Content-Security-Policy")).hasValue("sandbox; default-src 'none'");
 
         // Publishing again keeps the URL stable.
         HttpResponse<String> again = http.setVisibility(platformToken, id, "PUBLIC");
@@ -174,6 +177,54 @@ abstract class AbstractFileStorageIntegrationTest extends AbstractIntegrationTes
         assertThat(http.anonymousGet(url).statusCode()).isEqualTo(200);
         jdbcTemplate.update("update file_document set file_status_id = 'ARCHIVED' where id = ?", id);
         assertThat(http.anonymousGet(url).statusCode()).isEqualTo(404);
+        // no URL is handed out that would answer 404
+        assertThat((Object) JsonPath.read(http.get(platformToken, "/api/v1/files/" + id).body(), "$.data.publicUrl"))
+            .isNull();
+    }
+
+    /** Review round 1: no tenant can host active content (HTML, SVG) on the platform origin. */
+    @Test
+    void publicHtmlAndSvg_areServedAsAttachments_withCspAndNosniff_whilePngStaysInline() {
+        long category = http.createCategory(platformToken, FileHttp.unique("PUB_"), true);
+        byte[] html = "<html><body><script>alert(document.domain)</script></body></html>".getBytes(StandardCharsets.UTF_8);
+        byte[] svg = ("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"></svg>")
+            .getBytes(StandardCharsets.UTF_8);
+        long htmlId = http.uploadOk(platformToken, category, "x.html", html);
+        long svgId = http.uploadOk(platformToken, category, "x.svg", svg);
+        long pngId = http.uploadOk(platformToken, category, "x.png", FileHttp.png("inline"));
+
+        for (long id : new long[] {htmlId, svgId}) {
+            String url = JsonPath.read(http.setVisibility(platformToken, id, "PUBLIC").body(), "$.data.publicUrl");
+            HttpResponse<byte[]> response = http.anonymousGet(url);
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                .startsWith(id == htmlId ? "text/html" : "application/xml");
+            assertThat(response.headers().firstValue("Content-Disposition").orElseThrow())
+                .as("disposition of %s", url).startsWith("attachment;");
+            assertThat(response.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
+            assertThat(response.headers().firstValue("Content-Security-Policy")).hasValue("sandbox; default-src 'none'");
+        }
+        String pngUrl = JsonPath.read(http.setVisibility(platformToken, pngId, "PUBLIC").body(), "$.data.publicUrl");
+        assertThat(http.anonymousGet(pngUrl).headers().firstValue("Content-Disposition").orElseThrow()).startsWith("inline;");
+    }
+
+    /** Review round 1: the public path is GET/HEAD only, and publicUrl is withdrawn with the category's policy. */
+    @Test
+    void publicPath_otherMethodsNeedAuthentication_andPublicUrlFollowsTheCategoryPolicy() {
+        long category = http.createCategory(platformToken, FileHttp.unique("PUB_"), true);
+        long id = http.uploadOk(platformToken, category, "e.png", FileHttp.png("policy"));
+        String url = JsonPath.read(http.setVisibility(platformToken, id, "PUBLIC").body(), "$.data.publicUrl");
+
+        assertThat(http.anonymous("HEAD", url).statusCode()).isEqualTo(200);
+        assertThat(http.anonymous("POST", url).statusCode()).isEqualTo(401);
+        assertThat(http.anonymous("DELETE", url).statusCode()).isEqualTo(401);
+
+        HttpResponse<String> closed = http.put(platformToken, "/api/v1/files/categories/" + category,
+            "{\"nameAr\":\"x\",\"nameEn\":\"closed\",\"allowPublic\":false}");
+        assertThat(closed.statusCode()).isEqualTo(200);
+        assertThat(http.anonymousGet(url).statusCode()).isEqualTo(404);
+        assertThat((Object) JsonPath.read(http.get(platformToken, "/api/v1/files/" + id).body(), "$.data.publicUrl"))
+            .isNull();
     }
 
     @Test

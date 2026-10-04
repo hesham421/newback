@@ -168,6 +168,15 @@ final class FileHttp {
         return send(authorized(json(path), token).POST(body(jsonBody)));
     }
 
+    HttpResponse<String> put(String token, String path, String jsonBody) {
+        return send(authorized(json(path), token).PUT(body(jsonBody)));
+    }
+
+    /** A request with an arbitrary method and no token or tenant header. */
+    HttpResponse<String> anonymous(String method, String path) {
+        return send(HttpRequest.newBuilder(URI.create(baseUrl + path)).method(method, HttpRequest.BodyPublishers.noBody()));
+    }
+
     static String errorCode(HttpResponse<String> response) {
         return JsonPath.read(response.body(), "$.error.code");
     }

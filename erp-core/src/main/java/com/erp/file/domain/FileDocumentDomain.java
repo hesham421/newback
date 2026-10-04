@@ -73,6 +73,37 @@ public final class FileDocumentDomain {
         }
     }
 
+    /**
+     * erp-core step 07 — content types a public file may be rendered {@code inline} with: raster images
+     * and PDF. Everything else (HTML, SVG, XML, JavaScript, text, ...) is served as an
+     * {@code attachment}, so no tenant can host active content on the platform origin. SVG is
+     * deliberately absent (it can carry script).
+     */
+    public static final Set<String> INLINE_SAFE_CONTENT_TYPES = Set.of(
+        "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp",
+        "application/pdf");
+
+    /** Whether a public file of this content type may be served inline (parameters such as charset ignored). */
+    public static boolean isInlineSafe(String contentType) {
+        if (contentType == null) {
+            return false;
+        }
+        int semicolon = contentType.indexOf(';');
+        String base = (semicolon >= 0 ? contentType.substring(0, semicolon) : contentType).trim().toLowerCase(java.util.Locale.ROOT);
+        return INLINE_SAFE_CONTENT_TYPES.contains(base);
+    }
+
+    /**
+     * erp-core step 07 — whether the public URL of a document actually serves it: PUBLIC with a slug,
+     * ACTIVE, and in a category that (still) allows public files. The public lookup query applies the
+     * same conditions, so no URL is handed out that would answer 404.
+     */
+    public static boolean isPubliclyServable(String visibility, String publicSlug, String fileStatusId,
+                                             Boolean categoryAllowPublic) {
+        return VISIBILITY_PUBLIC.equals(visibility) && publicSlug != null
+            && STATUS_ACTIVE.equals(fileStatusId) && Boolean.TRUE.equals(categoryAllowPublic);
+    }
+
     public String getCurrentStatus() {
         return currentStatus;
     }

@@ -96,10 +96,12 @@ public class FileService {
 
     /**
      * Public file payload (erp-core step 07): either a {@code redirectUrl} (the provider serves the
-     * content directly) or the content stream with its metadata; {@code etag} is the quoted content hash.
+     * content directly) or the content stream with its metadata; {@code etag} is the quoted content hash;
+     * {@code inline} is true only for the safe content types of
+     * {@link FileDocumentDomain#INLINE_SAFE_CONTENT_TYPES} (everything else is an attachment).
      */
     public record PublicFile(String redirectUrl, InputStream content, Long size, String contentType,
-                             String fileName, String etag) {
+                             String fileName, String etag, boolean inline) {
     }
 
     /** API-FILE-001 — upload: validate ownership → resolve limits → detect+enforce type → enforce size → store ACTIVE. */
@@ -355,10 +357,10 @@ public class FileService {
         String etag = view.getContentHash() != null ? "\"" + view.getContentHash() + "\"" : null;
         Optional<String> direct = provider.publicUrl(view.getStorageRef());
         if (direct.isPresent()) {
-            return new PublicFile(direct.get(), null, null, null, null, etag);
+            return new PublicFile(direct.get(), null, null, null, null, etag, false);
         }
         return new PublicFile(null, provider.get(view.getStorageRef()), view.getFileSize(),
-            view.getContentType(), view.getFileName(), etag);
+            view.getContentType(), view.getFileName(), etag, FileDocumentDomain.isInlineSafe(view.getContentType()));
     }
 
     /**

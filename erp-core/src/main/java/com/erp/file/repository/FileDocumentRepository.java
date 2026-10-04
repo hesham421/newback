@@ -32,7 +32,8 @@ public interface FileDocumentRepository
         + "f.fileCategoryFk.id AS fileCategoryId, f.createdAt AS createdAt, f.createdBy AS createdBy, "
         + "f.updatedAt AS updatedAt, f.updatedBy AS updatedBy, f.storageProvider AS storageProvider, "
         + "f.storageRef AS storageRef, f.visibility AS visibility, f.publicSlug AS publicSlug, "
-        + "f.contentHash AS contentHash FROM FileDocument f";
+        + "f.contentHash AS contentHash, c.allowPublic AS categoryAllowPublic "
+        + "FROM FileDocument f LEFT JOIN f.fileCategoryFk c";
 
     /** Alias of the content column in {@link #findContentTupleById}. */
     String CONTENT_ALIAS = "content";
@@ -75,7 +76,7 @@ public interface FileDocumentRepository
      * lifecycle status, and in a category that (still) allows public files. Bytes excluded.
      */
     @Query(METADATA_SELECT + " WHERE f.publicSlug = :slug AND f.visibility = :visibility "
-        + "AND f.fileStatusId = :status AND f.fileCategoryFk.allowPublic = true")
+        + "AND f.fileStatusId = :status AND c.allowPublic = true")
     Optional<Tuple> findPublicMetadataTupleBySlug(@Param("slug") String slug,
                                                   @Param("visibility") String visibility,
                                                   @Param("status") String status);

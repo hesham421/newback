@@ -47,8 +47,10 @@ authentication at a stable, shareable URL. Private download keeps its single-use
   - A category without `ALLOW_PUBLIC` (or no category) → 409 `FILE_PUBLIC_NOT_ALLOWED`, decided
     by `FileDocumentDomain.assertCanBePublic`.
 - **`GET /api/v1/public/files/{tenantCode}/{publicSlug}`** (`PublicFileController`):
-  - Answers 302 to the provider URL when the provider has one; otherwise streams the content.
-  - Headers: `Cache-Control: max-age=86400, public` and `ETag: "<sha256>"`.
+  - Answers 302 to the provider URL when the provider has one; otherwise streams the content —
+    `inline` only for raster images and PDF, `attachment` for everything else (review round 1).
+  - Headers: `Cache-Control: max-age=86400, public`, `ETag: "<sha256>"`,
+    `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`.
   - Only a PUBLIC, ACTIVE document in a category that allows public files is served; anything
     else is 404.
   - The tenant comes from the path: `TenantResolutionFilter` gained path-based resolution
@@ -60,8 +62,8 @@ authentication at a stable, shareable URL. Private download keeps its single-use
 - **i18n.** `FILE_PUBLIC_NOT_ALLOWED` and `FILE_STORAGE_UNAVAILABLE`, in EN and AR (own block at the
   end of each bundle).
 
-`mvn -q verify` is green:
-- erp-core: 142 tests (111 pre-existing with unchanged assertions, plus 31 new);
+`mvn -q verify` is green (after review round 1):
+- erp-core: 148 tests (111 pre-existing with unchanged assertions, plus 37 new);
 - erp-app-reference: 8 tests (7 existing, one of them with an adapted expected list, plus 1 new).
 
 ## Files changed
@@ -114,7 +116,7 @@ authentication at a stable, shareable URL. Private download keeps its single-use
 - `erp-app-reference/src/test/java/com/erp/app/ReferenceApplicationSmokeTest.java`:
   - Flyway list `2..10, 12, 1000`;
   - new `publicFilePathNeedsNoTokenOrTenantHeader`.
-- `docs/DEVIATIONS.md`: 16 `[07]` entries.
+- `docs/DEVIATIONS.md`: 16 `[07]` entries + 5 review-round-1 entries.
 
 **Deleted**: none.
 
@@ -155,19 +157,48 @@ These mirror the 16 `[07]` entries in `docs/DEVIATIONS.md`:
 15. **Smoke test.** The Flyway list now includes `12`, and one test was added.
 16. **The manual acceptance ran on the reference jar** against a native PostgreSQL scratch DB.
 
+## Review round 1 fixes
+
+Finding 1 (blocking, anonymous stored XSS via public files) and three notes, fixed in commit
+`step(07): review round 1 fixes — safe inline types, CSP/nosniff on public files, GET-only public path`:
+
+- **Safe inline types.** `FileDocumentDomain.INLINE_SAFE_CONTENT_TYPES` (png, jpeg, gif, webp, avif,
+  bmp, pdf — no SVG) + `isInlineSafe`. `FileService.openPublic` sets `PublicFile.inline`;
+  `PublicFileController` uses `inline` only then, otherwise `attachment`. Unsafe types may still be
+  published (chosen over refusing; recorded).
+- **Headers.** Every public answer (200 and 302) carries `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: sandbox; default-src 'none'`.
+- **Redirect path.** Direct provider URLs are outside our headers — documented in DEVIATIONS (serve the
+  CDN on a separate origin with its own headers).
+- **GET/HEAD only.** `ErpCoreSecurityAutoConfiguration` permits only `GET` and `HEAD` on
+  `PUBLIC_FILE_PATHS`; other methods → 401 anonymous.
+- **No 404 URLs handed out.** `PublicFileUrls.of` now uses `FileDocumentDomain.isPubliclyServable`
+  (PUBLIC + slug, ACTIVE, category allows public) — the same conditions as the public lookup. The
+  metadata select `LEFT JOIN`s the category (`categoryAllowPublic` on `FileMetadataView` and the entity).
+- **S3 risk** (shared key layout, whole-bucket exposure reveals private objects, unpublish does not
+  revoke a direct URL) recorded in DEVIATIONS.
+- **Tests added** (per provider, DB and LOCAL):
+  `publicHtmlAndSvg_areServedAsAttachments_withCspAndNosniff_whilePngStaysInline` (HTML → `text/html`
+  attachment, SVG → `application/xml` attachment, both with nosniff + CSP; PNG inline) and
+  `publicPath_otherMethodsNeedAuthentication_andPublicUrlFollowsTheCategoryPolicy` (HEAD 200, POST/DELETE
+  401; category switched to `allowPublic=false` → public GET 404 and metadata `publicUrl` null); the
+  publish test now asserts `inline`, nosniff and CSP; the archived test asserts `publicUrl` null.
+  Unit: `isInlineSafe_onlyRasterImagesAndPdf_neverHtmlOrSvg`, `isPubliclyServable_...`.
+
 ## Acceptance checklist
 
 3/3 ✅
 
 - ✅ **Tests are green for both providers, and the app starts with `erp.core.files.storage=LOCAL` and a temp root.**
-  - `DbStorageFileIntegrationTest` 7/7 and `LocalStorageFileIntegrationTest` 7/7, each covering:
+  - `DbStorageFileIntegrationTest` 9/9 and `LocalStorageFileIntegrationTest` 9/9 (after review round 1), each covering:
     - upload → private download via token;
     - single-use token;
     - publish → anonymous GET with bytes, `Cache-Control` and ETag;
     - unpublish → 404;
     - a category without `ALLOW_PUBLIC`, or no category → 409;
     - tenant B can neither publish A's document nor read it by slug;
-    - the failure paths.
+    - the failure paths;
+    - HTML/SVG served as attachments with nosniff + CSP, PNG inline; GET/HEAD-only path (round 1).
   - The S3 provider has a fake-`S3Client` unit test (3/3).
   - The reference jar started on port 1807 with `--erp.core.files.storage=LOCAL --erp.core.files.local.root=<scratch dir>`: "Started ReferenceApplication in 19.014 seconds"; Flyway applied V2..V10 and V12.
   - With a missing root the startup fails: `erp.core.files.local.root must be an existing, writable directory`.
@@ -180,6 +211,15 @@ These mirror the 16 `[07]` entries in `docs/DEVIATIONS.md`:
 
 ```
 $ java -version → openjdk 21.0.7
+$ rm -rf target erp-core/target erp-app-reference/target; mvn -q verify     (review round 1)
+EXIT=0 secs=158
+com.erp.file.DbStorageFileIntegrationTest                          9 0 0 0   (+2 round 1)
+com.erp.file.LocalStorageFileIntegrationTest                       9 0 0 0   (+2 round 1)
+com.erp.file.domain.FileDocumentDomainVisibilityTest               5 0 0 0   (+2 round 1)
+erp-core tests=148 failures=0 errors=0 skipped=0
+erp-app-reference tests=8 failures=0 errors=0 skipped=0
+
+--- initial submission (before review round 1):
 $ rm -rf target erp-core/target erp-app-reference/target; mvn -q verify
 EXIT=0 secs=154
 (earlier runs fixed: BootstrapAdminPasswordIntegrationTest counted 'admin' across tenants -> test tenant admin
@@ -285,6 +325,10 @@ $ dropdb erp_s07_app; select count(*) from pg_database where datname like 'erp_s
   - New keys need a migration that widens `CHK_FILE_DOCUMENT_STORAGE_PROVIDER`.
   - LOCAL content is not deleted on soft delete (RULE-FILE-006). There is no purge job yet.
 - **Storefront.** Create category `PRODUCT_IMAGE` with `allowPublic=true`, upload into it, then `PATCH /api/v1/files/{id}/visibility {"visibility":"PUBLIC"}`. Use `data.publicUrl`, or `FileDocumentLookupApi.publicUrl(id)` from another module.
+- **Public file safety.** Public content is inline only for raster images/PDF and always carries
+  nosniff + `sandbox` CSP; keep that when step 06's chain takes over the path (the headers are set by
+  `PublicFileController`, not by the chain). A CDN origin used via `s3.public-base-url` must be a
+  separate domain with its own headers.
 - **Path-tenant mechanism.** It is generic. Any future public URL that carries `{tenantCode}` can be added to `erp.core.tenant.path-tenant-paths`, and the property list must keep the public files default.
 - **S3 behind a CDN.** Objects are written without an ACL, and keys contain the document id and file name. If `s3.public-base-url` exposes the whole bucket, private objects are reachable by key too. Restrict public exposure to the bucket/CDN side, or add a public prefix later.
 - **Tests.** FILE tests run before `com.erp.sec`. Never provision test tenants with admin username `admin`, because some SEC tests count `admin` rows across tenants.

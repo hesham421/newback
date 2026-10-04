@@ -25,6 +25,7 @@ import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -130,7 +131,8 @@ public class ErpCoreSecurityAutoConfiguration {
                 if (publicPaths.length > 0) {
                     auth.requestMatchers(publicPaths).permitAll();
                 }
-                auth.requestMatchers(PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
+                auth.requestMatchers(HttpMethod.GET, PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
+                auth.requestMatchers(HttpMethod.HEAD, PUBLIC_FILE_PATHS).permitAll();
                 auth.anyRequest().authenticated();
             })
             .exceptionHandling(handling -> handling

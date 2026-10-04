@@ -147,6 +147,12 @@ public class FileDocument extends AuditableEntity implements FileMetadataView {
         this.publicSlug = null;
     }
 
+    /** {@link FileMetadataView#getCategoryAllowPublic()} — the category's public policy; null without a category. */
+    @Override
+    public Boolean getCategoryAllowPublic() {
+        return fileCategoryFk != null ? fileCategoryFk.getAllowPublic() : null;
+    }
+
     /** {@link FileMetadataView#getFileCategoryId()} — flattens the to-one FK to its id for the shared mapper. */
     @Override
     public Long getFileCategoryId() {
