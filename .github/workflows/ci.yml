@@ -1,0 +1,190 @@
+name: ci
+
+# erp-core step 12 — build, test and publish.
+#   build-test        every push to main, every pull request, every v* tag: `mvn verify` on JDK 21 with
+#                     the tests forced onto Testcontainers (Docker is available on GitHub-hosted runners),
+#                     the ArchUnit rules, the enforcer rules and the erp-core JaCoCo gate (>= 60 % lines).
+#   docker-image      builds the reference application's image (erp-app-reference/Dockerfile).
+#   publish           v* tags only: deploys com.erp:erp-platform (parent pom) and com.erp:erp-core (jar +
+#                     test-jar) to this repository's GitHub Packages registry with the job's GITHUB_TOKEN.
+#   consume-published after publish: checks out ONLY erp-app-reference (no root pom, no erp-core sources),
+#                     resolves the parent pom and erp-core:<tag version> from GitHub Packages and runs the
+#                     reference application's tests — proves the published jar works outside the reactor.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+    env:
+      # Force the Testcontainers backend (docs/steps/02-report.md): without Docker the tests fail instead
+      # of silently falling back to the embedded PostgreSQL that developers use on Docker-less machines.
+      ERP_TEST_DB: testcontainers
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Docker is available for Testcontainers
+        run: docker version --format 'Docker server {{.Server.Version}}'
+
+      - name: mvn verify (tests, ArchUnit, enforcer, JaCoCo gate)
+        run: mvn -B -q verify
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/'
+          if-no-files-found: warn
+
+      - name: Upload JaCoCo report (erp-core)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-erp-core
+          path: erp-core/target/site/jacoco/
+          if-no-files-found: warn
+
+  docker-image:
+    name: docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the reference application image
+        run: docker build -f erp-app-reference/Dockerfile -t erp-app-reference:${{ github.sha }} .
+
+  publish:
+    name: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-test, docker-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          # settings.xml <server id="github"> = <distributionManagement> id in the root pom
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: The tag matches the project version
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          POM_VERSION="$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$TAG_VERSION" != "$POM_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the project version $POM_VERSION"
+            exit 1
+          fi
+          echo "version=$POM_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy erp-core (+ parent pom and test-jar) to GitHub Packages
+        # -DskipTests (not -Dmaven.test.skip): the test classes are still compiled, so the erp-core
+        # test-jar (TestPostgres + TestcontainersPostgresConfiguration) is attached and published.
+        run: mvn -B -q -pl erp-core -am deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  consume-published:
+    name: consume-published
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      ERP_TEST_DB: testcontainers
+    steps:
+      - name: Check out erp-app-reference only
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            erp-app-reference/
+          sparse-checkout-cone-mode: false
+
+      - name: The reactor is not here
+        run: |
+          test ! -e pom.xml || { echo "::error::root pom.xml was checked out"; exit 1; }
+          test ! -e erp-core || { echo "::error::erp-core was checked out"; exit 1; }
+          ls -la
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          # no Maven cache: nothing from an earlier job may stand in for the published artifact
+
+      - name: settings.xml for GitHub Packages (read)
+        run: |
+          mkdir -p ~/.m2
+          rm -rf ~/.m2/repository/com/erp
+          cat > ~/.m2/settings.xml <<'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.GITHUB_TOKEN}</password>
+              </server>
+            </servers>
+            <profiles>
+              <profile>
+                <id>github</id>
+                <repositories>
+                  <repository>
+                    <id>github</id>
+                    <url>https://maven.pkg.github.com/hesham421/newback</url>
+                    <snapshots><enabled>false</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>github</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
+
+      - name: Build and test erp-app-reference against the published erp-core
+        run: mvn -B -q -f erp-app-reference/pom.xml verify -Derp.core.version="${{ needs.publish.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: erp-core came from GitHub Packages
+        run: |
+          VERSION="${{ needs.publish.outputs.version }}"
+          ls ~/.m2/repository/com/erp/erp-core/"$VERSION"/
+          grep -l "maven.pkg.github.com\|github" ~/.m2/repository/com/erp/erp-core/"$VERSION"/_remote.repositories
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consume-published-surefire-reports
+          path: erp-app-reference/target/surefire-reports/
+          if-no-files-found: warn

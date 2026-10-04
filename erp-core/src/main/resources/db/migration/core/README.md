@@ -35,6 +35,10 @@ No core script renames or drops a table or column, changes a column type, or edi
 existing script (Flyway checksums applied scripts). A mistake is fixed forward by a new script.
 Each plan step reserves its version numbers (e.g. step 05 = `V10`, step 06 = `V11`, ...).
 
+Since erp-core step 12 this is a build failure, not a convention: `MigrationNamingTest`
+(`com.erp.architecture`) rejects any core script after `V9` that contains `DROP TABLE`, `DROP COLUMN`,
+`RENAME` or `ALTER [COLUMN] <col> [SET DATA] TYPE` (comments and string literals are ignored).
+
 The only exceptions ever made are the two the step-05 plan itself sanctions inside
 `V10__tenant_schema.sql`: dropping the temporary `DEFAULT 1` of every `TENANT_ID` after the backfill,
 and replacing each unique constraint of a tenant-scoped table by its composite `(TENANT_ID, ...)` form

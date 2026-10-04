@@ -14,7 +14,7 @@
 
     <groupId>com.erp</groupId>
     <artifactId>erp-platform</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
 
     <name>ERP Platform</name>
@@ -52,6 +52,12 @@
         <!-- Default: allow forking on non-Windows environments (see the windows-tests-no-fork
              profile below). -->
         <surefire.forkCount>1</surefire.forkCount>
+
+        <!-- erp-core step 12: line-coverage gate of erp-core (jacoco-maven-plugin, see erp-core/pom.xml). -->
+        <jacoco.version>0.8.13</jacoco.version>
+        <!-- Empty default so surefire's "@{argLine} ..." resolves in modules without the JaCoCo agent;
+             jacoco:prepare-agent replaces it with the agent argument where it runs. -->
+        <argLine></argLine>
     </properties>
 
     <dependencyManagement>
@@ -155,6 +161,21 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- erp-core step 12, task 12: `mvn deploy` (CI, on a v* tag) publishes to this repository's GitHub
+         Packages registry. The <server> id `github` carries the credentials (CI: GITHUB_TOKEN). -->
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages (hesham421/newback)</name>
+            <url>https://maven.pkg.github.com/hesham421/newback</url>
+        </repository>
+        <snapshotRepository>
+            <id>github</id>
+            <name>GitHub Packages (hesham421/newback)</name>
+            <url>https://maven.pkg.github.com/hesham421/newback</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -184,12 +205,20 @@
                     <!-- JUnit 5 via spring-boot-starter-test; -Dtest= filtering works. reuseForks keeps
                          one JVM for all test classes of a module, so the per-JVM test database
                          (com.erp.testsupport.TestPostgres) is started once and Spring's context cache
-                         is shared. On Windows the profile below runs in-process (forkCount=0). -->
+                         is shared. On Windows the profile below runs in-process (forkCount=0); since step 12 both
+                         modules override it with forkCount=1 (erp-core: JaCoCo agent). -->
                     <configuration>
                         <forkCount>${surefire.forkCount}</forkCount>
                         <reuseForks>true</reuseForks>
-                        <argLine>-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</argLine>
+                        <argLine>@{argLine} -XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</argLine>
                     </configuration>
+                </plugin>
+
+                <!-- erp-core step 12: coverage (bound in erp-core/pom.xml only) -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -217,6 +246,22 @@
                                         Point JAVA_HOME at a JDK 21+ install and retry.
                                     </message>
                                 </requireJavaVersion>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                    <!-- erp-core step 12, task 8: dependency hygiene. A dependency declared twice in one
+                         pom, or a transitive version lower than another path requires, fails the build.
+                         Conflicts are resolved with <dependencyManagement> pins, never by disabling. -->
+                    <execution>
+                        <id>enforce-dependency-hygiene</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <banDuplicatePomDependencyVersions/>
+                                <requireUpperBoundDeps/>
                             </rules>
                             <fail>true</fail>
                         </configuration>
