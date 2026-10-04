@@ -1,5 +1,6 @@
 package com.erp.sec.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -26,6 +27,7 @@ import lombok.experimental.SuperBuilder;
  * lifecycle hooks, excluded from the update request.
  */
 @Entity
+@Audited(entityType = "SEC_ROLE")
 @Table(name = "SEC_ROLE",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_SEC_ROLE_CODE", columnNames = {"TENANT_ID", "CODE"})

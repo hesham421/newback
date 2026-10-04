@@ -1,5 +1,6 @@
 package com.erp.file.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import com.erp.file.domain.FileDocumentDomain;
 import com.erp.file.repository.FileMetadataView;
@@ -41,6 +42,7 @@ import lombok.experimental.SuperBuilder;
  * document may become PUBLIC is decided in FileDocumentDomain.
  */
 @Entity
+@Audited(entityType = "FILE_DOCUMENT")
 @Table(name = "FILE_DOCUMENT",
     indexes = {
         @Index(name = "IDX_FILE_DOCUMENT_OWNER", columnList = "OWNER_ID, OWNER_TYPE, MODULE_CODE"),

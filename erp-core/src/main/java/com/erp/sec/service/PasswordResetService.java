@@ -1,5 +1,6 @@
 package com.erp.sec.service;
 
+import com.erp.audit.crossmodule.AuditApi;
 import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
@@ -83,6 +84,8 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final NotificationDispatchApi notificationDispatchApi;
     private final DomainEventPublisher eventPublisher;
+    // erp-core step 10 — PASSWORD_RESET also goes to the generic audit log (one timeline)
+    private final AuditApi auditApi;
 
     /**
      * The base of the UI that hosts the reset screen ({@code erp.core.frontend.base-url}) and the
@@ -140,6 +143,8 @@ public class PasswordResetService {
             .detailsAr("تم إتمام إعادة تعيين كلمة المرور")
             .detailsEn("Password reset completed")
             .build());
+        auditApi.record(SecAuditEntries.accountEvent(AuditApi.ACTION_PASSWORD_RESET, user,
+            "تم إتمام إعادة تعيين كلمة المرور", "Password reset completed", null));
 
         log.info("Password reset completed for User ID: {}", user.getUserPk());
 

@@ -1,5 +1,6 @@
 package com.erp.mdl.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,6 +31,7 @@ import lombok.experimental.SuperBuilder;
  * inventing one here would not trace to any SRS/db-script source.
  */
 @Entity
+@Audited(entityType = "MDL_LOOKUP_TYPE")
 @Table(name = "MDL_LOOKUP_TYPE",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_MDL_LOOKUP_TYPE_KEY", columnNames = {"TENANT_ID", "KEY"})

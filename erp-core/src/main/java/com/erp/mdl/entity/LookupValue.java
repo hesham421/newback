@@ -1,5 +1,6 @@
 package com.erp.mdl.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,6 +35,7 @@ import lombok.experimental.SuperBuilder;
  * hint; neither is upper-cased in the lifecycle hooks (no normalization rule is given).
  */
 @Entity
+@Audited(entityType = "MDL_LOOKUP_VALUE")
 @Table(name = "MDL_LOOKUP_VALUE",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_MDL_LOOKUP_VALUE_TYPE_CODE", columnNames = {"TENANT_ID", "LOOKUP_TYPE_ID", "CODE"})

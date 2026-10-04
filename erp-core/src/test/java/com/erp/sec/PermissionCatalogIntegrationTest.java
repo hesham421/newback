@@ -103,8 +103,12 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void coreContributors_reproduceTheSeededCatalog_rowForRow() {
+        // erp-core step 10: com.erp.audit's contributor declares a catalog that no migration seeds (the
+        // step's "seed permission via contributor instead"), so it is outside this seeded-catalog check;
+        // AuditApiIntegrationTest asserts the synchronizer wrote its row.
         List<PermissionDef> core = contributors.stream()
             .filter(c -> c.getClass().getName().startsWith("com.erp.") && !c.getClass().getName().contains("Test"))
+            .filter(c -> !c.getClass().getName().startsWith("com.erp.audit."))
             .flatMap(c -> c.permissions().stream())
             .filter(def -> !NOT_SEEDED_AUTHORITIES.contains(def.authority()))
             .toList();
@@ -137,6 +141,7 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         // every seeded screen (18, including SEC's three public screens) is declared with its seeded names
         List<PermissionScreen> screens = contributors.stream()
             .filter(c -> !c.getClass().getName().contains("Test"))
+            .filter(c -> !c.getClass().getName().startsWith("com.erp.audit."))
             .flatMap(c -> c.screens().stream())
             .filter(screen -> !NOT_SEEDED_SCREENS.contains(screen.screenCode())).toList();
         assertThat(screens).hasSize(18);

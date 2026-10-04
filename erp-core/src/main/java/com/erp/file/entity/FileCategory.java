@@ -1,5 +1,6 @@
 package com.erp.file.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.converter.BooleanNumberConverter;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
@@ -29,6 +30,7 @@ import lombok.experimental.SuperBuilder;
  * by RULE-FILE-001/002. Persistence-only; the uniqueness decision lives in FileCategoryDomain.
  */
 @Entity
+@Audited(entityType = "FILE_CATEGORY")
 @Table(name = "FILE_CATEGORY",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_FILE_CATEGORY_CATEGORY_CODE", columnNames = {"TENANT_ID", "CATEGORY_CODE"})

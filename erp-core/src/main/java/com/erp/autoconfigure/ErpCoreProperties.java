@@ -44,6 +44,9 @@ public class ErpCoreProperties {
 
     private final Notif notif = new Notif();
 
+    // erp-core step 10 — generic audit log
+    private final Audit audit = new Audit();
+
     /** Authentication settings. */
     @Getter
     @Setter
@@ -345,5 +348,23 @@ public class ErpCoreProperties {
             /** Delay between two runs when the application has scheduling enabled, in milliseconds. */
             private long intervalMs = 60_000L;
         }
+    }
+
+    /** Generic audit log settings (erp-core step 10). */
+    @Getter
+    @Setter
+    public static class Audit {
+
+        /**
+         * {@code AuditRetentionJob} deletes {@code CORE_AUDIT_EVENT} rows older than this many days;
+         * {@code 0} (the default) keeps every row forever.
+         */
+        private int retentionDays = 0;
+
+        /**
+         * Cron of the job's own {@code @Scheduled} trigger, which fires only in an application that
+         * enables scheduling; {@code -} (the default) disables it.
+         */
+        private String retentionCron = "-";
     }
 }

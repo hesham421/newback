@@ -1,5 +1,6 @@
 package com.erp.sec.service;
 
+import com.erp.audit.crossmodule.AuditApi;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
@@ -61,6 +62,8 @@ public class AuthService {
     private final JwtTokenIssuer jwtTokenIssuer;
     private final JwtTokenValidator jwtTokenValidator;
     private final ActiveSessionMapper activeSessionMapper;
+    // erp-core step 10 — LOGIN / LOGOUT also go to the generic audit log (one timeline)
+    private final AuditApi auditApi;
 
     /**
      * API-SEC-001. {@code noRollbackFor} keeps the LOGIN_FAILED row REQ-SEC-002 mandates: the 401
@@ -111,6 +114,8 @@ public class AuthService {
             .detailsEn("Successful login")
             .ipAddress(ipAddress)
             .build());
+        auditApi.record(SecAuditEntries.accountEvent(AuditApi.ACTION_LOGIN, user,
+            "تسجيل دخول ناجح", "Successful login", ipAddress));
 
         log.info("Login succeeded for User ID: {}", user.getUserPk());
 
@@ -158,6 +163,8 @@ public class AuthService {
                 .detailsEn("Signed out")
                 .ipAddress(ipAddress)
                 .build());
+            auditApi.record(SecAuditEntries.accountEvent(AuditApi.ACTION_LOGOUT, user,
+                "تسجيل خروج", "Signed out", ipAddress));
             log.info("Terminated ActiveSession ID: {} on logout", session.getActiveSessionPk());
         }
 

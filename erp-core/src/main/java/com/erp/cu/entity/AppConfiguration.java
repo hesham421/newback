@@ -1,5 +1,6 @@
 package com.erp.cu.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.converter.BooleanNumberConverter;
 import com.erp.common.domain.GlobalAuditableEntity;
 import jakarta.persistence.Column;
@@ -34,6 +35,7 @@ import lombok.experimental.SuperBuilder;
  * {@code @UniqueConstraint} cannot express.
  */
 @Entity
+@Audited(entityType = "CU_APP_CONFIGURATION")
 @Table(name = "CU_APP_CONFIGURATION")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
 public class AppConfiguration extends GlobalAuditableEntity {

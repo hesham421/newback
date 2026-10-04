@@ -1,5 +1,6 @@
 package com.erp.notif.entity;
 
+import com.erp.audit.crossmodule.Audited;
 import com.erp.common.converter.BooleanNumberConverter;
 import com.erp.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
@@ -29,6 +30,7 @@ import lombok.experimental.SuperBuilder;
  * to FILE (no FK — XM-NOTIF-002). Persistence-only; decisions live in NotificationTemplateDomain.
  */
 @Entity
+@Audited(entityType = "NOTIF_TEMPLATE")
 @Table(name = "NOTIF_TEMPLATE",
     uniqueConstraints = {
         @UniqueConstraint(name = "UQ_NOTIF_TEMPLATE_CODE", columnNames = {"TENANT_ID", "TEMPLATE_CODE"})
