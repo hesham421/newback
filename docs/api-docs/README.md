@@ -7,7 +7,7 @@ code or its annotations and regenerate.
 
 | | |
 |---|---|
-| Generated | 2026-10-05 |
+| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day) |
 | Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference` **1.1.0-SNAPSHOT**, profile `dev`. That is erp-core **1.0.0** with no unreleased changes. OpenAPI `info.version` reads `v0`. |
 | Generator | `erp-app-reference/governance/governance-tools/api-doc-generator` (unchanged), driven by `_tools/generate_all.py` |
 | Operations | **105** (86 paths) |
@@ -39,6 +39,13 @@ Notes:
   in `notif/`. `/api/v1/customers/me` and `/api/v1/public/customers/**` are in `sec/`.
 - `app/` documents `POST /api/v1/sec/dev/password-reset-token`. This is a dev-profile test fixture of the
   reference app, not part of erp-core.
+- The public file `GET /api/v1/public/files/{tenantCode}/{publicSlug}` (HEAD is served by the same mapping)
+  needs no token. Its "Not required" comes from the `@SecurityRequirements` opt-out on
+  `PublicFileController.get`, which this regeneration added.
+- The inbox endpoints (`/api/v1/notif/inbox/**`, `/api/v1/customers/me/inbox/**`) and the public file endpoint
+  have no Business Responses section and no Authorization rule. Their controllers map routes with constants or
+  path arrays, which the generator's route matcher cannot read. For example, `INBOX_ITEM_NOT_FOUND` (404 on
+  `PATCH .../inbox/{id}/read`) is listed only as unbound in `notif/index.md`.
 - No contract ids are stamped. The generator reads them from a governance execution plan, and none is used
   here.
 
@@ -52,7 +59,8 @@ python docs/api-docs/_tools/generate_all.py --function review     # what would c
 python docs/api-docs/_tools/generate_all.py --function update     # write only what changed (or: generate)
 python docs/api-docs/_tools/generate_all.py --function check      # generator assertions per module
 python docs/api-docs/_tools/check_completeness.py                 # every operation in exactly one folder
-# other server: add --base http://host:port to either script
+# other server: add --base http://host:port to either script; to generate from an instance on another
+# port without changing the published server, also pass --server-url http://localhost:7272 to generate_all.py
 ```
 
 `_tools/generate_all.py` does the following:

@@ -122,14 +122,20 @@ def filtered(spec: dict, owner: dict, module: str) -> dict:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # docs carry Arabic and em dashes; a cp1256 console would crash
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default="http://localhost:7272")
     ap.add_argument("--function", default="generate", choices=["generate", "update", "review", "check"])
+    ap.add_argument("--server-url", help="Publish this URL as the document's server instead of the one springdoc "
+                    "derived from the request (use http://localhost:7272, the reference app's default port, "
+                    "when generating from an instance on another port)")
     args = ap.parse_args()
 
     with urllib.request.urlopen(f"{args.base}/v3/api-docs", timeout=60) as r:
         spec = json.loads(r.read().decode("utf-8"))
     owner = assign(spec)
+    if args.server_url:
+        spec["servers"] = [{"url": args.server_url, "description": "Generated server url"}]
 
     bundles = sorted((REPO / "erp-core" / "src" / "main" / "resources" / "i18n").glob("messages*.properties"))
     migrations = [d for d in (REPO / "erp-core" / "src" / "main" / "resources" / "db" / "migration",

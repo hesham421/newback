@@ -26,6 +26,7 @@ HEADING = re.compile(r"^## (GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE) (/\S*)
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # docs carry Arabic and em dashes; a cp1256 console would crash
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:7272")
     args = ap.parse_args()

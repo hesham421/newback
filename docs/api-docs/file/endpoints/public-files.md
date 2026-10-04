@@ -11,7 +11,7 @@ Operation ID: `get`
 
 **Authentication**
 
-Required (bearerAuth).
+Not required.
 
 **Authorization**: not extracted — no controller method matching this route was found in the module source.
 

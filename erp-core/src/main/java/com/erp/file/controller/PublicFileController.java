@@ -4,6 +4,7 @@ import com.erp.file.service.FileService;
 import com.erp.file.service.PublicFileUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -52,6 +53,7 @@ public class PublicFileController {
     private final FileService service;
 
     @GetMapping("/{tenantCode}/{publicSlug}")
+    @SecurityRequirements // unauthenticated (PUBLIC_FILE_PATHS, GET and HEAD); clears the global bearer requirement
     @Operation(summary = "Get a public file (no authentication)", description = "جلب ملف عام دون مصادقة")
     public ResponseEntity<InputStreamResource> get(
             @Parameter(description = "Tenant code - رمز المستأجر", example = "ACME") @PathVariable String tenantCode,
