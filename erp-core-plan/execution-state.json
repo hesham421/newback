@@ -114,9 +114,9 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-03",
-      "attempts": 1,
+      "attempts": 2,
       "implementer_agent": "a4ad65f5255bec784",
       "reviewer_agent": "ade2fea7d515978b0",
       "review": {
@@ -554,6 +554,12 @@
       "step": "03",
       "event": "fix",
       "note": "round 1 findings relayed to implementer"
+    },
+    {
+      "at": "2026-10-04T15:30:40Z",
+      "step": "03",
+      "event": "reported",
+      "note": "round 1 fixes 261f9fb (repo/entity scan back-off + overlap collapse, +5 tests; core 60, app 4)"
     }
   ]
 }
