@@ -1038,6 +1038,12 @@
       "step": "12",
       "event": "fix",
       "note": "CI on main green (run 37239814860: build-test w/ Testcontainers on Docker 28.0.4 + docker-image). v1.0.0 tag predates fix; per RELEASE.md (no re-tag, PATCH for fixes) preparing v1.0.1 to run publish/consume"
+    },
+    {
+      "at": "2026-10-04T22:47:22Z",
+      "step": "12",
+      "event": "fix",
+      "note": "Phase D: api-verify 162/166; debate 13 items (3 blocking); agreed set -> fix branch step/14-api-verify (realm scope: staff user by-id+search+sessions+dashboard STAFF-only; NOTIF email resolution). Release v1.0.1 (58e9c51) held until fix merged"
     }
   ]
 }
