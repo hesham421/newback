@@ -16,6 +16,13 @@ public interface RecipientDirectory {
     boolean isActive(Long recipientId);
 
     /**
+     * erp-core step 14 — the recipient's account e-mail, used by dispatch to address an EMAIL when the
+     * dispatching module supplied no {@code email} variable. Empty for an unknown id or an account
+     * without an address.
+     */
+    Optional<String> emailOf(Long recipientId);
+
+    /**
      * erp-core step 08 — the recipient id of the authenticated caller, for the in-app inbox
      * ({@code /api/v1/notif/inbox}). Recipients of both realms (staff and customer) are
      * {@code SEC_USER} rows, so one id space serves both; empty when the caller is not a user account.

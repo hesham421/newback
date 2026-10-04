@@ -215,12 +215,11 @@ public class PasswordResetService {
      * own, so a failure inside it can never mark this transaction rollback-only and the
      * PasswordResetToken + audit rows still commit (the catch below is therefore effective).
      *
-     * <p>The recipient's {@code email} travels among the dispatch variables because that is NOTIF's
-     * published contract to callers: NOTIF's {@code EmailChannelProvider} reads the destination address
-     * from {@code variables.get("email")} "since NOTIF has no crossmodule contact-lookup for a bare
-     * recipientId", and returns {@code failure("missing recipient email address")} without it.
-     * ENT-SEC-001's {@code email} field is specified for exactly this — "used for password-reset
-     * delivery".
+     * <p>The recipient's {@code email} travels among the dispatch variables explicitly. Since erp-core
+     * step 14 NOTIF would fill it from the recipient's account itself, but only for a recipient its own
+     * transaction can see; this dispatch runs {@code REQUIRES_NEW}, so passing the address keeps the
+     * reset mail addressed regardless (an explicit {@code variables.email} always wins). ENT-SEC-001's
+     * {@code email} field is specified for exactly this — "used for password-reset delivery".
      */
     private void dispatchResetNotification(User user, PasswordResetToken token, String rawToken) {
         try {

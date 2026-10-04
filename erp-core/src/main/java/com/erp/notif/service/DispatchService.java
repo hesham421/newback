@@ -5,6 +5,7 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.events.DomainEventPublisher;
 import com.erp.events.NotificationRequestedEvent;
+import com.erp.notif.channel.NotifChannels;
 import com.erp.notif.crossmodule.RecipientDirectory;
 import com.erp.notif.domain.NotificationChannelConfigDomain;
 import com.erp.notif.domain.NotificationLogDomain;
@@ -19,7 +20,9 @@ import com.erp.notif.repository.NotificationChannelConfigRepository;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.notif.repository.NotificationTemplateRepository;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  * (RULE-NOTIF-007), then create one NOTIF_LOG per requested channel (RULE-NOTIF-001) — a
  * disabled/unconfigured channel becomes CHANNEL_DISABLED and is never delivered (RULE-NOTIF-003), an
  * enabled channel becomes QUEUED (its variables kept in VARIABLES_JSON) and a
- * {@link NotificationRequestedEvent} is published.
+ * {@link NotificationRequestedEvent} is published. An EMAIL row whose request carries no {@code email}
+ * variable gets the recipient's account e-mail from the recipient directory (erp-core step 14); an
+ * explicit {@code variables.email} always wins.
  *
  * <p>Nothing is sent here: {@link NotificationDeliveryListener} delivers each queued row asynchronously
  * after this transaction commits, through the channel's {@code ChannelProvider}, with Spring Retry
@@ -119,6 +124,7 @@ public class DispatchService {
         }
 
         String variablesJson = DispatchVariables.write(request.getVariables());
+        String emailVariablesJson = null;     // resolved once, only if an EMAIL row is queued
         List<Long> logIds = new ArrayList<>();
         for (String channelHint : request.getChannelHint()) {
             String channelTypeId = normalize(channelHint);
@@ -135,7 +141,14 @@ public class DispatchService {
             } else {
                 // erp-core step 08 — queue it; the asynchronous worker delivers it after commit.
                 transitionTo(logRow, NotificationLogDomain.STATUS_QUEUED);
-                logRow.setVariablesJson(variablesJson);
+                if (NotifChannels.EMAIL.equals(channelTypeId)) {
+                    if (emailVariablesJson == null) {
+                        emailVariablesJson = DispatchVariables.write(withRecipientEmail(request));
+                    }
+                    logRow.setVariablesJson(emailVariablesJson);
+                } else {
+                    logRow.setVariablesJson(variablesJson);
+                }
             }
             NotificationLog saved = logRepository.save(logRow);
             logIds.add(saved.getId());
@@ -146,6 +159,24 @@ public class DispatchService {
         }
 
         return ServiceResult.success(DispatchResponse.builder().logIds(logIds).build());
+    }
+
+    /**
+     * erp-core step 14 — the variables of an EMAIL row: the request's own, plus {@code email} from the
+     * recipient's account when the request supplied none (blank counts as none). An explicit
+     * {@code variables.email} is an override and is kept as is. When the directory knows no address
+     * either, the variables stay without it and the EMAIL provider rejects the row (FAILED, one attempt).
+     */
+    private Map<String, String> withRecipientEmail(DispatchRequest request) {
+        Map<String, String> variables = request.getVariables() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(request.getVariables());
+        String explicit = variables.get("email");
+        if (explicit == null || explicit.isBlank()) {
+            recipientDirectory.emailOf(request.getRecipientId())
+                .ifPresent(email -> variables.put("email", email));
+        }
+        return variables;
     }
 
     /** Builds a transient PENDING log for one channel (RULE-NOTIF-001 fan-out row). */
