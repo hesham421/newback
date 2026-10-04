@@ -330,9 +330,9 @@
         "V12__file_storage.sql"
       ],
       "touches_external_repos": false,
-      "status": "FIXING",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-07",
-      "attempts": 2,
+      "attempts": 3,
       "implementer_agent": "a49feaa002168f461",
       "reviewer_agent": "a0d63958cc103b106",
       "review": {
@@ -776,6 +776,12 @@
       "step": "08",
       "event": "fix",
       "note": "PASS round 1 pre-rebase; implementer rebasing onto main (06 merged) to resolve conflicts before merge (post-rebase re-verify by reviewer). Notes: requeue double-send under backlog; enable requeue in prod"
+    },
+    {
+      "at": "2026-10-04T18:28:07Z",
+      "step": "07",
+      "event": "reported",
+      "note": "fix round 1 + rebase onto 06 at 2e3bdae; core 177/app 8"
     }
   ]
 }
