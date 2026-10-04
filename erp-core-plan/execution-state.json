@@ -114,12 +114,17 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "FIXING",
       "worktree": ".worktrees/step-03",
       "attempts": 1,
       "implementer_agent": "a4ad65f5255bec784",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "ade2fea7d515978b0",
+      "review": {
+        "verdict": "FAIL",
+        "round": 1,
+        "evidence": "5/5 acceptance pass; blocking: core JPA repo registrar unconditional + no package-overlap collapse -> BeanDefinitionOverrideException when app declares @EnableJpaRepositories or sits in parent package (reproduced)",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/03-report.md",
       "deviations": [
@@ -543,6 +548,12 @@
       "step": "03",
       "event": "reported",
       "note": "implementer report b58e228, 5/5, core 55 + app 4 tests"
+    },
+    {
+      "at": "2026-10-04T15:22:04Z",
+      "step": "03",
+      "event": "fix",
+      "note": "round 1 findings relayed to implementer"
     }
   ]
 }
