@@ -185,6 +185,40 @@ Finding 1 (blocking, anonymous stored XSS via public files) and three notes, fix
   publish test now asserts `inline`, nosniff and CSP; the archived test asserts `publicUrl` null.
   Unit: `isInlineSafe_onlyRasterImagesAndPdf_neverHtmlOrSvg`, `isPubliclyServable_...`.
 
+## Rebase onto 06
+
+`git rebase main` (main = step 06 merged, `3016338`). Conflicts and resolutions:
+
+- `erp-core/src/main/java/com/erp/file/permission/FilePermissions.java` (add/add): took 06's contributor;
+  added `DOCUMENT_PUBLISH = "FILE:DOCUMENT:PUBLISH"` and its `PermissionDef` (explicit code, BROWSER
+  screen, action PUBLISH) so the synchronizer reproduces the V12 row (matched by code, same names).
+- `ReferenceApplicationSmokeTest.java`: Flyway list → `2..12, 1000`.
+- `db/migration/core/README.md`, `i18n/messages.properties`, `i18n/messages_ar.properties`,
+  `docs/DEVIATIONS.md`: both sides kept, 06 first, then 07.
+- `ErpCoreSecurityAutoConfiguration.java` (auto-merged, then reworked): the public file wiring moved
+  from the staff chain into 06's `@Order(90)` customer chain — `GET`/`HEAD` `permitAll` on
+  `PUBLIC_FILE_PATHS`, and the path in the public lists of that chain's `TenantResolutionFilter`
+  (with `path-tenant-paths`) and `RealmEnforcementFilter`; staff chain lines removed. Kept out of
+  `customer-public-paths` because that list is permitted for every method.
+
+Follow-ups: `PermissionCatalogIntegrationTest` 40 → 41 core actions (V12's action, verified row for
+row); `FileHttp` operator insert gains `REALM = 'STAFF'`; new test
+`publicFile_withCustomerTokens_isServedLikeAnonymous_andTheyCannotWriteToThePath` (same- and
+foreign-tenant customer tokens get 200 on the public URL, no `REALM_MISMATCH`; customer POST → 405;
+customer token on `/api/v1/files/{id}` → 403 `REALM_MISMATCH`). `TenantSchemaIntegrationTest` counts
+unchanged (19 / 14 / 19).
+
+```
+$ rm -rf target erp-core/target erp-app-reference/target; mvn -q verify     (after rebase onto 06)
+EXIT=0 secs=184
+com.erp.file.DbStorageFileIntegrationTest        10 0 0 0
+com.erp.file.LocalStorageFileIntegrationTest     10 0 0 0
+com.erp.sec.PermissionCatalogIntegrationTest      4 0 0 0
+com.erp.tenant.TenantSchemaIntegrationTest        4 0 0 0
+erp-core tests=177 failures=0 errors=0 skipped=0
+erp-app-reference tests=8 failures=0 errors=0 skipped=0
+```
+
 ## Acceptance checklist
 
 3/3 ✅
@@ -313,7 +347,7 @@ $ dropdb erp_s07_app; select count(*) from pg_database where datname like 'erp_s
 
 ## Notes for later steps
 
-- **Rebase onto step 06 (merges first).**
+- **Rebase onto step 06 — DONE** (see "Rebase onto 06"; the list below was the plan).
   1. Move `auth.requestMatchers(PUBLIC_FILE_PATHS).permitAll()` from `erpCoreSecurityFilterChain` into 06's `@Order(90)` customer/public chain. That chain's matcher `/api/v1/public/**` already covers the path.
   2. Make sure 06's chain runs `TenantResolutionFilter` built with `properties.getTenant().getPathTenantPaths()` (5-argument constructor). Without it a public file request has no tenant and fails with `TENANT_CONTEXT_MISSING`.
   3. `FilePermissions`: add/add conflict. Keep 06's class, add `DOCUMENT_PUBLISH = "FILE:DOCUMENT:PUBLISH"`, and contribute it. V12 already seeds and grants it; never edit V12.

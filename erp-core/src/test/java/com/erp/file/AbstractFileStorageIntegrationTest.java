@@ -268,6 +268,36 @@ abstract class AbstractFileStorageIntegrationTest extends AbstractIntegrationTes
             .statusCode()).isEqualTo(404);
     }
 
+    /**
+     * Rebase onto step 06: the public file path lives in the customer chain. A customer token — of the
+     * same or another tenant — is irrelevant there (no 403 REALM_MISMATCH), just like a staff token; a
+     * write to the path is never served (405).
+     */
+    @Test
+    void publicFile_withCustomerTokens_isServedLikeAnonymous_andTheyCannotWriteToThePath() {
+        long category = http.createCategory(platformToken, FileHttp.unique("PUB_"), true);
+        byte[] content = FileHttp.png("customer-" + FileHttp.unique("C"));
+        long id = http.uploadOk(platformToken, category, "f.png", content);
+        String url = JsonPath.read(http.setVisibility(platformToken, id, "PUBLIC").body(), "$.data.publicUrl");
+
+        String samePlatformCustomer = http.customerToken(jdbcTemplate, FileHttp.PLATFORM);
+        String codeB = FileHttp.unique("FC");
+        http.provisionTenant(platformToken, codeB);
+        String foreignCustomer = http.customerToken(jdbcTemplate, codeB);
+
+        for (String token : new String[] {samePlatformCustomer, foreignCustomer}) {
+            HttpResponse<byte[]> response = http.getWithToken(token, url);
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(content);
+        }
+        // a customer passes the chain's ROLE_CUSTOMER rule for non-GET methods, but there is no write handler
+        assertThat(http.post(samePlatformCustomer, url, "").statusCode()).isEqualTo(405);
+        // and the customer token is still refused on the staff file API
+        HttpResponse<String> staffApi = http.get(samePlatformCustomer, "/api/v1/files/" + id);
+        assertThat(staffApi.statusCode()).isEqualTo(403);
+        assertThat(FileHttp.errorCode(staffApi)).isEqualTo("REALM_MISMATCH");
+    }
+
     private HttpResponse<String> sendDelete(long id) {
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(

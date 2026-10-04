@@ -98,9 +98,9 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
             .filter(c -> c.getClass().getName().startsWith("com.erp.") && !c.getClass().getName().contains("Test"))
             .flatMap(c -> c.permissions().stream())
             .toList();
-        // V7: 38 actions of SEC/MDL/NOTIF/FILE/CU; V10: 2 PLATFORM actions
-        assertThat(core).hasSize(40);
-        assertThat(core.stream().map(PermissionDef::authority).collect(Collectors.toSet())).hasSize(40);
+        // V7: 38 actions of SEC/MDL/NOTIF/FILE/CU; V10: 2 PLATFORM actions; V12 (step 07): FILE:DOCUMENT:PUBLISH
+        assertThat(core).hasSize(41);
+        assertThat(core.stream().map(PermissionDef::authority).collect(Collectors.toSet())).hasSize(41);
 
         Set<String> seeded = Set.copyOf(jdbcTemplate.queryForList(
             "select a.permission_code from sec_action_reg a join sec_screen_reg s on s.screen_reg_pk = a.screen_id"

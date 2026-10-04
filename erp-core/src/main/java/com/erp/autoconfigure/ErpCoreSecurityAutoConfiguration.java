@@ -13,6 +13,7 @@ import com.erp.tenant.TenantContext;
 import com.erp.tenant.permission.TenantPermissions;
 import com.erp.tenant.repository.TenantRepository;
 import com.erp.tenant.security.TenantResolutionFilter;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.MessageSource;
@@ -88,10 +89,12 @@ public class ErpCoreSecurityAutoConfiguration {
     public static final String PLATFORM_TENANT_MANAGE_AUTHORITY = TenantPermissions.PLATFORM_TENANT_MANAGE;
 
     /**
-     * erp-core step 07 — the public file URLs ({@code PublicFileController}), always permitted without
-     * authentication. Their tenant comes from the path ({@code erp.core.tenant.path-tenant-paths}).
-     * Kept as one isolated constant + one matcher line so that step 06's customer/public chain can take
-     * it over with a minimal change.
+     * erp-core step 07 — the public file URLs ({@code PublicFileController}). Served by the customer
+     * chain (they lie under {@value #CUSTOMER_PUBLIC_API}), which permits them for {@code GET} and
+     * {@code HEAD} only, treats them as public for realm enforcement (any token, staff or customer, is
+     * irrelevant there) and resolves their tenant from the path ({@code erp.core.tenant.path-tenant-paths}).
+     * Not part of {@code erp.core.security.customer-public-paths}, because that list is permitted for
+     * every method.
      */
     public static final String PUBLIC_FILE_PATHS = "/api/v1/public/files/**";
 
@@ -120,8 +123,7 @@ public class ErpCoreSecurityAutoConfiguration {
         String[] publicPaths = properties.getSecurity().getPublicPaths().toArray(String[]::new);
         TenantResolutionFilter tenantResolutionFilter = new TenantResolutionFilter(
             tenantRepository::getObject, messageSource,
-            properties.getSecurity().getPublicPaths(), properties.getTenant().getExemptPaths(),
-            properties.getTenant().getPathTenantPaths());
+            properties.getSecurity().getPublicPaths(), properties.getTenant().getExemptPaths());
         http
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -131,8 +133,6 @@ public class ErpCoreSecurityAutoConfiguration {
                 if (publicPaths.length > 0) {
                     auth.requestMatchers(publicPaths).permitAll();
                 }
-                auth.requestMatchers(HttpMethod.GET, PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
-                auth.requestMatchers(HttpMethod.HEAD, PUBLIC_FILE_PATHS).permitAll();
                 auth.anyRequest().authenticated();
             })
             .exceptionHandling(handling -> handling
@@ -163,8 +163,13 @@ public class ErpCoreSecurityAutoConfiguration {
                                                                   MessageSource messageSource) throws Exception {
         List<String> customerPublicPaths = properties.getSecurity().getCustomerPublicPaths();
         String[] publicPaths = customerPublicPaths.toArray(String[]::new);
+        // erp-core step 07: the public file URLs are public for the filters too (no realm check, no
+        // TENANT_REQUIRED) and take their tenant from the path.
+        List<String> unauthenticatedPaths = new ArrayList<>(customerPublicPaths);
+        unauthenticatedPaths.add(PUBLIC_FILE_PATHS);
         TenantResolutionFilter tenantResolutionFilter = new TenantResolutionFilter(
-            tenantRepository::getObject, messageSource, customerPublicPaths, properties.getTenant().getExemptPaths());
+            tenantRepository::getObject, messageSource, unauthenticatedPaths, properties.getTenant().getExemptPaths(),
+            properties.getTenant().getPathTenantPaths());
         http
             .securityMatcher(CUSTOMER_PUBLIC_API, CUSTOMER_API)
             .csrf(AbstractHttpConfigurer::disable)
@@ -173,6 +178,8 @@ public class ErpCoreSecurityAutoConfiguration {
                 if (publicPaths.length > 0) {
                     auth.requestMatchers(publicPaths).permitAll();
                 }
+                auth.requestMatchers(HttpMethod.GET, PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
+                auth.requestMatchers(HttpMethod.HEAD, PUBLIC_FILE_PATHS).permitAll();
                 auth.anyRequest().hasAuthority(JwtAuthenticationFilter.ROLE_CUSTOMER);
             })
             .exceptionHandling(handling -> handling
@@ -180,7 +187,7 @@ public class ErpCoreSecurityAutoConfiguration {
                 .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
-            .addFilterAfter(new RealmEnforcementFilter(User.REALM_CUSTOMER, customerPublicPaths, securityErrorHandler),
+            .addFilterAfter(new RealmEnforcementFilter(User.REALM_CUSTOMER, unauthenticatedPaths, securityErrorHandler),
                 TenantResolutionFilter.class);
         return http.build();
     }

@@ -54,8 +54,8 @@ final class FileHttp {
     private static String createOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
         String username = "file-op-" + UUID.randomUUID().toString().substring(0, 8);
         jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
-                + " FULL_NAME_EN, STATUS_CODE, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
-                + " VALUES (nextval('SEQ_SEC_USER'), 1, ?, ?, ?, 'مشغل الملفات', 'File operator', 'ACTIVE', TRUE,"
+                + " FULL_NAME_EN, STATUS_CODE, REALM, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
+                + " VALUES (nextval('SEQ_SEC_USER'), 1, ?, ?, ?, 'مشغل الملفات', 'File operator', 'ACTIVE', 'STAFF', TRUE,"
                 + " 'test', now())",
             username, username + "@file.test", encoder.encode(PASSWORD));
         jdbc.update("INSERT INTO SEC_USER_ROLE (USER_ROLE_PK, TENANT_ID, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT)"
@@ -92,6 +92,29 @@ final class FileHttp {
         if (response.statusCode() != 201) {
             throw new AssertionError("create tenant " + code + " -> " + response.statusCode() + " " + response.body());
         }
+    }
+
+    /**
+     * A CUSTOMER-realm access token of {@code tenantCode}: registers over the public API, activates the
+     * account with JDBC (skipping the e-mail verification, which is step 06's own test), then logs in.
+     */
+    String customerToken(JdbcTemplate jdbc, String tenantCode) {
+        String email = "buyer." + UUID.randomUUID().toString().substring(0, 8) + "@shop.test";
+        HttpResponse<String> registered = send(json("/api/v1/public/customers/register")
+            .header(TenantConstants.TENANT_CODE_HEADER, tenantCode)
+            .POST(body("{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD + "\",\"fullName\":\"Buyer\"}")));
+        if (registered.statusCode() != 201) {
+            throw new AssertionError("register -> " + registered.statusCode() + " " + registered.body());
+        }
+        long id = ((Number) JsonPath.read(registered.body(), "$.data.id")).longValue();
+        jdbc.update("UPDATE SEC_USER SET STATUS_CODE = 'ACTIVE' WHERE USER_PK = ? AND REALM = 'CUSTOMER'", id);
+        HttpResponse<String> login = send(json("/api/v1/public/customers/login")
+            .header(TenantConstants.TENANT_CODE_HEADER, tenantCode)
+            .POST(body("{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD + "\"}")));
+        if (login.statusCode() != 200) {
+            throw new AssertionError("customer login -> " + login.statusCode() + " " + login.body());
+        }
+        return JsonPath.read(login.body(), "$.data.accessToken");
     }
 
     /** Creates an active file category and returns its id. */
