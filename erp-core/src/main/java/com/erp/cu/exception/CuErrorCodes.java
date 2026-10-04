@@ -28,7 +28,18 @@ public final class CuErrorCodes {
 
     /**
      * PLATFORM-STD (ERR-0004, DRV-001) — configKey not found. Thrown by every find-by-key path:
-     * getByKey, update, deactivate, and the internal getValue().
+     * getByKey, update and deactivate.
      */
     public static final String APP_CONFIGURATION_NOT_FOUND = "APP_CONFIGURATION_NOT_FOUND";
+
+    // --- erp-core step 09: typed, tenant-aware settings (SettingsApi) and the configuration scope ---
+
+    /** SettingsApi: the key has neither an active tenant override nor an active platform default. */
+    public static final String SETTING_NOT_FOUND = "SETTING_NOT_FOUND";
+
+    /** SettingsApi: the stored value cannot be read as the requested type (or the type is unsupported). */
+    public static final String SETTING_TYPE_MISMATCH = "SETTING_TYPE_MISMATCH";
+
+    /** scope=PLATFORM requested by a caller outside the PLATFORM tenant. */
+    public static final String SETTING_PLATFORM_SCOPE_FORBIDDEN = "SETTING_PLATFORM_SCOPE_FORBIDDEN";
 }

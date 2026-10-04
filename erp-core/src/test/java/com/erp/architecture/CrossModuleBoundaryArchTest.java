@@ -57,7 +57,9 @@ public class CrossModuleBoundaryArchTest {
             // erp-core step 08: the event bus's public surface is its ROOT package — DomainEvent,
             // DomainEventPublisher, ErpCoreEvents and the core event classes, which every module may
             // publish or listen to. com.erp.events.support (publisher impl, task decorator) is internal.
-            new Module("com.erp.events", "com.erp.events.crossmodule", "com.erp.events")
+            new Module("com.erp.events", "com.erp.events.crossmodule", "com.erp.events"),
+            // erp-core step 09: number series; public surface = com.erp.sequence.crossmodule (NumberSeriesApi)
+            new Module("com.erp.sequence", "com.erp.sequence.crossmodule")
     );
 
     /**
@@ -173,6 +175,28 @@ public class CrossModuleBoundaryArchTest {
         if (present) {
             throw new AssertionError("A shared permission constants class exists again: each module declares its own "
                     + "permissions through a com.erp.sec.permission.PermissionContributor");
+        }
+    }
+
+    /**
+     * erp-core step 09 acceptance — {@code NumberSeriesApi} and {@code SettingsApi} are interfaces in their
+     * modules' {@code crossmodule} packages, i.e. on the public surface the boundary rule above allows every
+     * other module to depend on (the sequence module itself consumes {@code tenant.crossmodule} the same way).
+     */
+    @ArchTest
+    static void step09_apis_are_crossmodule_interfaces_allowed_by_the_boundary_rule(JavaClasses classes) {
+        for (String api : List.of("com.erp.sequence.crossmodule.NumberSeriesApi", "com.erp.cu.crossmodule.SettingsApi")) {
+            JavaClass clazz = classes.get(api);
+            if (!clazz.isInterface()) {
+                throw new AssertionError(api + " must be an interface");
+            }
+            Module module = MODULES.stream()
+                    .filter(m -> clazz.getPackageName().startsWith(m.packagePrefix() + "."))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(api + " is not inside a bounded module"));
+            if (!JavaClass.Predicates.resideInAPackage(module.crossModulePackage() + "..").test(clazz)) {
+                throw new AssertionError(api + " is not in " + module.crossModulePackage());
+            }
         }
     }
 

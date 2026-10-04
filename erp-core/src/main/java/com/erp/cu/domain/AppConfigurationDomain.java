@@ -4,6 +4,9 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.cu.entity.AppConfiguration;
 import com.erp.cu.exception.CuErrorCodes;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Domain companion for ENTITY-CU-001 (AppConfiguration). Owns every "is this operation
@@ -51,6 +54,37 @@ public final class AppConfigurationDomain {
         if (configValue == null || configValue.isBlank()) {
             throw new LocalizedException(Status.VALIDATION_ERROR, CuErrorCodes.APP_CONFIGURATION_FIELDS_REQUIRED);
         }
+    }
+
+    /**
+     * erp-core step 09 — platform defaults ({@link SettingScope#PLATFORM}) may be read and written only
+     * from the PLATFORM tenant (the caller's authority is checked by the service's {@code @PreAuthorize};
+     * this is the tenant half of the rule).
+     */
+    public static void assertScopeAllowed(SettingScope scope, boolean callerIsPlatformTenant) {
+        if (scope == SettingScope.PLATFORM && !callerIsPlatformTenant) {
+            throw new LocalizedException(Status.FORBIDDEN, CuErrorCodes.SETTING_PLATFORM_SCOPE_FORBIDDEN);
+        }
+    }
+
+    /**
+     * erp-core step 09 — settings resolution for {@code tenantId}: its active override wins, then the
+     * active platform default; a deactivated row counts as absent (soft delete). {@code candidates} are
+     * the key's override and default rows ({@code findOverrideAndDefault}).
+     */
+    public static Optional<String> resolve(List<AppConfiguration> candidates, Long tenantId) {
+        Optional<AppConfiguration> override = candidates.stream()
+            .filter(c -> c.getTenantId() != null && Objects.equals(c.getTenantId(), tenantId))
+            .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+            .findFirst();
+        if (override.isPresent()) {
+            return override.map(AppConfiguration::getConfigValue);
+        }
+        return candidates.stream()
+            .filter(c -> c.getTenantId() == null)
+            .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+            .findFirst()
+            .map(AppConfiguration::getConfigValue);
     }
 
     public String getConfigKey() {

@@ -29,7 +29,11 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
         Set.of("core_tenant", "sec_module_reg", "sec_screen_reg", "sec_action_reg", "flyway_schema_history");
 
     /** Entities that extend GlobalAuditableEntity instead (acceptance: the three Sec*Reg and Tenant). */
-    private static final Set<String> GLOBAL_ENTITIES = Set.of("ModuleRegistry", "ScreenRegistry", "ActionRegistry", "Tenant");
+    private static final Set<String> GLOBAL_ENTITIES = Set.of("ModuleRegistry", "ScreenRegistry", "ActionRegistry", "Tenant",
+        "AppConfiguration"); // step 09: platform defaults (NULL tenant) + overrides, filtered explicitly
+
+    /** Step 09: the plan's one deliberate exception — CU_APP_CONFIGURATION.TENANT_ID NULL = platform default. */
+    private static final Set<String> NULLABLE_TENANT_TABLES = Set.of("cu_app_configuration");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -42,9 +46,11 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
             "select table_name, is_nullable, column_default, data_type from information_schema.columns"
                 + " where table_schema = 'public' and column_name = 'tenant_id' order by table_name");
 
-        assertThat(columns).hasSize(20); // 18 (step 05) + SEC_CUSTOMER_VERIFY_TOKEN (step 06) + NOTIF_INBOX (step 08)
+        // 18 (step 05) + SEC_CUSTOMER_VERIFY_TOKEN (step 06) + NOTIF_INBOX (step 08) + CORE_NUMBER_SERIES (step 09)
+        assertThat(columns).hasSize(21);
         assertThat(columns).allSatisfy(column -> {
-            assertThat(column.get("is_nullable")).as("%s nullable", column.get("table_name")).isEqualTo("NO");
+            assertThat(column.get("is_nullable")).as("%s nullable", column.get("table_name"))
+                .isEqualTo(NULLABLE_TENANT_TABLES.contains(column.get("table_name")) ? "YES" : "NO");
             assertThat(column.get("column_default")).as("%s default", column.get("table_name")).isNull();
             assertThat(column.get("data_type")).as("%s type", column.get("table_name")).isEqualTo("bigint");
         });
@@ -86,7 +92,9 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
                     uniqueColumns.put(rs.getString("conname"), rs.getString("cols"));
                 }
             });
-        assertThat(uniqueColumns).hasSize(14); // 13 (step 05) + UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (step 06)
+        // 13 (step 05) + UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (step 06) + UQ_CORE_NUMBER_SERIES_CODE_PERIOD (step 09)
+        // - UQ_CU_APP_CONFIG_CONFIG_KEY (step 09: now a unique index on (COALESCE(TENANT_ID, 0), CONFIG_KEY))
+        assertThat(uniqueColumns).hasSize(14);
         assertThat(uniqueColumns.values()).allSatisfy(cols -> assertThat(cols.split(",")).contains("tenant_id"));
     }
 
@@ -99,7 +107,8 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
                 Collectors.mapping(Class::getSimpleName, Collectors.toSet())));
 
         assertThat(byTenantAware.get(false)).containsExactlyInAnyOrderElementsOf(GLOBAL_ENTITIES);
-        assertThat(byTenantAware.get(true)).hasSize(20); // + CustomerVerifyToken (step 06) + NotificationInboxItem (step 08)
+        // + CustomerVerifyToken (step 06) + NotificationInboxItem (step 08), + NumberSeries - AppConfiguration (step 09)
+        assertThat(byTenantAware.get(true)).hasSize(20);
     }
 
     @Test

@@ -87,7 +87,8 @@ public class ErpCoreAutoConfiguration {
      */
     public static final String CORE_PACKAGE_LIST =
         "com.erp.common,com.erp.cu,com.erp.mdl,com.erp.sec,com.erp.file,com.erp.notif,com.erp.tenant"
-            + ",com.erp.events";
+            + ",com.erp.events"
+            + ",com.erp.sequence";
 
     /** The core packages: component scan, entity scan and JPA repositories all use exactly these. */
     public static final String[] CORE_PACKAGES = StringUtils.commaDelimitedListToStringArray(CORE_PACKAGE_LIST);

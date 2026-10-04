@@ -27,6 +27,23 @@ public class CuPermissions implements PermissionContributor {
     /** API-CU-005 (deactivate configuration) — DELETE-class; the action code stays DEACTIVATE. */
     public static final String CONFIG_DEACTIVATE = "CONFIG_DEACTIVATE";
 
+    // --- erp-core step 09: platform defaults of the settings (scope=PLATFORM) ---
+    // Declared under the PLATFORM registry module, so — like PLATFORM_TENANT_MANAGE — they are effective
+    // only inside the PLATFORM tenant: tenant provisioning never copies PLATFORM-module grants, and super
+    // roles of other tenants never receive PLATFORM-module authorities (MenuService).
+
+    /** Registry module of the platform administration screens (declared, with its names, by the tenant module). */
+    public static final String PLATFORM_MODULE = "PLATFORM";
+
+    /** Gateway (VIEW) action of screen PLATFORM_SETTINGS (RULE-SEC-007). */
+    public static final String PERM_PLATFORM_SETTINGS_VIEW = "PERM_PLATFORM_SETTINGS_VIEW";
+
+    /** Read and write the platform defaults ({@code scope=PLATFORM} on every configuration endpoint). */
+    public static final String PLATFORM_SETTINGS_MANAGE = "PLATFORM_SETTINGS_MANAGE";
+
+    private static final PermissionScreen PLATFORM_SETTINGS =
+        new PermissionScreen(PLATFORM_MODULE, "PLATFORM_SETTINGS", "إعدادات المنصة الافتراضية", "Platform Default Settings");
+
     private static final PermissionScreen CONFIGURATIONS =
         new PermissionScreen(MODULE, "CU_CONFIGURATIONS", "إدارة إعدادات المنصة", "Platform Configuration");
 
@@ -37,7 +54,7 @@ public class CuPermissions implements PermissionContributor {
 
     @Override
     public List<PermissionScreen> screens() {
-        return List.of(CONFIGURATIONS);
+        return List.of(CONFIGURATIONS, PLATFORM_SETTINGS);
     }
 
     @Override
@@ -46,6 +63,8 @@ public class CuPermissions implements PermissionContributor {
             PermissionDef.of(CONFIGURATIONS, "VIEW", "عرض", CONFIG_VIEW),
             PermissionDef.of(CONFIGURATIONS, "CREATE", "إنشاء", CONFIG_CREATE),
             PermissionDef.of(CONFIGURATIONS, "UPDATE", "تعديل", CONFIG_UPDATE),
-            PermissionDef.of(CONFIGURATIONS, "DEACTIVATE", "إلغاء تفعيل", CONFIG_DEACTIVATE));
+            PermissionDef.of(CONFIGURATIONS, "DEACTIVATE", "إلغاء تفعيل", CONFIG_DEACTIVATE),
+            PermissionDef.of(PLATFORM_SETTINGS, "VIEW", "عرض", PERM_PLATFORM_SETTINGS_VIEW),
+            PermissionDef.of(PLATFORM_SETTINGS, "MANAGE", "إدارة", PLATFORM_SETTINGS_MANAGE));
     }
 }
