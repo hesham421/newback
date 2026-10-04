@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "03",
+  "current_step": "04",
   "max_parallel": 3,
   "steps": [
     {
@@ -180,8 +180,8 @@
         "V9__notif_seed.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-04",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -572,6 +572,12 @@
       "step": "03",
       "event": "merged",
       "note": "merged 6e1e668 (pure replay); verify core 60/app 4 on branch+main; pushed. Leftover initialised governance/shared checkout at old path excluded locally via .git/info/exclude (not deleted)"
+    },
+    {
+      "at": "2026-10-04T15:42:01Z",
+      "step": "04",
+      "event": "dispatched",
+      "note": "implementer dispatched"
     }
   ]
 }
