@@ -424,8 +424,8 @@
         "V14__sequence_and_settings.sql"
       ],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-09",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "a181bd5f6686701b8",
       "reviewer_agent": "a2209f7b8d8cab5d6",
@@ -435,7 +435,7 @@
         "evidence": "core 283/app 9; concurrency x3 green; 55 live probes: tenant-predicated locks, settings isolation airtight, PLATFORM scope 403 for tenant super admin, cache keyed tenant:key",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "71542d38bd920c4f839e6305cb4a48ef4d3e608e",
       "report": "docs/steps/09-report.md",
       "deviations": [
         "PERM_SEQUENCE_SERIES_MANAGE + VIEW gateway",
@@ -503,8 +503,13 @@
       "worktree": ".worktrees/step-11",
       "attempts": 1,
       "implementer_agent": "ad181b74b69a9957b",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "abe882887d5047d52",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 197/app 9 (pre-rebase base); live: 4 definitions, BOM+AR header bytes verified, tenant isolation 3 reports, per-report authz, formula-injection guard, cap 422",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/11-report.md",
       "deviations": [
@@ -884,6 +889,18 @@
       "step": "09",
       "event": "review",
       "note": "PASS round 1; notes: cache-aside stale window, REQUIRES_NEW gaps accepted by step file"
+    },
+    {
+      "at": "2026-10-04T19:26:51Z",
+      "step": "09",
+      "event": "merged",
+      "note": "merged 71542d3 (pure replay); core 283/app 9 on branch+main; pushed"
+    },
+    {
+      "at": "2026-10-04T19:26:52Z",
+      "step": "11",
+      "event": "review",
+      "note": "PASS round 1 (pre-rebase); waits for 10 merge, then final rebase (move AUDIT_EVENT_LIST to com.erp.audit) + re-verify"
     }
   ]
 }
