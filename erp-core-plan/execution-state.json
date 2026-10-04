@@ -283,8 +283,8 @@
         "V11__sec_realms.sql"
       ],
       "touches_external_repos": false,
-      "status": "MERGING",
-      "worktree": ".worktrees/step-06",
+      "status": "COMPLETE",
+      "worktree": null,
       "attempts": 1,
       "implementer_agent": "af553cc9f1ddb7ca5",
       "reviewer_agent": "ae17110c259b607c2",
@@ -294,7 +294,7 @@
         "evidence": "core 138/app 7; @PreAuthorize 84 annotations, 0 cross-module; live probes a-j pass (realm mismatch 403, tampered tokens 401, mass-assignment blocked, rate limit, reset cross-realm 409, synchronizer idempotent)",
         "checked_at": "2026-10-04"
       },
-      "merged_commit": null,
+      "merged_commit": "3016338ce6260e3bcb4820b583ae6a8d4faaa8fa",
       "report": "docs/steps/06-report.md",
       "deviations": [
         "V7 not edited (additive-only); PermissionConstants mention remains in V7 SQL comment",
@@ -332,7 +332,7 @@
       "touches_external_repos": false,
       "status": "FIXING",
       "worktree": ".worktrees/step-07",
-      "attempts": 1,
+      "attempts": 2,
       "implementer_agent": "a49feaa002168f461",
       "reviewer_agent": "a0d63958cc103b106",
       "review": {
@@ -419,8 +419,8 @@
         "V14__sequence_and_settings.sql"
       ],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-09",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -747,6 +747,24 @@
       "step": "06",
       "event": "review",
       "note": "PASS round 1; follow-up notes: staff admin can assign roles/edit customers (no privilege gain); findUserIdsHoldingPermission not realm-filtered; customer email case-sensitive"
+    },
+    {
+      "at": "2026-10-04T18:17:10Z",
+      "step": "06",
+      "event": "merged",
+      "note": "merged 3016338 (pure replay); core 138/app 7 on branch+main; pushed"
+    },
+    {
+      "at": "2026-10-04T18:17:10Z",
+      "step": "07",
+      "event": "fix",
+      "note": "round 1 fixes ba8343b (safe inline allow-list, CSP+nosniff, GET/HEAD-only, publicUrl conditions); implementer now rebases onto main (06 merged) to move public wiring into customer chain before round-2 review"
+    },
+    {
+      "at": "2026-10-04T18:17:11Z",
+      "step": "09",
+      "event": "dispatched",
+      "note": "implementer dispatched (slot freed by 06)"
     }
   ]
 }
