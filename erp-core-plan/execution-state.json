@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "01",
+  "current_step": "02",
   "max_parallel": 3,
   "steps": [
     {
@@ -64,8 +64,8 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "PENDING",
-      "worktree": null,
+      "status": "IN_PROGRESS",
+      "worktree": ".worktrees/step-02",
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
@@ -469,6 +469,12 @@
       "step": "01",
       "event": "merged",
       "note": "merged e91e4e1, clean replay, package green on branch+main, pushed"
+    },
+    {
+      "at": "2026-10-04T14:11:43Z",
+      "step": "02",
+      "event": "dispatched",
+      "note": "implementer dispatched in .worktrees/step-02"
     }
   ]
 }
