@@ -180,15 +180,26 @@
         "V9__notif_seed.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-04",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "ae801abc7f152e1c1",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/04-report.md",
+      "deviations": [
+        "old V-numbers = pre-step-01 numbering",
+        "V1 omitted (nothing shared)",
+        "scratch DBs via psql, native PG",
+        "set-based seeds; grant surrogate ids order may differ",
+        "admin PENDING + placeholder hash (no MUST_RESET status)",
+        "BootstrapAdminPasswordRunner @Component w/o @PreAuthorize",
+        "core test props unchanged; ref app ERP_BOOTSTRAP_ADMIN_PASSWORD",
+        "Flyway customizer test asserts Flyway guarantees",
+        "MigrationNamingTest rejects dup versions, allows README",
+        "comments repointed"
+      ],
       "verification": [
         "mvn -q verify",
         "ls erp-core/src/main/resources/db/migration/core | sort -V"
@@ -578,6 +589,12 @@
       "step": "04",
       "event": "dispatched",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-04T16:05:05Z",
+      "step": "04",
+      "event": "reported",
+      "note": "implementer report 167455a, 4/4; core 69, app 5"
     }
   ]
 }
