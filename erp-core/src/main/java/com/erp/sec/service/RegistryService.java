@@ -70,7 +70,7 @@ public class RegistryService {
 
     /** API-SEC-018 — code uniqueness (QR-SEC-035) is decided by {@code ModuleRegistryDomain}. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_MODULE_REGISTRY_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_MODULE_REGISTRY_UPDATE)")
     public ServiceResult<ModuleRegistryResponse> registerModule(ModuleRegistryCreateRequest request) {
         log.info("Registering module with code: {}", request.getCode());
 
@@ -85,7 +85,7 @@ public class RegistryService {
 
     /** API-SEC-019 — RULE-SEC-004 then page-code uniqueness, both decided by the Domain object. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_MODULE_REGISTRY_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_MODULE_REGISTRY_UPDATE)")
     public ServiceResult<ScreenRegistryResponse> registerScreen(ScreenRegistryCreateRequest request) {
         log.info("Registering screen with page code: {}", request.getPageCode());
 
@@ -107,7 +107,7 @@ public class RegistryService {
      * permission code, then let {@code ActionRegistryDomain} decide on both facts (QR-SEC-037).
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_MODULE_REGISTRY_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_MODULE_REGISTRY_UPDATE)")
     public ServiceResult<ActionRegistryResponse> registerAction(ActionRegistryCreateRequest request) {
         log.info("Registering action {} on page {}", request.getActionCode(), request.getPageCode());
 
@@ -131,7 +131,7 @@ public class RegistryService {
      * fetched per page and grouped, so neither nesting level multiplies the page.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_MODULE_REGISTRY_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_MODULE_REGISTRY_VIEW)")
     public ServiceResult<Page<RegistryRowResponse>> search(RegistrySearchRequest searchRequest) {
         log.debug("Searching registry");
 

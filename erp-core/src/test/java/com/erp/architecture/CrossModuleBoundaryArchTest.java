@@ -41,7 +41,9 @@ public class CrossModuleBoundaryArchTest {
      * deliberately not module-bounded and are not listed here.
      */
     private static final List<Module> MODULES = List.of(
-            new Module("com.erp.sec", "com.erp.sec.crossmodule"),
+            // erp-core step 06: com.erp.sec.permission (exact) is SEC's permission-catalog SPI
+            // (PermissionContributor, PermissionDef, ...) that every module's XxxPermissions implements.
+            new Module("com.erp.sec", "com.erp.sec.crossmodule", "com.erp.sec.permission"),
             new Module("com.erp.notif", "com.erp.notif.crossmodule"),
             new Module("com.erp.file", "com.erp.file.crossmodule"),
             new Module("com.erp.cu", "com.erp.cu.crossmodule"),
@@ -95,29 +97,18 @@ public class CrossModuleBoundaryArchTest {
         }
     }
 
-    /** Fully-qualified name of the one class exempted by {@link #spel_type_references_do_not_bypass_the_module_boundary}. */
-    private static final String PERMISSION_CONSTANTS_CLASS = "com.erp.sec.permission.PermissionConstants";
-
     /**
      * The half normal ArchUnit dependency rules structurally cannot see: a
      * {@code @PreAuthorize} SpEL string's {@code T(...)} type reference is a plain String
      * constant in bytecode, not a real class dependency. This walks every
      * {@code @PreAuthorize}-annotated method's expression looking for a
      * {@code T(fully.qualified.Type)} reference that crosses a module boundary. Any such
-     * reference found is a new, unreviewed bypass of the structural rule above and must fail
-     * the build.
+     * reference found is a bypass of the structural rule above and must fail the build.
      *
-     * <p><b>Deliberate, accepted exception:</b> a reference to exactly
-     * {@code com.erp.sec.permission.PermissionConstants} is allowed from any caller module.
-     * That class is a pure, stateless string-constants holder with no logic — the project's
-     * shared permission-naming registry, not a protected SEC-internal — and every module's
-     * {@code build-create-service} skill-generated {@code @PreAuthorize} checks are
-     * <em>mandated</em> to reference it by fully-qualified name (see
-     * {@code build-create-service/SKILL.md}'s {@code <PERMISSIONS_CLASS>} variable: "Fully-
-     * qualified name of the project's permission constants class"). This exception is an exact
-     * class-name match only — no other class under {@code com.erp.sec} is exempt, so a real
-     * future bypass (some other SEC-internal class referenced via SpEL {@code T(...)}) still
-     * fails.
+     * <p>erp-core step 06: there is no exception any more. The former cross-module constants class in
+     * SEC is gone; every module references the permission constants class of its own module
+     * (e.g. {@code com.erp.file.permission.FilePermissions}), which this rule enforces for every
+     * {@code @PreAuthorize}.
      */
     @ArchTest
     static void spel_type_references_do_not_bypass_the_module_boundary(JavaClasses classes) {
@@ -131,9 +122,6 @@ public class CrossModuleBoundaryArchTest {
                 Matcher matcher = typeReference.matcher(expression);
                 while (matcher.find()) {
                     String referencedType = matcher.group(1);
-                    if (referencedType.equals(PERMISSION_CONSTANTS_CLASS)) {
-                        continue;
-                    }
                     String callerModule = topLevelModuleOf(clazz.getPackageName());
                     String referencedModule = topLevelModuleOf(packageOf(referencedType));
                     if (!callerModule.equals(referencedModule)) {
@@ -149,6 +137,37 @@ public class CrossModuleBoundaryArchTest {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * erp-core step 06, task 8 — SEC (identity and permissions) must not depend on FILE, NOTIF, MDL or
+     * CU except through their {@code crossmodule} packages. The old central permission-constants class
+     * knew every module; the per-module permission contributors replaced it, and this rule keeps SEC
+     * from growing such knowledge again.
+     */
+    @ArchTest
+    static void sec_depends_on_other_core_modules_only_through_their_crossmodule_packages(JavaClasses classes) {
+        for (String other : List.of("com.erp.file", "com.erp.notif", "com.erp.mdl", "com.erp.cu")) {
+            noClasses().that().resideInAPackage("com.erp.sec..")
+                    .should().dependOnClassesThat(JavaClass.Predicates.resideInAPackage(other + "..")
+                            .and(DescribedPredicate.not(JavaClass.Predicates.resideInAPackage(other + ".crossmodule.."))))
+                    .as("com.erp.sec must reach " + other + " only through " + other + ".crossmodule")
+                    .check(classes);
+        }
+    }
+
+    /**
+     * erp-core step 06 — every {@code T(...)} type a {@code @PreAuthorize} references lives in the
+     * annotated class's own module (the rule above), and the permission constants class
+     * that used to be shared by all modules (in com.erp.sec.permission) no longer exists.
+     */
+    @ArchTest
+    static void the_shared_permission_constants_class_is_gone(JavaClasses classes) {
+        boolean present = classes.stream().anyMatch(clazz -> clazz.getSimpleName().equals("Permission" + "Constants"));
+        if (present) {
+            throw new AssertionError("A shared permission constants class exists again: each module declares its own "
+                    + "permissions through a com.erp.sec.permission.PermissionContributor");
         }
     }
 

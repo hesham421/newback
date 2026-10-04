@@ -42,7 +42,7 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
             "select table_name, is_nullable, column_default, data_type from information_schema.columns"
                 + " where table_schema = 'public' and column_name = 'tenant_id' order by table_name");
 
-        assertThat(columns).hasSize(18);
+        assertThat(columns).hasSize(19); // 18 (step 05) + SEC_CUSTOMER_VERIFY_TOKEN (step 06)
         assertThat(columns).allSatisfy(column -> {
             assertThat(column.get("is_nullable")).as("%s nullable", column.get("table_name")).isEqualTo("NO");
             assertThat(column.get("column_default")).as("%s default", column.get("table_name")).isNull();
@@ -86,7 +86,7 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
                     uniqueColumns.put(rs.getString("conname"), rs.getString("cols"));
                 }
             });
-        assertThat(uniqueColumns).hasSize(13);
+        assertThat(uniqueColumns).hasSize(14); // 13 (step 05) + UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (step 06)
         assertThat(uniqueColumns.values()).allSatisfy(cols -> assertThat(cols.split(",")).contains("tenant_id"));
     }
 
@@ -99,7 +99,7 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
                 Collectors.mapping(Class::getSimpleName, Collectors.toSet())));
 
         assertThat(byTenantAware.get(false)).containsExactlyInAnyOrderElementsOf(GLOBAL_ENTITIES);
-        assertThat(byTenantAware.get(true)).hasSize(18);
+        assertThat(byTenantAware.get(true)).hasSize(19); // + CustomerVerifyToken (step 06)
     }
 
     @Test

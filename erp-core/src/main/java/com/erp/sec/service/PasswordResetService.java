@@ -117,7 +117,8 @@ public class PasswordResetService {
                 Status.CONFLICT, SecErrorCodes.SEC_409_RESET_TOKEN_INVALID));
 
         Instant now = Instant.now();
-        PasswordResetTokenDomain.from(token).assertUsable(now);
+        // erp-core step 06: a customer's reset token never completes a staff reset.
+        PasswordResetTokenDomain.from(token).assertUsable(now, User.REALM_STAFF, token.getUser().getRealm());
 
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));

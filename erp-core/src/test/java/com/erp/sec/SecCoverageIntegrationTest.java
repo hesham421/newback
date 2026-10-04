@@ -25,7 +25,7 @@ import com.erp.sec.entity.RoleActionGrant;
 import com.erp.sec.entity.ScreenRegistry;
 import com.erp.sec.entity.User;
 import com.erp.sec.entity.UserRoleAssignment;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActionRegistryRepository;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.ModuleRegistryRepository;
@@ -186,11 +186,11 @@ class SecCoverageIntegrationTest extends AbstractIntegrationTest {
             .nameEn("Dashboard test role")
             .build());
 
-        grantExistingSeededPermission(role, PermissionConstants.PERM_SEC_DASHBOARD_VIEW);
-        grantExistingSeededPermission(role, PermissionConstants.PERM_SEC_USERS_VIEW);
-        grantExistingSeededPermission(role, PermissionConstants.PERM_SEC_AUDIT_LOG_VIEW);
-        grantExistingSeededPermission(role, PermissionConstants.PERM_SEC_ROLES_VIEW);
-        // Deliberately NOT granted: PermissionConstants.PERM_SEC_SESSIONS_VIEW.
+        grantExistingSeededPermission(role, SecPermissions.PERM_SEC_DASHBOARD_VIEW);
+        grantExistingSeededPermission(role, SecPermissions.PERM_SEC_USERS_VIEW);
+        grantExistingSeededPermission(role, SecPermissions.PERM_SEC_AUDIT_LOG_VIEW);
+        grantExistingSeededPermission(role, SecPermissions.PERM_SEC_ROLES_VIEW);
+        // Deliberately NOT granted: SecPermissions.PERM_SEC_SESSIONS_VIEW.
 
         userRoleAssignmentRepository.save(UserRoleAssignment.builder()
             .user(user)
@@ -199,10 +199,10 @@ class SecCoverageIntegrationTest extends AbstractIntegrationTest {
             .build());
 
         setAuthenticatedPrincipal(user.getUsername(),
-            PermissionConstants.PERM_SEC_DASHBOARD_VIEW,
-            PermissionConstants.PERM_SEC_USERS_VIEW,
-            PermissionConstants.PERM_SEC_AUDIT_LOG_VIEW,
-            PermissionConstants.PERM_SEC_ROLES_VIEW);
+            SecPermissions.PERM_SEC_DASHBOARD_VIEW,
+            SecPermissions.PERM_SEC_USERS_VIEW,
+            SecPermissions.PERM_SEC_AUDIT_LOG_VIEW,
+            SecPermissions.PERM_SEC_ROLES_VIEW);
 
         ServiceResult<DashboardResponse> result = dashboardService.summary();
         DashboardResponse response = result.getData();
@@ -308,7 +308,9 @@ class SecCoverageIntegrationTest extends AbstractIntegrationTest {
         // and it would stop proving REQ-SEC-006. Hence the explicit clear below rather than
         // relying on the class's @AfterEach, which only runs after the assertions.
         setAuthenticatedPrincipal("notif-channel-admin-" + uniqueSuffix(),
-            PermissionConstants.PERM_NOTIF_CHANNELS_UPDATE);
+            // NOTIF's authority as a literal: since erp-core step 06 each module owns its constants,
+            // and a SEC test must not import NOTIF internals (CrossModuleBoundaryArchTest).
+            "PERM_NOTIF_CHANNELS_UPDATE");
         notificationChannelAdminApi.setChannelEnabled("EMAIL", false);
         SecurityContextHolder.clearContext();
 

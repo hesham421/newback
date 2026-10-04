@@ -37,6 +37,9 @@ public class RoleResponse {
     @Schema(description = "Active status - حالة التفعيل", example = "true")
     private Boolean isActiveFl;
 
+    @Schema(description = "Super role: holds every catalog permission (read-only) - دور شامل يملك كل الصلاحيات", example = "false")
+    private Boolean isSuper;
+
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Instant createdAt;

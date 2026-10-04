@@ -50,7 +50,7 @@ public class RoleService {
 
     /** API-SEC-013 — the uniqueness probe matches the stored form, which {@code @PrePersist} uppercases. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_CREATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_CREATE)")
     public ServiceResult<RoleResponse> create(RoleCreateRequest request) {
         log.info("Creating Role with code: {}", request.getCode());
 
@@ -70,7 +70,7 @@ public class RoleService {
      * guard. Gated on PERM_SEC_ROLES_UPDATE, the permission the grant writes already use.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
     public ServiceResult<RoleResponse> update(Long id, RoleUpdateRequest request) {
         log.info("Updating Role ID: {}", id);
 
@@ -91,7 +91,7 @@ public class RoleService {
      * resolve a role it holds only an id for — a deep link — without having listed it first.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_VIEW)")
     public ServiceResult<RoleResponse> getById(Long id) {
         log.debug("Fetching Role ID: {}", id);
 
@@ -104,7 +104,7 @@ public class RoleService {
 
     /** API-SEC-012 — an empty match is success with empty content, never a 404. */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_ROLES_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_VIEW)")
     public ServiceResult<Page<RoleResponse>> search(RoleSearchRequest searchRequest) {
         log.debug("Searching Role");
 

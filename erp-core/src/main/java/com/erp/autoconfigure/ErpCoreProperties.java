@@ -2,6 +2,7 @@ package com.erp.autoconfigure;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
@@ -76,6 +77,43 @@ public class ErpCoreProperties {
          * account stays unusable.
          */
         private String bootstrapAdminPassword;
+
+        // ── erp-core step 06: the CUSTOMER realm ────────────────────────────────────────────────
+
+        /**
+         * The default unauthenticated paths of the customer security chain
+         * ({@code erpCoreCustomerSecurityFilterChain}, which serves {@code /api/v1/public/**} and
+         * {@code /api/v1/customers/**}): customer self-registration, e-mail verification, login and
+         * password reset. <b>The single place</b> later steps append their public storefront paths to
+         * (e.g. step 07's {@code /api/v1/public/files/**}). Every other path of that chain needs a
+         * CUSTOMER token; all of them require {@code X-Tenant-Code} when no token is sent.
+         */
+        public static final List<String> DEFAULT_CUSTOMER_PUBLIC_PATHS = List.of(
+            "/api/v1/public/customers/register",
+            "/api/v1/public/customers/verify",
+            "/api/v1/public/customers/login",
+            "/api/v1/public/customers/password-reset/**");
+
+        /**
+         * Paths the customer security filter chain permits without authentication. Setting this
+         * replaces the whole list.
+         */
+        private List<String> customerPublicPaths = new ArrayList<>(DEFAULT_CUSTOMER_PUBLIC_PATHS);
+
+        /** Brute-force protection of the customer login (bucket4j, keyed {@code tenant:realm:username}). */
+        private final LoginRateLimit customerLoginRateLimit = new LoginRateLimit();
+    }
+
+    /** Login attempts allowed per key and period (erp-core step 06). */
+    @Getter
+    @Setter
+    public static class LoginRateLimit {
+
+        /** Attempts allowed per {@link #period} for one {@code tenant:realm:username} key. */
+        private int capacity = 10;
+
+        /** The refill period of {@link #capacity}. */
+        private Duration period = Duration.ofMinutes(1);
     }
 
     /** Access-token (JWT) settings. */
@@ -145,5 +183,11 @@ public class ErpCoreProperties {
 
         /** Route on {@link #baseUrl} that hosts the password-reset screen. */
         private String passwordResetPath = "/reset";
+
+        /** Route on {@link #baseUrl} that the customer e-mail verification link opens (erp-core step 06). */
+        private String customerVerifyPath = "/customer/verify";
+
+        /** Route on {@link #baseUrl} that the customer password-reset link opens (erp-core step 06). */
+        private String customerPasswordResetPath = "/customer/reset";
     }
 }

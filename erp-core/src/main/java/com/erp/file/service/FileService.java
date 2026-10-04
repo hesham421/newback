@@ -77,7 +77,7 @@ public class FileService {
 
     /** API-FILE-001 — upload: validate ownership → resolve limits → detect+enforce type → enforce size → store ACTIVE. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_CREATE)")
     public ServiceResult<FileMetadataResponse> store(UploadRequest request, MultipartFile file) {
         log.info("Storing file for owner {}/{} in module {}",
@@ -122,7 +122,7 @@ public class FileService {
 
     /** API-FILE-002 — issue a fresh single-use download token; store its nonce in the token store for the TTL. */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_VIEW)")
     public ServiceResult<AccessTokenResponse> issueAccessToken(Long id) {
         log.info("Issuing access token for file ID: {}", id);
@@ -185,7 +185,7 @@ public class FileService {
 
     /** API-FILE-004 — metadata by id (bytes excluded, DRV-003). */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_VIEW)")
     public ServiceResult<FileMetadataResponse> getMetadata(Long id) {
         log.debug("Fetching file metadata ID: {}", id);
@@ -200,7 +200,7 @@ public class FileService {
 
     /** API-FILE-005 — owner list (bytes excluded, DRV-003). Empty result is a 200 empty page. */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_VIEW)")
     public ServiceResult<Page<FileMetadataResponse>> listByOwner(Long ownerId, String ownerType,
             String moduleCode, String fileTypeId, String fileStatusId, int page, int size, String sort) {
@@ -231,9 +231,9 @@ public class FileService {
      * argument; any other action value passes it so resolveTargetStatus still answers 400, never 403.
      */
     @Transactional
-    @PreAuthorize("(#action == 'ARCHIVE' and hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("(#action == 'ARCHIVE' and hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_UPDATE))"
-        + " or (#action == 'DELETE' and hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+        + " or (#action == 'DELETE' and hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_BROWSER_DELETE))"
         + " or (#action != 'ARCHIVE' and #action != 'DELETE')")
     public ServiceResult<FileMetadataResponse> softDelete(Long id, String action) {

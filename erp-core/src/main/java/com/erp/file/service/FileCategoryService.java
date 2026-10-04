@@ -55,7 +55,7 @@ public class FileCategoryService {
     );
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_CATEGORIES_CREATE)")
     public ServiceResult<CategoryResponse> create(CategoryCreateRequest request) {
         log.info("Creating FileCategory with code: {}", request.getCategoryCode());
@@ -82,7 +82,7 @@ public class FileCategoryService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_CATEGORIES_VIEW)")
     public ServiceResult<Page<CategoryResponse>> search(CategorySearchRequest searchRequest) {
         log.debug("Searching FileCategory");
@@ -100,7 +100,7 @@ public class FileCategoryService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_CATEGORIES_VIEW)")
     public ServiceResult<CategoryResponse> getById(Long id) {
         log.debug("Fetching FileCategory ID: {}", id);
@@ -113,7 +113,7 @@ public class FileCategoryService {
     }
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_CATEGORIES_UPDATE)")
     public ServiceResult<CategoryResponse> update(Long id, CategoryUpdateRequest request) {
         log.info("Updating FileCategory ID: {}", id);
@@ -136,7 +136,7 @@ public class FileCategoryService {
      * no active-child guard, so it simply flips the flag. Returns void so the controller responds 204.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.file.permission.FilePermissions)"
         + ".PERM_FILE_CATEGORIES_DELETE)")
     public void deactivate(Long id) {
         log.info("Deactivating FileCategory ID: {}", id);

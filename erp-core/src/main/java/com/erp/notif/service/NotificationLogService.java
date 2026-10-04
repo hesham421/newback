@@ -52,7 +52,7 @@ public class NotificationLogService {
     );
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_LOG_VIEW)")
     public ServiceResult<Page<NotificationLogResponse>> search(NotificationLogSearchRequest searchRequest) {
         log.debug("Searching NotificationLog");
@@ -70,7 +70,7 @@ public class NotificationLogService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_LOG_VIEW)")
     public ServiceResult<NotificationLogResponse> getById(Long id) {
         log.debug("Fetching NotificationLog ID: {}", id);

@@ -2,6 +2,7 @@ package com.erp.sec.security;
 
 import com.erp.sec.entity.ActiveSession;
 import com.erp.sec.entity.User;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.service.MenuService;
@@ -49,6 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /** USER_STATUS code a caller must carry to authenticate (REQ-SEC-001, CHK_SEC_USER_STATUS). */
     private static final String STATUS_ACTIVE = "ACTIVE";
+
+    /** erp-core step 06 — the single authority of a CUSTOMER caller ({@code hasRole('CUSTOMER')}). */
+    public static final String ROLE_CUSTOMER = SecPermissions.ROLE_CUSTOMER;
 
     private final JwtTokenValidator tokenValidator;
     private final UserRepository userRepository;
@@ -103,6 +107,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * unknown session makes the token unusable for every subsequent request, which is what
      * API-SEC-026 relies on. A non-ACTIVE or deactivated user is rejected for the same reason.
      *
+     * <p>erp-core step 06 — the token's {@code realm} claim selects the account (usernames are unique
+     * per tenant and realm) and the authorities: a {@code STAFF} caller gets its RBAC permission codes
+     * as today ({@link MenuService#effectiveAuthorityCodes()}); a {@code CUSTOMER} caller gets exactly
+     * {@value #ROLE_CUSTOMER} and no grant is queried. The realm is attached as {@link AuthRealm}
+     * details, which {@link RealmEnforcementFilter} checks against the chain's realm. A token without a
+     * known realm (e.g. issued before step 06) does not authenticate.
+     *
      * @return whether the caller was authenticated. The token's tenant is set as the
      *         {@link TenantContext} before the lookups; on {@code false} the caller restores the
      *         previous tenant (none, on a real request)
@@ -111,14 +122,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = claims.getSubject();
         String tokenRef = claims.getId();
         Long tenantId = tenantIdOf(claims);
+        String realm = claims.get(JwtTokenIssuer.REALM_CLAIM, String.class);
         if (username == null || username.isBlank() || tokenRef == null || tokenRef.isBlank()
-            || tenantId == null) {
+            || tenantId == null || !(User.REALM_STAFF.equals(realm) || User.REALM_CUSTOMER.equals(realm))) {
             return false;
         }
 
         TenantContext.set(tenantId);
         try {
-            User user = userRepository.findByUsername(username).orElse(null);
+            User user = userRepository.findByUsernameAndRealm(username, realm).orElse(null);
             if (user == null || !STATUS_ACTIVE.equals(user.getStatusCode())
                 || !Boolean.TRUE.equals(user.getIsActiveFl())) {
                 return false;
@@ -130,17 +142,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return false;
             }
 
-            SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(username, null, List.of()));
+            if (User.REALM_CUSTOMER.equals(realm)) {
+                install(username, realm, List.of(new SimpleGrantedAuthority(ROLE_CUSTOMER)));
+                return true;
+            }
+            install(username, realm, List.of());
             Set<String> codes = menuService.effectiveAuthorityCodes().getData();
-            SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(username, null, toAuthorities(codes)));
+            install(username, realm, toAuthorities(codes));
             return true;
         } catch (RuntimeException e) {
             SecurityContextHolder.clearContext();
             log.warn("Failed to resolve the effective grants of an otherwise valid caller", e);
             return false;
         }
+    }
+
+    private static void install(String username, String realm, List<GrantedAuthority> authorities) {
+        UsernamePasswordAuthenticationToken authentication =
+            new UsernamePasswordAuthenticationToken(username, null, authorities);
+        authentication.setDetails(new AuthRealm(realm));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     /** The token's {@code tid} claim (a JSON number), or {@code null} when absent or malformed. */
@@ -155,9 +176,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * {@link InternalCallerContext#INTERNAL_AUTHORITY}, stripped so no request can ever acquire it,
      * whatever a registry row might say.
      */
-    private List<GrantedAuthority> toAuthorities(Set<String> codes) {
+    private static List<GrantedAuthority> toAuthorities(Set<String> codes) {
         return codes.stream()
-            .filter(code -> !InternalCallerContext.INTERNAL_AUTHORITY.equals(code))
+            .filter(code -> !InternalCallerContext.INTERNAL_AUTHORITY.equals(code) && !ROLE_CUSTOMER.equals(code))
             .map(code -> (GrantedAuthority) new SimpleGrantedAuthority(code))
             .toList();
     }

@@ -50,7 +50,7 @@ public class NotificationChannelConfigService {
     );
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_CHANNELS_CREATE)")
     public ServiceResult<ChannelResponse> create(ChannelCreateRequest request) {
         log.info("Creating NotificationChannelConfig with channel: {}", request.getChannelTypeId());
@@ -69,7 +69,7 @@ public class NotificationChannelConfigService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_CHANNELS_VIEW)")
     public ServiceResult<Page<ChannelResponse>> search(ChannelSearchRequest searchRequest) {
         log.debug("Searching NotificationChannelConfig");
@@ -87,7 +87,7 @@ public class NotificationChannelConfigService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_CHANNELS_VIEW)")
     public ServiceResult<ChannelResponse> getById(Long id) {
         log.debug("Fetching NotificationChannelConfig ID: {}", id);
@@ -100,7 +100,7 @@ public class NotificationChannelConfigService {
     }
 
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_CHANNELS_UPDATE)")
     public ServiceResult<ChannelResponse> update(Long id, ChannelUpdateRequest request) {
         log.info("Updating NotificationChannelConfig ID: {}", id);
@@ -123,7 +123,7 @@ public class NotificationChannelConfigService {
      * Returns void so the controller responds 204.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants)"
+    @PreAuthorize("hasAuthority(T(com.erp.notif.permission.NotifPermissions)"
         + ".PERM_NOTIF_CHANNELS_DELETE)")
     public void disable(Long id) {
         log.info("Disabling NotificationChannelConfig ID: {}", id);

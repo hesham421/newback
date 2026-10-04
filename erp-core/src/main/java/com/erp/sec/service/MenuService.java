@@ -10,9 +10,14 @@ import com.erp.sec.mapper.ModuleRegistryMapper;
 import com.erp.sec.mapper.ScreenRegistryMapper;
 import com.erp.sec.repository.EffectiveGrantProjection;
 import com.erp.sec.repository.ModuleRegistryRepository;
+import com.erp.sec.repository.ActionRegistryRepository;
 import com.erp.sec.repository.RoleActionGrantRepository;
+import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.ScreenRegistryRepository;
 import com.erp.sec.repository.UserRepository;
+import com.erp.tenant.TenantConstants;
+import com.erp.tenant.TenantContext;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,10 +39,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class MenuService {
 
+    /** Registry module whose permissions are effective only inside the PLATFORM tenant (V10). */
+    static final String PLATFORM_MODULE_CODE = "PLATFORM";
+
     private final UserRepository userRepository;
     private final ModuleRegistryRepository moduleRepository;
     private final ScreenRegistryRepository screenRepository;
     private final RoleActionGrantRepository roleActionGrantRepository;
+    private final RoleRepository roleRepository;
+    private final ActionRegistryRepository actionRegistryRepository;
     private final ModuleRegistryMapper moduleMapper;
     private final ScreenRegistryMapper screenMapper;
 
@@ -76,7 +86,7 @@ public class MenuService {
         log.debug("Resolving the effective permission codes of the authenticated caller");
 
         Set<String> codes = resolveCaller()
-            .map(caller -> Set.copyOf(
+            .map(caller -> withSuperRole(caller,
                 roleActionGrantRepository.findEffectivePermissionCodesForUser(caller.getUserPk())))
             .orElseGet(Set::of);
 
@@ -100,8 +110,9 @@ public class MenuService {
     public ServiceResult<Set<String>> effectiveAuthorityCodes() {
         log.debug("Resolving the gateway-applied permission codes of the authenticated caller");
 
-        List<EffectiveGrantProjection> grants = resolveCaller()
-            .map(caller -> roleActionGrantRepository.findEffectiveGrantsForUser(caller.getUserPk()))
+        Optional<User> caller = resolveCaller();
+        List<EffectiveGrantProjection> grants = caller
+            .map(user -> roleActionGrantRepository.findEffectiveGrantsForUser(user.getUserPk()))
             .orElseGet(List::of);
 
         Set<Long> screensWithGateway = grants.stream()
@@ -115,7 +126,25 @@ public class MenuService {
             .map(EffectiveGrantProjection::permissionCode)
             .collect(Collectors.toUnmodifiableSet());
 
-        return ServiceResult.success(codes);
+        return ServiceResult.success(caller.map(user -> withSuperRole(user, codes)).orElse(codes));
+    }
+
+    /**
+     * erp-core step 06 — {@code SYS_ADMIN_ALL}: a caller holding an active super role ({@code IS_SUPER})
+     * holds every active catalog authority on top of {@code granted}, so a permission a module adds later
+     * needs no new grant. Permissions of the {@value #PLATFORM_MODULE_CODE} module are included only
+     * inside the PLATFORM tenant (they never leave it, as tenant provisioning already guarantees for
+     * grants). All catalog VIEW actions are included, so RULE-SEC-007 holds for the result.
+     */
+    private Set<String> withSuperRole(User caller, java.util.Collection<String> granted) {
+        if (!roleRepository.holdsActiveSuperRole(caller.getUserPk())) {
+            return Set.copyOf(granted);
+        }
+        List<String> excluded = Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(TenantContext.current())
+            ? List.of("") : List.of(PLATFORM_MODULE_CODE);
+        Set<String> codes = new HashSet<>(granted);
+        codes.addAll(actionRegistryRepository.findActiveAuthorityCodesExcludingModules(excluded));
+        return Set.copyOf(codes);
     }
 
     /**

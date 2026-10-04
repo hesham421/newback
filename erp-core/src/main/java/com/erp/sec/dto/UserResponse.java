@@ -40,6 +40,9 @@ public class UserResponse {
     @Schema(description = "USER_STATUS code - رمز الحالة", example = "ACTIVE")
     private String statusCode;
 
+    @Schema(description = "Auth realm: STAFF or CUSTOMER - نطاق المصادقة", example = "STAFF")
+    private String realm;
+
     @Schema(description = "Last login timestamp - تاريخ آخر دخول")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Instant lastLoginAt;

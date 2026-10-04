@@ -74,6 +74,20 @@ public class ErpCoreOpenApiAutoConfiguration {
         return group("cu", "CU — Common Utils", "com.erp.cu.controller");
     }
 
+    /**
+     * erp-core step 06 — the CUSTOMER realm's endpoints (also listed under {@code sec}, whose package
+     * holds their controllers).
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "customersApi")
+    public GroupedOpenApi customersApi() {
+        return GroupedOpenApi.builder()
+            .group("customers")
+            .displayName("Customers — Storefront accounts")
+            .pathsToMatch("/api/v1/public/customers/**", "/api/v1/customers/**")
+            .build();
+    }
+
     private static GroupedOpenApi group(String id, String displayName, String controllerPackage) {
         return GroupedOpenApi.builder()
             .group(id)

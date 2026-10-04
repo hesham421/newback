@@ -17,7 +17,7 @@ import com.erp.sec.entity.Role;
 import com.erp.sec.entity.User;
 import com.erp.sec.entity.UserRoleAssignment;
 import com.erp.sec.exception.SecErrorCodes;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.AuditLogEntryRepository;
 import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
@@ -103,7 +103,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        setAuthenticatedPrincipal("searcher", PermissionConstants.PERM_SEC_USERS_VIEW);
+        setAuthenticatedPrincipal("searcher", SecPermissions.PERM_SEC_USERS_VIEW);
 
         Statistics statistics = statistics();
         statistics.clear();
@@ -136,7 +136,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void search_emptyPage_issuesNoRoleQueryAtAll() {
-        setAuthenticatedPrincipal("searcher", PermissionConstants.PERM_SEC_USERS_VIEW);
+        setAuthenticatedPrincipal("searcher", SecPermissions.PERM_SEC_USERS_VIEW);
 
         // An IN () against an empty page is a Postgres syntax error — the empty page must short out.
         ServiceResult<Page<UserResponse>> result = userService.search(UserSearchRequest.builder()
@@ -159,7 +159,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
         assign(user, role);
         entityManager.flush();
 
-        setAuthenticatedPrincipal("updater", PermissionConstants.PERM_SEC_USERS_UPDATE);
+        setAuthenticatedPrincipal("updater", SecPermissions.PERM_SEC_USERS_UPDATE);
 
         ServiceResult<UserResponse> result = userService.update(user.getUserPk(),
             UserUpdateRequest.builder()
@@ -183,7 +183,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
         entityManager.flush();
 
         setAuthenticatedPrincipal("creator",
-            PermissionConstants.PERM_SEC_USERS_CREATE, PermissionConstants.PERM_SEC_USERS_UPDATE);
+            SecPermissions.PERM_SEC_USERS_CREATE, SecPermissions.PERM_SEC_USERS_UPDATE);
 
         ServiceResult<UserResponse> result = userService.create(createRequest("withroles")
             .roleIds(List.of(role.getRolePk()))
@@ -206,7 +206,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void create_withoutRoleIds_stillWorksAndReturnsAnEmptyArray() {
-        setAuthenticatedPrincipal("creator", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("creator", SecPermissions.PERM_SEC_USERS_CREATE);
 
         // The pre-change client sends no roleIds at all — that request must stay valid.
         ServiceResult<UserResponse> result =
@@ -218,7 +218,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void create_withEmptyRoleIds_isTreatedAsNoRoles() {
-        setAuthenticatedPrincipal("creator", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("creator", SecPermissions.PERM_SEC_USERS_CREATE);
 
         // [] means "no roles", so it must not demand the assignment permission either.
         ServiceResult<UserResponse> result =
@@ -235,7 +235,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withUnknownRoleId_rollsTheUserBackToo() {
         setAuthenticatedPrincipal("creator",
-            PermissionConstants.PERM_SEC_USERS_CREATE, PermissionConstants.PERM_SEC_USERS_UPDATE);
+            SecPermissions.PERM_SEC_USERS_CREATE, SecPermissions.PERM_SEC_USERS_UPDATE);
 
         UserCreateRequest request = createRequest("badrole")
             .roleIds(List.of(Long.MAX_VALUE))
@@ -253,7 +253,7 @@ class UserRolesInResponseIntegrationTest extends AbstractIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withRoleIdsButWithoutTheAssignPermission_isDeniedAndCreatesNothing() {
-        setAuthenticatedPrincipal("creator", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("creator", SecPermissions.PERM_SEC_USERS_CREATE);
 
         UserCreateRequest request = createRequest("nogrant")
             .roleIds(List.of(Long.MAX_VALUE))

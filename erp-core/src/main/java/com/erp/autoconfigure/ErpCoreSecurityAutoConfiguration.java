@@ -1,15 +1,19 @@
 package com.erp.autoconfigure;
 
+import com.erp.sec.entity.User;
 import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtAuthenticationFilter;
 import com.erp.sec.security.JwtTokenValidator;
+import com.erp.sec.security.RealmEnforcementFilter;
 import com.erp.sec.security.SecSecurityErrorHandler;
 import com.erp.sec.service.MenuService;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
+import com.erp.tenant.permission.TenantPermissions;
 import com.erp.tenant.repository.TenantRepository;
 import com.erp.tenant.security.TenantResolutionFilter;
+import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.MessageSource;
 import org.springframework.security.authorization.AuthorizationDecision;
@@ -47,6 +51,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * {@code X-Tenant-Code} header and refuses unknown / suspended tenants. {@value #PLATFORM_PATHS}
  * requires an authenticated caller of the PLATFORM tenant holding
  * {@value #PLATFORM_TENANT_MANAGE_AUTHORITY}.
+ *
+ * <p>Realms (erp-core step 06): a second chain, {@value #CUSTOMER_FILTER_CHAIN_BEAN_NAME}
+ * ({@code @Order(}{@value #CUSTOMER_FILTER_CHAIN_ORDER}{@code )}), serves exactly
+ * {@value #CUSTOMER_PUBLIC_API} and {@value #CUSTOMER_API} for the CUSTOMER realm: its
+ * {@code erp.core.security.customer-public-paths} are open, everything else needs a customer token
+ * ({@code ROLE_CUSTOMER}). Both chains run the same JWT and tenant filters plus a
+ * {@link RealmEnforcementFilter} for their own realm, so a token of the other realm is refused with 403
+ * {@code REALM_MISMATCH}. Each chain backs off by bean name.
  */
 @AutoConfiguration(
     before = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class},
@@ -59,11 +71,20 @@ public class ErpCoreSecurityAutoConfiguration {
     public static final String FILTER_CHAIN_BEAN_NAME = "erpCoreSecurityFilterChain";
     public static final int FILTER_CHAIN_ORDER = 100;
 
+    public static final String CUSTOMER_FILTER_CHAIN_BEAN_NAME = "erpCoreCustomerSecurityFilterChain";
+    public static final int CUSTOMER_FILTER_CHAIN_ORDER = 90;
+
+    /** The unauthenticated storefront API (customer self-service, later steps' public resources). */
+    public static final String CUSTOMER_PUBLIC_API = "/api/v1/public/**";
+
+    /** The authenticated customer API. */
+    public static final String CUSTOMER_API = "/api/v1/customers/**";
+
     /** The platform-level API (tenant provisioning). */
     public static final String PLATFORM_PATHS = "/api/v1/platform/**";
 
     /** Authority required on {@link #PLATFORM_PATHS} (seeded to the PLATFORM tenant's SYS_ADMIN by V10). */
-    public static final String PLATFORM_TENANT_MANAGE_AUTHORITY = "PLATFORM_TENANT_MANAGE";
+    public static final String PLATFORM_TENANT_MANAGE_AUTHORITY = TenantPermissions.PLATFORM_TENANT_MANAGE;
 
     /**
      * {@code @Lazy} keeps the JPA and method-security infrastructure out of the security-config
@@ -106,7 +127,49 @@ public class ErpCoreSecurityAutoConfiguration {
                 .authenticationEntryPoint(securityErrorHandler)
                 .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class);
+            .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF,
+                properties.getSecurity().getPublicPaths(), securityErrorHandler), TenantResolutionFilter.class);
+        return http.build();
+    }
+
+    /**
+     * erp-core step 06 — the CUSTOMER realm's chain: {@value #CUSTOMER_PUBLIC_API} and
+     * {@value #CUSTOMER_API} only. {@code erp.core.security.customer-public-paths} are open (they still
+     * need {@code X-Tenant-Code}); every other path of the chain needs an authenticated CUSTOMER
+     * ({@value JwtAuthenticationFilter#ROLE_CUSTOMER}). A staff token is refused by the chain's
+     * {@link RealmEnforcementFilter} (403 {@code REALM_MISMATCH}).
+     */
+    @Bean(name = CUSTOMER_FILTER_CHAIN_BEAN_NAME)
+    @ConditionalOnMissingBean(name = CUSTOMER_FILTER_CHAIN_BEAN_NAME)
+    @Order(CUSTOMER_FILTER_CHAIN_ORDER)
+    public SecurityFilterChain erpCoreCustomerSecurityFilterChain(HttpSecurity http,
+                                                                  JwtAuthenticationFilter jwtAuthenticationFilter,
+                                                                  SecSecurityErrorHandler securityErrorHandler,
+                                                                  ErpCoreProperties properties,
+                                                                  ObjectProvider<TenantRepository> tenantRepository,
+                                                                  MessageSource messageSource) throws Exception {
+        List<String> customerPublicPaths = properties.getSecurity().getCustomerPublicPaths();
+        String[] publicPaths = customerPublicPaths.toArray(String[]::new);
+        TenantResolutionFilter tenantResolutionFilter = new TenantResolutionFilter(
+            tenantRepository::getObject, messageSource, customerPublicPaths, properties.getTenant().getExemptPaths());
+        http
+            .securityMatcher(CUSTOMER_PUBLIC_API, CUSTOMER_API)
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> {
+                if (publicPaths.length > 0) {
+                    auth.requestMatchers(publicPaths).permitAll();
+                }
+                auth.anyRequest().hasAuthority(JwtAuthenticationFilter.ROLE_CUSTOMER);
+            })
+            .exceptionHandling(handling -> handling
+                .authenticationEntryPoint(securityErrorHandler)
+                .accessDeniedHandler(securityErrorHandler))
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(new RealmEnforcementFilter(User.REALM_CUSTOMER, customerPublicPaths, securityErrorHandler),
+                TenantResolutionFilter.class);
         return http.build();
     }
 

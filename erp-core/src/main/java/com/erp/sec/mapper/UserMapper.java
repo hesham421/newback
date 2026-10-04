@@ -31,11 +31,16 @@ public class UserMapper {
             .fullNameEn(request.getFullNameEn())
             .passwordHash(passwordHash)
             .statusCode(STATUS_ACTIVE)
+            .realm(User.REALM_STAFF)
             .isActiveFl(Boolean.TRUE)
             .build();
     }
 
-    /** API-SEC-011 approve — the sign-up's email becomes the new user's login (DBF-SEC-098). */
+    /**
+     * API-SEC-011 approve — the sign-up's email becomes the new user's login (DBF-SEC-098). The
+     * admin-approved sign-up is staff onboarding: the account is explicitly {@code REALM='STAFF'}
+     * (erp-core step 06, task 7).
+     */
     public User toEntity(SignupRequest signupRequest, String passwordHash) {
         if (signupRequest == null) {
             return null;
@@ -47,6 +52,7 @@ public class UserMapper {
             .fullNameEn(signupRequest.getFullNameEn())
             .passwordHash(passwordHash)
             .statusCode(STATUS_ACTIVE)
+            .realm(User.REALM_STAFF)
             .isActiveFl(Boolean.TRUE)
             .build();
     }
@@ -77,6 +83,7 @@ public class UserMapper {
             .fullNameAr(entity.getFullNameAr())
             .fullNameEn(entity.getFullNameEn())
             .statusCode(entity.getStatusCode())
+            .realm(entity.getRealm())
             .lastLoginAt(entity.getLastLoginAt())
             .isActiveFl(Boolean.TRUE.equals(entity.getIsActiveFl()))
             .roles(roles == null ? List.of() : roles)

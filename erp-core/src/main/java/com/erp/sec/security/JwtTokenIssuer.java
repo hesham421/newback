@@ -17,9 +17,16 @@ import org.springframework.stereotype.Component;
  * opaque {@code tokenRef} (DBF-SEC-077), so no raw token or hash is ever persisted. Since erp-core
  * step 05 the token also carries {@code tid}, the user's tenant: {@code JwtAuthenticationFilter}
  * makes it the request's tenant before it looks the user up (usernames are unique per tenant only).
+ * Since step 06 it carries {@code realm} too (usernames are unique per tenant and realm).
  */
 @Component
 public class JwtTokenIssuer {
+
+    /**
+     * erp-core step 06 — the auth realm of the token's subject ({@code STAFF} / {@code CUSTOMER}).
+     * {@code JwtAuthenticationFilter} resolves the user in this realm and derives the authorities from it.
+     */
+    public static final String REALM_CLAIM = "realm";
 
     private final SecretKey signingKey;
     private final long expirationMs;
@@ -37,6 +44,7 @@ public class JwtTokenIssuer {
             .id(tokenRef)
             .claim("uid", user.getUserPk())
             .claim(TenantConstants.TENANT_ID_CLAIM, user.getTenantId())
+            .claim(REALM_CLAIM, user.getRealm())
             .issuedAt(Date.from(issuedAt))
             .expiration(Date.from(issuedAt.plusMillis(expirationMs)))
             .signWith(signingKey)

@@ -59,7 +59,7 @@ public class LookupValueService {
      * delegated to {@link LookupValueDomain#create} for the actual decision.
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_CREATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_CREATE)")
     public ServiceResult<LookupValueResponse> create(Long lookupTypeId, LookupValueCreateRequest request) {
         log.info("Creating LookupValue under LookupType ID: {} with code: {}", lookupTypeId, request.getCode());
 
@@ -79,7 +79,7 @@ public class LookupValueService {
 
     /** API-MDL-007 — no business rule beyond existence; name/sortOrder are freely mutable. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_UPDATE)")
     public ServiceResult<LookupValueResponse> update(Long id, LookupValueUpdateRequest request) {
         log.info("Updating LookupValue ID: {}", id);
 
@@ -95,7 +95,7 @@ public class LookupValueService {
 
     /** API-MDL-008 — soft-deactivate only. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_UPDATE)")
     public ServiceResult<LookupValueResponse> deactivate(Long id) {
         log.info("Deactivating LookupValue ID: {}", id);
 
@@ -119,7 +119,7 @@ public class LookupValueService {
      * an ad-hoc request collection, the same reasoning as a child search's explicit join, A.5.17).
      */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_UPDATE)")
     public ServiceResult<List<LookupValueResponse>> reorder(Long lookupTypeId, LookupValueReorderRequest request) {
         log.info("Reordering LookupValues for LookupType ID: {}", lookupTypeId);
 
@@ -169,7 +169,7 @@ public class LookupValueService {
      * {@code DimensionValueService#search} child-search shape.
      */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_MDL_LOOKUPS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_VIEW)")
     public ServiceResult<Page<LookupValueResponse>> search(LookupValueSearchRequest searchRequest) {
         Long lookupTypeId = searchRequest.getLookupTypeId();
         log.debug("Searching LookupValue for LookupType ID: {}", lookupTypeId);

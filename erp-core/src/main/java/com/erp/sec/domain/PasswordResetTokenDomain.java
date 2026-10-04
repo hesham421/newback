@@ -40,6 +40,20 @@ public final class PasswordResetTokenDomain {
         }
     }
 
+    /**
+     * erp-core step 06 — as {@link #assertUsable(Instant)}, and the token must belong to an account of
+     * {@code expectedRealm}: a staff token never resets a customer password and vice versa. A realm
+     * mismatch answers the same code as an unknown token (no oracle).
+     *
+     * @throws LocalizedException {@code SEC-409-RESET-TOKEN-INVALID} (409)
+     */
+    public void assertUsable(Instant now, String expectedRealm, String userRealm) {
+        if (expectedRealm == null || !expectedRealm.equals(userRealm)) {
+            throw new LocalizedException(Status.CONFLICT, SecErrorCodes.SEC_409_RESET_TOKEN_INVALID);
+        }
+        assertUsable(now);
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
     }

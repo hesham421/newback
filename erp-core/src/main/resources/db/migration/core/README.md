@@ -68,6 +68,7 @@ A global table (only when a plan step names it global) has no `TENANT_ID`, and i
 | V8 | `V8__mdl_seed.sql` | lookup types/values `NOTIF_CHANNEL`, `NOTIF_STATUS`, `FILE_FILE_STATUS`, `FILE_FILE_TYPE` |
 | V9 | `V9__notif_seed.sql` | `EMAIL` channel config; `PASSWORD_RESET` / `ACCOUNT_ACTIVATION` templates |
 | V10 | `V10__tenant_schema.sql` | `CORE_TENANT` + PLATFORM tenant (ID 1); `TENANT_ID`/`VERSION` on every tenant-scoped table (backfilled to PLATFORM), `VERSION` on the catalog, audit columns on 8 SEC tables, composite uniques; `PLATFORM` module/screen, `PERM_PLATFORM_TENANTS_VIEW` + `PLATFORM_TENANT_MANAGE` granted to PLATFORM's `SYS_ADMIN` |
+| V11 | `V11__sec_realms.sql` | `SEC_USER.REALM` (STAFF/CUSTOMER) + per-realm user uniques, status `PENDING_VERIFICATION`, `SEC_ROLE.IS_SUPER` (every `SYS_ADMIN` super), `SEC_CUSTOMER_VERIFY_TOKEN`, templates `CUSTOMER_VERIFY_EMAIL` / `CUSTOMER_PASSWORD_RESET` for every tenant. The permission catalog is upserted from code at startup by `PermissionCatalogSynchronizer` (V7/V10 catalog rows stay, reproduced identically) |
 
 ## Bootstrap admin
 

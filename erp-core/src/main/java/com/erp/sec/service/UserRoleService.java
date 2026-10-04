@@ -59,7 +59,7 @@ public class UserRoleService {
 
     /** API-SEC-008 — check RULE-SEC-005, replace the assignment set, audit each add and removal. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_USERS_UPDATE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_USERS_UPDATE)")
     public ServiceResult<UserResponse> assign(Long userId, UserRoleAssignmentRequest request) {
         log.info("Assigning roles to User ID: {}", userId);
 

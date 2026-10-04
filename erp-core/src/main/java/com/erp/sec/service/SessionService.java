@@ -66,7 +66,7 @@ public class SessionService {
 
     /** API-SEC-025 — only sessions whose {@code terminatedAt} is null (REQ-SEC-027). */
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_SESSIONS_VIEW)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_SESSIONS_VIEW)")
     public ServiceResult<Page<ActiveSessionResponse>> search(ActiveSessionSearchRequest searchRequest) {
         log.debug("Searching ActiveSession");
 
@@ -139,7 +139,7 @@ public class SessionService {
 
     /** API-SEC-026 — a session already terminated is rejected by {@code ActiveSessionDomain}. */
     @Transactional
-    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.PermissionConstants).PERM_SEC_SESSIONS_DELETE)")
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_SESSIONS_DELETE)")
     public ServiceResult<SessionTerminationResponse> terminate(Long id) {
         log.info("Terminating ActiveSession ID: {}", id);
 

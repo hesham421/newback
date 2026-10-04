@@ -19,7 +19,7 @@ import com.erp.sec.entity.ActiveSession;
 import com.erp.sec.entity.Role;
 import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
-import com.erp.sec.permission.PermissionConstants;
+import com.erp.sec.permission.SecPermissions;
 import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
@@ -93,7 +93,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
         persistSession(owner);
         persistSession(other);
 
-        setAuthenticatedPrincipal("session-admin", PermissionConstants.PERM_SEC_SESSIONS_VIEW);
+        setAuthenticatedPrincipal("session-admin", SecPermissions.PERM_SEC_SESSIONS_VIEW);
 
         List<ActiveSessionResponse> rows = searchSessions(SearchOperator.LIKE, owner.getUsername());
 
@@ -108,7 +108,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
         User owner = persistUser("equals");
         persistSession(owner);
 
-        setAuthenticatedPrincipal("session-admin", PermissionConstants.PERM_SEC_SESSIONS_VIEW);
+        setAuthenticatedPrincipal("session-admin", SecPermissions.PERM_SEC_SESSIONS_VIEW);
 
         assertThat(searchSessions(SearchOperator.EQUALS, owner.getUsername().toUpperCase()))
             .as("EQUALS must match the login the same way LIKE does")
@@ -120,7 +120,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
     void sessionSearch_returnsNothingForAnUnknownUsername() {
         persistSession(persistUser("present"));
 
-        setAuthenticatedPrincipal("session-admin", PermissionConstants.PERM_SEC_SESSIONS_VIEW);
+        setAuthenticatedPrincipal("session-admin", SecPermissions.PERM_SEC_SESSIONS_VIEW);
 
         assertThat(searchSessions(SearchOperator.LIKE, "no-such-login-" + uniqueSuffix()))
             .as("an unmatched filter must yield an empty page, never the full set")
@@ -129,7 +129,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void sessionSearch_rejectsAnOperatorItCannotHonourOnUsername() {
-        setAuthenticatedPrincipal("session-admin", PermissionConstants.PERM_SEC_SESSIONS_VIEW);
+        setAuthenticatedPrincipal("session-admin", SecPermissions.PERM_SEC_SESSIONS_VIEW);
 
         assertThatThrownBy(() -> searchSessions(SearchOperator.GREATER_THAN, "abc"))
             .isInstanceOfSatisfying(LocalizedException.class, ex -> {
@@ -148,7 +148,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
         Role match = persistRole("Uniquely named " + uniqueSuffix());
         persistRole("Something else " + uniqueSuffix());
 
-        setAuthenticatedPrincipal("role-admin", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-admin", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         ServiceResult<Page<RoleResponse>> result = roleService.search(
             RoleSearchRequest.builder().name(match.getNameEn()).size(50).build());
@@ -163,7 +163,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
     void roleSearch_stillHonoursTheFiltersSpellingOfName() {
         Role match = persistRole("Filters spelling " + uniqueSuffix());
 
-        setAuthenticatedPrincipal("role-admin", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-admin", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         ServiceResult<Page<RoleResponse>> result = roleService.search(
             RoleSearchRequest.builder()
@@ -184,7 +184,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anySearch_rejectsAnUnsupportedFilterFieldAndNamesIt() {
-        setAuthenticatedPrincipal("role-admin", PermissionConstants.PERM_SEC_ROLES_VIEW);
+        setAuthenticatedPrincipal("role-admin", SecPermissions.PERM_SEC_ROLES_VIEW);
 
         assertThatThrownBy(() -> roleService.search(RoleSearchRequest.builder()
             .filters(List.of(SearchFilter.builder()
@@ -208,7 +208,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
     void createUser_withATakenUsername_namesUsernameInFieldErrors() {
         User existing = persistUser("dup-username");
 
-        setAuthenticatedPrincipal("user-admin", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("user-admin", SecPermissions.PERM_SEC_USERS_CREATE);
 
         assertThatThrownBy(() -> userService.create(userCreateRequest(
             existing.getUsername(), "free-" + uniqueSuffix() + "@example.com")))
@@ -222,7 +222,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
     void createUser_withATakenEmail_namesEmailInFieldErrors() {
         User existing = persistUser("dup-email");
 
-        setAuthenticatedPrincipal("user-admin", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("user-admin", SecPermissions.PERM_SEC_USERS_CREATE);
 
         assertThatThrownBy(() -> userService.create(userCreateRequest(
             "free-" + uniqueSuffix(), existing.getEmail())))
@@ -236,7 +236,7 @@ class SecSearchFilterIntegrationTest extends AbstractIntegrationTest {
     void createUser_withBothTaken_namesBothFields() {
         User existing = persistUser("dup-both");
 
-        setAuthenticatedPrincipal("user-admin", PermissionConstants.PERM_SEC_USERS_CREATE);
+        setAuthenticatedPrincipal("user-admin", SecPermissions.PERM_SEC_USERS_CREATE);
 
         assertThatThrownBy(() -> userService.create(
             userCreateRequest(existing.getUsername(), existing.getEmail())))
