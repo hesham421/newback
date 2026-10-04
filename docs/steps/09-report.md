@@ -35,6 +35,36 @@
 
 The concurrency test was green on 3 consecutive separate runs.
 
+### Rebase onto 07/08
+
+The branch was rebased onto `main` after steps 07 (merge `6c0eae1`) and 08 (merge `de18fe9`). Conflicts and how they were resolved:
+
+- `CORE_PACKAGE_LIST`: `... ,com.erp.tenant` + `,com.erp.events` (08) + `,com.erp.sequence` (09). `ErpCoreAutoConfigurationTest` expects that order.
+- `AutoConfiguration.imports`: 07's `FileStorageAutoConfiguration`, then 08's `ErpCoreEventsAutoConfiguration` and `ErpCoreNotifAutoConfiguration`, then `ErpCoreCacheAutoConfiguration`.
+- i18n bundles, `docs/DEVIATIONS.md`, `db/migration/core/README.md`: the 06, 07 and 08 blocks, then 09. The V14 row and the V14 header no longer call V12/V13 "reserved"; V14 now follows V2..V13. V14 has not been applied anywhere outside this branch, so its checksum is not a concern.
+- `CrossModuleBoundaryArchTest.MODULES`: 08's `com.erp.events` entry, then `com.erp.sequence`. 08's rules are kept.
+- `TenantSchemaIntegrationTest`, reconciled against the run:
+  - `tenant_id` columns: 21 (18 + SEC_CUSTOMER_VERIFY_TOKEN + NOTIF_INBOX + CORE_NUMBER_SERIES), with `cu_app_configuration` the one nullable exception.
+  - Unique constraints: 14.
+  - Tenant-aware entities: 20 (+NotificationInboxItem, +NumberSeries, −AppConfiguration). `AppConfiguration` stays in the global set.
+- `PermissionCatalogIntegrationTest` merged without conflict: 07's 41 seeded actions, plus 09's skip of its 4 synchronizer-only permissions and 2 screens.
+- `ReferenceApplicationSmokeTest`: Flyway `2..14, 1000`.
+
+Further changes:
+
+- **Duplicate API dropped.** Step 07 had added `com.erp.tenant.crossmodule.TenantLookupApi.codeOf(tenantId)`, which does the same as this step's `TenantDirectoryApi`. `TenantDirectoryApi`/`Impl` were deleted, and `NumberAllocationService` uses `TenantLookupApi` for `{TENANT}`. The deviation entry was updated. The swap is part of the rebased step commit; this report and its notes are the follow-up commit.
+- **Interplay with 08, no conflict.**
+  - 08's `ErpCoreEventsAutoConfiguration` adds `@EnableAsync` at the default order, plus its own executor. `ErpCoreCacheAutoConfiguration`'s `@EnableCaching(order = LOWEST_PRECEDENCE - 1)` is a separate advisor; no method is both `@Async` and cached.
+  - 08 publishes no event for configuration or settings changes, so none was added here. Cache eviction stays on the CRUD writes.
+  - Tenant provisioning is still the `TenantProvisioningContributor` SPI, so `SequenceTenantProvisioningContributor` is unchanged.
+
+After the rebase:
+
+- `rm -rf target */target; mvn -q -o verify` → EXIT=0 in 198 s.
+  - erp-core: 283 tests, 0 failures, 0 errors, 0 skipped.
+  - erp-app-reference: 9 tests, 0 failures, 0 errors, 0 skipped.
+- `NumberSeriesConcurrencyIntegrationTest` re-run: 1/1 passed (32.2 s including context start), BUILD SUCCESS.
+
 ## Files changed
 
 **Created**
@@ -279,7 +309,7 @@ sec/tenant/SecTenantProvisioningContributor.java:57, sequence/tenant/SequenceTen
 
 ## Notes for later steps
 
-- **Migrations.** V14 is taken. On rebase over 07/08, `ReferenceApplicationSmokeTest` becomes `2..14, 1000`. The `TenantSchemaIntegrationTest` counts (20 tenant columns, 14 uniques, 19 tenant entities, global entities including `AppConfiguration`, nullable exception `cu_app_configuration`) must be merged with the siblings' additions.
+- **Migrations.** V2..V14 are taken; the chain is contiguous after the rebase. `TenantSchemaIntegrationTest` now expects 21 tenant columns (`cu_app_configuration` nullable), 14 uniques and 20 tenant entities, with `AppConfiguration` global. Steps 10/11 add theirs on top.
 - **Numbers.** Inject `com.erp.sequence.crossmodule.NumberSeriesApi`.
   - It numbers the current tenant.
   - Seed series in the app's `V1000+` migration for PLATFORM, and new tenants get copies.
