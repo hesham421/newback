@@ -16,15 +16,25 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-01",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "a52423e37028cd885",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/01-report.md",
+      "deviations": [
+        "Docker unavailable -> native PostgreSQL 16.15 for app-start check",
+        "dev health: mail health disabled via override (no SMTP creds)",
+        "30 PERM_FIN constants (not 45)",
+        "i18n: messages.properties is EN bundle; keys FIN-*",
+        "@Schema FIN examples replaced with NOTIF",
+        "bare V<n> in comments left, mapping recorded",
+        "CLAUDE.md had no fin lines",
+        "pom unchanged (no fin-only deps)",
+        "ArchUnit fin entry removed"
+      ],
       "verification": [
         "mvn -q -DskipTests package",
         "grep -rniE \"com\\.erp\\.fin|PERM_FIN\" src || echo OK-no-fin-refs",
@@ -436,6 +446,12 @@
       "step": "01",
       "event": "dispatched",
       "note": "implementer dispatched in worktree .worktrees/step-01"
+    },
+    {
+      "at": "2026-10-04T14:05:59Z",
+      "step": "01",
+      "event": "reported",
+      "note": "implementer report 2fd6dc1, 5/5 acceptance claimed"
     }
   ]
 }
