@@ -377,12 +377,17 @@
         "V13__notif_async_inbox.sql"
       ],
       "touches_external_repos": false,
-      "status": "REVIEW",
+      "status": "FIXING",
       "worktree": ".worktrees/step-08",
       "attempts": 1,
       "implementer_agent": "a610cba22aa4f49f5",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "a798b3445c7335bfb",
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "core 138/app 8, 4 consecutive green runs; dispatch median 8ms with blocking mail; tenant/security propagation tested; rollback no-send; VARIABLES_JSON cleared; inbox IDOR-safe",
+        "checked_at": "2026-10-04"
+      },
       "merged_commit": null,
       "report": "docs/steps/08-report.md",
       "deviations": [
@@ -765,6 +770,12 @@
       "step": "09",
       "event": "dispatched",
       "note": "implementer dispatched (slot freed by 06)"
+    },
+    {
+      "at": "2026-10-04T18:18:13Z",
+      "step": "08",
+      "event": "fix",
+      "note": "PASS round 1 pre-rebase; implementer rebasing onto main (06 merged) to resolve conflicts before merge (post-rebase re-verify by reviewer). Notes: requeue double-send under backlog; enable requeue in prod"
     }
   ]
 }
