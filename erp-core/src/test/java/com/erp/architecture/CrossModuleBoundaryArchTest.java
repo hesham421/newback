@@ -62,7 +62,10 @@ public class CrossModuleBoundaryArchTest {
             new Module("com.erp.sequence", "com.erp.sequence.crossmodule"),
             // erp-core step 10: the audit log's public surface is its crossmodule package (AuditApi,
             // AuditEntry, AuditChange, the @Audited annotation every audited entity carries)
-            new Module("com.erp.audit", "com.erp.audit.crossmodule")
+            new Module("com.erp.audit", "com.erp.audit.crossmodule"),
+            // erp-core step 11: the reporting SPI (ReportProvider, ReportParam, ReportResult, ...) is the
+            // report module's ROOT package, which every module's report providers implement.
+            new Module("com.erp.report", "com.erp.report.crossmodule", "com.erp.report")
     );
 
     /**

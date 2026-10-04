@@ -201,4 +201,34 @@ class ReferenceApplicationSmokeTest {
         assertThat(response.statusCode()).isEqualTo(404);
         assertThat((String) JsonPath.read(response.body(), "$.error.code")).isEqualTo("FILE_DOCUMENT_NOT_FOUND");
     }
+
+    /**
+     * erp-core step 11: the report definitions list the three core reports plus the application's own
+     * {@code APP_SMOKE_REPORT} (registered only by declaring a {@code ReportProvider} bean), which runs and
+     * exports as CSV with the UTF-8 BOM through the core endpoints.
+     */
+    @Test
+    void reportDefinitionsListTheThreeCoreReportsAndTheApplicationsOwn() throws Exception {
+        String token = JsonPath.read(login(BOOTSTRAP_ADMIN_PASSWORD).body(), "$.data.accessToken");
+
+        HttpResponse<String> definitions = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/report/definitions"))
+                .header("Authorization", "Bearer " + token).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertThat(definitions.statusCode()).as(definitions.body()).isEqualTo(200);
+        List<String> codes = JsonPath.read(definitions.body(), "$.data[*].code");
+        assertThat(codes).containsExactlyInAnyOrder("SEC_USER_LIST", "AUDIT_EVENT_LIST", "NOTIF_LOG_SUMMARY",
+            "APP_SMOKE_REPORT");
+
+        HttpResponse<byte[]> export = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/report/APP_SMOKE_REPORT/export"))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .header("Accept-Language", "ar")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
+            HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(export.statusCode()).isEqualTo(200);
+        assertThat(new String(export.body(), java.nio.charset.StandardCharsets.UTF_8))
+            .isEqualTo("﻿المعرف,التسمية\r\n1,alpha\r\n2,بيتا\r\n3,\"gamma, delta\"\r\n");
+    }
 }

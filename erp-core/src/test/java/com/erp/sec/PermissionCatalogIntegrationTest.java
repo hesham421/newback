@@ -45,6 +45,9 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         "PERM_SEQUENCE_SERIES_VIEW", "PERM_SEQUENCE_SERIES_MANAGE");        // step 09 (SequencePermissions)
     private static final Set<String> NOT_SEEDED_SCREENS = Set.of("PLATFORM_SETTINGS", "SEQUENCE_SERIES"); // step 09
 
+    /** erp-core step 11 — package of the report module's registry-derived contributor (not a seed). */
+    static final String REPORT_CONTRIBUTOR_PACKAGE = "com.erp.report.";
+
     /** A contributor that exists only in this test's context (module TSTX, one screen, one VIEW). */
     @TestConfiguration
     static class TestOnlyPermissions {
@@ -106,9 +109,12 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         // erp-core step 10: com.erp.audit's contributor declares a catalog that no migration seeds (the
         // step's "seed permission via contributor instead"), so it is outside this seeded-catalog check;
         // AuditApiIntegrationTest asserts the synchronizer wrote its row.
+        // erp-core step 11: the report module's contributor (screens <MODULE>_REPORTS, permissions
+        // <MODULE>:REPORT:<CODE>) is derived from the report registry and was never seeded; it is excluded here
         List<PermissionDef> core = contributors.stream()
             .filter(c -> c.getClass().getName().startsWith("com.erp.") && !c.getClass().getName().contains("Test"))
             .filter(c -> !c.getClass().getName().startsWith("com.erp.audit."))
+            .filter(c -> !c.getClass().getName().startsWith(REPORT_CONTRIBUTOR_PACKAGE))
             .flatMap(c -> c.permissions().stream())
             .filter(def -> !NOT_SEEDED_AUTHORITIES.contains(def.authority()))
             .toList();
@@ -119,7 +125,8 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         Set<String> seeded = Set.copyOf(jdbcTemplate.queryForList(
             "select a.permission_code from sec_action_reg a join sec_screen_reg s on s.screen_reg_pk = a.screen_id"
                 + " join sec_module_reg m on m.module_reg_pk = s.module_id"
-                + " where m.code in ('SEC','MDL','NOTIF','FILE','CU','PLATFORM')", String.class)
+                + " where m.code in ('SEC','MDL','NOTIF','FILE','CU','PLATFORM')"
+                + " and s.page_code not like '%\\_REPORTS'", String.class)
             .stream().filter(code -> !NOT_SEEDED_AUTHORITIES.contains(code)).toList());
         assertThat(core.stream().map(PermissionDef::authority).collect(Collectors.toSet()))
             .containsExactlyInAnyOrderElementsOf(seeded);
@@ -142,6 +149,7 @@ class PermissionCatalogIntegrationTest extends AbstractIntegrationTest {
         List<PermissionScreen> screens = contributors.stream()
             .filter(c -> !c.getClass().getName().contains("Test"))
             .filter(c -> !c.getClass().getName().startsWith("com.erp.audit."))
+            .filter(c -> !c.getClass().getName().startsWith(REPORT_CONTRIBUTOR_PACKAGE))
             .flatMap(c -> c.screens().stream())
             .filter(screen -> !NOT_SEEDED_SCREENS.contains(screen.screenCode())).toList();
         assertThat(screens).hasSize(18);
