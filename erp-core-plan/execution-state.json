@@ -283,15 +283,25 @@
         "V11__sec_realms.sql"
       ],
       "touches_external_repos": false,
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "worktree": ".worktrees/step-06",
-      "attempts": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "implementer_agent": "af553cc9f1ddb7ca5",
       "reviewer_agent": null,
       "review": null,
       "merged_commit": null,
-      "report": null,
-      "deviations": [],
+      "report": "docs/steps/06-report.md",
+      "deviations": [
+        "V7 not edited (additive-only); PermissionConstants mention remains in V7 SQL comment",
+        "authority format PERM_<SCREEN>_<ACTION> kept; PermissionDef optional legacy code",
+        "V11 sanctioned non-additive ops",
+        "staff user lookups STAFF-only; staff user API lists customers",
+        "customer reset reuses SEC_PWD_RESET_TOKEN; reset verifies account; fullName; no customer logout",
+        "PENDING_VERIFICATION counts active for notif",
+        "no provisioning change for templates",
+        "extra error code + Status.TOO_MANY_REQUESTS",
+        "no audit rows for customer events"
+      ],
       "verification": [
         "mvn -q verify",
         "grep -rn \"PermissionConstants\" erp-core/src || echo OK"
@@ -692,6 +702,12 @@
       "step": "07",
       "event": "reported",
       "note": "implementer report 2b758b5, 3/3; core 142, app 8"
+    },
+    {
+      "at": "2026-10-04T17:59:44Z",
+      "step": "06",
+      "event": "reported",
+      "note": "implementer report 7656efc, 3/3; core 138, app 7"
     }
   ]
 }
