@@ -34,6 +34,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  *   <li>when recording an outcome fails (database error) after a successful send, the run's own retry
  *       recognises its claim and attempts again at once (at-least-once), instead of skipping its own
  *       lease and leaving the row {@code QUEUED} until a requeue;</li>
+ *   <li>two workers preparing the same {@code QUEUED} row at the same time: exactly one claims it and
+ *       sends, the other loses on the row's {@code VERSION} and ends quietly.</li>
  * </ul>
  * Uses a Mockito spy on the delivery processor, hence its own context.
  */
@@ -78,6 +80,36 @@ class NotificationClaimIntegrationTest extends AbstractAsyncIntegrationTest {
         assertThat(((Number) row.get("attempts")).intValue()).as("retried once after the lost record").isEqualTo(2);
         assertThat(row.get("next_attempt_at")).isNull();
         assertThat(sends.get()).as("at-least-once: the unrecorded send is repeated").isEqualTo(2);
+    }
+
+    @Test
+    void twoWorkersPreparingTheSameRow_exactlyOneSends_andTheOtherEndsQuietly() throws Exception {
+        String address = unique("race-") + "@example.test";
+        AtomicInteger sends = countSendsTo(address);
+        long id = insertQueuedRow(address);
+        // both workers have read the row (VERSION 0) and passed every check before either writes its
+        // claim: prepare computes the lease right before the claiming write
+        CyclicBarrier bothRead = new CyclicBarrier(2);
+        AtomicInteger leases = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (leases.incrementAndGet() <= 2) {
+                bothRead.await(20, TimeUnit.SECONDS);
+            }
+            return invocation.callRealMethod();
+        }).when(processor).lease();
+
+        List<CompletableFuture<Void>> workers = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            workers.add(CompletableFuture.runAsync(() -> worker.deliver(PLATFORM, id)));
+        }
+        CompletableFuture.allOf(workers.toArray(CompletableFuture[]::new)).get(30, TimeUnit.SECONDS);
+
+        await().atMost(ASYNC_TIMEOUT).until(() -> NotificationLogDomain.STATUS_SENT.equals(
+            jdbc.queryForObject("SELECT NOTIFICATION_STATUS_ID FROM NOTIF_LOG WHERE ID = ?", String.class, id)));
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM NOTIF_LOG WHERE ID = ?", id);
+        assertThat(((Number) row.get("attempts")).intValue()).as("one claim committed").isEqualTo(1);
+        assertThat(sends.get()).as("exactly one send").isEqualTo(1);
+        assertThat(workers).allSatisfy(f -> assertThat(f).isCompletedWithValue(null));   // no exception
     }
 
     // ---------------------------------------------------------------------------------------------
