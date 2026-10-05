@@ -1050,6 +1050,12 @@
       "step": "12",
       "event": "merged",
       "note": "Phase D fix loop merged 3803b07 (CI green run 37245194866). Release erp-core 1.1.0 (MINOR per RELEASE.md: additive NOTIF public members) merged 286ddb6, tag v1.1.0 -> 10a6811 pushed; main at 1.2.0-SNAPSHOT. v1.0.0 tag remains, never published"
+    },
+    {
+      "at": "2026-10-05T00:30:42Z",
+      "step": "12",
+      "event": "merged",
+      "note": "v1.1.0 tag CI run 37247370169 all green: build-test, docker-image, publish (GitHub Packages), consume-published. Step 12 acceptance met (published version 1.1.0; v1.0.0 never published)"
     }
   ]
 }
