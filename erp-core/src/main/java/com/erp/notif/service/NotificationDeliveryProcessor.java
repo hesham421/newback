@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li>{@link #prepare} — the row must still be {@code QUEUED} and unclaimed; increments {@code ATTEMPTS}
  *       (committed, so an attempt cut short by a crash still counts), claims the row with a lease in
- *       {@code NEXT_ATTEMPT_AT} (erp-core 1.1.1) and builds the {@link OutboundMessage};</li>
+ *       {@code NEXT_ATTEMPT_AT} (erp-core 1.2.0) and builds the {@link OutboundMessage};</li>
  *   <li>the provider sends;</li>
  *   <li>{@link #recordOutcome} — {@code SENT} (+ {@link NotificationDispatchedEvent}),
  *       {@code SKIPPED_NO_PROVIDER} (final, never retried), a failed attempt with attempts left: the row
@@ -60,7 +60,7 @@ public class NotificationDeliveryProcessor {
         RETRY,
         /** The provider rejected the message permanently: {@code FAILED} after this attempt (step 14). */
         REJECTED,
-        /** The last allowed attempt failed: {@code FAILED} after this attempt (erp-core 1.1.1). */
+        /** The last allowed attempt failed: {@code FAILED} after this attempt (erp-core 1.2.0). */
         EXHAUSTED,
         /** The row is unknown, no longer {@code QUEUED}, or claimed by another attempt: nothing was done. */
         NOT_QUEUED
@@ -79,7 +79,7 @@ public class NotificationDeliveryProcessor {
      * future because another attempt holds its lease or waits out its retry delay; otherwise counts
      * the attempt, claims the row and returns the message to send.
      *
-     * <p>erp-core 1.1.1 — the claim: {@code NEXT_ATTEMPT_AT} becomes now + the lease
+     * <p>erp-core 1.2.0 — the claim: {@code NEXT_ATTEMPT_AT} becomes now + the lease
      * ({@code erp.core.notif.requeue.stale-after-minutes}) while the provider sends, so the requeue
      * job (which picks rows whose {@code NEXT_ATTEMPT_AT} is older than now − the same period) never
      * re-dispatches a row in flight, and a duplicate delivery of the row skips it. Two concurrent
@@ -87,16 +87,29 @@ public class NotificationDeliveryProcessor {
      * optimistic-locking error, which the worker treats as "not queued". A row that already used
      * every attempt (e.g. a requeued row with a crash in between) is failed instead of attempted
      * again, so requeues never push {@code ATTEMPTS} past {@code erp.core.notif.retry.max-attempts}.
+     *
+     * <p>Ownership: the claim is identified by the row {@code VERSION} the claiming write produced
+     * (returned in {@link Claim#version()}, and again by {@link #recordOutcome} for a retry). The worker
+     * passes the version of its own last write as {@code ownedVersion}; a claimed row whose
+     * {@code VERSION} still equals it was claimed by this very delivery run and is attempted again —
+     * e.g. after recording the previous outcome failed (database error), or when the retry fires
+     * before {@code NEXT_ATTEMPT_AT} because the clock moved. Any other write to the row (another
+     * run's claim) changes {@code VERSION}, so a duplicate never mistakes someone else's claim for
+     * its own; this needs no clock comparison.
+     *
+     * @param ownedVersion the {@code VERSION} written by this delivery run's last claim or retry
+     *                     record, or {@code null} when the run holds no claim yet
      */
     @Transactional
-    public Optional<OutboundMessage> prepare(Long logId) {
+    public Optional<Claim> prepare(Long logId, Long ownedVersion) {
         NotificationLog row = logRepository.findWithTemplateById(logId).orElse(null);
         if (row == null || !NotificationLogDomain.from(row).isAwaitingDelivery()) {
             log.debug("Notification {} is not queued (unknown or already final) — attempt skipped", logId);
             return Optional.empty();
         }
         Instant now = Instant.now();
-        if (row.getNextAttemptAt() != null && row.getNextAttemptAt().isAfter(now)) {
+        boolean owned = ownedVersion != null && ownedVersion.equals(row.getVersion());
+        if (!owned && row.getNextAttemptAt() != null && row.getNextAttemptAt().isAfter(now)) {
             log.debug("Notification {} is claimed until {} — attempt skipped", logId, row.getNextAttemptAt());
             return Optional.empty();
         }
@@ -110,8 +123,19 @@ public class NotificationDeliveryProcessor {
         row.setAttempts(attempt);
         row.setRetryCount((short) (attempt - 1));
         row.setNextAttemptAt(now.plus(lease()));
-        logRepository.save(row);
-        return Optional.of(toMessage(row));
+        NotificationLog claimed = logRepository.saveAndFlush(row);
+        return Optional.of(new Claim(toMessage(claimed), claimed.getVersion()));
+    }
+
+    /** A claimed row: the message to send and the {@code VERSION} that identifies the claim. */
+    public record Claim(OutboundMessage message, Long version) {
+    }
+
+    /**
+     * What {@link #recordOutcome} recorded; {@code version} is the row {@code VERSION} written for a
+     * {@link Outcome#RETRY} (the claim the run's next attempt owns), otherwise {@code null}.
+     */
+    public record Recorded(Outcome outcome, Long version) {
     }
 
     /**
@@ -123,10 +147,10 @@ public class NotificationDeliveryProcessor {
      *              {@code ATTEMPTS} once a requeue restarted the run.
      */
     @Transactional
-    public Outcome recordOutcome(Long logId, DeliveryResult result, int round) {
+    public Recorded recordOutcome(Long logId, DeliveryResult result, int round) {
         NotificationLog row = logRepository.findWithTemplateById(logId).orElse(null);
         if (row == null || !NotificationLogDomain.from(row).isAwaitingDelivery()) {
-            return Outcome.NOT_QUEUED;
+            return new Recorded(Outcome.NOT_QUEUED, null);
         }
         int attempt = row.getAttempts();
         switch (result.status()) {
@@ -139,7 +163,7 @@ public class NotificationDeliveryProcessor {
                 log.info("Notification {} sent via {} (attempt {})", logId, row.getChannelTypeId(), attempt);
                 eventPublisher.publish(new NotificationDispatchedEvent(row.getId(), row.getChannelTypeId(),
                     row.getRecipientId(), row.getTemplateFk().getTemplateCode(), attempt));
-                return Outcome.DELIVERED;
+                return new Recorded(Outcome.DELIVERED, null);
             }
             case SKIPPED_NO_PROVIDER -> {
                 transitionTo(row, NotificationLogDomain.STATUS_SKIPPED_NO_PROVIDER);
@@ -149,13 +173,13 @@ public class NotificationDeliveryProcessor {
                 row.setVariablesJson(null);
                 logRepository.save(row);
                 log.info("Notification {} skipped: no provider for channel {}", logId, row.getChannelTypeId());
-                return Outcome.SKIPPED;
+                return new Recorded(Outcome.SKIPPED, null);
             }
             case REJECTED -> {
                 log.warn("Notification {} rejected by the {} provider (attempt {}), not retried: {}", logId,
                     row.getChannelTypeId(), attempt, result.detail());
                 fail(row, result.detail());
-                return Outcome.REJECTED;
+                return new Recorded(Outcome.REJECTED, null);
             }
             default -> {
                 if (!NotificationLogDomain.hasAttemptsLeft(attempt, maxAttempts())) {
@@ -163,14 +187,14 @@ public class NotificationDeliveryProcessor {
                     log.warn("Notification {} attempt {} via {} failed: {}", logId, attempt, row.getChannelTypeId(),
                         result.detail());
                     fail(row, result.detail());
-                    return Outcome.EXHAUSTED;
+                    return new Recorded(Outcome.EXHAUSTED, null);
                 }
                 row.setLastError(result.detail());
                 row.setNextAttemptAt(Instant.now().plusMillis(backoffAfter(Math.max(1, round))));
-                logRepository.save(row);
+                NotificationLog recorded = logRepository.saveAndFlush(row);
                 log.warn("Notification {} attempt {} via {} failed: {}", logId, attempt, row.getChannelTypeId(),
                     result.detail());
-                return Outcome.RETRY;
+                return new Recorded(Outcome.RETRY, recorded.getVersion());
             }
         }
     }

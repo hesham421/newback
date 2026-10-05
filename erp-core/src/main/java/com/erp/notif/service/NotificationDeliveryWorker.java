@@ -27,15 +27,20 @@ import org.springframework.stereotype.Component;
  * attempts, 2 s doubling, at most 32 s between two) and tries again. After the last failed attempt
  * {@link #exhausted} marks the row {@code FAILED}. The waiting happens inside Spring Retry.
  *
- * <p>erp-core 1.1.1: the last allowed attempt ({@code ATTEMPTS} reaching the maximum) is failed by the
+ * <p>erp-core 1.2.0: the last allowed attempt ({@code ATTEMPTS} reaching the maximum) is failed by the
  * processor directly, an attempt that finds the row claimed by another attempt (a duplicate
  * delivery after a requeue) ends quietly, and each failed attempt stores in {@code NEXT_ATTEMPT_AT}
- * the moment this run's next retry is due (from Spring Retry's own counter).
+ * the moment this run's next retry is due (from Spring Retry's own counter). The run's own retries
+ * recognise their own claim by the row {@code VERSION} the run last wrote, so a retry after a failed
+ * outcome record (or a clock step) proceeds instead of skipping its own claim.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationDeliveryWorker {
+
+    /** Retry-context attribute holding the run's owned claim (a row {@code VERSION}). */
+    private static final String CLAIM_ATTRIBUTE = NotificationDeliveryWorker.class.getName() + ".claim";
 
     private final NotificationDeliveryProcessor processor;
     private final ChannelProviderRegistry providerRegistry;
@@ -72,25 +77,49 @@ public class NotificationDeliveryWorker {
     }
 
     private Attempt attempt(Long logId, int round) {
-        Optional<OutboundMessage> prepared;
+        Optional<NotificationDeliveryProcessor.Claim> prepared;
         try {
-            prepared = processor.prepare(logId);
+            prepared = processor.prepare(logId, ownedClaim());
         } catch (OptimisticLockingFailureException e) {
-            // erp-core 1.1.1: a concurrent attempt (a duplicate delivery) claimed the row first
+            // erp-core 1.2.0: a concurrent attempt (a duplicate delivery) claimed the row first
             log.debug("Notification {} was claimed concurrently by another attempt — attempt skipped", logId);
             return new Attempt(NotificationDeliveryProcessor.Outcome.NOT_QUEUED, null);
         }
         if (prepared.isEmpty()) {
             return new Attempt(NotificationDeliveryProcessor.Outcome.NOT_QUEUED, null);
         }
-        OutboundMessage message = prepared.get();
+        rememberClaim(prepared.get().version());
+        OutboundMessage message = prepared.get().message();
         DeliveryResult result;
         try {
             result = providerRegistry.resolve(message.channel()).send(message);
         } catch (RuntimeException e) {
             result = DeliveryResult.failed(describe(e));
         }
-        return new Attempt(processor.recordOutcome(logId, result, round), result.detail());
+        NotificationDeliveryProcessor.Recorded recorded = processor.recordOutcome(logId, result, round);
+        if (recorded.version() != null) {
+            rememberClaim(recorded.version());
+        }
+        return new Attempt(recorded.outcome(), result.detail());
+    }
+
+    /**
+     * The row {@code VERSION} of this delivery run's last claim or retry record, kept in the Spring
+     * Retry context so that it survives from one attempt of the run to the next (erp-core 1.2.0).
+     * When recording an outcome fails (a database error), the claim written by {@code prepare} is
+     * still the row's current version, so the run's next attempt owns it and retries at once instead
+     * of stalling behind its own lease.
+     */
+    private static Long ownedClaim() {
+        RetryContext context = RetrySynchronizationManager.getContext();
+        return context != null ? (Long) context.getAttribute(CLAIM_ATTRIBUTE) : null;
+    }
+
+    private static void rememberClaim(Long version) {
+        RetryContext context = RetrySynchronizationManager.getContext();
+        if (context != null) {
+            context.setAttribute(CLAIM_ATTRIBUTE, version);
+        }
     }
 
     /** The 1-based number of this attempt within the current {@code @Retryable} run. */
