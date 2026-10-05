@@ -1056,6 +1056,12 @@
       "step": "12",
       "event": "merged",
       "note": "v1.1.0 tag CI run 37247370169 all green: build-test, docker-image, publish (GitHub Packages), consume-published. Step 12 acceptance met (published version 1.1.0; v1.0.0 never published)"
+    },
+    {
+      "at": "2026-10-05T00:37:26Z",
+      "step": "12",
+      "event": "merged",
+      "note": "PLAN CLOSURE: mvn -q verify on main PASS (core 358, app 10); docs closure merged"
     }
   ]
 }
