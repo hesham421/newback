@@ -321,7 +321,7 @@ Each name was verified mechanically: the class file exists under `erp-core/src/t
 | 11 | Excel opens the Arabic CSV correctly | not a JUnit test: 11-report dev 13 (BOM verified programmatically; manual check not possible) |
 | 12 | ArchUnit library rules 1–7 | ✓ `CoreLibraryRulesArchTest.rule1_core_never_depends_on_an_application`; ✓ `rule1_core_depends_only_on_the_allowed_libraries`; ✓ `rule2_every_entity_extends_an_auditable_base`; ✓ `rule2_only_the_listed_entities_are_global`; ✓ `rule3_…`; ✓ `rule4_no_value_injection_of_core_configuration`; ✓ `rule5_controllers_live_in_controller_packages`; ✓ `rule5_preauthorize_references_its_own_modules_permissions_class`; ✓ `rule6_no_enable_scheduling`; ✓ `rule6_no_spring_boot_application`; ✓ `rule7_native_queries_only_in_tenant_sequence_audit`; ✓ `rule7_raw_jdbc_only_in_documented_places` |
 | 12 | Core scripts after V9 are additive only | ✓ `MigrationNamingTest.coreScriptsAfterTheBaseline_areAdditiveOnly`; ✓ `theAdditiveGuardItself_flagsDropsRenamesAndTypeChanges_butNotCommentsOrLiterals` |
-| 12 | JaCoCo ≥ 60 %; CI publish and consume-published | not a JUnit test: 12-report §Acceptance row 3 (75.21 %); row 1 ⚠️ untested named gap (no CI run possible locally) |
+| 12 | JaCoCo ≥ 60 %; CI publish and consume-published | not a JUnit test: 12-report §Acceptance row 3 (75.21 %); row 1 ✓ met with `v1.1.0` (12-report §Release outcome; CI run 37247370169: publish + consume-published green) |
 | 14 | An EMAIL with no address anywhere ends `FAILED` after one attempt, without retry | ✓ `NotificationAsyncDeliveryIntegrationTest.anEmailWithNoAddressAnywhere_isFailedAfterOneAttempt_withoutAnyRetry`; ✓ `EmailChannelProviderTest.aMissingAddress_isRejected_withoutTouchingTheMailSender` |
 | 14 | An explicit `variables.email` overrides the account e-mail; the staff by-id, search, session and dashboard realm rules | ✓ `NotificationAsyncDeliveryIntegrationTest.anExplicitEmailVariable_overridesTheRecipientsAccountEmail`; ✓ `StaffRealmIsolationIntegrationTest.everyStaffByIdUserEndpoint_onACustomerId_is404_andChangesNothing`; ✓ `theStaffByIdEndpoints_stillWorkOnStaffAccounts`; ✓ `theStaffUserSearch_neverListsACustomer_evenOneSharingAStaffEmail`; ✓ `aCustomersSession_isNeitherListedNorTerminableByStaff`; ✓ `theDashboardCounts_staffAccountsAndSessionsOnly` |
 
@@ -339,7 +339,7 @@ Agreed item 4: the five JUnit classes behind the plan's §9 step-09 rows, run at
 | `SettingsCacheTest` | 4 | 0 | 0 | 0 | surefire, 9068779 |
 | `ConfigurationScopeApiIntegrationTest` | 3 | 0 | 0 | 0 | surefire, 9068779 |
 
-CI run id: not available yet. This branch is local (never pushed, per the task rules), so no GitHub Actions run exists for the fix; the orchestrator cites the main CI run id once the fix is merged and main CI is green.
+CI evidence: the fix loop was merged to `main` as `3803b07` (same code as verified here), and CI on `main` passed in GitHub Actions run [37245194866](https://github.com/hesham421/newback/actions/runs/37245194866). The release tag `v1.1.0` (→ `10a6811`) then passed every job in run [37247370169](https://github.com/hesham421/newback/actions/runs/37247370169): `build-test`, `docker-image`, `publish` and `consume-published`.
 
 ## 8. Surviving records and privileges
 

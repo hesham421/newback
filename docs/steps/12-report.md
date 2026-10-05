@@ -366,3 +366,23 @@ tried here did not hit. Testcontainers-only differences (glibc `en_US.utf8` coll
 `test` / user `test`) also cannot be exercised without Docker. If `build-test` is still red, the
 new annotations name the failing tests:
 `GET https://api.github.com/repos/hesham421/newback/check-runs/<job_id>/annotations`.
+
+## Release outcome
+
+- **`v1.0.0` was never published.** The tag (→ `2eb6c39`) ran CI in run
+  [37235531822](https://github.com/hesham421/newback/actions/runs/37235531822): `build-test` failed on
+  the order-dependent `BootstrapAdminPasswordIntegrationTest` (Linux run order), so `publish` and
+  `consume-published` were skipped. RELEASE.md forbids re-tagging, so 1.0.0 stays unpublished.
+- **Post-merge CI fix** (above) merged as `f905025`. CI on `main` green in run
+  [37239814860](https://github.com/hesham421/newback/actions/runs/37239814860): `build-test` with
+  Testcontainers on Docker 28.0.4, and `docker-image`.
+- **Phase D fix loop** merged as `3803b07`. CI on `main` green in run
+  [37245194866](https://github.com/hesham421/newback/actions/runs/37245194866).
+- **Release erp-core 1.1.0** merged as `286ddb6`, tag `v1.1.0` → `10a6811`. It is a MINOR release
+  because the fix loop added public NOTIF members (DEVIATIONS `[12]`). The tag's CI run
+  [37247370169](https://github.com/hesham421/newback/actions/runs/37247370169) was green in every job:
+  `build-test`, `docker-image`, `publish` (to GitHub Packages, `https://maven.pkg.github.com/hesham421/newback`)
+  and `consume-published` (erp-app-reference built and smoke-tested against the published artifact only).
+
+Acceptance row 1 ("CI green on `main`; tag published; `consume-published` green") is now **met**, with
+`v1.1.0` in place of `v1.0.0`.
