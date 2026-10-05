@@ -3,6 +3,56 @@
 All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer). Versioning policy:
 `docs/RELEASE.md`. Per-step details: `docs/steps/NN-report.md`; deviations: `docs/DEVIATIONS.md`.
 
+## [1.1.0] — 2026-10-05
+
+MINOR release. It is a MINOR, not a PATCH, because the public NOTIF types gained additive members (see
+Added), and `docs/RELEASE.md` allows additions only in a MINOR. Compared with 1.0.0 there are no
+migrations, no table or column changes and no `erp.core.*` property changes. Two behaviour fixes are
+visible to REST clients (see Security and Fixed below).
+
+**Note:** `v1.0.0` was tagged but never published, because its CI `build-test` job failed (so `publish`
+and `consume-published` were skipped). 1.1.0 is the first published version of erp-core. A published
+version is never re-tagged (`docs/RELEASE.md`).
+
+### Security
+- The staff user, session and dashboard APIs are now limited to the STAFF realm. Before, a staff admin
+  could deactivate and then reactivate an unverified customer, which bypassed customer verification, and
+  could edit a customer account or assign roles to it.
+  - A CUSTOMER account id on the staff by-id user endpoints (get, update, assign roles, deactivate,
+    reactivate) answers `404 SEC-404-USER`, the same as an unknown id. A customer session id on
+    terminate-session answers `404 SEC-404-SESSION`.
+  - Staff user search and the active-sessions list never include customers.
+  - The security dashboard's user and session counts cover STAFF accounts only, so the counts change
+    for tenants that have customers.
+
+### Added
+- `DeliveryStatus.REJECTED` and `DeliveryResult.rejected(String)` in `com.erp.notif.channel`: a
+  permanent failure that NOTIF never retries.
+- `RecipientDirectory.emailOf(Long)` in `com.erp.notif.crossmodule`: the recipient's account e-mail.
+  The method has no default implementation, so any implementation of `RecipientDirectory` outside
+  erp-core must add it. erp-core's own implementation is `SecRecipientDirectory`.
+
+### Fixed
+- NOTIF EMAIL dispatch now uses the recipient's account e-mail from the user directory when
+  `variables.email` is absent. `variables.email` still overrides it when present. An EMAIL that has no
+  address at all is terminal: the provider returns `REJECTED`, and the row ends `FAILED` after one
+  attempt (`attempts=1`) instead of being retried.
+- `BootstrapAdminPasswordIntegrationTest` was order-dependent: its raw-SQL `SYS_ADMIN` role query saw
+  the `admin` of every tenant other test classes had provisioned. The query is now scoped to the PLATFORM
+  tenant; the assertion is unchanged (test-only).
+- Surefire `runOrder` is pinned to `${surefire.runOrder}`, default `alphabetical`, so CI (Linux) runs
+  the same order as Windows. The embedded test PostgreSQL uses `max_connections=100`, like the container.
+- CI `build-test` publishes the root cause of a failure as public annotations
+  (`.github/scripts/ci-annotate-failures.py`) and uploads `mvn-verify.log` with the surefire reports.
+
+### Docs
+- API documentation generated from the running application, under `docs/api-docs/`.
+- `PublicFileController`: `@SecurityRequirements` opt-out, so the OpenAPI document shows the public-file
+  endpoint as unauthenticated. OpenAPI metadata only; runtime security is unchanged.
+- The governed core API test plan (`TC-CORE-*`), under `docs/test-api/`.
+- The api-verify report (172/172), `docs/test-api/core-verify-report.md`. The api-docs were regenerated
+  for the realm and NOTIF fixes.
+
 ## [1.0.0] — 2026-10-05
 
 First release of erp-core as a versioned, auto-configured Spring Boot library. There are 12 plan steps.
