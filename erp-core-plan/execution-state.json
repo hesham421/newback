@@ -1044,6 +1044,12 @@
       "step": "12",
       "event": "fix",
       "note": "Phase D: api-verify 162/166; debate 13 items (3 blocking); agreed set -> fix branch step/14-api-verify (realm scope: staff user by-id+search+sessions+dashboard STAFF-only; NOTIF email resolution). Release v1.0.1 (58e9c51) held until fix merged"
+    },
+    {
+      "at": "2026-10-05T00:24:17Z",
+      "step": "12",
+      "event": "merged",
+      "note": "Phase D fix loop merged 3803b07 (CI green run 37245194866). Release erp-core 1.1.0 (MINOR per RELEASE.md: additive NOTIF public members) merged 286ddb6, tag v1.1.0 -> 10a6811 pushed; main at 1.2.0-SNAPSHOT. v1.0.0 tag remains, never published"
     }
   ]
 }
