@@ -39,6 +39,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * session is rejected, leaves no tenant behind, so the tenant module's {@code TenantResolutionFilter}
  * (next in the chain) can fall back to the {@code X-Tenant-Code} header.
  *
+ * <p>erp-core 1.1.1: the filter starts every request with no tenant. A value already present on the
+ * thread (a leak from earlier work on a reused worker thread) is logged and cleared before anything
+ * else runs, so it can never be used by the request; it is put back in the {@code finally}.
+ *
  * <p>Not a {@code @Component}: exposed as a bean by
  * {@code com.erp.autoconfigure.ErpCoreSecurityAutoConfiguration}, which also places it in the core
  * security filter chain.
@@ -77,6 +81,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         Long previousTenant = TenantContext.current();
+        if (previousTenant != null) {
+            // erp-core 1.1.1: a tenant left on a reused worker thread is never used by this request;
+            // whatever was there is restored after the chain (the finally below).
+            log.warn("Tenant {} was already set on thread {} when request {} {} arrived; cleared for the request",
+                previousTenant, Thread.currentThread().getName(), request.getMethod(), request.getRequestURI());
+            TenantContext.clear();
+        }
         try {
             String header = request.getHeader(HttpHeaders.AUTHORIZATION);
             if (header != null && header.startsWith(BEARER_PREFIX)
@@ -85,7 +96,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .map(this::authenticate)
                     .orElse(false);
                 if (!authenticated) {
-                    restoreTenant(previousTenant);
+                    // no tenant behind: TenantResolutionFilter may fall back to X-Tenant-Code
+                    TenantContext.clear();
                 }
             }
             chain.doFilter(request, response);
@@ -115,8 +127,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * known realm (e.g. issued before step 06) does not authenticate.
      *
      * @return whether the caller was authenticated. The token's tenant is set as the
-     *         {@link TenantContext} before the lookups; on {@code false} the caller restores the
-     *         previous tenant (none, on a real request)
+     *         {@link TenantContext} before the lookups; on {@code false} the caller clears it
      */
     private boolean authenticate(Claims claims) {
         String username = claims.getSubject();
