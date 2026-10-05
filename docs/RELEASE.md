@@ -1,7 +1,7 @@
 # Releasing erp-core — versioning and compatibility policy
 
 `com.erp:erp-core` follows [Semantic Versioning](https://semver.org/). An application pins an exact
-version (`<erp.core.version>1.1.0</erp.core.version>`) and upgrades on purpose.
+version (`<erp.core.version>1.2.0</erp.core.version>`) and upgrades on purpose.
 
 ## What a version number promises
 

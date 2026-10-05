@@ -65,7 +65,7 @@ Application `pom.xml` (Spring Boot parent 4.0.1, the version erp-core is built a
 
 <properties>
   <java.version>21</java.version>
-  <erp.core.version>1.1.0</erp.core.version>
+  <erp.core.version>1.2.0</erp.core.version>
 </properties>
 
 <dependencies>
