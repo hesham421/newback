@@ -29,4 +29,8 @@ public final class CommonErrorCodes {
     // Added by erp-core step 05 with the VERSION column (@Version on every entity): a stale update
     // fails Hibernate's optimistic-lock check; answered 409 instead of the catch-all 500.
     public static final String CONCURRENT_MODIFICATION = "CONCURRENT_MODIFICATION";
+
+    // Added by the erp-core 1.1.1 hardening: a request for a path that no controller or static
+    // resource serves (Spring's NoResourceFoundException) answers 404 instead of the catch-all 500.
+    public static final String NOT_FOUND = "NOT_FOUND";
 }

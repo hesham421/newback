@@ -22,6 +22,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Centralized exception-to-response mapping — shared infrastructure. Feature modules never
@@ -168,14 +169,57 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(error));
     }
 
+    /**
+     * erp-core 1.1.1: a path no controller or static resource serves. Spring MVC raises
+     * {@link NoResourceFoundException}, which used to reach the catch-all and answer 500. Reached only
+     * when the security chain let the request through: an authenticated caller, or an anonymous one
+     * on a permitted path (an anonymous request on a protected path still gets 401 first).
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException ex) {
+        log.debug("No resource: {}", ex.getMessage());
+        ApiError error = ApiError.builder()
+            .code(CommonErrorCodes.NOT_FOUND)
+            .message(resolveMessage(CommonErrorCodes.NOT_FOUND, null))
+            .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    /**
+     * The catch-all. erp-core 1.1.1: an exception that merely wraps a {@link LocalizedException} —
+     * e.g. {@code TENANT_CONTEXT_MISSING}, raised by Hibernate's tenant resolver while the transaction
+     * manager opens a session and wrapped in a {@code CannotCreateTransactionException} — is answered
+     * as that {@code LocalizedException} (its own code and status) instead of a bare
+     * {@code INTERNAL_ERROR}.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
+        LocalizedException wrapped = wrappedLocalizedException(ex);
+        if (wrapped != null) {
+            log.error("Error wrapped in {}", ex.getClass().getName(), ex);
+            return handleLocalizedException(wrapped);
+        }
         log.error("Unexpected error", ex);
         ApiError error = ApiError.builder()
             .code(CommonErrorCodes.INTERNAL_ERROR)
             .message(resolveMessage(CommonErrorCodes.INTERNAL_ERROR, null))
             .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.failure(error));
+    }
+
+    /** The first {@link LocalizedException} in the cause chain of {@code ex}, or {@code null}. */
+    private static LocalizedException wrappedLocalizedException(Throwable ex) {
+        Throwable cause = ex.getCause();
+        for (int depth = 0; cause != null && depth < 16; depth++) {
+            if (cause instanceof LocalizedException localized) {
+                return localized;
+            }
+            if (cause == cause.getCause()) {
+                break;
+            }
+            cause = cause.getCause();
+        }
+        return null;
     }
 
     private String resolveMessage(String code, Object[] args) {
