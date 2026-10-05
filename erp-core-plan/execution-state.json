@@ -4,7 +4,7 @@
   "generated_at": "2026-10-04T12:51:46Z",
   "repo_root_note": "paths are repo-relative; the orchestrator resolves the root at runtime",
   "main_branch": "main",
-  "current_step": "13",
+  "current_step": null,
   "max_parallel": 3,
   "steps": [
     {
@@ -608,15 +608,22 @@
       "parallel_group": null,
       "migrations": [],
       "touches_external_repos": true,
-      "status": "BLOCKED",
+      "status": "COMPLETE",
       "worktree": null,
       "attempts": 0,
       "implementer_agent": null,
       "reviewer_agent": null,
-      "review": null,
-      "merged_commit": null,
+      "review": {
+        "verdict": "PASS",
+        "round": 1,
+        "evidence": "append-only verified byte-for-byte on 40 files; ~75 claims verified vs code; no invented ids",
+        "checked_at": "2026-10-05T07:24:41Z"
+      },
+      "merged_commit": "governance-shared@48749ec",
       "report": null,
-      "deviations": [],
+      "deviations": [
+        "Owner decision: no factory run/changes; erp-core deltas documented as append-only addenda in governance-shared analysis files P0..P2 for SEC/NOTIF/FILE/MDL/CU (40 files), merged to governance-shared main 48749ec; independent review PASS"
+      ],
       "verification": [
         "mvn -q verify"
       ],
@@ -637,9 +644,10 @@
   "halts": [
     {
       "reason": "Step 13 requires local paths of the factory and governance-shared repos (env ERP_FACTORY_DIR, ERP_GOV_SHARED_DIR); not set — per orchestrate-plan STEP 5 in --auto mode, marked BLOCKED for a human",
-      "needs_human": true,
+      "needs_human": false,
       "recorded_at": "2026-10-04T21:18:36Z",
-      "step": "13"
+      "step": "13",
+      "resolution": "resolved by owner decision (documentation instead of factory registration)"
     }
   ],
   "log": [
@@ -1074,6 +1082,12 @@
       "step": "13",
       "event": "halt",
       "note": "Owner decision 2026-10-05: no factory run/changes; instead document erp-core deltas as append-only addenda in governance-shared analysis files (P0..P2) for SEC/NOTIF/FILE/MDL/CU, merged to governance-shared main. In progress"
+    },
+    {
+      "at": "2026-10-05T07:24:41Z",
+      "step": "13",
+      "event": "merged",
+      "note": "analysis addenda merged to governance-shared main 48749ec (owner decision replaces factory registration)"
     }
   ]
 }
