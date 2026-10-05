@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * The {@code NOTIF_LOG} rows this JVM has handed to the core event executor and not finished yet —
- * waiting in the executor's queue, being sent, or between two retries (erp-core 1.1.1 hardening).
+ * waiting in the executor's queue, being sent, or between two retries (erp-core 1.2.0 hardening).
  *
  * <p>{@link NotificationDeliveryListener} tracks a row before it submits its delivery and releases it
  * when the delivery returns (or when the executor rejects it); {@link NotificationRequeueJob} never

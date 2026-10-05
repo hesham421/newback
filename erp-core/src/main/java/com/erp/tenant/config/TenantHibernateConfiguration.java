@@ -16,11 +16,11 @@ import org.springframework.stereotype.Component;
  * {@code AuditableEntity} this switches on Hibernate's discriminator (row-level) multi-tenancy.
  *
  * <p>The resolver becomes strict once every bean has been created and <em>before the embedded web
- * server starts accepting requests</em> (erp-core 1.1.1): this bean is a {@link SmartLifecycle} whose
+ * server starts accepting requests</em> (erp-core 1.2.0): this bean is a {@link SmartLifecycle} whose
  * phase ({@value #PHASE}) is just below the phase of Boot's web-server start lifecycle
  * ({@code WebServerStartStopLifecycle}, {@code SmartLifecycle.DEFAULT_PHASE - 2048}). Lifecycles start
  * in ascending phase order during {@code finishRefresh}, so no request can ever be served with the
- * bootstrap sentinel tenant. Before 1.1.1 the switch happened on {@link ContextRefreshedEvent}, which is
+ * bootstrap sentinel tenant. Before 1.2.0 the switch happened on {@link ContextRefreshedEvent}, which is
  * published <em>after</em> the web server started, leaving a short window in which a request could run
  * with the sentinel. Repository bootstrap (singleton creation) still happens before any lifecycle
  * starts, so it keeps the sentinel. The {@link ContextRefreshedEvent} switch stays as a fallback (a

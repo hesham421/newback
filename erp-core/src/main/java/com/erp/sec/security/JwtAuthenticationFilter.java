@@ -39,7 +39,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * session is rejected, leaves no tenant behind, so the tenant module's {@code TenantResolutionFilter}
  * (next in the chain) can fall back to the {@code X-Tenant-Code} header.
  *
- * <p>erp-core 1.1.1: the filter starts every request with no tenant. A value already present on the
+ * <p>erp-core 1.2.0: the filter starts every request with no tenant. A value already present on the
  * thread (a leak from earlier work on a reused worker thread) is logged and cleared before anything
  * else runs, so it can never be used by the request; it is put back in the {@code finally}.
  *
@@ -82,7 +82,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         Long previousTenant = TenantContext.current();
         if (previousTenant != null) {
-            // erp-core 1.1.1: a tenant left on a reused worker thread is never used by this request;
+            // erp-core 1.2.0: a tenant left on a reused worker thread is never used by this request;
             // whatever was there is restored after the chain (the finally below).
             log.warn("Tenant {} was already set on thread {} when request {} {} arrived; cleared for the request",
                 previousTenant, Thread.currentThread().getName(), request.getMethod(), request.getRequestURI());

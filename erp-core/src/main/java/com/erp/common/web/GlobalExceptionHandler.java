@@ -170,7 +170,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * erp-core 1.1.1: a path no controller or static resource serves. Spring MVC raises
+     * erp-core 1.2.0: a path no controller or static resource serves. Spring MVC raises
      * {@link NoResourceFoundException}, which used to reach the catch-all and answer 500. Reached only
      * when the security chain let the request through: an authenticated caller, or an anonymous one
      * on a permitted path (an anonymous request on a protected path still gets 401 first).
@@ -186,7 +186,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * The catch-all. erp-core 1.1.1: an exception that merely wraps a {@link LocalizedException} —
+     * The catch-all. erp-core 1.2.0: an exception that merely wraps a {@link LocalizedException} —
      * e.g. {@code TENANT_CONTEXT_MISSING}, raised by Hibernate's tenant resolver while the transaction
      * manager opens a session and wrapped in a {@code CannotCreateTransactionException} — is answered
      * as that {@code LocalizedException} (its own code and status) instead of a bare

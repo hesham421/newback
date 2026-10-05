@@ -20,7 +20,7 @@ public final class PageableBuilder {
     }
 
     /**
-     * erp-core 1.1.1: a page whose rows would start past {@link Integer#MAX_VALUE} (e.g.
+     * erp-core 1.2.0: a page whose rows would start past {@link Integer#MAX_VALUE} (e.g.
      * {@code page = 2147483647}) is rejected with 400 {@code VALIDATION_ERROR} on field {@code page}.
      * JPA's first-result is an {@code int}: such an offset used to overflow into a negative value and
      * surface as a 500.

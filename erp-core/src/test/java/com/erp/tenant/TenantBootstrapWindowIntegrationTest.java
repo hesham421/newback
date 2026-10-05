@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * erp-core 1.1.1 — by the time the embedded web server accepts requests, the tenant resolver is
+ * erp-core 1.2.0 — by the time the embedded web server accepts requests, the tenant resolver is
  * already strict: there is no window in which a request runs with the bootstrap sentinel tenant.
- * Before 1.1.1 the switch happened on {@code ContextRefreshedEvent}, after the web server started.
+ * Before 1.2.0 the switch happened on {@code ContextRefreshedEvent}, after the web server started.
  */
 class TenantBootstrapWindowIntegrationTest extends AbstractIntegrationTest {
 

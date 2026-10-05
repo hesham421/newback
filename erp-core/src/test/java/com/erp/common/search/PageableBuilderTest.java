@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 
 /**
- * erp-core 1.1.1 — a page whose rows would start past {@code Integer.MAX_VALUE} is a 400
+ * erp-core 1.2.0 — a page whose rows would start past {@code Integer.MAX_VALUE} is a 400
  * {@code VALIDATION_ERROR} on {@code page} instead of an int overflow (500) in JPA's first-result.
  */
 class PageableBuilderTest {

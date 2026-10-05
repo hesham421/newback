@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
 
 /**
- * erp-core 1.1.1 — the delivery listener tracks a row while its delivery waits in, or runs on, the
+ * erp-core 1.2.0 — the delivery listener tracks a row while its delivery waits in, or runs on, the
  * event executor, ignores a duplicate for a tracked row, and survives an executor that rejects the
  * task (queue full): the row is released (so the requeue job can pick it up later) and the worker
  * never runs.

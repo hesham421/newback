@@ -17,7 +17,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * job). The delivery itself runs on the core event executor ({@value ErpCoreEvents#EXECUTOR}), so
  * dispatch returns without waiting for any send.
  *
- * <p>erp-core 1.1.1: the listener submits the delivery to the executor itself (instead of
+ * <p>erp-core 1.2.0: the listener submits the delivery to the executor itself (instead of
  * {@code @Async}) so that
  * <ul>
  *   <li>the row is recorded in {@link NotificationDeliveryTracker} while it waits in the executor's

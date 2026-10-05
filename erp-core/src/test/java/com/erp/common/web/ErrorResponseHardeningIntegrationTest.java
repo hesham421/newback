@@ -21,7 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * erp-core 1.1.1 — client and programming errors that used to surface as a generic 500
+ * erp-core 1.2.0 — client and programming errors that used to surface as a generic 500
  * {@code INTERNAL_ERROR}: an unknown path (404 {@code NOT_FOUND}), a page number whose offset
  * overflows (400 {@code VALIDATION_ERROR} on {@code page}), and {@code TENANT_CONTEXT_MISSING} wrapped
  * by the transaction manager (500 carrying its own code).

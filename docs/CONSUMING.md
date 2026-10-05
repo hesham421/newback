@@ -289,7 +289,7 @@ default is `false`, and without the job a `QUEUED` notification is never retried
   The row stays `QUEUED` and untouched, and the dispatching call is not affected;
 - a send succeeded but its outcome could not be recorded (delivery is at-least-once).
 
-The job is safe to run while deliveries are in flight (since 1.1.1). An attempt claims its row by
+The job is safe to run while deliveries are in flight (since 1.2.0). An attempt claims its row by
 setting `NEXT_ATTEMPT_AT` to now + `stale-after-minutes` while it sends. Between retries the column holds
 the time the next retry is due. The job only picks rows whose `NEXT_ATTEMPT_AT` (or, before any
 attempt, `CREATED_AT`) is older than `stale-after-minutes`. It also skips rows waiting in, or running

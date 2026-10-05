@@ -292,7 +292,7 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
         assertThat(dispatched.tenantInThread()).isEqualTo(tenantId);
     }
 
-    // erp-core 1.1.1 — claim/lease before send, executor rejection, attempts bounded across requeues.
+    // erp-core 1.2.0 — claim/lease before send, executor rejection, attempts bounded across requeues.
 
     @Test
     void requeueJob_neverRedispatchesARowInFlight_andADuplicateDeliveryDoesNotSendTwice() throws Exception {

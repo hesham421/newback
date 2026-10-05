@@ -19,7 +19,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * erp-core 1.1.1 — a tenant left on a reused worker thread is never seen by the request: the JWT
+ * erp-core 1.2.0 — a tenant left on a reused worker thread is never seen by the request: the JWT
  * filter (the outermost tenant-aware filter of both core chains) clears it before anything else and
  * puts it back only after the chain.
  */

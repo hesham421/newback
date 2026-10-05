@@ -9,7 +9,7 @@ import org.springframework.boot.web.server.servlet.context.ServletWebServerAppli
 import org.springframework.context.SmartLifecycle;
 
 /**
- * erp-core 1.1.1 — the tenant resolver turns strict in a lifecycle phase that starts before Boot's
+ * erp-core 1.2.0 — the tenant resolver turns strict in a lifecycle phase that starts before Boot's
  * web-server lifecycle, so no request is served while the bootstrap sentinel is still tolerated.
  */
 class TenantHibernateConfigurationTest {

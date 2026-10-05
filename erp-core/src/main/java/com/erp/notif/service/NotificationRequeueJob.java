@@ -31,7 +31,7 @@ import org.springframework.scheduling.annotation.Scheduled;
  * repository query and one {@link NotificationRequestedEvent} per stale row. The events are published
  * outside a transaction, so the delivery listener receives them at once (on the event executor).
  *
- * <p>erp-core 1.1.1 — what is never re-dispatched: a row in flight (its attempt claimed it with a
+ * <p>erp-core 1.2.0 — what is never re-dispatched: a row in flight (its attempt claimed it with a
  * lease in {@code NEXT_ATTEMPT_AT}, see {@code NotificationDeliveryProcessor.prepare}), a row between
  * two retries ({@code NEXT_ATTEMPT_AT} = when the retry is due), and a row waiting in, or running on,
  * this node's event executor ({@link NotificationDeliveryTracker}). A row the executor rejected is
@@ -57,7 +57,7 @@ public class NotificationRequeueJob {
 
     /**
      * @param tracker the rows waiting in, or running on, this node's event executor: never requeued
-     *                (erp-core 1.1.1)
+     *                (erp-core 1.2.0)
      */
     public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
                                   JdbcTemplate jdbcTemplate, ErpCoreProperties properties,

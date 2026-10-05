@@ -14,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-/** erp-core 1.1.1 — the new 404 mapping and the unwrapping of a wrapped {@link LocalizedException}. */
+/** erp-core 1.2.0 — the new 404 mapping and the unwrapping of a wrapped {@link LocalizedException}. */
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler(messages());

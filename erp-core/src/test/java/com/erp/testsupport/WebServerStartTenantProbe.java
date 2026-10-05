@@ -9,7 +9,7 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 
 /**
- * erp-core 1.1.1 — at the moment the embedded web server starts accepting requests, tries to open a
+ * erp-core 1.2.0 — at the moment the embedded web server starts accepting requests, tries to open a
  * JPA session with no tenant and records whether Hibernate's tenant resolver refused it (strict) or
  * still bound it to the bootstrap sentinel. Scanned by {@link CoreTestApplication} (it lives in
  * {@code com.erp.testsupport}), so every integration context carries it without changing the context
