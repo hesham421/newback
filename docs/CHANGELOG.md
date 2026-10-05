@@ -3,6 +3,51 @@
 All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer). Versioning policy:
 `docs/RELEASE.md`. Per-step details: `docs/steps/NN-report.md`; deviations: `docs/DEVIATIONS.md`.
 
+## [1.2.0] — 2026-10-05
+
+MINOR release. It is a MINOR, not a PATCH, because `com.erp.common` gained public members (see Added),
+and `docs/RELEASE.md` allows additions only in a MINOR. Nothing in any `crossmodule` package or SPI
+changed. Compared with 1.1.0 there are no migrations, no table or column changes and no `erp.core.*`
+property changes. Three error responses visible to REST clients change from 500 (see Fixed). Details:
+`docs/steps/15-report.md` and the `[15]` entries in `docs/DEVIATIONS.md`.
+
+### Added
+- `CommonErrorCodes.NOT_FOUND` in `com.erp.common.exception`: a generic 404 for an unknown path, with
+  English and Arabic messages.
+- `GlobalExceptionHandler.handleNoResource(NoResourceFoundException)` in `com.erp.common.web`: answers
+  an unknown path with `404 NOT_FOUND`.
+
+### Fixed
+- NOTIF delivery claims a row before it sends, using `NOTIF_LOG.NEXT_ATTEMPT_AT` as a lease
+  (now + `erp.core.notif.requeue.stale-after-minutes`, at least 1 minute). No column or property was
+  added.
+  - Under a backlog, the requeue job and a duplicate run never send a row that is in flight or waiting
+    between retries, so a notification is not sent twice. Concurrent claims are serialized by the
+    optimistic lock; the loser ends quietly.
+  - When the event executor's queue is full, the rejection is caught. The row stays `QUEUED` and
+    untouched, and the requeue job delivers it once it is stale. Before, the rejection escaped into the
+    dispatching caller.
+  - `ATTEMPTS` never exceeds `erp.core.notif.retry.max-attempts`, however often a row is requeued. The
+    last failed attempt fails the row at once, and a requeued row with no attempts left is failed without
+    another send. Before, a requeued row could reach twice the maximum.
+  - When recording an outcome fails after a send (a database error), the delivery run retries at once
+    (at-least-once). It no longer waits behind its own lease for the requeue job.
+- An unknown path answers `404 NOT_FOUND` instead of `500 INTERNAL_ERROR` (authenticated, or anonymous
+  under a permitted prefix; an anonymous request under a protected prefix still gets 401).
+- A search whose `page` offset overflows `int` (e.g. `page=2147483647`) answers `400 VALIDATION_ERROR`
+  with `fieldErrors[0].field = page` instead of `500 INTERNAL_ERROR`.
+- An exception that wraps a `LocalizedException` is answered with that exception's own code and status
+  instead of `500 INTERNAL_ERROR`. `TENANT_CONTEXT_MISSING` (e.g. inside
+  `CannotCreateTransactionException`) is still a 500, now with its own code.
+- The tenant resolver becomes strict before the web server starts accepting requests, not only on
+  `ContextRefreshedEvent`.
+- A `TenantContext` left on a request thread is logged and cleared when the request starts, and a
+  rejected token clears the tenant.
+
+### Docs
+- `docs/CONSUMING.md` §7: in production, enable `erp.core.notif.requeue.enabled=true` and scheduling
+  (`@EnableScheduling`), and why. The default stays `false`.
+
 ## [1.1.0] — 2026-10-05
 
 MINOR release. It is a MINOR, not a PATCH, because the public NOTIF types gained additive members (see
