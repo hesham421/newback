@@ -6,9 +6,12 @@ import com.erp.tenant.TenantContext;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.retry.RetryContext;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.support.RetrySynchronizationManager;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,6 +26,11 @@ import org.springframework.stereotype.Component;
  * {@code @Retryable} waits with exponential backoff ({@code erp.core.notif.retry.*}: by default 5
  * attempts, 2 s doubling, at most 32 s between two) and tries again. After the last failed attempt
  * {@link #exhausted} marks the row {@code FAILED}. The waiting happens inside Spring Retry.
+ *
+ * <p>erp-core 1.1.1: the last allowed attempt ({@code ATTEMPTS} reaching the maximum) is failed by the
+ * processor directly, an attempt that finds the row claimed by another attempt (a duplicate
+ * delivery after a requeue) ends quietly, and each failed attempt stores in {@code NEXT_ATTEMPT_AT}
+ * the moment this run's next retry is due (from Spring Retry's own counter).
  */
 @Component
 @RequiredArgsConstructor
@@ -43,7 +51,8 @@ public class NotificationDeliveryWorker {
         NotificationDeliveryProcessor.Outcome outcome;
         String error;
         try {
-            Attempt attempt = TenantContext.callAs(tenantId, () -> attempt(logId));
+            int round = currentRound();
+            Attempt attempt = TenantContext.callAs(tenantId, () -> attempt(logId, round));
             outcome = attempt.outcome();
             error = attempt.error();
         } catch (RuntimeException e) {
@@ -62,8 +71,15 @@ public class NotificationDeliveryWorker {
         TenantContext.runAs(tenantId, () -> processor.markFailed(logId, e.getMessage()));
     }
 
-    private Attempt attempt(Long logId) {
-        Optional<OutboundMessage> prepared = processor.prepare(logId);
+    private Attempt attempt(Long logId, int round) {
+        Optional<OutboundMessage> prepared;
+        try {
+            prepared = processor.prepare(logId);
+        } catch (OptimisticLockingFailureException e) {
+            // erp-core 1.1.1: a concurrent attempt (a duplicate delivery) claimed the row first
+            log.debug("Notification {} was claimed concurrently by another attempt — attempt skipped", logId);
+            return new Attempt(NotificationDeliveryProcessor.Outcome.NOT_QUEUED, null);
+        }
         if (prepared.isEmpty()) {
             return new Attempt(NotificationDeliveryProcessor.Outcome.NOT_QUEUED, null);
         }
@@ -74,7 +90,13 @@ public class NotificationDeliveryWorker {
         } catch (RuntimeException e) {
             result = DeliveryResult.failed(describe(e));
         }
-        return new Attempt(processor.recordOutcome(logId, result), result.detail());
+        return new Attempt(processor.recordOutcome(logId, result, round), result.detail());
+    }
+
+    /** The 1-based number of this attempt within the current {@code @Retryable} run. */
+    private static int currentRound() {
+        RetryContext context = RetrySynchronizationManager.getContext();
+        return context != null ? context.getRetryCount() + 1 : 1;
     }
 
     private static String describe(RuntimeException e) {

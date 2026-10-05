@@ -11,6 +11,7 @@ import com.erp.notif.entity.NotificationLog;
 import com.erp.notif.entity.NotificationTemplate;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.tenant.TenantContext;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -26,15 +27,17 @@ import org.springframework.transaction.annotation.Transactional;
  * channel provider <em>between</em> them, outside any transaction, so no database connection is held
  * while a provider talks to SMTP or another remote system:
  * <ol>
- *   <li>{@link #prepare} — the row must still be {@code QUEUED}; increments {@code ATTEMPTS} (committed,
- *       so an attempt cut short by a crash still counts) and builds the {@link OutboundMessage};</li>
+ *   <li>{@link #prepare} — the row must still be {@code QUEUED} and unclaimed; increments {@code ATTEMPTS}
+ *       (committed, so an attempt cut short by a crash still counts), claims the row with a lease in
+ *       {@code NEXT_ATTEMPT_AT} (erp-core 1.1.1) and builds the {@link OutboundMessage};</li>
  *   <li>the provider sends;</li>
  *   <li>{@link #recordOutcome} — {@code SENT} (+ {@link NotificationDispatchedEvent}),
- *       {@code SKIPPED_NO_PROVIDER} (final, never retried), or a failed attempt: the row stays
- *       {@code QUEUED} with {@code LAST_ERROR} and {@code NEXT_ATTEMPT_AT} and the worker retries;</li>
- *   <li>{@link #markFailed} once the retries are exhausted ({@code FAILED} + {@link NotificationFailedEvent}),
- *       or at once when the provider rejects the message permanently (erp-core step 14, e.g. an EMAIL
- *       with no recipient address).</li>
+ *       {@code SKIPPED_NO_PROVIDER} (final, never retried), a failed attempt with attempts left: the row
+ *       stays {@code QUEUED} with {@code LAST_ERROR} and {@code NEXT_ATTEMPT_AT} = when the retry is due
+ *       and the worker retries; or the last allowed attempt failed: {@code FAILED} at once;</li>
+ *   <li>{@code FAILED} + {@link NotificationFailedEvent} when the attempts are exhausted
+ *       ({@link #markFailed} if the worker's retries run out first), or at once when the provider
+ *       rejects the message permanently (erp-core step 14, e.g. an EMAIL with no recipient address).</li>
  * </ol>
  * Every final status clears {@code VARIABLES_JSON}. Delivery is at-least-once: a crash after a send
  * but before its outcome is recorded leaves the row {@code QUEUED} for the requeue job.
@@ -57,9 +60,14 @@ public class NotificationDeliveryProcessor {
         RETRY,
         /** The provider rejected the message permanently: {@code FAILED} after this attempt (step 14). */
         REJECTED,
-        /** The row is unknown or no longer {@code QUEUED}: nothing was done. */
+        /** The last allowed attempt failed: {@code FAILED} after this attempt (erp-core 1.1.1). */
+        EXHAUSTED,
+        /** The row is unknown, no longer {@code QUEUED}, or claimed by another attempt: nothing was done. */
         NOT_QUEUED
     }
+
+    /** {@code LAST_ERROR} of a row failed for exhausted attempts when no attempt recorded an error. */
+    static final String ATTEMPTS_EXHAUSTED = "delivery attempts exhausted";
 
     private final NotificationLogRepository logRepository;
     private final DomainEventPublisher eventPublisher;
@@ -67,7 +75,18 @@ public class NotificationDeliveryProcessor {
 
     /**
      * Starts an attempt: empty when the row is unknown or no longer {@code QUEUED} (e.g. already
-     * delivered after a requeue); otherwise counts the attempt and returns the message to send.
+     * delivered after a requeue), or when it is claimed — its {@code NEXT_ATTEMPT_AT} lies in the
+     * future because another attempt holds its lease or waits out its retry delay; otherwise counts
+     * the attempt, claims the row and returns the message to send.
+     *
+     * <p>erp-core 1.1.1 — the claim: {@code NEXT_ATTEMPT_AT} becomes now + the lease
+     * ({@code erp.core.notif.requeue.stale-after-minutes}) while the provider sends, so the requeue
+     * job (which picks rows whose {@code NEXT_ATTEMPT_AT} is older than now − the same period) never
+     * re-dispatches a row in flight, and a duplicate delivery of the row skips it. Two concurrent
+     * claims are serialized by the row's {@code VERSION}: the loser's commit fails with an
+     * optimistic-locking error, which the worker treats as "not queued". A row that already used
+     * every attempt (e.g. a requeued row with a crash in between) is failed instead of attempted
+     * again, so requeues never push {@code ATTEMPTS} past {@code erp.core.notif.retry.max-attempts}.
      */
     @Transactional
     public Optional<OutboundMessage> prepare(Long logId) {
@@ -76,16 +95,35 @@ public class NotificationDeliveryProcessor {
             log.debug("Notification {} is not queued (unknown or already final) — attempt skipped", logId);
             return Optional.empty();
         }
+        Instant now = Instant.now();
+        if (row.getNextAttemptAt() != null && row.getNextAttemptAt().isAfter(now)) {
+            log.debug("Notification {} is claimed until {} — attempt skipped", logId, row.getNextAttemptAt());
+            return Optional.empty();
+        }
+        if (!NotificationLogDomain.hasAttemptsLeft(row.getAttempts(), maxAttempts())) {
+            log.warn("Notification {} already used its {} attempts — failed instead of attempted again", logId,
+                row.getAttempts());
+            fail(row, row.getLastError() != null ? row.getLastError() : ATTEMPTS_EXHAUSTED);
+            return Optional.empty();
+        }
         int attempt = row.getAttempts() + 1;
         row.setAttempts(attempt);
         row.setRetryCount((short) (attempt - 1));
+        row.setNextAttemptAt(now.plus(lease()));
         logRepository.save(row);
         return Optional.of(toMessage(row));
     }
 
-    /** Records what the provider reported for the attempt {@link #prepare} started. */
+    /**
+     * Records what the provider reported for the attempt {@link #prepare} started.
+     *
+     * @param round the 1-based attempt number of the worker's current delivery run (Spring Retry's
+     *              counter): a failed attempt sets {@code NEXT_ATTEMPT_AT} to exactly when the worker's
+     *              next retry is due, so that retry finds the row unclaimed. It can differ from
+     *              {@code ATTEMPTS} once a requeue restarted the run.
+     */
     @Transactional
-    public Outcome recordOutcome(Long logId, DeliveryResult result) {
+    public Outcome recordOutcome(Long logId, DeliveryResult result, int round) {
         NotificationLog row = logRepository.findWithTemplateById(logId).orElse(null);
         if (row == null || !NotificationLogDomain.from(row).isAwaitingDelivery()) {
             return Outcome.NOT_QUEUED;
@@ -120,10 +158,15 @@ public class NotificationDeliveryProcessor {
                 return Outcome.REJECTED;
             }
             default -> {
+                if (!NotificationLogDomain.hasAttemptsLeft(attempt, maxAttempts())) {
+                    // the last attempt failed: final at once, so the row is never left QUEUED unclaimed
+                    log.warn("Notification {} attempt {} via {} failed: {}", logId, attempt, row.getChannelTypeId(),
+                        result.detail());
+                    fail(row, result.detail());
+                    return Outcome.EXHAUSTED;
+                }
                 row.setLastError(result.detail());
-                boolean more = NotificationLogDomain.hasAttemptsLeft(attempt,
-                    properties.getNotif().getRetry().getMaxAttempts());
-                row.setNextAttemptAt(more ? Instant.now().plusMillis(backoffAfter(attempt)) : null);
+                row.setNextAttemptAt(Instant.now().plusMillis(backoffAfter(Math.max(1, round))));
                 logRepository.save(row);
                 log.warn("Notification {} attempt {} via {} failed: {}", logId, attempt, row.getChannelTypeId(),
                     result.detail());
@@ -157,6 +200,15 @@ public class NotificationDeliveryProcessor {
         log.warn("Notification {} FAILED after {} attempts: {}", row.getId(), row.getAttempts(), reason);
         eventPublisher.publish(new NotificationFailedEvent(row.getId(), row.getChannelTypeId(), row.getRecipientId(),
             row.getTemplateFk().getTemplateCode(), row.getAttempts(), reason));
+    }
+
+    private int maxAttempts() {
+        return properties.getNotif().getRetry().getMaxAttempts();
+    }
+
+    /** How long a claimed row is protected from a second attempt: the requeue staleness period (at least 1 min). */
+    Duration lease() {
+        return Duration.ofMinutes(Math.max(1L, properties.getNotif().getRequeue().getStaleAfterMinutes()));
     }
 
     /** Delay before the attempt after {@code attemptsMade}: initial × multiplier^(n-1), capped. */

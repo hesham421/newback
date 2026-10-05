@@ -30,6 +30,12 @@ import org.springframework.scheduling.annotation.Scheduled;
  * see other tenants), then, per tenant inside {@code TenantContext.callAs}, the tenant-filtered
  * repository query and one {@link NotificationRequestedEvent} per stale row. The events are published
  * outside a transaction, so the delivery listener receives them at once (on the event executor).
+ *
+ * <p>erp-core 1.1.1 — what is never re-dispatched: a row in flight (its attempt claimed it with a
+ * lease in {@code NEXT_ATTEMPT_AT}, see {@code NotificationDeliveryProcessor.prepare}), a row between
+ * two retries ({@code NEXT_ATTEMPT_AT} = when the retry is due), and a row waiting in, or running on,
+ * this node's event executor ({@link NotificationDeliveryTracker}). A row the executor rejected is
+ * untracked and unclaimed, so it is delivered once it is stale.
  */
 @Slf4j
 public class NotificationRequeueJob {
@@ -41,13 +47,26 @@ public class NotificationRequeueJob {
     private final DomainEventPublisher eventPublisher;
     private final JdbcTemplate jdbcTemplate;
     private final ErpCoreProperties properties;
+    private final NotificationDeliveryTracker tracker;
 
+    /** Without a tracker: no row is known to be pending on this node (kept for existing callers). */
     public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
                                   JdbcTemplate jdbcTemplate, ErpCoreProperties properties) {
+        this(logRepository, eventPublisher, jdbcTemplate, properties, new NotificationDeliveryTracker());
+    }
+
+    /**
+     * @param tracker the rows waiting in, or running on, this node's event executor: never requeued
+     *                (erp-core 1.1.1)
+     */
+    public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
+                                  JdbcTemplate jdbcTemplate, ErpCoreProperties properties,
+                                  NotificationDeliveryTracker tracker) {
         this.logRepository = logRepository;
         this.eventPublisher = eventPublisher;
         this.jdbcTemplate = jdbcTemplate;
         this.properties = properties;
+        this.tracker = tracker;
     }
 
     /** Re-dispatches every stale {@code QUEUED} row of every tenant; returns how many. */
@@ -69,10 +88,16 @@ public class NotificationRequeueJob {
 
     private int requeueTenant(Instant cutoff) {
         List<NotificationLog> stale = logRepository.findStale(NotificationLogDomain.STATUS_QUEUED, cutoff);
+        int requeued = 0;
         for (NotificationLog row : stale) {
+            if (tracker.isPending(row.getId())) {
+                log.debug("Notification {} is still queued or in flight on this node — not requeued", row.getId());
+                continue;
+            }
             eventPublisher.publish(new NotificationRequestedEvent(row.getId(), row.getChannelTypeId(),
                 row.getRecipientId(), row.getTemplateFk().getTemplateCode()));
+            requeued++;
         }
-        return stale.size();
+        return requeued;
     }
 }
