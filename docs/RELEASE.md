@@ -1,7 +1,7 @@
 # Releasing erp-core — versioning and compatibility policy
 
 `com.erp:erp-core` follows [Semantic Versioning](https://semver.org/). An application pins an exact
-version (`<erp.core.version>1.0.0</erp.core.version>`) and upgrades on purpose.
+version (`<erp.core.version>1.1.0</erp.core.version>`) and upgrades on purpose.
 
 ## What a version number promises
 
@@ -50,5 +50,6 @@ version (`<erp.core.version>1.0.0</erp.core.version>`) and upgrades on purpose.
 4. A second commit moves `main` to the next development version, `X.(Y+1).0-SNAPSHOT`.
 
 A published version is immutable. Never re-tag; release a new PATCH instead.
+(`v1.0.0` was tagged but never published, because its CI failed; `1.1.0` is the first published version.)
 
 Out of scope: Maven Central, signed artifacts, SBOM.
