@@ -7,8 +7,8 @@ code or its annotations and regenerate.
 
 | | |
 |---|---|
-| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day) |
-| Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference` **1.1.0-SNAPSHOT**, profile `dev`. That is erp-core **1.0.0** with no unreleased changes. OpenAPI `info.version` reads `v0`. |
+| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`) |
+| Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference`, profile `dev`. The documented API is that of erp-core **1.1.0** (tag `v1.1.0` → `10a6811`), which contains the Phase D fix loop. OpenAPI `info.version` reads `v0`. |
 | Generator | `erp-app-reference/governance/governance-tools/api-doc-generator` (unchanged), driven by `_tools/generate_all.py` |
 | Operations | **105** (86 paths) |
 
