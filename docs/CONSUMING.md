@@ -146,7 +146,7 @@ should be `false`.
 | `erp.core.files.storage` | `DB` | `DB`, `LOCAL` (`erp.core.files.local.root`) or `S3` (`erp.core.files.s3.*`). |
 | `erp.core.files.max-content-bytes` / `max-request-bytes` / `public-base-url` | 5 MB / 10 MB / empty | Upload limits and the origin of public file URLs. |
 | `erp.core.notif.retry.*` | 5 attempts, 2 s doubling, 32 s maximum | Asynchronous delivery retries. |
-| `erp.core.notif.requeue.enabled` / `stale-after-minutes` / `interval-ms` | `false` / `10` / `60000` | Requeue job for stale `QUEUED` notifications. It runs only if the application enables scheduling. |
+| `erp.core.notif.requeue.enabled` / `stale-after-minutes` / `interval-ms` | `false` / `10` / `60000` | Requeue job for stale `QUEUED` notifications. It runs only if the application enables scheduling. **Enable it in production** (see §7). |
 | `erp.core.events.executor.*` | 4 / 16 / 500 / `erp-event-` | Event worker pool. |
 | `erp.core.security.customer-login-rate-limit.capacity` / `period` | `10` / `1m` | Customer login limit per `tenant:realm:username`. |
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
@@ -279,6 +279,24 @@ To add SMS or PUSH, or to replace EMAIL or IN_APP, define a `@Component` that im
 provider always wins over a core one for the same channel. To send, use
 `com.erp.notif.crossmodule.NotificationDispatchApi`. Dispatch is asynchronous. Read the outcome from
 `NotificationDispatchedEvent` / `NotificationFailedEvent` or from `NotificationLogQueryApi`.
+
+**Production: enable the requeue job.** Set `erp.core.notif.requeue.enabled=true` and declare
+`@EnableScheduling` (or call `NotificationRequeueJob.requeueStale()` from your own scheduler). The
+default is `false`, and without the job a `QUEUED` notification is never retried after any of these:
+- the JVM stopped while the row waited in the event executor's queue, was being sent, or waited
+  between two retries;
+- the event executor rejected the delivery because its queue was full (`erp.core.events.executor.queue-capacity`).
+  The row stays `QUEUED` and untouched, and the dispatching call is not affected;
+- a send succeeded but its outcome could not be recorded (delivery is at-least-once).
+
+The job is safe to run while deliveries are in flight (since 1.2.0). An attempt claims its row by
+setting `NEXT_ATTEMPT_AT` to now + `stale-after-minutes` while it sends. Between retries the column holds
+the time the next retry is due. The job only picks rows whose `NEXT_ATTEMPT_AT` (or, before any
+attempt, `CREATED_AT`) is older than `stale-after-minutes`. It also skips rows waiting in, or running
+on, its own node's executor. A duplicate delivery skips a claimed row, and a row never exceeds
+`erp.core.notif.retry.max-attempts` attempts, however often it is requeued. A crashed attempt is
+therefore picked up between `stale-after-minutes` and twice that after it started. Keep
+`stale-after-minutes` well above your slowest provider call.
 
 ## 8. File storage — `StorageProvider`
 

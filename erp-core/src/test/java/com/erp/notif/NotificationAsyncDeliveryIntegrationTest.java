@@ -1,6 +1,7 @@
 package com.erp.notif;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -9,14 +10,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.erp.autoconfigure.ErpCoreProperties;
+import com.erp.events.DomainEventPublisher;
 import com.erp.events.NotificationDispatchedEvent;
 import com.erp.events.NotificationFailedEvent;
+import com.erp.events.NotificationRequestedEvent;
 import com.erp.notif.channel.EmailChannelProvider;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
 import com.erp.notif.domain.NotificationLogDomain;
 import com.erp.notif.exception.NotifErrorCodes;
 import com.erp.notif.repository.NotificationLogRepository;
+import com.erp.notif.service.NotificationDeliveryListener;
+import com.erp.notif.service.NotificationDeliveryTracker;
+import com.erp.notif.service.NotificationDeliveryWorker;
 import com.erp.notif.service.NotificationRequeueJob;
 import com.erp.tenant.TenantContext;
 import com.erp.testsupport.AbstractAsyncIntegrationTest;
@@ -30,11 +37,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -66,6 +75,14 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
     private JdbcTemplate jdbc;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private NotificationDeliveryWorker worker;
+    @Autowired
+    private NotificationDeliveryTracker tracker;
+    @Autowired
+    private DomainEventPublisher eventPublisher;
+    @Autowired
+    private ErpCoreProperties properties;
 
     private NotifTestFixtures fixtures;
     private long recipientId;
@@ -275,7 +292,162 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
         assertThat(dispatched.tenantInThread()).isEqualTo(tenantId);
     }
 
+    // erp-core 1.2.0 — claim/lease before send, executor rejection, attempts bounded across requeues.
+
+    @Test
+    void requeueJob_neverRedispatchesARowInFlight_andADuplicateDeliveryDoesNotSendTwice() throws Exception {
+        String address = NotifTestFixtures.unique("inflight-") + "@example.test";
+        CountDownLatch sending = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger sendsToAddress = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (isAddressedTo(invocation.getArgument(0), address)) {
+                sendsToAddress.incrementAndGet();
+                sending.countDown();
+                release.await(30, TimeUnit.SECONDS);
+            }
+            return null;
+        }).when(mailSender).send(any(MimeMessage.class));
+        long id = insertQueuedRow(templateId(), "timezone('UTC', now()) - interval '1 hour'", address);
+        try {
+            requeueJob.requeueStale();
+            assertThat(sending.await(20, TimeUnit.SECONDS)).as("the first delivery reached the provider").isTrue();
+
+            // in flight: claimed with a lease, tracked on this node
+            Map<String, Object> inFlight = jdbc.queryForMap("SELECT * FROM NOTIF_LOG WHERE ID = ?", id);
+            assertThat(((Number) inFlight.get("attempts")).intValue()).isEqualTo(1);
+            assertThat(inFlight.get("next_attempt_at")).as("the attempt holds a lease").isNotNull();
+            assertThat(tracker.isPending(id)).isTrue();
+            Instant cutoff = Instant.now().minus(10, ChronoUnit.MINUTES);
+            assertThat(TenantContext.callAs(PLATFORM,
+                () -> logRepository.findStale(NotificationLogDomain.STATUS_QUEUED, cutoff).stream()
+                    .map(log -> log.getId()).toList())).as("a leased row is not stale").doesNotContain(id);
+
+            // this node's job, another node's job (no tracker) and a duplicate delivery all leave it alone
+            requeueJob.requeueStale();
+            new NotificationRequeueJob(logRepository, eventPublisher, jdbc, properties).requeueStale();
+            worker.deliver(PLATFORM, id);
+            assertThat(((Number) jdbc.queryForObject("SELECT ATTEMPTS FROM NOTIF_LOG WHERE ID = ?", Integer.class, id))
+                .intValue()).as("no second attempt while in flight").isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+        Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_SENT);
+        awaitExecutorIdle();
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(1);
+        assertThat(row.get("next_attempt_at")).isNull();
+        assertThat(sendsToAddress.get()).as("sent exactly once").isEqualTo(1);
+        assertThat(tracker.isPending(id)).isFalse();
+    }
+
+    @Test
+    void requeueJob_skipsARowWaitingInThisNodesExecutorQueue() {
+        String address = NotifTestFixtures.unique("waiting-") + "@example.test";
+        long id = insertQueuedRow(templateId(), "timezone('UTC', now()) - interval '1 hour'", address);
+        assertThat(tracker.track(id)).isTrue();   // as the listener does before it submits
+        try {
+            requeueJob.requeueStale();
+            awaitExecutorIdle();
+            assertThat(status(id)).isEqualTo(NotificationLogDomain.STATUS_QUEUED);
+            assertThat(((Number) jdbc.queryForObject("SELECT ATTEMPTS FROM NOTIF_LOG WHERE ID = ?", Integer.class, id))
+                .intValue()).isZero();
+        } finally {
+            tracker.release(id);
+        }
+        requeueJob.requeueStale();
+        assertThat(((Number) awaitStatus(id, NotificationLogDomain.STATUS_SENT).get("attempts")).intValue()).isEqualTo(1);
+    }
+
+    @Test
+    void anExecutorRejection_leavesTheRowQueuedAndUntouched_andTheRequeueJobDeliversItLater() {
+        String address = NotifTestFixtures.unique("rejected-") + "@example.test";
+        long id = insertQueuedRow(templateId(), "timezone('UTC', now())", address);
+        NotificationDeliveryListener rejecting = new NotificationDeliveryListener(worker, task -> {
+            throw new TaskRejectedException("erp-event- queue full");
+        }, tracker);
+
+        assertThatCode(() -> rejecting.onNotificationRequested(
+            new NotificationRequestedEvent(id, "EMAIL", recipientId, TEMPLATE))).doesNotThrowAnyException();
+
+        Map<String, Object> rejected = jdbc.queryForMap("SELECT * FROM NOTIF_LOG WHERE ID = ?", id);
+        assertThat(rejected.get("notification_status_id")).isEqualTo(NotificationLogDomain.STATUS_QUEUED);
+        assertThat(((Number) rejected.get("attempts")).intValue()).isZero();
+        assertThat(rejected.get("next_attempt_at")).as("not claimed").isNull();
+        assertThat(tracker.isPending(id)).isFalse();
+
+        // fresh: not stale yet, so not requeued
+        requeueJob.requeueStale();
+        awaitExecutorIdle();
+        assertThat(status(id)).isEqualTo(NotificationLogDomain.STATUS_QUEUED);
+
+        jdbc.update("UPDATE NOTIF_LOG SET CREATED_AT = timezone('UTC', now()) - interval '1 hour' WHERE ID = ?", id);
+        requeueJob.requeueStale();
+        Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_SENT);
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(1);
+    }
+
+    @Test
+    void aRequeuedRow_neverExceedsTheMaximumAttempts() {
+        String address = NotifTestFixtures.unique("bounded-") + "@example.test";
+        AtomicInteger sendsToAddress = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (isAddressedTo(invocation.getArgument(0), address)) {
+                sendsToAddress.incrementAndGet();
+            }
+            throw new MailSendException("smtp still down");
+        }).when(mailSender).send(any(MimeMessage.class));
+        // three attempts were made before the JVM stopped; two are left (max 5)
+        long id = insertQueuedRow(templateId(), "timezone('UTC', now()) - interval '1 hour'", address);
+        jdbc.update("UPDATE NOTIF_LOG SET ATTEMPTS = 3, RETRY_COUNT = 2, LAST_ERROR = 'smtp down',"
+            + " NEXT_ATTEMPT_AT = timezone('UTC', now()) - interval '1 hour' WHERE ID = ?", id);
+
+        requeueJob.requeueStale();
+        Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_FAILED);
+        awaitExecutorIdle();
+
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(5);
+        assertThat(((Number) row.get("retry_count")).intValue()).isEqualTo(4);
+        assertThat((String) row.get("last_error")).contains("smtp still down");
+        assertThat(row.get("next_attempt_at")).isNull();
+        assertThat(sendsToAddress.get()).as("only the two attempts left").isEqualTo(2);
+        NotificationFailedEvent failed = (NotificationFailedEvent) awaitEvent(NotificationFailedEvent.class, id).event();
+        assertThat(failed.getAttempts()).isEqualTo(5);
+    }
+
+    @Test
+    void aRequeuedRow_thatAlreadyUsedEveryAttempt_isFailedWithoutAnotherSend() {
+        String address = NotifTestFixtures.unique("used-up-") + "@example.test";
+        AtomicInteger sendsToAddress = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (isAddressedTo(invocation.getArgument(0), address)) {
+                sendsToAddress.incrementAndGet();
+            }
+            return null;
+        }).when(mailSender).send(any(MimeMessage.class));
+        long id = insertQueuedRow(templateId(), "timezone('UTC', now()) - interval '1 hour'", address);
+        jdbc.update("UPDATE NOTIF_LOG SET ATTEMPTS = 5, RETRY_COUNT = 4, LAST_ERROR = 'smtp down' WHERE ID = ?", id);
+
+        requeueJob.requeueStale();
+        Map<String, Object> row = awaitStatus(id, NotificationLogDomain.STATUS_FAILED);
+        awaitExecutorIdle();
+
+        assertThat(((Number) row.get("attempts")).intValue()).isEqualTo(5);
+        assertThat(row.get("error_message")).isEqualTo("smtp down");
+        assertThat(row.get("variables_json")).isNull();
+        assertThat(sendsToAddress.get()).isZero();
+    }
+
     // ---------------------------------------------------------------------------------------------
+
+    private long templateId() {
+        return jdbc.queryForObject("SELECT ID FROM NOTIF_TEMPLATE WHERE TENANT_ID = 1 AND TEMPLATE_CODE = ?", Long.class,
+            TEMPLATE);
+    }
+
+    private static boolean isAddressedTo(MimeMessage message, String address) throws Exception {
+        return message.getAllRecipients() != null && Arrays.stream(message.getAllRecipients())
+            .anyMatch(recipient -> address.equalsIgnoreCase(recipient.toString()));
+    }
 
     private DispatchCommand emailCommand(String email) {
         return new DispatchCommand(recipientId, TEMPLATE, List.of("EMAIL"), "TEST", null, null,
@@ -291,12 +463,16 @@ class NotificationAsyncDeliveryIntegrationTest extends AbstractAsyncIntegrationT
 
     /** Audit timestamps are stored as UTC wall-clock time (Hibernate binds {@code Instant} in UTC). */
     private long insertQueuedRow(long templateId, String createdAtSql) {
+        return insertQueuedRow(templateId, createdAtSql, "requeue@example.test");
+    }
+
+    private long insertQueuedRow(long templateId, String createdAtSql, String email) {
         return jdbc.queryForObject("INSERT INTO NOTIF_LOG (ID, TENANT_ID, RECIPIENT_ID, CHANNEL_TYPE_ID,"
                 + " NOTIFICATION_STATUS_ID, MODULE_CODE, RETRY_COUNT, ATTEMPTS, TEMPLATE_FK, VARIABLES_JSON,"
                 + " CREATED_BY, CREATED_AT, VERSION)"
                 + " VALUES (nextval('SEQ_NOTIF_LOG'), 1, ?, 'EMAIL', 'QUEUED', 'TEST', 0, 0, ?,"
-                + " '{\"email\":\"requeue@example.test\"}', 'test', " + createdAtSql + ", 0) RETURNING ID",
-            Long.class, recipientId, templateId);
+                + " ?, 'test', " + createdAtSql + ", 0) RETURNING ID",
+            Long.class, recipientId, templateId, "{\"email\":\"" + email + "\"}");
     }
 
     private String status(long id) {
