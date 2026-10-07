@@ -583,3 +583,68 @@ its REQs. No orphan, no dangling id.
 Both actions are effective only inside the PLATFORM tenant (RULE-TENANT-007). The frontend's PLATFORM
 screen archive is `governance/frontend/modules/PLATFORM/tests/`.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C3 — automated tenant-isolation tests (plan §5 C.3, item 12)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+REQ-TENANT-016 (row-level isolation) and RULE-TENANT-008 (provisioning SQL names `TENANT_ID`) state the
+isolation guarantee, but nothing failed the build when a new entity or a new raw SQL statement escaped it.
+This addendum turns the guarantee into one requirement with three checkable parts: the entity set, the HTTP
+behaviour of every core module, and the raw-SQL rule. It names the test or review rule that holds each part.
+Ids continue the module's sequence from the highest number ever issued (REQ / AC 023, RULE 009; the TENANT
+analysis has no pre-vendoring history). No ENT, DBF, XM, endpoint, permission, error code, schema change or
+migration is added.
+
+### 1. Requirements (§A4) — NEW
+
+### REQ-TENANT-024 — ضمان عزل المستأجرين / Tenant isolation guarantee
+Pattern    : ubiquitous
+Statement  : The system shall keep every tenant-scoped entity under Hibernate's tenant discriminator — every `@Entity` under `com.erp` extends `AuditableEntity` and so carries `@TenantId` on `TENANT_ID`, except the documented global set (RULE-TENANT-010) — so that a caller's search, list and read by id in every core module return only its own tenant's rows and an id of another tenant answers 404; and every raw SQL statement on a tenant-scoped table shall name `TENANT_ID` (RULE-TENANT-011).
+Traces     : US-TENANT-004
+Entities   : ENT-TENANT-001 (FK target); every tenant-scoped entity (21 classes, listed in §3)
+Rationale  : POL-TENANT-007; REQ-TENANT-016 made checkable by the build (plan §5 C.3)
+Source     : common/domain/AuditableEntity.java:35-37; common/domain/GlobalAuditableEntity.java (the global base); tenant/config/TenantIdentifierResolver.java:36-47
+Priority   : HIGH
+#### AC-TENANT-024 — [REQ-TENANT-024]
+Given two tenants A and B provisioned through `POST /api/v1/platform/tenants`, and in each of them one row of SEC (a role), MDL (a lookup type), FILE (a document), NOTIF (a template), CU (a configuration override), SEQUENCE (a number series) and AUDIT (the `CORE_AUDIT_EVENT` row written when the role was created)
+When A's administrator searches or lists each module and asks for B's row by its id
+Then every row A receives belongs to tenant A and includes A's new row, never B's; B's id answers 404 with the module's not-found code — `SEC-404-ROLE` (`GET /api/v1/sec/roles/{id}`), `MDL-404-TYPE` (`PUT /api/v1/mdl/lookup-types/{id}`: MDL has no read-by-id endpoint; B's row stays unchanged), `FILE_DOCUMENT_NOT_FOUND` (`GET /api/v1/files/{id}`), `NOTIF_TEMPLATE_NOT_FOUND` (`GET /api/v1/notifications/templates/{id}`), `APP_CONFIGURATION_NOT_FOUND` (`GET /api/v1/common/configurations/{key}` with B's key), `NUMBER_SERIES_NOT_FOUND` (`GET /api/v1/sequence/series/{id}`); AUDIT has no read-by-id endpoint, so `GET /api/v1/audit/events?entityId=<B's role id>` answers an empty page to A while B finds its row; B sees its own rows the same way (`TenantIsolationIntegrationTest`)
+And when a production `@Entity` under `com.erp` outside the global set does not extend `AuditableEntity`, or a class of the global set carries `@TenantId` or is not an entity, the build fails naming the class and telling the developer to make it tenant-scoped or to add it to the global list explicitly (`TenantScopedEntityTest`)
+
+### 2. Business rules (§A5) — NEW
+
+### RULE-TENANT-010 — المجموعة العامة من الكيانات / The global entity set
+Scope      : every JPA entity of erp-core
+Trigger    : at build time (ArchUnit), whenever an entity is added
+Statement  : The system shall treat exactly these entities as global (no Hibernate `@TenantId`; they extend `GlobalAuditableEntity`, not `AuditableEntity`): `com.erp.tenant.entity.Tenant` (`CORE_TENANT`, the tenant registry); `com.erp.sec.entity.ModuleRegistry` (`SEC_MODULE_REG`), `com.erp.sec.entity.ScreenRegistry` (`SEC_SCREEN_REG`) and `com.erp.sec.entity.ActionRegistry` (`SEC_ACTION_REG`), the code-defined permission catalog; `com.erp.cu.entity.AppConfiguration` (`CU_APP_CONFIGURATION`: nullable `TENANT_ID`, `NULL` = platform default, a tenant id = that tenant's override, every query names the owner explicitly in `ConfigurationService`). Every other entity extends `AuditableEntity`. A new global entity is added to the list explicitly, with an analysis entry that says why.
+Data source: the entity classes
+Message    : — (build failure: "<class> is not tenant-scoped: extend AuditableEntity — or, only if it is truly global, add it explicitly to TenantScopedEntityTest.GLOBAL_ENTITIES with an analysis entry that says why")
+Traces     : REQ-TENANT-024
+Source     : tenant/entity/Tenant.java:32-40; sec/entity/ModuleRegistry.java:29-36; sec/entity/ScreenRegistry.java:35-45; sec/entity/ActionRegistry.java:35-45; cu/entity/AppConfiguration.java:37-41, :50
+
+### RULE-TENANT-011 — كل جملة SQL صريحة تسمّي TENANT_ID / Every raw SQL statement names TENANT_ID
+Scope      : every `JdbcTemplate` / native SQL statement on a tenant-scoped table, in every module (RULE-TENANT-008 is its provisioning case)
+Trigger    : on code review (`gov-validate-backend-feature` checklist), wherever raw SQL is added
+Statement  : The system shall name `TENANT_ID` explicitly in every raw SQL statement that touches a tenant-scoped table: as the inserted value; as a predicate on every tenant-scoped table and join of a read, update or delete; or as the selected column of a deliberate cross-tenant discovery scan whose follow-up work then runs tenant by tenant. Raw SQL bypasses Hibernate's discriminator.
+Data source: the statement text
+Message    : — (review finding)
+Traces     : REQ-TENANT-024
+Source     : `governance/rules/GOVERNANCE-RULES.md` → Governance Rules; `.claude/skills/gov-validate-backend-feature/SKILL.md`; tenant/TenantProvisioningContributor.java:14-17. Where raw SQL may live at all: `CoreLibraryRulesArchTest.rule7_raw_jdbc_only_in_documented_places`, `rule7_native_queries_only_in_tenant_sequence_audit`
+
+### 3. Verified as-built facts
+| Kind | Fact | Source |
+|---|---|---|
+| NEW (note) | Tenant-scoped entities (21, each `extends AuditableEntity`): AUDIT `AuditEvent`; FILE `FileCategory`, `FileDocument`; MDL `LookupType`, `LookupValue`; NOTIF `NotificationChannelConfig`, `NotificationInboxItem`, `NotificationLog`, `NotificationTemplate`; SEC `ActiveSession`, `AuditLogEntry`, `CustomerVerifyToken`, `PasswordResetToken`, `Role`, `RoleActionGrant`, `RoleModuleGrant`, `RoleScreenGrant`, `SignupRequest`, `User`, `UserRoleAssignment`; SEQUENCE `NumberSeries`. With `CU_APP_CONFIGURATION` they are the 22 `TENANT_ID` tables of `../P2/db-script-tenant.md`. | the `@Entity` classes under erp-core/src/main/java/com/erp; `TenantSchemaIntegrationTest.everyEntity_extendsAuditableEntity_exceptTheFourGlobalOnes` (asserts 21) |
+| NEW (note) | Raw SQL on tenant-scoped tables: 15 statements, each naming `TENANT_ID` (RULE-TENANT-011). SEC provisioning 6 (`SEC_ROLE`, `SEC_ROLE_MODULE_GRANT`, `SEC_ROLE_SCREEN_GRANT`, `SEC_ROLE_ACTION_GRANT`, `SEC_USER`, `SEC_USER_ROLE`), MDL provisioning 2, NOTIF provisioning 2, SEQUENCE provisioning 1, `AuditEventStore` 3 (the insert; retention's tenant scan and per-tenant delete), `NotificationRequeueJob` 1 (tenant scan, then JPA per tenant through `TenantContext.callAs`). There is no `@Query(nativeQuery = true)` and no `createNativeQuery`. | sec, mdl, notif, sequence `tenant/*TenantProvisioningContributor.java`; audit/service/AuditEventStore.java:43-46, :98-103; notif/service/NotificationRequeueJob.java:43-44, :77-81 |
+
+### 4. Tests and rules that hold it
+| Kind | Item | Covers |
+|---|---|---|
+| NEW | ArchUnit `erp-core/src/test/java/com/erp/architecture/TenantScopedEntityTest.java` | RULE-TENANT-010; the entity part of REQ-TENANT-024 |
+| CHANGED | `erp-core/src/test/java/com/erp/tenant/TenantIsolationIntegrationTest.java` (step 05: SEC users only) gains one test per module: SEC role, MDL lookup type, FILE document, NOTIF template, CU configuration, SEQUENCE number series, AUDIT event | AC-TENANT-024, the HTTP part |
+| NEW | `governance/rules/GOVERNANCE-RULES.md` → Governance Rules: the raw-SQL rule; one checklist item of `gov-validate-backend-feature` | RULE-TENANT-011 |
+
+### 5. Frontend impact
+None: no endpoint, field, permission, page code or error code changes.
