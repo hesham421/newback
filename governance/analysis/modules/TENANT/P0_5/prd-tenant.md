@@ -159,7 +159,7 @@ US-TENANT-010
   Title          : استعادة مدير مستأجر / Recover a tenant's administrator
   Story          : As a platform operator, I need to set a new password for a tenant's super administrator when that tenant is locked out, so that the organisation regains access without a database intervention.
   Priority       : HIGH
-  Success metric : the administrator signs in with the new password and must change it (TC-CORE-TENANT-035)
+  Success metric : the administrator signs in with the new password and must change it (TC-CORE-TENANT-034)
   Traces         : POL-TENANT-006, POL-TENANT-011, POL-TENANT-013
   Source         : `../P1/srs-tenant.md` REQ-TENANT-027
   Status         : IMPLEMENTED (erp-core 1.3.0)
