@@ -66,7 +66,7 @@
       "worktree": ".worktrees/tm-d",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "a13c59d7399aab600",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-d-report.md",
@@ -81,14 +81,18 @@
       ],
       "wave": "2",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "FIXING",
       "branch": "tm/c3-tenant-isolation-tests",
       "worktree": ".worktrees/tm-c3",
       "attempts": 1,
       "deviations": 5,
       "implementer_agent": "ac59dc8798c2f6e2b",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "abd36c5aa783de8be",
+      "review": {
+        "verdict": "FAIL",
+        "round": 1,
+        "findings": 1
+      },
       "report": "docs/steps/tm-c3-report.md",
       "merged_commit": null
     },
@@ -335,6 +339,18 @@
       "step": "C3",
       "event": "REVIEW",
       "note": "implementer COMPLETE 2c11618 (399/10, P-LIVE 150 pass; JdbcTemplate audit 15/15 ok)"
+    },
+    {
+      "at": "2026-10-07T20:27:06Z",
+      "step": "C3",
+      "event": "FIXING",
+      "note": "reviewer FAIL: archived run report names wrong code under test (stale defaults); code/tests PASS; trial merge with G green 408/10"
+    },
+    {
+      "at": "2026-10-07T20:27:06Z",
+      "step": "D",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
     }
   ]
 }
