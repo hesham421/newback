@@ -67,8 +67,10 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("select count(*) from mdl_lookup_type where tenant_id = ?",
             Integer.class, tenantId)).isEqualTo(4);
         // PASSWORD_RESET, ACCOUNT_ACTIVATION (V9) + CUSTOMER_VERIFY_EMAIL, CUSTOMER_PASSWORD_RESET (V11, step 06)
-        assertThat(jdbcTemplate.queryForObject("select count(*) from notif_template where tenant_id = ?",
-            Integer.class, tenantId)).isEqualTo(4);
+        // + STAFF_PASSWORD_CHANGED (V17, tenant-maturity D): every PLATFORM template is copied, nothing else
+        assertThat(jdbcTemplate.queryForList("select template_code from notif_template where tenant_id = ?",
+            String.class, tenantId)).containsExactlyInAnyOrder("PASSWORD_RESET", "ACCOUNT_ACTIVATION",
+            "CUSTOMER_VERIFY_EMAIL", "CUSTOMER_PASSWORD_RESET", "STAFF_PASSWORD_CHANGED");
 
         // ... but never PLATFORM_TENANT_MANAGE: the platform API stays closed to it
         assertThat(jdbcTemplate.queryForObject("select count(*) from sec_role_action_grant g"
