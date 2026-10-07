@@ -89,7 +89,9 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `APP_CONFIGURATION_FIELDS_REQUIRED` | APP_CONFIGURATION_FIELDS_REQUIRED | AppConfigurationDomain.create |
 | 403 FORBIDDEN | `SETTING_PLATFORM_SCOPE_FORBIDDEN` | SETTING_PLATFORM_SCOPE_FORBIDDEN | AppConfigurationDomain.assertScopeAllowed |
+| 409 CONFLICT | `APP_CONFIGURATION_KEY_DUPLICATE` | APP_CONFIGURATION_KEY_DUPLICATE | AppConfigurationDomain.create |
 
 ### Other Possible Responses
 
@@ -354,6 +356,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `APP_CONFIGURATION_FIELDS_REQUIRED` | APP_CONFIGURATION_FIELDS_REQUIRED | AppConfigurationDomain.assertCanUpdate |
 | 403 FORBIDDEN | `SETTING_PLATFORM_SCOPE_FORBIDDEN` | SETTING_PLATFORM_SCOPE_FORBIDDEN | AppConfigurationDomain.assertScopeAllowed |
 | 404 NOT_FOUND | `APP_CONFIGURATION_NOT_FOUND` | APP_CONFIGURATION_NOT_FOUND | ConfigurationService.findInScope |
 

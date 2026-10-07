@@ -90,6 +90,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 409 CONFLICT | `SEC-409-ACTION-DUP` | SEC_409_ACTION_DUP | ActionRegistryDomain.create |
 | 409 CONFLICT | `SEC-409-SCREEN-NOT-REGISTERED` | SEC_409_SCREEN_NOT_REGISTERED | ActionRegistryDomain.create |
 
 ### Other Possible Responses
@@ -171,7 +172,11 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `RegistryController.registerModule`, `RegistryService.registerModule`, `RegistryService.normalize`, `ModuleRegistryDomain.create`, `ModuleRegistryMapper.toEntity`, `ModuleRegistryMapper.toResponse`, `new ModuleRegistryDomain()` and found no throw site naming a module error code.
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `RegistryController.registerModule`, `RegistryService.registerModule`, `RegistryService.normalize`, `ModuleRegistryDomain.create`, `ModuleRegistryMapper.toEntity`, `ModuleRegistryMapper.toResponse`, `new ModuleRegistryDomain()`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 409 CONFLICT | `SEC-409-MODULE-DUP` | SEC_409_MODULE_DUP | ModuleRegistryDomain.create |
 
 ### Other Possible Responses
 
@@ -290,6 +295,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 409 CONFLICT | `SEC-409-MODULE-NOT-REGISTERED` | SEC_409_MODULE_NOT_REGISTERED | ScreenRegistryDomain.create |
+| 409 CONFLICT | `SEC-409-SCREEN-DUP` | SEC_409_SCREEN_DUP | ScreenRegistryDomain.create |
 
 ### Other Possible Responses
 

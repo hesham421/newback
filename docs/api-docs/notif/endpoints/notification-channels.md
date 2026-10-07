@@ -75,7 +75,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `NotificationChannelController.create`, `NotificationChannelConfigService.create`, `NotificationChannelConfigService.normalize`, `NotificationChannelConfigDomain.create`, `NotificationChannelConfigMapper.toEntity`, `NotificationChannelConfigMapper.toResponse`, `new NotificationChannelConfigDomain()` and found no throw site naming a module error code.
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationChannelController.create`, `NotificationChannelConfigService.create`, `NotificationChannelConfigService.normalize`, `NotificationChannelConfigDomain.create`, `NotificationChannelConfigMapper.toEntity`, `NotificationChannelConfigMapper.toResponse`, `new NotificationChannelConfigDomain()`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 400 BAD_REQUEST | `NOTIF_CHANNEL_TYPE_REQUIRED` | NOTIF_CHANNEL_TYPE_REQUIRED | NotificationChannelConfigDomain.create |
+| 409 CONFLICT | `NOTIF_CHANNEL_CONFIG_DUPLICATE` | NOTIF_CHANNEL_CONFIG_DUPLICATE | NotificationChannelConfigDomain.create |
 
 ### Other Possible Responses
 

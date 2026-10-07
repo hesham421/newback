@@ -415,6 +415,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 400 BAD_REQUEST | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileService.resolveTargetStatus |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.softDelete |
+| 422 UNPROCESSABLE_CONTENT | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileDocumentDomain.assertCanTransitionTo |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |
 
 ### Other Possible Responses

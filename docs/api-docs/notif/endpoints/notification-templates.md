@@ -96,7 +96,9 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `NOTIF_TEMPLATE_BILINGUAL_REQUIRED` | NOTIF_TEMPLATE_BILINGUAL_REQUIRED | NotificationTemplateDomain.create |
 | 404 NOT_FOUND | `NOTIF_TEMPLATE_ATTACHMENT_NOT_FOUND` | NOTIF_TEMPLATE_ATTACHMENT_NOT_FOUND | NotificationTemplateService.assertAttachmentAvailable |
+| 409 CONFLICT | `NOTIF_TEMPLATE_CODE_DUPLICATE` | NOTIF_TEMPLATE_CODE_DUPLICATE | NotificationTemplateDomain.create |
 
 ### Other Possible Responses
 
@@ -351,6 +353,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `NOTIF_TEMPLATE_BILINGUAL_REQUIRED` | NOTIF_TEMPLATE_BILINGUAL_REQUIRED | NotificationTemplateDomain.assertBilingualBody |
 | 404 NOT_FOUND | `NOTIF_TEMPLATE_ATTACHMENT_NOT_FOUND` | NOTIF_TEMPLATE_ATTACHMENT_NOT_FOUND | NotificationTemplateService.assertAttachmentAvailable |
 | 404 NOT_FOUND | `NOTIF_TEMPLATE_NOT_FOUND` | NOTIF_TEMPLATE_NOT_FOUND | NotificationTemplateService.update |
 

@@ -82,6 +82,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-ACTION` | SEC_404_ACTION | RoleGrantService.grantAction |
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantAction |
+| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-SCREEN-GRANT` | SEC_409_NO_SCREEN_GRANT | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-VIEW-GRANT` | SEC_409_NO_VIEW_GRANT | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-SOD-CONFLICT` | SEC_409_SOD_CONFLICT | RoleActionGrantDomain.create |
@@ -99,7 +100,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Revoke action grant**
 
-سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-009)
+سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-055)
 
 Operation ID: `revokeAction`
 
@@ -328,6 +329,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-MODULE` | SEC_404_MODULE | RoleGrantService.grantModule |
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantModule |
+| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleModuleGrantDomain.create |
 
 ### Other Possible Responses
 
@@ -464,6 +466,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantScreen |
 | 404 NOT_FOUND | `SEC-404-SCREEN` | SEC_404_SCREEN | RoleGrantService.grantScreen |
+| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleScreenGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-MODULE-GRANT` | SEC_409_NO_MODULE_GRANT | RoleScreenGrantDomain.create |
 
 ### Other Possible Responses
@@ -479,7 +482,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Revoke screen grant**
 
-سحب منح شاشة مع منح إجراءاتها (RULE-SEC-008)
+سحب منح شاشة مع منح إجراءاتها (RULE-SEC-054)
 
 Operation ID: `revokeScreen`
 

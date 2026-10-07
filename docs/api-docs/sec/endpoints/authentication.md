@@ -317,7 +317,11 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `AuthController.signup`, `SignupRequestService.submit`, `SignupRequestDomain.create`, `SignupRequestMapper.toEntity`, `SignupRequestMapper.toResponse`, `new SignupRequestDomain()` and found no throw site naming a module error code.
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `AuthController.signup`, `SignupRequestService.submit`, `SignupRequestDomain.create`, `SignupRequestMapper.toEntity`, `SignupRequestMapper.toResponse`, `new SignupRequestDomain()`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 409 CONFLICT | `SEC-409-SIGNUP-DUP` | SEC_409_SIGNUP_DUP | SignupRequestDomain.create |
 
 ### Other Possible Responses
 

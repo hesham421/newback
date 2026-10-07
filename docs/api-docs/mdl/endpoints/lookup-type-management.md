@@ -86,6 +86,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 409 CONFLICT | `MDL-409-MODULE-NOT-REGISTERED` | MDL_409_MODULE_NOT_REGISTERED | LookupTypeDomain.create |
+| 409 CONFLICT | `MDL-409-TYPE-DUP` | MDL_409_TYPE_DUP | LookupTypeDomain.create |
 
 ### Other Possible Responses
 

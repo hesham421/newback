@@ -28,6 +28,10 @@ public class HxService {
         return ServiceResult.success(null);
     }
 
+    private void refuseRawStatus(String to) {
+        throw new LocalizedException(Status.VALIDATION_ERROR, HxErrorCodes.HX_422_BAD_TRANSITION, to);
+    }
+
     private FieldValueConverter converter() {
         return new HxInstantConverter(Set.of("createdAt"));
     }

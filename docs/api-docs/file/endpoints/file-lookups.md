@@ -43,7 +43,11 @@ Shape: `array of LookupOptionResponse`
 
 ### Business Responses
 
-None reached — walked `FileLookupController.get`, `FileLookupService.get`, `FileLookupService.toResponse` and found no throw site naming a module error code.
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileLookupController.get`, `FileLookupService.get`, `FileLookupService.toResponse`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `FILE_LOOKUP_KEY_UNKNOWN` | FILE_LOOKUP_KEY_UNKNOWN | FileLookupService.get |
 
 ### Other Possible Responses
 

@@ -500,12 +500,23 @@ def attach_business_errors(document: ApiDocument, classes: dict[str, ClassInfo],
     values = {c.name: c.value for c in document.error_codes}
     registered_status = {c.name: c.status for c in document.error_codes if c.status}
     sites = count_throw_sites(classes, helpers)
-    helper_status: dict[str, str] = {}
-    for name in sorted(classes):
-        for method_name in sorted(classes[name].methods):
-            for mi in classes[name].methods[method_name]:
-                for be in _helper_throws(classes[name], mi.body, "", helpers, classes):
-                    helper_status.setdefault(be.code, be.status)
+    # A code's registered Status is the one at its first throw site in source-path order (what
+    # error_mapping_extractor reads for direct throws); a helper call site competes on that order.
+    first_direct: dict[str, Path] = {}
+    first_helper: dict[str, tuple[Path, str]] = {}
+    for cls in sorted(classes.values(), key=lambda c: c.path):
+        for m in THROW_RE.finditer(cls.raw):
+            first_direct.setdefault(m.group(2), cls.path)
+        for method_name in sorted(cls.methods):
+            for mi in cls.methods[method_name]:
+                for be in _helper_throws(cls, mi.body, "", helpers, classes):
+                    if be.code not in first_helper or cls.path < first_helper[be.code][0]:
+                        first_helper[be.code] = (cls.path, be.status)
+    # Only the module's own catalog takes a Status this way; the shared framework codes keep theirs.
+    module_codes = {c.name for c in document.error_codes
+                    if not re.search(r"(^|[\\/])common[\\/]", c.source_file or "")}
+    helper_status = {code: status for code, (path, status) in first_helper.items()
+                     if code not in first_direct or path < first_direct[code]}
     bound_counts: dict[str, int] = {}
 
     for ep in document.endpoints:
@@ -537,7 +548,7 @@ def attach_business_errors(document: ApiDocument, classes: dict[str, ClassInfo],
     if document.auth_entry_point:
         via_codes[document.auth_entry_point.code] = document.auth_entry_point.handler
     for code in document.error_codes:
-        if not code.status and code.name in helper_status:
+        if code.name in helper_status and code.name in module_codes:
             # The pairing is spelled out at a helper's call site (the code is its argument, the
             # Status its throw's) -- the same evidence a direct throw gives.
             code.status = helper_status[code.name]

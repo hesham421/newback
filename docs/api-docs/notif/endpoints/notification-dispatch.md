@@ -64,6 +64,7 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `NOTIF_TEMPLATE_NOT_FOUND` | NOTIF_TEMPLATE_NOT_FOUND | DispatchService.doDispatch |
+| 422 UNPROCESSABLE_CONTENT | `NOTIF_LOG_INVALID_TRANSITION` | NOTIF_LOG_INVALID_TRANSITION | NotificationLogDomain.assertCanTransitionTo |
 | 422 UNPROCESSABLE_CONTENT | `NOTIF_TEMPLATE_INACTIVE` | NOTIF_TEMPLATE_INACTIVE | NotificationTemplateDomain.assertDispatchable |
 
 ### Other Possible Responses

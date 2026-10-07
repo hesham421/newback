@@ -54,16 +54,26 @@ class SharedHelperCodes(unittest.TestCase):
     def test_throw_sites_and_registered_status_come_from_helper_call_sites(self):
         sites = bx.count_throw_sites(self.classes, self.helpers)
         self.assertEqual(sites["HX_409_CODE_DUP"], ["HxDomain.create"])
-        self.assertEqual(sites["HX_422_BAD_TRANSITION"], ["HxDomain.assertCanMoveTo"])
+        self.assertEqual(sorted(sites["HX_422_BAD_TRANSITION"]), ["HxDomain.assertCanMoveTo", "HxService.refuseRawStatus"])
         document = ApiDocument(module="HX")
-        document.error_codes = [ErrorCode(name="HX_409_CODE_DUP", value="HX-409-CODE-DUP", source_file="x")]
+        document.error_codes = [
+            ErrorCode(name="HX_409_CODE_DUP", value="HX-409-CODE-DUP", source_file="exception/HxErrorCodes.java"),
+            # As error_mapping_extractor leaves it: the only DIRECT throw (HxService) says VALIDATION_ERROR.
+            ErrorCode(name="HX_422_BAD_TRANSITION", value="HX-422-BAD-TRANSITION",
+                      source_file="exception/HxErrorCodes.java", status="VALIDATION_ERROR"),
+            ErrorCode(name="VALIDATION_ERROR", value="VALIDATION_ERROR",
+                      source_file="com/erp/common/web/GlobalExceptionHandler.java"),
+        ]
         ep = Endpoint(method="POST", path="/api/v1/hx/items")
         document.endpoints = [ep]
         bx.attach_business_errors(document, self.classes, {id(ep): ("HxController", "create")},
                                   STATUS_HTTP, self.helpers)
-        code = document.error_codes[0]
+        code, transition, framework = document.error_codes
         self.assertEqual(code.status, "ALREADY_EXISTS")
         self.assertEqual(code.bound_endpoints, 1)
+        self.assertEqual(transition.status, "BUSINESS_RULE_VIOLATION",
+                         "the helper call site in HxDomain.java precedes the direct throw in HxService.java")
+        self.assertIsNone(framework.status, "a shared framework code keeps its own (absent) Status")
         self.assertIn(("HX_409_CODE_DUP", "ALREADY_EXISTS", "HxDomain.create"), codes(ep.business_errors))
 
 

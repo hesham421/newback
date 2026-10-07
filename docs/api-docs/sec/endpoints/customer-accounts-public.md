@@ -303,7 +303,11 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `PublicCustomerController.register`, `CustomerAccountService.register`, `UserDomain.createCustomer`, `CustomerAccountMapper.toEntity`, `CustomerAccountService.dispatch`, `CustomerAccountMapper.toResponse`, `new UserDomain()`, `InternalCallerContext.call`, `CustomerAccountService.actionLink` and found no throw site naming a module error code.
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PublicCustomerController.register`, `CustomerAccountService.register`, `UserDomain.createCustomer`, `CustomerAccountMapper.toEntity`, `CustomerAccountService.dispatch`, `CustomerAccountMapper.toResponse`, `new UserDomain()`, `InternalCallerContext.call`, `CustomerAccountService.actionLink`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 409 CONFLICT | `CUSTOMER_EMAIL_TAKEN` | CUSTOMER_EMAIL_TAKEN | UserDomain.createCustomer |
 
 ### Other Possible Responses
 

@@ -7,9 +7,9 @@ code or its annotations and regenerate.
 
 | | |
 |---|---|
-| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`). 2026-10-07 (TM-G, branch `tm/g-sec-grant-revoke`): whole app regenerated from the 1.3.0-SNAPSHOT build — `sec/` gains the screen and action revokes; the other modules' updates are the pre-existing drift of the `com.erp.common` shared-helper refactor (throw sites moved to `DomainRules` and shared helpers, `NOT_FOUND` row) |
+| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`). 2026-10-07/08 (TM-G, branch `tm/g-sec-grant-revoke`): whole app regenerated from the 1.3.0-SNAPSHOT build after the generator learned to bind codes raised through the shared `com.erp.common` helpers (`DomainRules`, `OwnedLookups`, `StatusTransitions`, `InstantFieldValueConverter`). Against the 2026-10-05 docs the only changes are `sec/`'s two new revoke endpoints and the genuine changes since then: the `NOT_FOUND` framework row (1.2.0), the walked-method lists of FILE/NOTIF (private helpers moved to `com.erp.common`), and the `FileService.sha256Hex` 500 row (`TokenHasher.sha256Hex` now throws `IllegalStateException`, answered by the shared `INTERNAL_ERROR` handler) |
 | Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference`, profile `dev`. The documented API is that of erp-core **1.1.0** (tag `v1.1.0` → `10a6811`), which contains the Phase D fix loop. OpenAPI `info.version` reads `v0`. |
-| Generator | `governance/tools/api-doc-generator` (unchanged; moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07), driven by `_tools/generate_all.py` |
+| Generator | `governance/tools/api-doc-generator` (moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07; TM-G added the shared-helper binding of `extractors/business_error_extractor.py`), driven by `_tools/generate_all.py` |
 | Operations | **107** (88 paths) |
 
 ## Modules
