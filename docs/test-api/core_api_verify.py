@@ -1227,6 +1227,156 @@ def test_notif_001_register_queues_verify_mail(ctx):
 
 
 # =============================================================================================
+# Phase 6b — role grant revoke (TM-G, erp-core 1.3.0): all in tenant B, so A's user/role
+# listings asserted by later phases are untouched
+# =============================================================================================
+RV_PERMS = {"SEC_ROLES": ["PERM_SEC_ROLES_VIEW", "PERM_SEC_ROLES_CREATE", "PERM_SEC_ROLES_UPDATE"],
+            "SEC_USERS": ["PERM_SEC_USERS_VIEW"]}
+
+
+def rv_registry(ctx):
+    """{pageCode: (module id, screen id, {permissionCode: action id})} of SEC_ROLES and SEC_USERS."""
+    if not ctx.has("RV_REG"):
+        ctx.RV_REG = {page: registry_ids(ctx, ctx.T_B, page, perms) for page, perms in RV_PERMS.items()}
+    return ctx.RV_REG
+
+
+def rv_role(ctx, tag, grants):
+    """A role of tenant B holding exactly `grants` = {pageCode: [permissionCode, VIEW first]}."""
+    reg = rv_registry(ctx)
+    r = api("POST", "/api/v1/sec/roles", t=ctx.T_B,
+            body={"code": f"TC_RV{tag}_{ctx.RUN}", "nameAr": "سحب", "nameEn": f"Revoke {tag}"})
+    st(r, 201, what=f"create role TC_RV{tag}_{{RUN}}")
+    role = (r.data or {}).get("rolePk")
+    if not role:
+        raise Blocked(f"role TC_RV{tag} not created")
+    modules = set()
+    for page, perms in grants.items():
+        mod_id, scr_id, actions = reg[page]
+        if mod_id not in modules:
+            st(api("POST", f"/api/v1/sec/roles/{role}/modules", t=ctx.T_B, body={"moduleId": mod_id}), 201)
+            modules.add(mod_id)
+        st(api("POST", f"/api/v1/sec/roles/{role}/screens", t=ctx.T_B, body={"screenId": scr_id}), 201)
+        for p in perms:
+            st(api("POST", f"/api/v1/sec/roles/{role}/actions", t=ctx.T_B, body={"actionId": actions.get(p)}), 201)
+    return role
+
+
+def rv_tree(ctx, role, token=None):
+    """{pageCode: (granted, sorted permission codes)} of the role's grant tree, plus its module codes."""
+    r = api("GET", f"/api/v1/sec/roles/{role}/grants", t=token or ctx.T_B)
+    st(r, 200, what=f"GET /roles/{role}/grants")
+    screens, modules = {}, {}
+    for m in (r.data or {}).get("modules") or []:
+        modules[m.get("code")] = m.get("granted")
+        for s in m.get("screens") or []:
+            screens[s.get("pageCode")] = (s.get("granted"), sorted(a.get("permissionCode") for a in s.get("actions") or []))
+    return screens, modules
+
+
+def rv_audit(ctx, event, role):
+    """The SEC audit-log rows of `event` whose targetRef is `<role>/…` (tenant B)."""
+    r = api("POST", "/api/v1/sec/audit-log/search", t=ctx.T_B,
+            body={"filters": [{"field": "eventTypeCode", "operator": "EQUALS", "value": event}], "size": 200})
+    st(r, 200, what=f"SEC audit-log search {event}")
+    return sorted(str(x.get("targetRef")) for x in r.content if str(x.get("targetRef") or "").startswith(f"{role}/"))
+
+
+@tc("TC-CORE-SEC-035")
+def test_sec_035_revoke_screen_cascades(ctx):
+    role = rv_role(ctx, "S", RV_PERMS)
+    mod_id, scr_id, actions = rv_registry(ctx)["SEC_ROLES"]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/screens/{scr_id}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 3, "data.revokedActionGrants")
+    screens, modules = rv_tree(ctx, role)
+    check("SEC_ROLES" not in screens, "SEC_ROLES is gone from the grant tree (screen and its actions)", "absent", screens)
+    eq(screens.get("SEC_USERS"), (True, ["PERM_SEC_USERS_VIEW"]), "SEC_USERS untouched")
+    eq(modules.get("SEC"), True, "the SEC module grant stays")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), sorted(f"{role}/{a}" for a in actions.values()),
+       "one ACTION_REVOKED row per cascaded action (N = 3)")
+    eq(rv_audit(ctx, "SCREEN_REVOKED", role), [f"{role}/{scr_id}"], "one SCREEN_REVOKED row (N + 1 = 4 rows)")
+
+
+@tc("TC-CORE-SEC-036")
+def test_sec_036_revoke_non_view_action(ctx):
+    role = rv_role(ctx, "A", {"SEC_ROLES": RV_PERMS["SEC_ROLES"]})
+    ctx.RV_ROLE_A = role
+    actions = rv_registry(ctx)["SEC_ROLES"][2]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_CREATE']}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 1, "data.revokedActionGrants")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, ["PERM_SEC_ROLES_UPDATE", "PERM_SEC_ROLES_VIEW"]), "SEC_ROLES keeps VIEW and UPDATE")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), [f"{role}/{actions['PERM_SEC_ROLES_CREATE']}"], "exactly one ACTION_REVOKED row")
+
+
+@tc("TC-CORE-SEC-037")
+def test_sec_037_revoke_view_cascades(ctx):
+    role = rv_role(ctx, "V", {"SEC_ROLES": RV_PERMS["SEC_ROLES"]})
+    ctx.RV_ROLE_V = role
+    actions = rv_registry(ctx)["SEC_ROLES"][2]
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"rv-{ctx.run}", f"rv-{ctx.run}@t.test", "سحب", "Revoke"))
+    st(r, 201, what="create rv-{run} in B")
+    uid = (r.data or {}).get("userPk")
+    st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_B, body={"roleIds": [role]}), 200)
+    r = login_staff(ctx.TB, f"rv-{ctx.run}", PW)
+    st(r, 200, what="login rv-{run}")
+    t_rv = (r.data or {}).get("accessToken")
+    if not t_rv:
+        raise Blocked("no T_RV")
+    st(api("POST", "/api/v1/sec/roles/search", t=t_rv, body={"size": 10}), 200, what="T_RV holds PERM_SEC_ROLES_VIEW before")
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_VIEW']}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 3, "data.revokedActionGrants (VIEW + CREATE + UPDATE)")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, []), "the screen grant stays, with no action left")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), sorted(f"{role}/{a}" for a in actions.values()), "three ACTION_REVOKED rows")
+    st(api("POST", "/api/v1/sec/roles/search", t=t_rv, body={"size": 10}), 403, "SEC-403-FORBIDDEN",
+       what="the same token on its next request: VIEW is gone")
+    st(api("GET", "/api/v1/sec/menu", t=t_rv), 200, what="the session was not terminated")
+
+
+@tc("TC-CORE-SEC-038")
+def test_sec_038_unknown_grant_404(ctx):
+    role = ctx.RV_ROLE_V
+    reg = rv_registry(ctx)
+    actions = reg["SEC_ROLES"][2]
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_CREATE']}", t=ctx.T_B), 404, "SEC-404-GRANT",
+       what="action grant already cascaded away")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/{reg['SEC_USERS'][1]}", t=ctx.T_B), 404, "SEC-404-GRANT",
+       what="screen never granted to the role")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/999999999", t=ctx.T_B), 404, "SEC-404-GRANT")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/999999999", t=ctx.T_B), 404, "SEC-404-GRANT")
+    st(api("DELETE", f"/api/v1/sec/roles/999999999/screens/{reg['SEC_ROLES'][1]}", t=ctx.T_B), 404, "SEC-404-ROLE")
+
+
+@tc("TC-CORE-SEC-039")
+def test_sec_039_other_tenants_role_404(ctx):
+    role = ctx.RV_ROLE_A
+    mod_id, scr_id, actions = rv_registry(ctx)["SEC_ROLES"]
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/{scr_id}", t=ctx.T_A), 404, "SEC-404-ROLE")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_VIEW']}", t=ctx.T_A), 404, "SEC-404-ROLE")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, ["PERM_SEC_ROLES_UPDATE", "PERM_SEC_ROLES_VIEW"]), "B's role is unchanged")
+
+
+@tc("TC-CORE-SEC-040")
+def test_sec_040_module_revoke_unchanged(ctx):
+    role = rv_role(ctx, "M", {"SEC_ROLES": RV_PERMS["SEC_ROLES"][:2], "SEC_USERS": RV_PERMS["SEC_USERS"]})
+    mod_id = rv_registry(ctx)["SEC_ROLES"][0]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/modules/{mod_id}", t=ctx.T_B)
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("revokedScreenGrants"), d.get("revokedActionGrants")), (2, 3), "data.revokedScreenGrants / revokedActionGrants")
+    screens, modules = rv_tree(ctx, role)
+    eq((screens, modules), ({}, {}), "the grant tree is empty")
+    eq(len(rv_audit(ctx, "MODULE_REVOKED", role)), 1, "one MODULE_REVOKED row")
+    eq(len(rv_audit(ctx, "SCREEN_REVOKED", role)), 2, "two SCREEN_REVOKED rows")
+    eq(len(rv_audit(ctx, "ACTION_REVOKED", role)), 3, "three ACTION_REVOKED rows")
+
+
+# =============================================================================================
 # Phase 7 — files
 # =============================================================================================
 PNG = png_bytes(7)
@@ -2574,6 +2724,7 @@ ORDER = {
                   *rng("SEQ", 3, 14),
                   *rng("SETTINGS", 4, 10),
                   *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "SEC-031", "SEC-033",
+                  *rng("SEC", 35, 40),
                   "NOTIF-001",
                   *rng("FILE", 1, 18), "FILE-024", *rng("FILE", 19, 21), "FILE-023",
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
@@ -2643,6 +2794,10 @@ def run(args):
         order = [t for t in order if t in set(args.only.split(","))]
     meta = {"profile": args.profile, "base": BASE["url"], "run": run_id, "started": now.isoformat(timespec="seconds"),
             "cap": args.cap, "local_root": args.local_root}
+    if args.instance:
+        meta["instance"] = args.instance
+    if args.code_under_test:
+        meta["code_under_test"] = args.code_under_test
     sink = None
     if args.profile == "P-MAIL":
         from smtp_sink import SmtpSink
@@ -2712,11 +2867,14 @@ def main():
     ap.add_argument("--cap", type=int, default=None, help="P-CAP: the max-export-rows the instance runs with (2 or 3)")
     ap.add_argument("--local-root", default=None, help="P-LOCAL: erp.core.files.local.root of the instance")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--instance", default=None, help="free text recorded in the result: how the app instance was started")
+    ap.add_argument("--code-under-test", default=None, help="free text recorded in the result: branch and commit")
+    ap.add_argument("--report-out", default=None, help="with --report: write here instead of core-verify-report.md")
     ap.add_argument("--report", nargs="+", default=None, help="merge result JSON files into core-verify-report.md")
     args = ap.parse_args()
     if args.report:
         import core_verify_report
-        return core_verify_report.build(args.report)
+        return core_verify_report.build(args.report, args.report_out)
     return run(args)
 
 
