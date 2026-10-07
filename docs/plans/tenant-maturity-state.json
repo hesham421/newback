@@ -61,17 +61,16 @@
         "V16__sec_user_profile.sql",
         "V17__notif_seed_password_changed.sql"
       ],
-      "status": "FIXING",
+      "status": "REVIEW",
       "branch": "tm/d-sec-user-profile-passwords",
       "worktree": ".worktrees/tm-d",
-      "attempts": 2,
+      "attempts": 3,
       "deviations": 12,
       "implementer_agent": "a13c59d7399aab600",
       "reviewer_agent": "a229488dd88b15f25",
       "review": {
-        "verdict": "FAIL",
-        "round": 2,
-        "findings": 2
+        "verdict": "pending",
+        "round": 3
       },
       "report": "docs/steps/tm-d-report.md",
       "merged_commit": null
@@ -384,6 +383,12 @@
       "step": "D",
       "event": "FIXING",
       "note": "round-2 FAIL on SVG only: PIs outside root, <style> split by comment/CDATA, image-set(); LOW nested <use> amplification; passwords/multipart/names/ids/docs PASS; fix round 2 sent"
+    },
+    {
+      "at": "2026-10-07T22:55:28Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "fix round 2 done 81224b1 (document-level PI refusal, style concat check, grammar-based CSS allow-list, <use> limits, data-*; mvn 543/10, P-LIVE 171/171); round-3 review dispatched"
     }
   ]
 }
