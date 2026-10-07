@@ -8,7 +8,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** A tenant, as every platform-tenant endpoint returns it (business fields + audit). */
+/**
+ * A tenant, as every platform-tenant endpoint returns it (business fields + audit). The profile and the
+ * suspension facts since tenant-maturity B; the token cut-off is not exposed.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,6 +33,34 @@ public class TenantResponse {
 
     @Schema(description = "Status: ACTIVE or SUSPENDED - الحالة", example = "ACTIVE")
     private String statusCode;
+
+    @Schema(description = "Contact e-mail - بريد التواصل", example = "contact@acme.example")
+    private String contactEmail;
+
+    @Schema(description = "Contact phone - هاتف التواصل", example = "+966 11 555 0100")
+    private String contactPhone;
+
+    @Schema(description = "ISO 3166-1 alpha-2 country code - رمز الدولة", example = "SA")
+    private String countryCode;
+
+    @Schema(description = "Default UI language: ar or en - اللغة الافتراضية", example = "ar")
+    private String defaultLocale;
+
+    @Schema(description = "IANA time-zone id - المنطقة الزمنية", example = "Asia/Riyadh")
+    private String timezone;
+
+    @Schema(description = "Operator's notes - ملاحظات", example = "Pilot customer, invoiced yearly")
+    private String notes;
+
+    @Schema(description = "When the tenant was suspended; null while ACTIVE - تاريخ التعليق")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
+    private Instant suspendedAt;
+
+    @Schema(description = "Platform operator who suspended the tenant - من علّق المستأجر", example = "admin")
+    private String suspendedBy;
+
+    @Schema(description = "Reason of the suspension - سبب التعليق", example = "Unpaid invoice")
+    private String suspensionReason;
 
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
