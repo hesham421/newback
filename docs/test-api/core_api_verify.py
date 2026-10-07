@@ -1661,6 +1661,21 @@ def test_sec_054_audit_rows(ctx):
           "absent", "checked")
 
 
+@tc("TC-CORE-SEC-055")
+def test_sec_055_passwords_over_72_bytes_refused(ctx):
+    ascii73 = "Aa1" + "x" * 70
+    arabic122 = "س" * 60 + "12"
+    exactly72 = "Aa1" + "x" * 69
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"long-{ctx.run}", f"long-{ctx.run}@t.test", "ط", "Long", ascii73))
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="create with 73 ASCII bytes")
+    eq([f.get("field") for f in r.field_errors], ["password"], "fieldErrors[*].field")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_B, body={"newPassword": arabic122})
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="admin-set with 62 Arabic letters (122 bytes)")
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"b72-{ctx.run}", f"b72-{ctx.run}@t.test", "ط", "B72", exactly72))
+    st(r, 201, what="create with exactly 72 bytes")
+    st(login_staff(ctx.TB, f"b72-{ctx.run}", exactly72), 200, what="login with the 72-byte password")
+
+
 # =============================================================================================
 # Phase 7 — files
 # =============================================================================================
@@ -3009,7 +3024,7 @@ ORDER = {
                   *rng("SEQ", 3, 14),
                   *rng("SETTINGS", 4, 10),
                   *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "SEC-031", "SEC-033",
-                  *rng("SEC", 35, 40), *rng("SEC", 41, 54),
+                  *rng("SEC", 35, 40), *rng("SEC", 41, 55),
                   "NOTIF-001",
                   *rng("FILE", 1, 18), "FILE-024", *rng("FILE", 19, 21), "FILE-023",
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",

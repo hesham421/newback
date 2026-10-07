@@ -37,8 +37,8 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   400 `SEC-400-PHOTO-INVALID`). Migration `V16__sec_user_profile.sql` (phone, job titles, preferred locale, photo
   reference, password-change flag and time). Audit actions `PASSWORD_SET_BY_ADMIN`, `PASSWORD_CHANGED`,
   `PROFILE_PHOTO_CHANGED`; new core event `UserPasswordChangedEvent`.
-- [TM-D] SEC: one STAFF password policy, `erp.core.security.password-policy.*` (8..200 characters, a letter and a
-  digit by default), on user create, reset completion, admin-set, own change and a new tenant's first
+- [TM-D] SEC: one STAFF password policy, `erp.core.security.password-policy.*` (8..72 characters and at most 72 bytes,
+  a letter and a digit by default; a `max-length` above 72 fails startup), on user create, reset completion, admin-set, own change and a new tenant's first
   administrator: 400 `SEC-400-PASSWORD-POLICY` naming the field.
 - [TM-D] FILE: `FileImageStoreApi` (cross-module) stores a small public image for another module: type from the
   bytes, SVG only when allowed and free of active content, uncategorised, published under a random slug
@@ -59,6 +59,11 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
 
 ### Fixed
+- [TM-D] A multipart request without its `file` part, a non-multipart request to a multipart endpoint, and an upload
+  above `spring.servlet.multipart.*` now answer 400 `VALIDATION_ERROR` (the part named in `fieldErrors` when known)
+  instead of 500. This also fixes the pre-existing 500 of `POST /api/v1/files` without a `file` part.
+- [TM-D] Passwords longer than BCrypt's 72 bytes (e.g. 80 ASCII characters, or 62 Arabic letters) answered 500 on every
+  password path; they now answer 400 `SEC-400-PASSWORD-POLICY` (staff and customer realms).
 - `JwtAuthenticationFilter` no longer puts a tenant left on a reused worker thread back after the
   request: the thread leaves the filter with no tenant, so a container error dispatch after
   `sendError` (which skips the filter) can no longer run under the stale tenant.

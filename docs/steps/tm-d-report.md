@@ -40,14 +40,14 @@ Plan: `docs/plans/tenant-maturity-plan.md` §6 D.1–D.5 (plus §0 D3/D4, §9 ro
 | `SEC/P0/module-registry-sec.md`, `SEC/P0_5/prd-sec.md` | new 1.3.0 addenda | — |
 | `SEC/P2/db-script-sec.md`, `SEC/P2/registry-db-sec.md` | new 1.3.0 addenda | DBF-SEC-117..123 (V16, widths, `CHK_SEC_USER_LOCALE`), XM-SEC-006 |
 | `FILE/P1/srs.md`, `registry-srs-file.md`, `P0/business-policies-file.md`, `P0/module-registry-file.md`, `P2/db-script.md` | new 1.3.0 addenda | XM-FILE-002 (NEW), XM-FILE-001 (CHANGED, `publicUrls`), RULE-FILE-008..010, open points (SVG inline, category) |
-| `NOTIF/P1/srs.md`, `registry-srs-notif.md`, `P2/db-script.md`, `registry-db-notif.md`, `P0_5/prd-notif.md` | new 1.3.0 addenda | RULE-NOTIF-009, XM-NOTIF-003, V17 seed |
+| `NOTIF/P1/srs.md`, `registry-srs-notif.md`, `P2/db-script.md`, `registry-db-notif.md`, `P0_5/prd-notif.md` | new 1.3.0 addenda | RULE-NOTIF-023, XM-NOTIF-003, V17 seed |
 | `TENANT/P1/srs-tenant.md`, `registry-srs-tenant.md` | new 1.3.0 addenda (package D rows) | XM-TENANT-001 CHANGED (`summaryOf`), REQ-TENANT-001 CHANGED (admin password policy) |
 | `decisions/SEC/ADR-SEC-063.md` | NEW | plan ADR-SEC-039 |
 | `decisions/SEC/ADR-SEC-064.md` | NEW | plan ADR-SEC-040 |
 | `decisions/FILE/ADR-FILE-008.md` | NEW | plan ADR-FILE-001 (FILE ADRs 001..007 are the analysis-coverage work's as-built ADRs) |
 
 Ids were checked against the tree, this repository's full history and `governance-shared` (all history): FILE
-RULE 007 / XM 001 / API 008 → RULE-FILE-008, XM-FILE-002; NOTIF RULE 008 (governance-shared) / XM 002 → RULE-NOTIF-009,
+RULE 007 / XM 001 / API 008 → RULE-FILE-008, XM-FILE-002; NOTIF RULE 008 (governance-shared) / XM 002 → RULE-NOTIF-023,
 XM-NOTIF-003; SEC per `notes-for-later.md`.
 
 ## Files changed
@@ -138,7 +138,7 @@ sec/endpoints/my-profile.md (new), file/endpoints/file-documents.md}` (generated
 | Audit / event | 3 actions, `UserPasswordChangedEvent(userId, byAdmin)` | services | ✅ |
 | FILE API | `ImageStoreRequest` fields, `ImageStoreResult`, `StoredImage`, `discard`, `publicUrls` | `file/crossmodule` | ✅ |
 | FILE rules | RULE-FILE-008/009 (+ CSS `url()`, `@import`, check commit)/010 | `ImageValidationDomainService`, `FileImageStoreService`, repository query | ✅ |
-| NOTIF | RULE-NOTIF-009 listener, variables format | `StaffPasswordChangedNotifier` | ✅ |
+| NOTIF | RULE-NOTIF-023 listener, variables format | `StaffPasswordChangedNotifier` | ✅ |
 | TENANT | `summaryOf` → `TenantSummary(id, code, nameAr, nameEn)`; admin password policy | `TenantLookupApi`, `SecTenantProvisioningContributor` | ✅ |
 | Properties | `erp.core.security.password-policy.min-length/max-length/require-letter/require-digit` = 8/200/true/true | `ErpCoreProperties.Security.PasswordPolicySettings` | ✅ |
 
@@ -211,4 +211,4 @@ sec/endpoints/my-profile.md (new), file/endpoints/file-documents.md}` (generated
 - **Open**: `MaxUploadSizeExceededException` → 500 in apps with Spring's default 1 MB multipart ceiling (pre-existing);
   no password reuse/history rule; `PasswordPolicy` message names the default composition.
 - **Next free ids**: REQ-SEC-090, AC-SEC-096, RULE-SEC-063, DBF-SEC-124, XM-SEC-007, ADR-SEC-065 (held, unused) /
-  066+ (other session); RULE-FILE-011, XM-FILE-003, ADR-FILE-009; RULE-NOTIF-010, XM-NOTIF-004.
+  066+ (other session); RULE-FILE-011, XM-FILE-003, ADR-FILE-009; RULE-NOTIF-024, XM-NOTIF-004.
