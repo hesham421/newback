@@ -1165,6 +1165,11 @@ NEW / CHANGED / REMOVED for the factory to absorb.
 | CHANGED | GET | `/api/v1/sec/dashboard` | as before | user and session counts cover STAFF accounts only | DEVIATIONS [14] |
 | CHANGED | POST | `/api/v1/sec/auth/signup`, PATCH `/api/v1/sec/signup-requests/{id}` | as before | an approved sign-up creates a STAFF account | docs/steps/06-report.md |
 | NEW (report) | POST | `/api/v1/report/SEC_USER_LIST/run`, `/api/v1/report/SEC_USER_LIST/export` | `SEC:REPORT:SEC_USER_LIST` | params `realm`, `status`, `activeOnly`, `createdFrom`, `createdTo`; never returns the password hash | DEVIATIONS [11] |
+| AS-BUILT (v2 G5) | GET | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_VIEW` | one of the five endpoints ADR-SEC-038 declared for the SRS screens (the SEC v2 service-account change set itself was never implemented); STAFF accounts only | docs/api-docs/sec/endpoints/users.md; ADR-SEC-038 |
+| AS-BUILT (v2 G5) | GET | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_VIEW` | same; role detail | docs/api-docs/sec/endpoints/roles.md; ADR-SEC-038 |
+| AS-BUILT (v2 G5) | PUT | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_UPDATE` | same; role update | docs/api-docs/sec/endpoints/roles.md; ADR-SEC-038 |
+| AS-BUILT (v2 G5) | GET | `/api/v1/sec/roles/{id}/grants` | `PERM_SEC_ROLES_VIEW` | same; a role's module/screen/action grants | docs/api-docs/sec/endpoints/role-grants.md; ADR-SEC-038 |
+| AS-BUILT (v2 G5) | POST | `/api/v1/sec/signup-requests/search` | `PERM_SEC_USERS_VIEW` | same; the list behind the "Pending sign-ups" tab | docs/api-docs/sec/endpoints/sign-up-requests.md; ADR-SEC-038 |
 All other SEC endpoints keep their analysed behaviour, now confined to the caller's tenant.
 
 ### 2. Business rules

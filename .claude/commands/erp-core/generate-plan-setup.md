@@ -1,5 +1,7 @@
 # /erp-core/generate-plan-setup
 
+> Note (2026-10-07): the erp-core plan is complete (steps 01–13, `erp-core-plan/execution-state.json`) and the governance is now vendored inside this repository under `governance/`; this command is kept as completed-plan history.
+
 Generates (or refreshes) the execution state for the **erp-core technical plan**
 from the step files in `erp-core-plan/` at the repo root, and (re)generates the
 per-step executor command `.claude/commands/erp-core/execute-step.md` from the

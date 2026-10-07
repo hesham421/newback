@@ -9,7 +9,7 @@ code or its annotations and regenerate.
 |---|---|
 | Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`) |
 | Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference`, profile `dev`. The documented API is that of erp-core **1.1.0** (tag `v1.1.0` → `10a6811`), which contains the Phase D fix loop. OpenAPI `info.version` reads `v0`. |
-| Generator | `erp-app-reference/governance/governance-tools/api-doc-generator` (unchanged), driven by `_tools/generate_all.py` |
+| Generator | `governance/tools/api-doc-generator` (unchanged; moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07), driven by `_tools/generate_all.py` |
 | Operations | **105** (86 paths) |
 
 ## Modules
@@ -72,9 +72,8 @@ python docs/api-docs/_tools/check_completeness.py                 # every operat
 4. It runs the generator pipeline (`generator.run` / `generator.check`) with a hand-built
    `RepositoryContext`. The inputs are the module source root, `erp-core/src/main/java` as the shared root,
    the core i18n bundles and both Flyway migration roots.
-5. With `generate` or `update` it mirrors every module folder except `app/` into
-   `governance/backend/modules/<MOD>/api-docs/`, the copy the frontend reads (`--no-governance` skips it).
-   Commit both trees together.
+5. `docs/api-docs/<module>/` is the only copy: the frontend and the `api-verify` skill read it from here
+   (no mirror under `governance/` since 2026-10-07).
 
 The generator's own per-module discovery is bypassed (see `docs/DEVIATIONS.md`, `[D9]`).
 

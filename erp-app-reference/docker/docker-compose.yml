@@ -13,10 +13,8 @@
 #
 # Only Postgres + Redis are defined here — the two datastores this
 # backend's pom.xml actually depends on (Flyway/JDBC Postgres driver,
-# spring-boot-starter-data-redis). Oracle/RabbitMQ appear in the separate
-# infrastructure/ compose stack but have no scoping decision yet
-# (tracked in governance/modules-registry.json) and nothing in this repo connects
-# to them — they are deliberately not duplicated here.
+# spring-boot-starter-data-redis). Nothing in this repository connects to
+# any other infrastructure, so nothing else is defined here.
 #
 # Usage (from the backend repo root — --env-file points substitution at the
 # root .env so DB_USERNAME/DB_PASSWORD/DB_NAME/REDIS_PORT below pick up your

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
  * Repository for ENT-SEC-011 (AuditLogEntry). Module-internal, append-only (POL-SEC-009): no
  * update and no delete is declared here, and no SEC service may call the inherited
  * {@code delete*} or the update half of {@code save} — see
- * governance/project-artifacts/sec-implementation-notes.md.
+ * governance/analysis/modules/SEC/implementation-notes.md.
  */
 @Repository
 public interface AuditLogEntryRepository

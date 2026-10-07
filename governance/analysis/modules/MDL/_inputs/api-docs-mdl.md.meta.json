@@ -1,9 +1,0 @@
-{
-  "input": "api-docs",
-  "repo": "backend",
-  "commit": "a876df829aa16d7b08b3998beb55f5a5a283af80",
-  "source": "backend/modules/MDL/api-docs",
-  "file": "api-docs-mdl.md",
-  "digest": "d2b1266bf81aefa9f4c4f63f9ebf3ea787c31c7061798cb7b318a333315cf802",
-  "fetched_at": "2026-09-19T11:25:40+00:00"
-}

@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * deviation was reversed so that both criteria-driven reads go through the same dynamic
  * JPA-{@code Specification} filtering (via {@code SpecBuilder}) with criteria carried in the
  * request body, matching every other module's search endpoints (see the SEC GET-to-POST reversal
- * this mirrors, governance/project-artifacts/sec-implementation-notes.md §8).
+ * this mirrors, governance/analysis/modules/SEC/implementation-notes.md §8).
  */
 @RestController
 @RequestMapping("/api/v1/mdl/lookup-types")

@@ -1,5 +1,7 @@
 # /erp-core/execute-step
 
+> Note (2026-10-07): the erp-core plan is complete (steps 01–13, `erp-core-plan/execution-state.json`) and the governance is now vendored inside this repository under `governance/`; this command is kept as completed-plan history.
+
 Executes **one step** of the erp-core technical plan in the current checkout
 (a worktree when the orchestrator dispatched it, the main checkout when run by
 hand). This is the per-step counterpart of `[MODULE]/execute-backend.md`; it

@@ -30,7 +30,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * effective permission codes as authorities, so every {@code @PreAuthorize} downstream is a plain
  * set lookup. An absent or rejected token leaves the context anonymous — the authorization layer,
  * not this filter, decides what that means. See
- * governance/project-artifacts/sec-implementation-notes.md for the authority model.
+ * governance/analysis/modules/SEC/implementation-notes.md for the authority model.
  *
  * <p>Tenant (erp-core step 05): a valid token's {@code tid} claim becomes the request's
  * {@link TenantContext} <em>before</em> the user is looked up — the lookup is itself tenant-filtered

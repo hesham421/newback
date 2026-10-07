@@ -10,7 +10,7 @@ import com.erp.sec.exception.SecErrorCodes;
  * Domain companion for ENT-SEC-007 (RoleModuleGrant): API-SEC-014's duplication guard
  * ({@code UQ_SEC_ROLE_MODULE_GRANT_ROLE_MODULE}) → {@code SEC-409-GRANT-DUP}. RULE-SEC-003's
  * cascade revoke is a service action, not a decision, and the "must be active" half resolves as
- * 404 at load time — see governance/project-artifacts/sec-implementation-notes.md.
+ * 404 at load time — see governance/analysis/modules/SEC/implementation-notes.md.
  */
 public final class RoleModuleGrantDomain {
 
