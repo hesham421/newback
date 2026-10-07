@@ -1,5 +1,7 @@
 package com.erp.file.crossmodule;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -19,4 +21,10 @@ public interface FileDocumentLookupApi {
      * {@code erp.core.files.public-base-url} when set) or the storage provider's direct URL — else empty.
      */
     Optional<String> publicUrl(Long documentId);
+
+    /**
+     * tenant-maturity D.4 — {@link #publicUrl} for several documents in one query (e.g. a page of users
+     * with photos); ids without a servable public document are absent from the map.
+     */
+    Map<Long, String> publicUrls(Collection<Long> documentIds);
 }

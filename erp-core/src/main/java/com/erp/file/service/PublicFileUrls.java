@@ -45,11 +45,11 @@ public class PublicFileUrls {
     /**
      * The public URL of {@code view} in the current tenant, or empty unless the public endpoint would
      * actually serve it ({@link FileDocumentDomain#isPubliclyServable}: PUBLIC, ACTIVE, category allows
-     * public files).
+     * public files or, for an image-store document, no category).
      */
     public Optional<String> of(FileMetadataView view) {
         if (view == null || !FileDocumentDomain.isPubliclyServable(view.getVisibility(), view.getPublicSlug(),
-                view.getFileStatusId(), view.getCategoryAllowPublic())) {
+                view.getFileStatusId(), view.getFileCategoryId(), view.getCategoryAllowPublic())) {
             return Optional.empty();
         }
         Optional<String> direct = storageProviders.forKey(view.getStorageProvider()).publicUrl(view.getStorageRef());

@@ -2,6 +2,8 @@ package com.erp.file.repository;
 
 import com.erp.file.entity.FileDocument;
 import jakarta.persistence.Tuple;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +63,10 @@ public interface FileDocumentRepository
                                          @Param("fileStatusId") String fileStatusId,
                                          Pageable pageable);
 
+    /** tenant-maturity D.4 — metadata of several documents at once ({@code FileDocumentLookupApi.publicUrls}). */
+    @Query(METADATA_SELECT + " WHERE f.id IN :ids")
+    List<Tuple> findMetadataTuplesByIdIn(@Param("ids") Collection<Long> ids);
+
     /** Existence check for {@code FileDocumentLookupApi} — no content or metadata loaded. */
     boolean existsByIdAndFileStatusIdNot(Long id, String fileStatusId);
 
@@ -73,10 +79,11 @@ public interface FileDocumentRepository
 
     /**
      * erp-core step 07 — a servable public document of the current tenant by slug: PUBLIC, in the given
-     * lifecycle status, and in a category that (still) allows public files. Bytes excluded.
+     * lifecycle status, and in a category that (still) allows public files — or, since tenant-maturity
+     * D.4, uncategorised (an image-store document, RULE-FILE-010). Bytes excluded.
      */
     @Query(METADATA_SELECT + " WHERE f.publicSlug = :slug AND f.visibility = :visibility "
-        + "AND f.fileStatusId = :status AND c.allowPublic = true")
+        + "AND f.fileStatusId = :status AND (c.id IS NULL OR c.allowPublic = true)")
     Optional<Tuple> findPublicMetadataTupleBySlug(@Param("slug") String slug,
                                                   @Param("visibility") String visibility,
                                                   @Param("status") String status);

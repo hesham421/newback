@@ -4,6 +4,11 @@ import com.erp.file.domain.FileDocumentDomain;
 import com.erp.file.repository.FileDocumentRepository;
 import com.erp.file.repository.FileMetadataView;
 import com.erp.file.service.PublicFileUrls;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -37,5 +42,20 @@ public class FileDocumentLookupApiImpl implements FileDocumentLookupApi {
         return repository.findMetadataTupleById(documentId)
             .map(FileMetadataView::from)
             .flatMap(publicFileUrls::of);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> publicUrls(Collection<Long> documentIds) {
+        List<Long> ids = documentIds == null ? List.of()
+            : documentIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> urls = new HashMap<>();
+        repository.findMetadataTuplesByIdIn(ids).stream()
+            .map(FileMetadataView::from)
+            .forEach(view -> publicFileUrls.of(view).ifPresent(url -> urls.put(view.getId(), url)));
+        return urls;
     }
 }
