@@ -1,6 +1,7 @@
 package com.erp.tenant;
 
 import com.jayway.jsonpath.JsonPath;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -126,6 +127,32 @@ final class TenantHttp {
 
     HttpResponse<String> patch(String token, String path, String jsonBody) {
         return send(authorized(json(path), token).method("PATCH", body(jsonBody)));
+    }
+
+    HttpResponse<String> put(String token, String path, String jsonBody) {
+        return send(authorized(json(path), token).PUT(body(jsonBody)));
+    }
+
+    /** Multipart upload ({@code POST /api/v1/files}) of a tiny PNG owned by {@code SHOP/PRODUCT/ownerId}. */
+    HttpResponse<String> uploadPng(String token, long ownerId, String fileName) {
+        String boundary = "----erp" + UUID.randomUUID().toString().replace("-", "");
+        StringBuilder fields = new StringBuilder();
+        for (String[] field : new String[][] {{"ownerId", String.valueOf(ownerId)}, {"ownerType", "PRODUCT"},
+            {"moduleCode", "SHOP"}}) {
+            fields.append("--").append(boundary).append("\r\nContent-Disposition: form-data; name=\"").append(field[0])
+                .append("\"\r\n\r\n").append(field[1]).append("\r\n");
+        }
+        fields.append("--").append(boundary).append("\r\nContent-Disposition: form-data; name=\"file\"; filename=\"")
+            .append(fileName).append("\"\r\nContent-Type: application/octet-stream\r\n\r\n");
+        ByteArrayOutputStream content = new ByteArrayOutputStream();
+        content.writeBytes(fields.toString().getBytes(StandardCharsets.UTF_8));
+        content.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'});
+        content.writeBytes(fileName.getBytes(StandardCharsets.UTF_8));
+        content.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return send(authorized(HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/files")), token)
+            .header("Accept-Language", "en")
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .POST(HttpRequest.BodyPublishers.ofByteArray(content.toByteArray())));
     }
 
     /** The {@code tid} claim of an access token (payload decoded without verification — test only). */
