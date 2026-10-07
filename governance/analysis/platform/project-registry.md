@@ -15,11 +15,11 @@ on a screen is `PERM_<PAGE_CODE>_<ACTION>`, `VIEW` being the gateway action.
 
 | Module | Package | Analysis (`governance/analysis/…`) | Permission module → screens (page codes) | API contract (`docs/api-docs/…`, operations) | Test suites |
 |---|---|---|---|---|---|
-| SEC — identity, roles, grants, staff and customer auth | `com.erp.sec` | `modules/SEC/` P0–P2 (+ addenda) · `decisions/SEC/` 14 ADRs | `SEC` → `SEC_LOGIN`, `SEC_SIGNUP`, `SEC_PWD_RESET`, `SEC_USERS`, `SEC_ROLES`, `SEC_MODULE_REGISTRY`, `SEC_DASHBOARD`, `SEC_AUDIT_LOG`, `SEC_SESSIONS` | `sec/` — 40 | `docs/test-api/` (TC-CORE) · `governance/backend/modules/SEC/test-api/` · `governance/frontend/modules/SEC/tests/` (auth, cross-cutting, customer portal, SEC screens) |
+| SEC — identity, roles, grants, staff and customer auth | `com.erp.sec` | `modules/SEC/` P0–P2 (+ addenda), `implementation-notes.md` · `decisions/SEC/` 13 ADRs | `SEC` → `SEC_LOGIN`, `SEC_SIGNUP`, `SEC_PWD_RESET`, `SEC_USERS`, `SEC_ROLES`, `SEC_MODULE_REGISTRY`, `SEC_DASHBOARD`, `SEC_AUDIT_LOG`, `SEC_SESSIONS` | `sec/` — 40 | `docs/test-api/` (TC-CORE) · `governance/backend/modules/SEC/test-api/` · `governance/frontend/modules/SEC/tests/` (auth, cross-cutting, customer portal, SEC screens) |
 | TENANT — platform tenant provisioning | `com.erp.tenant` | — (erp-core plan step 05, `docs/steps/05-report.md`) | `PLATFORM` → `PLATFORM_TENANTS` | `tenant/` — 5 | `docs/test-api/` · `governance/frontend/modules/PLATFORM/tests/` |
 | FILE — files, categories, public files | `com.erp.file` | `modules/FILE/` P0–P2_5 (+ addenda) · `decisions/FILE/` none | `FILE` → `FILE_CATEGORIES`, `FILE_BROWSER` | `file/` — 14 | `docs/test-api/` · `governance/backend/modules/FILE/test-api/` · `governance/frontend/modules/FILE/tests/` |
 | NOTIF — templates, channels, dispatch, logs, inbox | `com.erp.notif` | `modules/NOTIF/` P0–P2_5 (+ addenda) · `decisions/NOTIF/` none | `NOTIF` → `NOTIF_TEMPLATES`, `NOTIF_CHANNELS`, `NOTIF_LOG` | `notif/` — 18 | `docs/test-api/` · `governance/backend/modules/NOTIF/test-api/` · `governance/frontend/modules/NOTIF/tests/` |
-| MDL — master-data lookups | `com.erp.mdl` | `modules/MDL/` P0–P2_5 (+ addenda) · `decisions/MDL/` 16 ADRs | `MDL` → `MDL_LOOKUPS`, `MDL_TYPE_REGISTRY` | `mdl/` — 11 | `governance/backend/modules/MDL/test-api/` · `governance/frontend/modules/MDL/tests/` |
+| MDL — master-data lookups | `com.erp.mdl` | `modules/MDL/` P0–P2_5 (+ addenda) · `decisions/MDL/` 13 ADRs | `MDL` → `MDL_LOOKUPS`, `MDL_TYPE_REGISTRY` | `mdl/` — 11 | `governance/backend/modules/MDL/test-api/` · `governance/frontend/modules/MDL/tests/` |
 | CU — configuration and settings store | `com.erp.cu` | `modules/CU/` P0–P2 (+ addenda) · `decisions/CU/` none | `CU` → `CU_CONFIGURATIONS`; `PLATFORM` → `PLATFORM_SETTINGS` | `cu/` — 5 | `docs/test-api/` · `governance/backend/modules/CU/test-api/` · `governance/frontend/modules/CU/tests/` |
 | SEQUENCE — number series | `com.erp.sequence` | — (erp-core plan step 09) | `SEQUENCE` → `SEQUENCE_SERIES` | `sequence/` — 6 | `docs/test-api/` · `governance/frontend/modules/SEQUENCE/tests/` |
 | AUDIT — generic audit events | `com.erp.audit` | — (erp-core plan step 10) | `AUDIT` → `AUDIT_EVENTS` | `audit/` — 1 | `docs/test-api/` · `governance/frontend/modules/AUDIT/tests/` |
@@ -33,7 +33,7 @@ Packages without an HTTP surface: `com.erp.common` (foundation), `com.erp.events
 
 | Module | Analysis version | What the addenda record |
 |---|---|---|
-| SEC | v1 (current). A v2 change set — a service account / machine principal for an unattended caller — was analysed but never implemented and is not vendored (reference: `governance-shared` @ `1087165`, `analysis/modules/SEC/v2/`). | customer realm (self-registration, verification, customer login and reset), tenancy, the permission catalog replacing the static constants, realm separation of staff APIs, login rate limiting |
+| SEC | v1 (current). The service-account change set (CS-SEC-001, analysed as SEC v2) was never implemented; its five G5 endpoint declarations (`GET /sec/users/{id}`, `GET /sec/roles/{id}`, `PUT /sec/roles/{id}`, `GET /sec/roles/{id}/grants`, `POST /sec/signup-requests/search`) are the as-built endpoints recorded in ADR-SEC-038 and `docs/api-docs/sec/`; the rest of v2 is not vendored (reference: `governance-shared` @ `1087165`, `analysis/modules/SEC/v2/`). | customer realm (self-registration, verification, customer login and reset), tenancy, the permission catalog replacing the static constants, realm separation of staff APIs, login rate limiting |
 | MDL | v1 | tenancy, lookup types owned per module, `OwnedLookups` consumers |
 | CU | v1 (legacy path) | the `SettingsApi`, platform defaults and tenant overrides, `PLATFORM_SETTINGS` |
 | FILE | v1 (legacy path) | the `StorageProvider` SPI, public files, download tokens, `PUBLISH` action |
@@ -41,10 +41,12 @@ Packages without an HTTP surface: `com.erp.common` (foundation), `com.erp.events
 
 The ADRs kept under `governance/analysis/decisions/` are those whose decision still describes
 the current code (search endpoints are `POST …/search`, no by-id read in MDL, the SEC lookups
-stay CHECK-constrained, every primary key comes from a named sequence, pre-authentication
-endpoints are throttled, …). ADRs about the unimplemented SEC v2 change set, about the former
-plan generator's id binding and review rounds, and one contradicted by the code (no SEC code
-for the rate limit) were dropped — `docs/governance-vendoring-report.md` lists them.
+stay CHECK-constrained, every primary key comes from a named sequence, …). Customer login is
+throttled in SEC (`CUSTOMER_LOGIN_RATE_LIMITED` 429); staff login is not. ADRs about the
+unimplemented SEC v2 change set, about the former plan generator's id binding and review rounds,
+and those contradicted by the code (the SEC throttle claims, MDL's index strategy, the
+inactive-type guard, the fixed sort field) were dropped — `docs/governance-vendoring-report.md`
+lists them.
 
 ## Cross-module reads
 

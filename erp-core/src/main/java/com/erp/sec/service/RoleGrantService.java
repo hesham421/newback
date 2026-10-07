@@ -313,8 +313,8 @@ public class RoleGrantService {
 
     /**
      * RULE-SEC-005's counterpart set. SEC v1 declares no conflicting-pair source anywhere, and the
-     * platform's only real pair is FIN-owned and FIN-enforced
-     * (governance/modules/FIN/P3_1/backend-execution-plan-fin.md:1061-1066), so this resolves empty
+     * platform's only real pair belonged to FIN, removed in erp-core 1.0.0 (see ADR-SEC-038 and the SEC
+     * P1 addendum, governance/analysis/modules/SEC/P1/srs-sec.md), so this resolves empty
      * and the guard above stays live for the day such a source exists.
      */
     private Set<Long> conflictingCounterpartActions(Long actionId) {

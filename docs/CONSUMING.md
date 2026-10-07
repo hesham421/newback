@@ -127,7 +127,7 @@ Never use `@Value` for them. The IDE completion comes from `META-INF/spring-conf
 
 | Property | What |
 |---|---|
-| `spring.datasource.url` / `username` / `password` | PostgreSQL 16. Flyway applies the core chain first. |
+| `spring.datasource.url` / `username` / `password` | PostgreSQL 16 — the version the test suite runs against (Testcontainers and the embedded fallback); `erp-app-reference/docker/docker-compose.yml` pins `postgres:17`, a pre-existing drift — use 16. Flyway applies the core chain first. |
 | `erp.core.security.jwt.secret` | HMAC key for access tokens, at least 32 bytes. Startup fails if it is blank. |
 | `erp.core.files.access-token-secret` | Secret for the FILE download-token key. Startup fails if it is blank. |
 

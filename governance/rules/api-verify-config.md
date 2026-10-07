@@ -53,7 +53,7 @@ regenerated, because its value is precisely the history a regeneration would era
 | Error code format | `{MOD}-{http}[-{SLUG}]` — e.g. `SEC-409-USER-DUP`, `SEC-500`; `{http}` = the row's HTTP status, `{SLUG}` = SCREAMING-KEBAB (optional) — never the hyphenated governance rule/RULE id |
 | `DELETE` semantics | **soft** — an "active" flag column, suffix `Fl` (e.g. `isActiveFl`); teardown calls the deactivate endpoint, never a hard delete, unless the module's own api-docs document a genuine hard-delete endpoint |
 | Permissions | pattern `PERM_<PAGE_CODE>_<ACTION>`, actions `VIEW`/`CREATE`/`UPDATE`/`DELETE`, gateway action `VIEW` (without `VIEW` no other permission on that page applies) — a forbidden call asserts the forbidden status through the error envelope |
-| Realms | STAFF (`/api/v1/auth/**`, staff endpoints) and CUSTOMER (`/api/v1/public/customers/**`, `/api/v1/customers/me/**`); a token of one realm is rejected on the other's endpoints — see `docs/api-docs/sec/index.md` |
+| Realms | STAFF (`/api/v1/sec/auth/**`, staff endpoints) and CUSTOMER (`/api/v1/public/customers/**`, `/api/v1/customers/me/**`); a token of one realm is rejected on the other's endpoints — see `docs/api-docs/sec/index.md` |
 | Languages | `ar` (primary), `en` — both required; message-presence assertions check both language fields the envelope carries; report language = `ar`, with `en` beside it |
 | Manifest tier | when a test-execution-manifest is supplied → Full tier; otherwise → **minimal tier** (happy-path CRUD only, state why negatives were skipped) rather than treating the absence as an error |
 

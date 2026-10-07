@@ -23,11 +23,12 @@ governance/
     platform/               PROJECT-OVERVIEW.md (the platform as implemented) ·
                             project-registry.md (live modules, screens, contract, test suites)
     domain/                 domain-profile.md (the original domain analysis, verbatim)
-    decisions/<MOD>/        the ADRs that still describe the current code (SEC 14, MDL 16)
+    decisions/<MOD>/        the ADRs that still describe the current code (SEC 13, MDL 13)
     modules/<MOD>/          P0 (policies, module registry, platform summary) · P0_5 (PRD) ·
                             P1 (SRS + registry) · P2 (DB script + registry) · P2_5 (UI/UX spec,
                             flow diagram — FILE, NOTIF, MDL) — verbatim, for SEC, MDL, CU, FILE, NOTIF;
-                            each P0–P2 artifact ends with "Implementation Addendum — erp-core 1.2.0"
+                            each P0–P2 artifact ends with "Implementation Addendum — erp-core 1.2.0";
+                            SEC also carries implementation-notes.md (cited by erp-core Javadoc)
   backend/modules/<MOD>/test-api/   the adapted legacy API suites (test_<mod>_apis.py +
                                     <mod>_problems_report.md) for SEC, MDL, CU, FILE, NOTIF
   frontend/modules/<MOD>/tests/     the frontend's E2E spec archives (specs, page objects, run
@@ -67,10 +68,15 @@ found them identical, so they were removed rather than kept in step by hand.
 
 `analysis/modules/SEC/` (v1) is the current analysis: its P0–P2 artifacts carry the
 "Implementation Addendum — erp-core 1.2.0" sections recording what erp-core actually
-implemented (tag `v1.2.0`), as every other module's do. The SEC v2 change set (CS-SEC-001: a
-service account / machine principal for an unattended caller) was analysed but never
-implemented in erp-core; it is not vendored, and neither are its ADRs (`governance-shared` @
-`1087165`, `analysis/modules/SEC/v2/`, `analysis/decisions/SEC/ADR-SEC-012…034`).
+implemented (tag `v1.2.0`), as every other module's do. The service-account change set
+(CS-SEC-001, analysed as SEC v2) was never implemented; its five G5 endpoint declarations
+(`GET /sec/users/{id}`, `GET /sec/roles/{id}`, `PUT /sec/roles/{id}`, `GET /sec/roles/{id}/grants`,
+`POST /sec/signup-requests/search`) are the as-built endpoints recorded in ADR-SEC-038 and
+`docs/api-docs/sec/`, and are listed in the SEC P1 addendum. The rest of v2 and its ADRs are not
+vendored (`governance-shared` @ `1087165`, `analysis/modules/SEC/v2/`,
+`analysis/decisions/SEC/ADR-SEC-012…034`).
+`analysis/modules/SEC/implementation-notes.md` is the SEC implementation-notes record ten
+erp-core classes cite (historical paths inside; decisions current as of 1.2.0).
 
 MDL's UI/UX specification (`ui-ux-spec-mdl.md`, `flow-diagram-mdl.md`) was produced under
 `P3_2/` instead of `P2_5/`; it is kept under `analysis/modules/MDL/P2_5/` so the three modules
@@ -91,8 +97,8 @@ that have a UI/UX spec (FILE, NOTIF, MDL) keep it in the same place.
   test reports, generator fix prompts and integration notes written against the monolith; FIN
   and Oracle items), `testsprite/`, `mcp-servers/`.
 - **ADRs contradicted by or unrelated to the current code** — the SEC v2 service-account
-  decisions, the generator's id-binding and review-round records, and one decision the code
-  contradicts.
+  decisions, the generator's id-binding and review-round records, and the decisions the code contradicts
+  (see the report §3).
 
 ## Historical wording inside verbatim files
 

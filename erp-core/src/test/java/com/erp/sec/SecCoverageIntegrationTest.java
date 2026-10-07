@@ -59,9 +59,9 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 
 /**
- * Coverage for the 7 SEC test-plan cases ({@code governance/modules/SEC/test_gen/backend-test-plan-sec.md})
+ * Coverage for the 7 SEC test-plan cases ({@code docs/test-api/core-test-plan.md})
  * that neither TestSprite nor the hand-written MODE-5 {@code requests}-based script
- * ({@code governance/modules/SEC/test-api/test_sec_apis.py}) can exercise, because each needs
+ * ({@code governance/backend/modules/SEC/test-api/test_sec_apis.py}) can exercise, because each needs
  * either in-process access (a value never returned over HTTP, a cross-module Spring interface with
  * no HTTP surface) or fixture data no HTTP client can construct (a role missing one specific
  * permission, a deliberately deactivated grant row). This is a new, standalone JUnit suite — it

@@ -8,9 +8,9 @@
 | Raw import | already on `main`: `b8ce7fa` "merge: chore(governance) project governance inside this repo" (`173cef0`): 879 files copied byte-identical from `1087165` into `governance/` with FIN/NOTE removed, the submodule, `.gitmodules`, `.governance-scope`, `scripts/governance` and the `governance-shared.yml` workflow removed, the FIN commands removed — **but** with every factory artifact still present (`packages/`, `_state/`, `_inputs/`, `test_gen/`, `api_verify/`, `P3_*`, `manifest.json`, `modules-registry.json`, `WORKSPACE.md`, `AMEND-P3-O.md`, `backend/modules/*/api-docs`, `testsprite/`), `erp-app-reference/governance/` (project-artifacts, governance-tools, mcp-servers, testsprite) still in place, the old factory `erp-app-reference/CLAUDE.md`, no root `CLAUDE.md`, the per-module factory commands and `orchestrate-module`/`generate-module-setup` still present, the skills pointing at `governance/backend/modules/<MOD>/api-docs`, `.mcp.json` unchanged. `docs/steps/v4-01-report.md` is that import's own report. |
 | This branch | `chore/vendor-governance`, the cleanup delta on top of `b8ce7fa`: one history, no second vendoring |
 
-Result: `governance/` goes from 879 files (16 MB) to **268 files (3.4 MB)**; 757 files were removed
+Result: `governance/` goes from 879 files (16 MB) to **265 files (3.4 MB)** after the review fixes (§7); 761 files were removed
 relative to `b8ce7fa` (appendix A lists every one), 63 moved, 18 edited, 2 added at the root
-(`CLAUDE.md`, this report).
+(`CLAUDE.md`, this report), plus `governance/analysis/modules/SEC/implementation-notes.md` re-vendored.
 
 ## 1. What `governance/` now holds (target layout)
 
@@ -21,8 +21,9 @@ relative to `b8ce7fa` (appendix A lists every one), 63 moved, 18 edited, 2 added
 | `governance/analysis/platform/PROJECT-OVERVIEW.md` | the platform as implemented: library + reference app, the eleven core packages, tenancy and realms, versions 1.0.0 → 1.2.0 → 1.3.0-SNAPSHOT, where contract and tests live. Sources: `docs/CHANGELOG.md`, `docs/CONSUMING.md`, `docs/api-docs/README.md`, the addenda | 1 | **new** (replaces the generator rendering) |
 | `governance/analysis/platform/project-registry.md` | the live modules with package, analysis folder, permission module → page codes (from `*Permissions.java`), api-docs folder and operation count, test suites; analysis status per module; cross-module reads | 1 | **new** (replaces the generator registry) |
 | `governance/analysis/domain/domain-profile.md` | the original domain analysis | 1 | verbatim |
-| `governance/analysis/decisions/{SEC,MDL,CU,FILE,NOTIF}/` | the ADRs that still describe the current code: SEC 001–011, 035, 038, 044 (14); MDL 002–007, 009, 010, 012–016, 042–044 (16); CU/FILE/NOTIF only `.gitkeep` | 35 | verbatim, pruned (§3) |
-| `governance/analysis/modules/{SEC,MDL,CU,FILE,NOTIF}/{P0,P0_5,P1,P2}` | policies, module registry, platform summary, PRD, SRS + registry, DB script + registry — each with its "Implementation Addendum — erp-core 1.2.0" section tying the analysis to the implemented logic | 60 | verbatim |
+| `governance/analysis/decisions/{SEC,MDL,CU,FILE,NOTIF}/` | the ADRs that still describe the current code: SEC 001–011, 035, 038 (13); MDL 002–007, 010, 012–016, 043 (13); CU/FILE/NOTIF only `.gitkeep` | 31 | verbatim, pruned (§3) |
+| `governance/analysis/modules/{SEC,MDL,CU,FILE,NOTIF}/{P0,P0_5,P1,P2}` | policies, module registry, platform summary, PRD, SRS + registry, DB script + registry — each with its "Implementation Addendum — erp-core 1.2.0" section tying the analysis to the implemented logic (SEC's P1 addendum now also lists the five as-built ADR-SEC-038 endpoints, §7) | 60 | verbatim (+5 addendum rows) |
+| `governance/analysis/modules/SEC/implementation-notes.md` | the SEC implementation-notes record cited by ten erp-core classes: verbatim from `b8ce7fa`'s `erp-app-reference/governance/project-artifacts/sec-implementation-notes.md` with a three-line header (historical paths; decisions current as of 1.2.0) | 1 | re-vendored (§7) |
 | `governance/analysis/modules/{FILE,NOTIF,MDL}/P2_5` | UI/UX spec + flow diagram (MDL's moved from `P3_2/`, where the generator had put it) | 6 (+2 `.gitkeep`) | verbatim |
 | `governance/backend/modules/{SEC,MDL,CU,FILE,NOTIF}/test-api/` | the adapted legacy API suites (`test_<mod>_apis.py` + `<mod>_problems_report.md`) | 11 | verbatim |
 | `governance/frontend/modules/{AUDIT,CU,FILE,MDL,NOTIF,PLATFORM,REPORT,SEC,SEQUENCE}/tests/` | the frontend's E2E spec archives (specs, page objects, setup, run reports) | 83 | verbatim |
@@ -42,16 +43,16 @@ added a `publish_to_governance` step and a `--no-governance` flag; both are gone
 | What | Why | Files |
 |---|---|---|
 | `governance/analysis/modules/*/{P3_1,P3_2,P3_5_BE,_inputs,_state,api_verify,test_gen,frontend-test,manifest.json}` | plan-generator execution artifacts (backend/frontend execution plans, stage state, gate records, generated test plans, fetched inputs) | 163 |
-| `governance/analysis/modules/SEC/v2/` | the SEC v2 change set (service account / machine principal): analysed, never implemented in erp-core, no addendum — v1 is the current analysis | 96 |
+| `governance/analysis/modules/SEC/v2/` | the service-account change set (CS-SEC-001, analysed as SEC v2) was never implemented; its five G5 endpoint declarations (`GET /sec/users/{id}`, `GET /sec/roles/{id}`, `PUT /sec/roles/{id}`, `GET /sec/roles/{id}/grants`, `POST /sec/signup-requests/search`) are the as-built endpoints recorded in ADR-SEC-038 and `docs/api-docs/sec/` and are listed in the SEC P1 addendum; the rest has no addendum — v1 is the current analysis | 96 |
 | `governance/analysis/platform/system-test-{index,full-flow}-erp.md` | old monolith flows (SEC → MDL → FIN) | 2 |
 | `governance/analysis/platform/{PROJECT-OVERVIEW,project-registry}.md` (generator versions) | replaced by current versions written from the code and the repo docs | (rewritten) |
-| `governance/analysis/decisions/SEC/ADR-SEC-{012…034,036,037,039,040,041,042,043,045,046,047}.md` | §3 | 33 |
-| `governance/analysis/decisions/MDL/ADR-MDL-{001,008,011,017…041}.md` | §3 | 28 |
+| `governance/analysis/decisions/SEC/ADR-SEC-{012…034,036,037,039,040,041,042,043,044,045,046,047}.md` | §3 | 34 |
+| `governance/analysis/decisions/MDL/ADR-MDL-{001,008,009,011,017…042,044}.md` | §3 | 31 |
 | `governance/backend/modules/*/api-docs/` | identical to `docs/api-docs/<mod>/` (above) | 39 |
 | `governance/backend/modules/*/{packages,testsprite,execution-state.json}` | factory-delivered packages, TestSprite archive, per-track state | 215 |
 | `governance/frontend/modules/*/{packages,frontend-test,execution-state.json}` | factory-delivered packages and state | 87 |
 | `governance/modules-registry.json`, `governance/.gitignore`, `governance/rules/{AMEND-P3-O.md,WORKSPACE.md,.gitkeep}` | the generator's registry and `_state` cache ignores; generator-era records | 5 |
-| `erp-app-reference/governance/project-artifacts/` (46 files) | the whole folder: September handovers (`HANDOVER-FE-*`), FIN items (`FIN-RETAINED-EARNINGS-SEED`, `TEST-REPORT-FIN-*`, `fin-chart-of-accounts-review`, `backend/seed-scripts/fin-seed-*`), Oracle items (`oracle-aq-fin-integration-plan`, `seed-and-cutover-findings`, `backend/oracle-cutover/`), old test reports (`TEST-REPORT-PLATFORM-backend-2026-09-12`), generator fix prompts and reports (`API-DOCS-GENERATOR-*`, `PROMPT-api-docs-generator-fixes`, `generator-defect-report-and-fix-prompt`), integration notes and audits written against the monolith (`PLATFORM-MODULES-INTEGRATION-INDEX`, `platform-integration-{common,sec,file,notif}`, `integration-notifications-fileservice`, `platform-audit-widths-and-error-localization`, `INTERFACE-VS-REST-AND-POM-STRUCTURE-RECOMMENDATION` — the single-POM layout erp-core no longer has), SEC notes written against the monolith paths (`sec-implementation-notes`, `sec-alignment-report`, `sec-test-phase-consolidation-2026-09-11`), `local-dev-commands.md` (machine-specific paths, `ErpMainApplication` and a root `src/` that no longer exist; the root `CLAUDE.md` carries the current commands), `README.md`. Nothing qualified as still accurate for the current code, so the folder is dropped | 46 |
+| `erp-app-reference/governance/project-artifacts/` (46 files) | the whole folder: September handovers (`HANDOVER-FE-*`), FIN items (`FIN-RETAINED-EARNINGS-SEED`, `TEST-REPORT-FIN-*`, `fin-chart-of-accounts-review`, `backend/seed-scripts/fin-seed-*`), Oracle items (`oracle-aq-fin-integration-plan`, `seed-and-cutover-findings`, `backend/oracle-cutover/`), old test reports (`TEST-REPORT-PLATFORM-backend-2026-09-12`), generator fix prompts and reports (`API-DOCS-GENERATOR-*`, `PROMPT-api-docs-generator-fixes`, `generator-defect-report-and-fix-prompt`), integration notes and audits written against the monolith (`PLATFORM-MODULES-INTEGRATION-INDEX`, `platform-integration-{common,sec,file,notif}`, `integration-notifications-fileservice`, `platform-audit-widths-and-error-localization`, `INTERFACE-VS-REST-AND-POM-STRUCTURE-RECOMMENDATION` — the single-POM layout erp-core no longer has), SEC notes written against the monolith paths (`sec-alignment-report`, `sec-test-phase-consolidation-2026-09-11`; `sec-implementation-notes.md` was re-vendored under `governance/analysis/modules/SEC/` in §7 because ten erp-core classes cite it), `local-dev-commands.md` (machine-specific paths, `ErpMainApplication` and a root `src/` that no longer exist; the root `CLAUDE.md` carries the current commands), `README.md`. Nothing qualified as still accurate for the current code, so the folder is dropped | 46 |
 | `erp-app-reference/governance/{README.md,.gitignore,mcp-servers/,testsprite/}` | the former mount's README, the bespoke Postgres and Oracle MCP servers, TestSprite governance/prompts/runs | 24 |
 | `erp-app-reference/CLAUDE.md` | the factory-era instructions (partitions, structural law, TestSprite); replaced by the root `CLAUDE.md` | 1 |
 | `erp-app-reference/scripts/{README.md,rename-project.sh}` | pre-erp-core: the script renames a root `src/main/java/com/erp` and `ErpMainApplication`, neither of which exists in the reactor | 2 |
@@ -75,18 +76,20 @@ contradicted by the code; keep when uncertain.
 | ADR-SEC-036, 046 | the v2 backend plan restatement and the generator's AC-block checker |
 | ADR-SEC-039, 040 | the generator's atom kinds / API ids for in-process read surfaces |
 | ADR-SEC-041 | a guarded partial unique index on PENDING sign-ups — not in the core migration chain (`V4__sec_schema.sql` has no partial unique index) |
-| ADR-SEC-045 | "no SEC code for the rate limit; throttling stays at ingress" — contradicted by `com.erp.sec.security.LoginRateLimiter` (bucket4j) |
+| ADR-SEC-044, 045 | the throttle claims — 045 ("no SEC code for the rate limit; throttling stays at ingress") is contradicted by `com.erp.sec.security.LoginRateLimiter`, and 044 ("the pre-authentication endpoints are throttled") overstates it: only customer login is throttled (`CUSTOMER_LOGIN_RATE_LIMITED` 429); staff login is not |
 | ADR-MDL-001, 008, 011 | the generator's api-docs id binding (superseded chain; the current docs carry no contract ids) |
 | ADR-MDL-017 … 022, 025 … 041 | review-round dialogue records (findings G1…G8, scores, verdict REVISE) of the generator's gate |
 | ADR-MDL-023, 024 | test-plan coverage mechanics of the dropped `test_gen` stage |
+| ADR-MDL-009 | index strategy ("the filters get an index, the flags do not") — contradicted by `V3__mdl_schema.sql` (creates `IDX_MDL_LOOKUP_TYPE_ACTIVE` and `IDX_MDL_LOOKUP_VALUE_TYPE`, no name indexes) |
+| ADR-MDL-042 | "no value is created under an inactive type" — no such guard exists in `LookupValueService`/`LookupValueDomain` (recorded as a known gap, §6) |
+| ADR-MDL-044 | "no free sort field is modelled" — `LookupTypeService` accepts `sortField` (`docs/api-docs/mdl/endpoints/lookup-type-management.md`) |
 
 | Kept | Why it still holds |
 |---|---|
 | ADR-SEC-001 … 011 | v1 decisions: CHECK-constrained SEC lookups, the PLATFORM-STD error umbrella, `POST …/search`, api-docs without `API-*` ids, no caller-permission endpoint, no SEC lookup endpoint, screen/form/menu decisions the frontend archive still follows |
 | ADR-SEC-035 | every SEC primary key from a named sequence — matches the core migrations and the convention precedence |
 | ADR-SEC-038 | the by-id read endpoints the SRS screens demand — served (`GET /api/v1/sec/{users,roles}/{id}`, `SecReadOneIntegrationTest`) |
-| ADR-SEC-044 | pre-authentication endpoints throttled and input-bounded — `LoginRateLimiter` |
-| ADR-MDL-002 … 007, 009, 010, 012 … 016, 042 … 044 | `POST …/search` reads, schema and index decisions, no by-id read (true of `docs/api-docs/mdl/`), the owner-module select and uniqueness pre-check behaviour the frontend archive follows |
+| ADR-MDL-002 … 007, 010, 012 … 016, 043 | `POST …/search` reads, the string precisions, no by-id read (true of `docs/api-docs/mdl/`), the owner-module select and uniqueness pre-check behaviour the frontend archive follows |
 
 ## 4. Dependency removals and rewrites outside `governance/`
 
@@ -94,7 +97,7 @@ contradicted by the code; keep when uncertain.
 |---|---|---|
 | `.mcp.json` | bespoke Node `postgres` server under `erp-app-reference/governance/mcp-servers/`, `oracle`, `TestSprite` | **`postgres` only**: `npx -y @modelcontextprotocol/server-postgres <url>`, URL from `${DB_USERNAME:-postgres}`, `${DB_PASSWORD:-postgres}`, `${DB_HOST:-localhost}`, `${DB_PORT:-5432}`, `${DB_NAME:-erp_db}`. Chosen because `uvx`/`uv`/`pipx` are not installed on the development machine while `npx` (Node 20) is, and a stdio `initialize` smoke test answered; read-only by design (READ ONLY transactions). The npm package is marked deprecated; the comment names the `uvx postgres-mcp --access-mode=restricted` swap once `uv` exists |
 | `.claude/commands/generate-api-docs.md` | profile/partition workflow over `generate.py --module`, writing under `governance/backend/modules/<MOD>/api-docs/` | rewritten: `docs/api-docs/_tools/generate_all.py` over `governance/tools/api-doc-generator/`, output `docs/api-docs/<module>/`, module list = the live modules of the running app, review → write → check (+ `check_completeness.py`) → commit |
-| `.claude/skills/{README.md,api-verify,build-create-entity}` | `governance/backend/modules/<MOD>/api-docs`, "partition", `erp-app-reference/governance/governance-tools` | `governance/rules/…`, `docs/api-docs/<module>/`, `docs/test-api/`; coding standards unchanged |
+| `.claude/skills/api-verify/SKILL.md` | `governance/backend/modules/<MOD>/api-docs`, "partition", `erp-app-reference/governance/governance-tools` | `governance/rules/…`, `docs/api-docs/<module>/`, `docs/test-api/`. `README.md` and `build-create-entity` were already repointed to `governance/rules/` by `b8ce7fa` and are unchanged; coding standards unchanged |
 | `.claude/commands/erp-core/*` | — | one note line each; no other edit |
 | `.env.example`, `.gitignore` | TestSprite key and paths | removed |
 | `erp-app-reference/docker/docker-compose.yml` | comment citing `governance/modules-registry.json` and Oracle | reworded |
@@ -148,15 +151,30 @@ Residual matches, all classified — none is a dependency:
   verified), take `governance/frontend/modules/<MOD>/tests/` here as the archive of its own E2E
   specs and `governance/rules/GOVERNANCE-RULES.md` as the shared rules, and drop its own submodule,
   CODEOWNERS-era wording and factory commands — the frontend repository's own change.
-- **Dangling Javadoc citations.** Eight erp-core SEC/MDL classes cite
-  `governance/project-artifacts/sec-implementation-notes.md` (dropped with the folder) and two
-  cite a former `governance/modules/FIN/…` plan path; `SecCoverageIntegrationTest` cites
-  `governance/modules/SEC/test_gen/…`. They were out of scope for a documentation change; a later
-  source edit can shorten those comments.
+- **Known gap (from the dropped ADR-MDL-042).** The analysis decided that no lookup value may be
+  created under an inactive lookup type; erp-core 1.2.0 has no such guard in `LookupValueService`
+  / `LookupValueDomain`, so a value can be created under an inactive type. Recorded here as a
+  backend gap; not fixed in this change.
 - **Generator test on Windows.** Pin `encoding="utf-8"` in the fixture `write_text` of
   `tests/test_security_extractor.py` so the suite passes without `PYTHONUTF8=1`.
 
-## Appendix A — every file removed relative to `b8ce7fa` (757)
+## 7. Review fixes (same branch, one commit)
+
+| Finding | Fix |
+|---|---|
+| ADR-MDL-009 contradicted by `V3__mdl_schema.sql:112-115` | dropped |
+| ADR-MDL-042 has no guard in the code | dropped; known gap recorded in §6 |
+| ADR-SEC-044 makes the same throttle claim as the dropped 045 (staff login has no limiter) | dropped; `project-registry.md` now says customer login is throttled (`CUSTOMER_LOGIN_RATE_LIMITED` 429), staff login is not |
+| ADR-MDL-044 contradicted by `sortField` on `LookupTypeService` | dropped |
+| `sec-implementation-notes.md` cited by ten live classes | re-vendored verbatim from `b8ce7fa` as `governance/analysis/modules/SEC/implementation-notes.md` (three-line header); the eight Javadoc citations repointed (`LookupTypeController:42`, `LookupTypeService:142`, `RoleModuleGrantDomain:13`, `RoleModuleGrant:32`, `SecErrorCodes:7`, `AuditLogEntryRepository:17`, `PasswordResetTokenRepository:14`, `JwtAuthenticationFilter:33`); the two FIN-plan citations (`RoleGrantService:317`, `UserRoleService:194`) now point to ADR-SEC-038 and the SEC P1 addendum; `SecCoverageIntegrationTest:62-64` now cites `docs/test-api/core-test-plan.md` and `governance/backend/modules/SEC/test-api/test_sec_apis.py`. Comment-only edits; `mvn -q verify` re-run (§5) |
+| SEC v2 wording | `governance/README.md`, `project-registry.md` and §2 above now state that the service-account change set (CS-SEC-001) was never implemented and that its five G5 endpoint declarations are the as-built endpoints of ADR-SEC-038 / `docs/api-docs/sec/`; the five rows were appended inside the SEC P1 addendum's Endpoints table (`governance/analysis/modules/SEC/P1/srs-sec.md`) |
+| `api-verify-config.md` realm path | `/api/v1/auth/**` → `/api/v1/sec/auth/**` |
+| PostgreSQL version drift | `CLAUDE.md` and `docs/CONSUMING.md` note that 16 is the tested version while `docker-compose.yml` pins `postgres:17` (pre-existing) — use 16 |
+| §4 overclaim | only `api-verify/SKILL.md` changed among the skills on this branch |
+
+Final ADR counts: SEC 13 (001–011, 035, 038), MDL 13 (002–007, 010, 012–016, 043).
+
+## Appendix A — every file removed relative to `b8ce7fa` (761)
 
 ```
 .claude/commands/CU/execute-backend-test.md
@@ -247,6 +265,7 @@ erp-app-reference/scripts/rename-project.sh
 governance/.gitignore
 governance/analysis/decisions/MDL/ADR-MDL-001.md
 governance/analysis/decisions/MDL/ADR-MDL-008.md
+governance/analysis/decisions/MDL/ADR-MDL-009.md
 governance/analysis/decisions/MDL/ADR-MDL-011.md
 governance/analysis/decisions/MDL/ADR-MDL-017.md
 governance/analysis/decisions/MDL/ADR-MDL-018.md
@@ -273,6 +292,8 @@ governance/analysis/decisions/MDL/ADR-MDL-038.md
 governance/analysis/decisions/MDL/ADR-MDL-039.md
 governance/analysis/decisions/MDL/ADR-MDL-040.md
 governance/analysis/decisions/MDL/ADR-MDL-041.md
+governance/analysis/decisions/MDL/ADR-MDL-042.md
+governance/analysis/decisions/MDL/ADR-MDL-044.md
 governance/analysis/decisions/SEC/ADR-SEC-012.md
 governance/analysis/decisions/SEC/ADR-SEC-013.md
 governance/analysis/decisions/SEC/ADR-SEC-014.md
@@ -303,6 +324,7 @@ governance/analysis/decisions/SEC/ADR-SEC-040.md
 governance/analysis/decisions/SEC/ADR-SEC-041.md
 governance/analysis/decisions/SEC/ADR-SEC-042.md
 governance/analysis/decisions/SEC/ADR-SEC-043.md
+governance/analysis/decisions/SEC/ADR-SEC-044.md
 governance/analysis/decisions/SEC/ADR-SEC-045.md
 governance/analysis/decisions/SEC/ADR-SEC-046.md
 governance/analysis/decisions/SEC/ADR-SEC-047.md

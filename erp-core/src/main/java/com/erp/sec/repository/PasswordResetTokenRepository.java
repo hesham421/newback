@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 /**
  * Repository for ENT-SEC-012 (PasswordResetToken). Module-internal (A.2.3). QR-SEC-038 is
  * catalogued as an EXISTS but is realised here as a fetch, because its predicate IS
- * RULE-SEC-006's verdict — see governance/project-artifacts/sec-implementation-notes.md.
+ * RULE-SEC-006's verdict — see governance/analysis/modules/SEC/implementation-notes.md.
  */
 @Repository
 public interface PasswordResetTokenRepository

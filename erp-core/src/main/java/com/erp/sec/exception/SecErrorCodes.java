@@ -4,7 +4,7 @@ package com.erp.sec.exception;
  * Module-specific error codes for Security (SEC) — one constant per row of the SEC v1 §Error
  * Catalog. The constant value is the catalog code verbatim, and is both the wire {@code code} in
  * the {@code ApiError} envelope and the i18n message key. Constant names replace the catalog's
- * hyphens with underscores — see governance/project-artifacts/sec-implementation-notes.md.
+ * hyphens with underscores — see governance/analysis/modules/SEC/implementation-notes.md.
  */
 public final class SecErrorCodes {
 

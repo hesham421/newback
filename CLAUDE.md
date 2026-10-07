@@ -18,7 +18,7 @@ inside this repository.
 | Reactor | `com.erp:erp-platform` `1.3.0-SNAPSHOT` (`pom.xml`, `erp-core/pom.xml`, `erp-app-reference/pom.xml` always share one version) |
 | Released | `v1.2.0` (latest, 2026-10-05) · `v1.1.0` (first published) · `v1.0.0` (tagged, never published) — `docs/CHANGELOG.md`, `docs/RELEASE.md` |
 | JDK | **25** — `maven.compiler.release=25`; the enforcer fails any other JDK at `validate`. `.sdkmanrc` = `java=25-tem`, CI = Temurin 25 |
-| Stack | Spring Boot 4.0.1, PostgreSQL 16, Flyway, springdoc, JJWT, bucket4j, ArchUnit, Testcontainers, JaCoCo gate ≥ 60 % lines on erp-core |
+| Stack | Spring Boot 4.0.1, PostgreSQL 16 (the tested version — Testcontainers and the embedded fallback; `erp-app-reference/docker/docker-compose.yml` still pins `postgres:17`, a pre-existing drift: use 16 locally), Flyway, springdoc, JJWT, bucket4j, ArchUnit, Testcontainers, JaCoCo gate ≥ 60 % lines on erp-core |
 | Published to | this repository's GitHub Packages registry (`docs/CONSUMING.md`) |
 
 ## Build, run, test

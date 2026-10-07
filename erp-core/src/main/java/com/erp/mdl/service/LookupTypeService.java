@@ -139,7 +139,7 @@ public class LookupTypeService {
      * (e.g. {@code key LIKE}) — reaching {@link SpecBuilder} untouched, the same shape as any
      * other module's {@code POST /search}. The earlier GET + scalar-argument deviation
      * (SVC-API-SEARCH.md point 7) was reversed alongside SEC's own GET-to-POST reversal
-     * (governance/project-artifacts/sec-implementation-notes.md §8).
+     * (governance/analysis/modules/SEC/implementation-notes.md §8).
      */
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority(T(com.erp.mdl.permission.MdlPermissions).PERM_MDL_LOOKUPS_VIEW)")
