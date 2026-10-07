@@ -162,6 +162,17 @@ use the archived E2E specs under `governance/frontend/modules/<MOD>/tests/` as i
   is wrong, the code or its annotations are wrong — fix those and regenerate.
 - NEVER invent a field, column, table, sequence or constraint name — look it up in the
   module's `P2/db-script*.md` or in the existing migrations and entities.
+- NEVER implement a new requirement, feature or behaviour change that has no analysis entry.
+  It is documented first, as an "Implementation Addendum — erp-core <target version>" appended
+  to the module's `P0`/`P1` (behaviour), `P2/db-script*.md` (schema, exact names and widths) and
+  `decisions/<MOD>/` (ADR, when alternatives were weighed) under `governance/analysis/`, rows
+  labelled NEW / CHANGED / REMOVED, ids continuing the module's sequence. Full procedure:
+  root `CLAUDE.md` → "Analysis first".
+- NEVER call such work done before the code has been checked against that entry (names, widths,
+  endpoints, permissions, error codes, migration number), `docs/api-docs/` regenerated and
+  complete, the test plan extended and `docs/CHANGELOG.md` updated. A deliberate deviation
+  updates the addendum and is recorded in `docs/DEVIATIONS.md`; code and analysis are never
+  left disagreeing silently.
 
 ---
 

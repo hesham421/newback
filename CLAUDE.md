@@ -127,6 +127,51 @@ The frontend is a separate repository. It reads this repository's `docs/api-docs
 the API contract and may use `governance/frontend/modules/<MOD>/tests/` as its E2E baseline;
 nothing here is copied into it.
 
+## Analysis first — every new requirement or feature (NON-NEGOTIABLE)
+
+A new requirement, a new feature or a behaviour change is **documented in the analysis before it
+is implemented, and checked against that documentation after**. Code with no analysis entry, or
+an entry the code does not match, is not done. The pattern is the existing
+"Implementation Addendum — erp-core 1.2.0" sections under `governance/analysis/modules/<MOD>/`.
+
+**Before writing code** — append, never rewrite (the original analysis above an addendum stays
+as it was):
+
+1. Behaviour / requirement → the module's `P0`/`P1` document gets (or extends) an addendum headed
+   `## Implementation Addendum — erp-core <target version>` (the version `main` is moving to,
+   e.g. `1.3.0`), with the same header lines (`Source version`, `Steps`/`Change`, `Statement`) and
+   rows labelled **NEW / CHANGED / REMOVED**. New ids continue the module's sequence
+   (`REQ-<MOD>-NNN`, `AC-`, `RULE-`, `ENT-`, `DBF-`, `XM-`) from the last used number; nothing is
+   renumbered.
+2. Schema → `P2/db-script-<mod>.md` addendum: table, columns, types **and widths**, constraints,
+   sequences, with the exact physical names the migration will use and the migration file name
+   (`V<N>__…`). The migration is written from this entry, not the other way round.
+3. A choice between alternatives → `governance/analysis/decisions/<MOD>/ADR-<MOD>-NNN.md`, next
+   free number, same template as the existing ADRs.
+4. Endpoints → listed in the addendum (method, path, required permission, error codes) so they
+   can be checked against the generated `docs/api-docs/<module>/` afterwards.
+5. A new module → the full `P0`, `P0_5`, `P1`, `P2` set under `governance/analysis/modules/<MOD>/`
+   plus its rows in `governance/analysis/platform/project-registry.md`; a platform-wide change →
+   `PROJECT-OVERVIEW.md` and `project-registry.md` as well.
+6. Anything the frontend must react to (new screen, page code, permission, contract change) is
+   marked in the addendum — the frontend repository reads these files.
+
+**After the code is written** — before calling the work done:
+
+1. Compare the code with the entry item by item: entity/table/column/sequence/constraint names
+   and widths, endpoint paths, methods and permissions, error codes, status flows, migration
+   number. A difference is fixed in the code; if the deviation was deliberate, the addendum is
+   updated and the deviation recorded in `docs/DEVIATIONS.md`. The two are never left disagreeing
+   silently — that is exactly the drift the vendoring review had to clean up (ADR-MDL-009/010/044).
+2. Regenerate `docs/api-docs/<module>/` from the running app and run
+   `docs/api-docs/_tools/check_completeness.py`; every endpoint in the addendum must be there.
+3. Extend `docs/test-api/core-test-plan.md` (`TC-CORE-*`) and the api-verify cases for the new
+   behaviour; run `gov-validate-backend-feature`.
+4. Add the change to `docs/CHANGELOG.md` under the unreleased version.
+
+The step is complete only when the addendum, the code, `docs/api-docs/`, the test plan and the
+changelog all say the same thing.
+
 ## Database migrations (Flyway)
 
 - **Core** owns `V1..V999` in `erp-core/src/main/resources/db/migration/core/` and is
