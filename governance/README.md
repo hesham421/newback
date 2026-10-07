@@ -1,91 +1,103 @@
-# `governance/` — the ERP project's governance
+# `governance/` — this project's own governance, self-contained
 
-The analysis, plans, packages, API documentation and execution records of the
-ERP platform, owned by this project (backend `newback` + frontend `newfront`).
-It is a plain folder in this repository: no submodule, no external governance
-repository, no plan generator. Everything a session needs to read or write
-about a module's governance is here.
+Everything the ERP platform's AI-assisted work needs — for the backend in this repository
+and for the frontend that consumes it — lives in this folder. There is **no governance
+submodule and no governance factory**: nothing here is pulled from, pinned to or published
+back to another repository, and nothing here describes anything but the current logic
+(erp-core 1.2.0 as implemented, plus the analysis it was implemented from).
+
+Origin: the shared governance repository `governance-shared` at `main` @
+`1087165c607ee8bac8c1c9be2598dd9415a2244d` was imported raw into this repository on
+2026-10-07 (commit `b8ce7fa`, 879 files), then pruned to the documents below. That repository
+is kept untouched as a **read-only historical reference**; nothing in this repository reads
+it. `docs/governance-vendoring-report.md` lists every file kept, rewritten and dropped.
 
 ## Layout
 
 ```
-README.md                  this file
-modules-registry.json      the live modules (SEC, MDL, CU, FILE, NOTIF), their versions and package paths
-rules/                     rules every runtime follows
-  GOVERNANCE-RULES.md        skill routing, execution order, convention precedence
-  api-verify-config.md       the project's conventions for the api-verify skill
-  WORKSPACE.md               what does and does not exist around the repos
-  AMEND-P3-O.md              historical amendment record (pre-v6 backend toolset)
-  README.md                  index of the above
-analysis/
-  domain/                  domain-profile.md
-  platform/                PROJECT-OVERVIEW.md, project-registry.md, system tests
-  modules/<MOD>/           the module's stage artifacts (P0 … P3_2, test_gen, api_verify),
-                           _state/, _inputs/, manifest.json; vN/ for a later version
-  decisions/<MOD>/         the module's ADRs
-backend/modules/<MOD>/     backend track: api-docs/, execution-state.json, packages/, test-api/, testsprite/
-frontend/modules/<MOD>/    frontend track: execution-state.json, packages/, tests/
+governance/
+  README.md                 this file
+  rules/                    GOVERNANCE-RULES.md (skill routing, execution order, convention
+                            precedence) · api-verify-config.md (api-verify run conventions)
+  analysis/
+    platform/               PROJECT-OVERVIEW.md (the platform as implemented) ·
+                            project-registry.md (live modules, screens, contract, test suites)
+    domain/                 domain-profile.md (the original domain analysis, verbatim)
+    decisions/<MOD>/        the ADRs that still describe the current code (SEC 14, MDL 16)
+    modules/<MOD>/          P0 (policies, module registry, platform summary) · P0_5 (PRD) ·
+                            P1 (SRS + registry) · P2 (DB script + registry) · P2_5 (UI/UX spec,
+                            flow diagram — FILE, NOTIF, MDL) — verbatim, for SEC, MDL, CU, FILE, NOTIF;
+                            each P0–P2 artifact ends with "Implementation Addendum — erp-core 1.2.0"
+  backend/modules/<MOD>/test-api/   the adapted legacy API suites (test_<mod>_apis.py +
+                                    <mod>_problems_report.md) for SEC, MDL, CU, FILE, NOTIF
+  frontend/modules/<MOD>/tests/     the frontend's E2E spec archives (specs, page objects, run
+                                    reports) for AUDIT, CU, FILE, MDL, NOTIF, PLATFORM, REPORT,
+                                    SEC, SEQUENCE
+  tools/api-doc-generator/  the generator behind docs/api-docs (driven by docs/api-docs/_tools/)
 ```
 
-Modules: analysis and decisions for SEC, MDL, CU, FILE, NOTIF; backend partitions
-for those plus TENANT, AUDIT, SEQUENCE, REPORT (api-docs of the erp-core modules);
-frontend partitions for SEC, MDL, CU, FILE, NOTIF, PLATFORM, AUDIT, SEQUENCE, REPORT.
+Module codes: analysis folders are upper-case (`SEC`); the generated API contract uses the
+lower-case package names of the running app (`sec`, `tenant`, `file`, `notif`, `mdl`, `cu`,
+`sequence`, `audit`, `report`, `app`).
 
-## Who writes what
+## Documentation map — which document is the current reference for what
 
-| Path | Written by | Notes |
-|---|---|---|
-| `analysis/**` (modules, decisions, domain, platform) | the project owner | Implementation never edits it. A wrong plan is recorded as a gap (below). |
-| `rules/**`, `modules-registry.json` | the project owner | |
-| `backend/modules/<MOD>/api-docs/` | backend (`newback`) | Generated from the running app (`/generate-api-docs`, or `python docs/api-docs/_tools/generate_all.py` for the erp-core modules). Never hand-edited: an error is a defect in the code, fixed there and regenerated. One copy only: the frontend reads this one. Not version-suffixed. |
-| `backend/modules/<MOD>/**` (execution-state.json, test-api/, testsprite/) | backend (`newback`) | `packages/` is read-only during implementation. |
-| `frontend/modules/<MOD>/**` (execution-state.json, tests/) | frontend (`newfront`) | The frontend reads this folder from its sibling checkout (`GOV_ROOT`, default `../newback/governance`) and commits its writes here, in this repository. `packages/` is read-only during implementation. |
-
-Reading is shared: either track may read any path here. Writing is by the
-table. Nothing mechanical enforces it, so review does.
-
-## Recording a gap
-
-When the analysis or a package is wrong or missing something, the implementing
-track does not patch it. It records the finding in its own
-`execution-state.json` (`backend/modules/<MOD>/` or `frontend/modules/<MOD>/`):
-
-```jsonc
-"api_doc_gaps": [{
-  "type": "ABSENT",              // or NAMING_MISMATCH, …
-  "phase": "F2", "sub": "F2-SCR-SEC-003",
-  "endpoint": "what the plan names that is not there",
-  "detail": "what you found, and what you did instead",
-  "resolution": "OPEN"           // first word: OPEN / DEFERRED / PENDING · RESOLVED / CLOSED / IMPLEMENTED · HUMAN / ADR
-}]
-```
-
-The project owner reviews open gaps and answers them in `analysis/`, then the
-track marks the entry resolved.
-
-## Origin and what was removed on import
-
-Imported on 2026-10-07 (plan v4, step v4-01) from the former shared-governance
-repository at commit `1087165`. Every kept file is byte-identical to that
-commit except `modules-registry.json` (FIN and NOTE entries removed). Paths were
-re-rooted: `platform/rules/*` → `rules/`, `platform/modules-registry.json` →
-`modules-registry.json`.
-
-| Removed | Reason |
+| Question | Current reference |
 |---|---|
-| `analysis/modules/{FIN,NOTE}`, `analysis/decisions/{FIN,NOTE}`, `backend/modules/{FIN,NOTE}`, `frontend/modules/{FIN,NOTE}` | FIN is out of the project; NOTE was the factory's sample module. 654 files. |
-| FIN and NOTE entries of `modules-registry.json` | Same. |
-| `_archive-v5/` | Pre-v6 factory artefacts, loaded by nothing. 43 files. |
-| `history/` | Factory history and reports (blueprint, coverage map, pytest evidence). 6 files. |
-| `profiles/` | The factory's domain-profile inputs (`erp.yaml`); the rendered result is kept as `analysis/domain/domain-profile.md`. 2 files. |
-| `project.yaml` | The factory's project descriptor (profile id, consumer repos). |
-| `platform/profile-summary.json` | The factory's consumer contract (paths, tracks, phase lists). Commands now name the fixed paths and phase lists directly. |
-| `CODEOWNERS` | Enforced the shared repository's partitions; replaced by the table above. |
-| `PROJECT-INSTRUCTIONS.md` | Instructions for running the factory itself; nothing project-specific. |
-| the old `README.md` | Described the factory-driven, submodule-mounted repository. Its project content (one api-docs copy, generated never edited, track partitions) is folded into this file. |
+| The API contract (endpoints, DTOs, envelopes, error codes, messages) | `docs/api-docs/<module>/` — generated from the running reference app; never hand-edited; the only copy |
+| Behaviour and its rationale per module | the "Implementation Addendum — erp-core 1.2.0" sections of `governance/analysis/modules/<MOD>/{P0,P0_5,P1,P2}` (what was built on top of the analysis), the ADRs under `governance/analysis/decisions/<MOD>/`, and `docs/DEVIATIONS.md` (every deviation from the plan, by step) |
+| The platform as a whole (packages, tenancy, realms, versions) | `governance/analysis/platform/PROJECT-OVERVIEW.md` |
+| Which modules, screens, page codes and test suites exist | `governance/analysis/platform/project-registry.md` |
+| How to consume and configure erp-core in an application | `docs/CONSUMING.md` |
+| Release and compatibility policy, what changed per version | `docs/RELEASE.md`, `docs/CHANGELOG.md` |
+| Implementation history, step by step | `docs/steps/NN-report.md` and `erp-core-plan/` (completed; records, not instructions) |
+| Coding standards, skill routing, convention precedence | `governance/rules/GOVERNANCE-RULES.md` + `.claude/skills/` |
+| Verifying the API over HTTP | `governance/rules/api-verify-config.md`; the core suite and its results in `docs/test-api/`; the legacy adapted suites under `governance/backend/modules/<MOD>/test-api/`; the frontend's E2E archive under `governance/frontend/modules/<MOD>/tests/` |
+| The original analysis (before implementation) | `governance/analysis/modules/<MOD>/` bodies above their addenda, `governance/analysis/domain/domain-profile.md` |
 
-Historical files — anything under `analysis/`, `rules/AMEND-P3-O.md`, and
-other imported documents — may still mention the factory, `gov.py`,
-`profile-summary.json`, a `governance/shared` path or FIN/NOTE. Those are
-records of how they were produced, kept verbatim; a `governance/shared/<x>`
-path in them now means `governance/<x>` (with `platform/rules/` → `rules/`).
+## The API contract is not here
+
+The API documentation of every module is generated from the running reference app and
+lives in **`../docs/api-docs/<module>/`** — the single source, read by the frontend and by
+the `api-verify` skill. No copy is kept under `governance/`. The raw import carried
+`backend/modules/<MOD>/api-docs/` for nine modules; `diff -r` against `docs/api-docs/<module>/`
+found them identical, so they were removed rather than kept in step by hand.
+
+## Which SEC analysis is current
+
+`analysis/modules/SEC/` (v1) is the current analysis: its P0–P2 artifacts carry the
+"Implementation Addendum — erp-core 1.2.0" sections recording what erp-core actually
+implemented (tag `v1.2.0`), as every other module's do. The SEC v2 change set (CS-SEC-001: a
+service account / machine principal for an unattended caller) was analysed but never
+implemented in erp-core; it is not vendored, and neither are its ADRs (`governance-shared` @
+`1087165`, `analysis/modules/SEC/v2/`, `analysis/decisions/SEC/ADR-SEC-012…034`).
+
+MDL's UI/UX specification (`ui-ux-spec-mdl.md`, `flow-diagram-mdl.md`) was produced under
+`P3_2/` instead of `P2_5/`; it is kept under `analysis/modules/MDL/P2_5/` so the three modules
+that have a UI/UX spec (FILE, NOTIF, MDL) keep it in the same place.
+
+## What was deliberately left out (reference: governance-shared @1087165)
+
+- **FIN and NOTE everywhere** — FIN was removed from erp-core in plan step 01; NOTE was the
+  generator's sample module.
+- **Every plan-generator artifact** — per-module `P3_1`, `P3_2`, `P3_5_BE`, `_inputs`, `_state`,
+  `api_verify`, `test_gen`, `frontend-test`, `manifest.json`; `backend/modules/*/{packages,
+  testsprite, execution-state.json, api-docs}`; `frontend/modules/*/{packages, frontend-test,
+  execution-state.json}`; `modules-registry.json`; `rules/{AMEND-P3-O.md, WORKSPACE.md}`; the
+  generator's own repository files.
+- **Pre-erp-core platform documents** — the former `PROJECT-OVERVIEW.md` and
+  `project-registry.md` (rewritten from the current code), the system-test rollups (old
+  monolith flows), the whole of `erp-app-reference/governance/project-artifacts/` (handovers,
+  test reports, generator fix prompts and integration notes written against the monolith; FIN
+  and Oracle items), `testsprite/`, `mcp-servers/`.
+- **ADRs contradicted by or unrelated to the current code** — the SEC v2 service-account
+  decisions, the generator's id-binding and review-round records, and one decision the code
+  contradicts.
+
+## Historical wording inside verbatim files
+
+The analysis, ADRs, legacy suites and E2E archives are kept verbatim, so a few of them still
+mention the plan generator, the former submodule path, FIN permission codes or the legacy
+Oracle system in their prose. Those mentions are history, not dependencies: nothing in this
+repository resolves them. The live files — `CLAUDE.md`, `.claude/`, `.mcp.json`, `rules/`,
+`tools/`, `docs/api-docs/_tools/`, the build and CI files — carry none.
