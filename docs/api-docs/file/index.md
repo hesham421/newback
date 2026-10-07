@@ -136,7 +136,7 @@ Shared, module-independent mapping every business error code's `Status` resolves
 |---|---|---|---|
 | POST | `/api/v1/files/categories` | Create file category | [create_8](endpoints/file-categories.md#post-apiv1filescategories) |
 | POST | `/api/v1/files/categories/search` | Search file categories | [search_13](endpoints/file-categories.md#post-apiv1filescategoriessearch) |
-| GET | `/api/v1/files/categories/{id}` | Get file category by ID | [getById_5](endpoints/file-categories.md#get-apiv1filescategoriesid) |
+| GET | `/api/v1/files/categories/{id}` | Get file category by ID | [getById_6](endpoints/file-categories.md#get-apiv1filescategoriesid) |
 | PUT | `/api/v1/files/categories/{id}` | Update file category | [update_7](endpoints/file-categories.md#put-apiv1filescategoriesid) |
 | DELETE | `/api/v1/files/categories/{id}` | Deactivate file category | [deactivate_5](endpoints/file-categories.md#delete-apiv1filescategoriesid) |
 

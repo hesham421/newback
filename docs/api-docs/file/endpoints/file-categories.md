@@ -194,7 +194,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب فئة ملف حسب المعرف
 
-Operation ID: `getById_5`
+Operation ID: `getById_6`
 
 **Authentication**
 

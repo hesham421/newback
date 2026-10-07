@@ -687,7 +687,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.setPassword`, `UserPasswordService.setPassword`, `UserDomain.assertNotSelfForAdminPasswordSet`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `UserDomain.passwordChangeRequiredFor`, `UserSessionTerminator.terminateOpenSessions`, `UserMapper.toPasswordChangeResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `ActiveSession.terminate`, `new PasswordPolicy()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.setPassword`, `UserPasswordService.setPassword`, `UserDomain.assertNotSelfForAdminPasswordSet`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `UserDomain.passwordChangeRequiredFor`, `UserSessionTerminator.terminateOpenSessions`, `UserMapper.toPasswordChangeResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `UserSessionTerminator.terminateOpenSessions`, `new PasswordPolicy()`, `ActiveSession.terminate`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

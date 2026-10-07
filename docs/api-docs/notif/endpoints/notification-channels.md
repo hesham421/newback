@@ -177,7 +177,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب تهيئة قناة إشعار حسب المعرف
 
-Operation ID: `getById_4`
+Operation ID: `getById_5`
 
 **Authentication**
 

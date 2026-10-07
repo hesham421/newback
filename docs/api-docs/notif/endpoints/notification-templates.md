@@ -201,7 +201,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب قالب إشعار حسب المعرف
 
-Operation ID: `getById_3`
+Operation ID: `getById_4`
 
 **Authentication**
 

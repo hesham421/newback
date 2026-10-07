@@ -7,7 +7,10 @@
 - [POST /api/v1/platform/tenants](#post-apiv1platformtenants)
 - [POST /api/v1/platform/tenants/search](#post-apiv1platformtenantssearch)
 - [GET /api/v1/platform/tenants/{id}](#get-apiv1platformtenantsid)
+- [PUT /api/v1/platform/tenants/{id}](#put-apiv1platformtenantsid)
+- [POST /api/v1/platform/tenants/{id}/admin-reset](#post-apiv1platformtenantsidadmin-reset)
 - [PATCH /api/v1/platform/tenants/{id}/status](#patch-apiv1platformtenantsidstatus)
+- [GET /api/v1/platform/tenants/{id}/usage](#get-apiv1platformtenantsidusage)
 
 ## GET /api/v1/platform/tenants
 
@@ -41,6 +44,15 @@ Shape: `paginated list of TenantResponse (see Pagination Envelope in index.md)`
 | nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
 | nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
 | statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -57,6 +69,14 @@ _(partial — only fields with a documented example are shown)_
   "nameAr": "شركة أكمي",
   "nameEn": "Acme Ltd",
   "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -131,6 +151,15 @@ Shape: `TenantResponse`
 | nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
 | nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
 | statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -147,6 +176,14 @@ _(partial — only fields with a documented example are shown)_
   "nameAr": "شركة أكمي",
   "nameEn": "Acme Ltd",
   "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -222,6 +259,15 @@ Shape: `paginated list of TenantResponse (see Pagination Envelope in index.md)`
 | nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
 | nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
 | statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -238,6 +284,14 @@ _(partial — only fields with a documented example are shown)_
   "nameAr": "شركة أكمي",
   "nameEn": "Acme Ltd",
   "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -262,7 +316,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب مستأجر حسب المعرف
 
-Operation ID: `getById_6`
+Operation ID: `getById_3`
 
 **Authentication**
 
@@ -287,6 +341,15 @@ Shape: `TenantResponse`
 | nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
 | nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
 | statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -303,6 +366,14 @@ _(partial — only fields with a documented example are shown)_
   "nameAr": "شركة أكمي",
   "nameEn": "Acme Ltd",
   "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -324,11 +395,204 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
 
+## PUT /api/v1/platform/tenants/{id}
+
+**Update a tenant's names and profile**
+
+The code and the status never change here - تعديل أسماء المستأجر وملفه
+
+Operation ID: `updateTenant`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+Schema: `TenantUpdateRequest` (application/json)
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| nameAr | string | Yes | maxLength: 200 | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
+| nameEn | string | Yes | maxLength: 200 | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
+| contactEmail | string | No | maxLength: 255 | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No | maxLength: 30; pattern: `^$|^\+?[0-9][0-9 -]{5,28}[0-9]$` | Contact phone: optional +, digits, spaces, hyphens - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No | pattern: `^$|^[A-Z]{2}$` | ISO 3166-1 alpha-2 country code, upper case - رمز الدولة | SA |
+| defaultLocale | string | No | pattern: `^$|^(ar|en)$` | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No | maxLength: 64; pattern: `^$|^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$` | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No | maxLength: 1000 | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+
+**Request Example**
+
+```json
+{
+  "nameAr": "شركة أكمي",
+  "nameEn": "Acme Ltd",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly"
+}
+```
+
+### Response `200` — OK
+
+Shape: `TenantResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| id | integer (int64) | No |  | Unique identifier - المعرف الفريد | 2 |
+| code | string | No |  | Tenant code (X-Tenant-Code) - رمز المستأجر | ACME |
+| nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
+| nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
+| statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
+| createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
+| updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
+| updatedBy | string | No |  | Updated by - حُدّث بواسطة | admin |
+
+**Response Example**
+
+_(partial — only fields with a documented example are shown)_
+
+```json
+{
+  "id": 2,
+  "code": "ACME",
+  "nameAr": "شركة أكمي",
+  "nameEn": "Acme Ltd",
+  "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
+  "createdBy": "admin",
+  "updatedBy": "admin"
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateTenant`, `TenantService.update`, `TenantMapper.updateEntityFromRequest`, `TenantMapper.toResponse`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.update |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## POST /api/v1/platform/tenants/{id}/admin-reset
+
+**Reset the password of a tenant administrator (a staff user holding a super role)**
+
+newPassword must meet the STAFF password policy: 400 SEC-400-PASSWORD-POLICY (fieldErrors[0].field = newPassword), raised by SEC inside the tenant; the user's sessions end and, unless requireChangeAtNextLogin is false, the password must be changed at the next sign-in - إعادة تعيين كلمة مرور مدير المستأجر
+
+Operation ID: `resetAdministratorPassword`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+Schema: `TenantAdminResetRequest` (application/json)
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| username | string | Yes | maxLength: 100 | Username of a staff user of the tenant holding a super role - اسم دخول مدير المستأجر | admin |
+| newPassword | string | Yes | maxLength: 200 | New raw password, hashed server-side - كلمة المرور الجديدة | N3wP@ssw0rd1 |
+| requireChangeAtNextLogin | boolean | No |  | Whether the user must change the password at the next sign-in (default true) - إلزام المستخدم بتغيير كلمة المرور عند الدخول التالي (افتراضيًا نعم) | true |
+
+**Request Example**
+
+```json
+{
+  "username": "admin",
+  "newPassword": "N3wP@ssw0rd1",
+  "requireChangeAtNextLogin": true
+}
+```
+
+### Response `200` — OK
+
+Shape: `TenantAdminResetResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| username | string | No |  | Username whose password was reset - اسم الدخول | admin |
+| sessionsTerminated | integer (int32) | No |  | Number of the user's sessions that were terminated - عدد الجلسات المنتهية | 1 |
+
+**Response Example**
+
+```json
+{
+  "username": "admin",
+  "sessionsTerminated": 1
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.resetAdministratorPassword`, `TenantService.resetAdministratorPassword`, `TenantDomain.from`, `TenantContext.callAs`, `TenantService.resetInsideTenant`, `TenantMapper.toAdminResetResponse`, `new TenantDomain()`, `TenantDomain.assertCanResetAdministrator`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_ADMIN_NOT_FOUND` | TENANT_ADMIN_NOT_FOUND | TenantDomain.assertCanResetAdministrator |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.resetAdministratorPassword |
+| 422 UNPROCESSABLE_CONTENT | `TENANT_ADMIN_NOT_SUPER` | TENANT_ADMIN_NOT_SUPER | TenantDomain.assertCanResetAdministrator |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
 ## PATCH /api/v1/platform/tenants/{id}/status
 
 **Activate or suspend a tenant**
 
-تفعيل أو تعليق مستأجر
+A suspension needs a reason of 3 to 500 characters - تفعيل أو تعليق مستأجر
 
 Operation ID: `updateStatus`
 
@@ -351,12 +615,14 @@ Schema: `TenantStatusUpdateRequest` (application/json)
 | Field | Type | Required | Constraints | Description | Example |
 |---|---|---|---|---|---|
 | statusCode | string | Yes | pattern: `ACTIVE|SUSPENDED` | Target status: ACTIVE or SUSPENDED - الحالة المطلوبة | SUSPENDED |
+| reason | string | No |  | Reason of a suspension, 3 to 500 characters: required for SUSPENDED, ignored for ACTIVE - سبب التعليق، مطلوب عند التعليق | Unpaid invoice |
 
 **Request Example**
 
 ```json
 {
-  "statusCode": "SUSPENDED"
+  "statusCode": "SUSPENDED",
+  "reason": "Unpaid invoice"
 }
 ```
 
@@ -371,6 +637,15 @@ Shape: `TenantResponse`
 | nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
 | nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
 | statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -387,6 +662,14 @@ _(partial — only fields with a documented example are shown)_
   "nameAr": "شركة أكمي",
   "nameEn": "Acme Ltd",
   "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -394,10 +677,11 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateStatus`, `TenantService.updateStatus`, `TenantDomain.from`, `Tenant.suspend`, `Tenant.activate`, `TenantMapper.toResponse`, `TenantDomain.assertCanChangeStatusTo`, `new TenantDomain()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateStatus`, `TenantService.updateStatus`, `TenantDomain.from`, `TenantDomain.assertCanChangeStatusTo`, `TenantDomain.assertSuspensionReasonGiven`, `TenantDomain.changesStatusTo`, `Tenant.suspend`, `Tenant.activate`, `TenantMapper.toResponse`, `new TenantDomain()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `TENANT_SUSPENSION_REASON_REQUIRED` | TENANT_SUSPENSION_REASON_REQUIRED | TenantDomain.assertSuspensionReasonGiven |
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.updateStatus |
 | 422 UNPROCESSABLE_CONTENT | `TENANT_PLATFORM_PROTECTED` | TENANT_PLATFORM_PROTECTED | TenantDomain.assertCanChangeStatusTo |
 
@@ -409,3 +693,70 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
 | 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## GET /api/v1/platform/tenants/{id}/usage
+
+**Get a tenant's usage figures**
+
+أرقام استخدام المستأجر
+
+Operation ID: `getUsage`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Response `200` — OK
+
+Shape: `TenantUsageResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| id | integer (int64) | No |  | Tenant id - معرف المستأجر | 2 |
+| staffUsers | integer (int32) | No |  | Staff users, any status - عدد مستخدمي الموظفين | 12 |
+| customerUsers | integer (int32) | No |  | Customer accounts, any status - عدد حسابات العملاء | 340 |
+| activeSessions | integer (int32) | No |  | Open sessions (not terminated), both realms - الجلسات المفتوحة | 5 |
+| fileDocuments | integer (int64) | No |  | Documents that are not deleted - عدد المستندات | 87 |
+| fileBytes | integer (int64) | No |  | Bytes held by those documents - حجم المستندات بالبايت | 10485760 |
+| notificationsLast30Days | integer (int64) | No |  | Notification log rows created in the last 30 days - الإشعارات خلال آخر 30 يومًا | 42 |
+| collectedAt | string (date-time) | No |  | When the figures were collected - وقت جمع الأرقام |  |
+
+**Response Example**
+
+_(partial — only fields with a documented example are shown)_
+
+```json
+{
+  "id": 2,
+  "staffUsers": 12,
+  "customerUsers": 340,
+  "activeSessions": 5,
+  "fileDocuments": 87,
+  "fileBytes": 10485760,
+  "notificationsLast30Days": 42
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.getUsage`, `TenantService.getUsage`, `TenantContext.callAs`, `TenantMapper.toUsageResponse`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.getUsage |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
