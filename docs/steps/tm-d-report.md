@@ -234,3 +234,29 @@ Verification after the fixes:
 - api-docs regenerated (whole app, 115 ops); `check_completeness`: 115/115, 0 missing / duplicated / stale; `check` verdicts unchanged (SEC, TENANT, MDL, SEQUENCE, REPORT pass; the five known limitations).
 
 Notes for later after round 1: next free TC-CORE-SEC-056; RULE-NOTIF-024; E builds logos with `new ImageStoreRequest("CORE_TENANT", id, "TENANT", bytes, "logo", 1_048_576L, …)` (stored `logo.svg` / `logo.png`); an Inkscape-exported SVG with `inkscape:` / `sodipodi:` metadata is refused — export "plain SVG".
+
+## Review round 2
+
+Verdict FAIL on SVG only (passwords, multipart, names, ids and docs held; merged build 489/10, P-LIVE 171/171).
+Evidence of the reviewer: `rev-d2/svg/svg-probe-r2.txt`, `SvgProbe2.java`, `SvgDepth.java`. Fix commit `aae2e05`.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1a | MEDIUM — processing instructions outside the root not inspected (`<?xml-stylesheet …?>` css/xsl in the prolog, PI after the root) | `onlyCommentsAndOneRoot`: the document's children may be comments and exactly one element; anything else (PI included) refuses; PIs inside the tree were already refused | tests `roundTwoAttacksAndRefusedExports_areRejected` (4 PI cases) |
+| 1b | MEDIUM — `<style>` text split by comments / CDATA (`@imp<!---->ort`, `u<!---->rl(`, `u<![CDATA[rl(…`, `java<!---->script:`) | `<style>` children may be text and CDATA only (a comment, element or PI inside refuses); the **concatenated** sheet is checked | 5 split cases + comment-only / element-inside cases |
+| 1c | MEDIUM — URL-less fetching CSS (`image-set('http://…' 1x)`) | `safeCss` rewritten over the CSS grammar: refuses `//` (every absolute or protocol-relative URL), `data:`, `vbscript:`, `behavior`, `-moz-binding`, any at-rule but `@media` (so `@font-face`, `@import`, `@namespace`, `@charset`), any function outside a non-fetching allow-list (colours, `calc`/`min`/`max`/`clamp`/`var`, gradients, transforms, filter functions, `cubic-bezier`, `steps`, `url`) — so `image-set`, `-webkit-image-set`, `image`, `src`, `cross-fade`, `element`, `paint`, `local` are refused; still `url(#…)` only, no `\` / `<` / `javascript:` / `expression(`; checked as written and with `/*…*/` removed (catches `ur/**/l(`). Applied to `<style>`, `style` and every presentation attribute | 19 CSS cases |
+| 2 | LOW — renderer amplification via nested `<use>` (10^12 instances) | at most 100 `<use>` (`MAX_USE_ELEMENTS`); a `<use>` whose target is a `<use>` or contains one is refused (no nested references, which also covers self/ancestor references); nesting depth ≤ 64 (`MAX_DEPTH`, the walk is recursive) | `useAmplificationAndDepth_areBounded` (10^12 chain, 100 vs 101 uses, depth 64 vs 65, 140 000, 1 MB wide document accepted) |
+| 3 | usability | inert `data-*` attributes accepted as free text (no `<`, `javascript:`, `//`), like `title`; `<metadata>`, `sodipodi:*`, `inkscape:*`, DOCTYPE stay refused. "Logos must be plain / optimised SVG (SVGO, Inkscape Optimized/Plain SVG without metadata, Figma, Illustrator)" in RULE-FILE-009, the FILE addendum §3 note for E, ADR-FILE-008 and `docs/CONSUMING.md` | `roundTwoLegitimateExports_areAccepted` (13 exports incl. Illustrator `data-name="Layer 2 (final)"`, `@media`, transforms, CDATA style) |
+| 4 | RULE-FILE-009 wording | rewritten item by item (encoding, parse, document level, elements with the exact list, attributes, references, CSS, renderer limits) to match `SvgAllowList`; registry row updated | FILE `P1/srs.md` 1.3.0 §2 |
+
+Reviewer's probes re-run against the fixed classes: `SvgProbe2` — every attack rejected, every legit export accepted
+except the two Inkscape files with `<metadata>` / `sodipodi:namedview`, refused on purpose (item 3); `SvgDepth` — 50
+nested groups accepted, 99 and deeper rejected by the explicit 64-level cap. `ImageValidationDomainServiceTest`: 112 tests (49 of round 1 + 63 of round 2).
+
+Verification after round 2:
+- `mvn -q verify` (clean `target/`, code `aae2e05`): BUILD SUCCESS, JaCoCo met. erp-core **543** / 0 / 0 / 0 (82 suites);
+  erp-app-reference **10** / 0 / 0 / 0.
+- P-LIVE run **`26100802530A`**, port 18103, fresh `erp_tm_d` (dropped afterwards): **171 PASS, 0 FAIL** (22 profile
+  cases not run) — `docs/test-api/results/20261008T025336-P-LIVE.json` / `-report.md`, replacing run `2610080232BA`.
+- api-docs: `review` shows no change in any module (nothing regenerated); `check_completeness`: 115/115, 0 missing /
+  duplicated / stale.
