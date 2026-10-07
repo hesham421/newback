@@ -5,12 +5,14 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.RoleActionGrant;
 import com.erp.sec.exception.SecErrorCodes;
+import java.util.List;
 
 /**
  * Domain companion for ENT-SEC-009 (RoleActionGrant). Check order is API-SEC-017's Orchestration
  * line verbatim: RULE-SEC-002 (QR-SEC-029, {@code SEC-409-NO-SCREEN-GRANT}) → RULE-SEC-007
  * (QR-SEC-030, {@code SEC-409-NO-VIEW-GRANT}, skipped when the granted action IS VIEW) →
- * RULE-SEC-005 (QR-SEC-031, {@code SEC-409-SOD-CONFLICT}) → {@code SEC-409-GRANT-DUP}.
+ * RULE-SEC-005 (QR-SEC-031, {@code SEC-409-SOD-CONFLICT}) → {@code SEC-409-GRANT-DUP}. On revoke
+ * it decides RULE-SEC-009's cascade set (ADR-SEC-062).
  */
 public final class RoleActionGrantDomain {
 
@@ -62,6 +64,20 @@ public final class RoleActionGrantDomain {
             entity.getRole() == null ? null : entity.getRole().getRolePk(),
             entity.getAction() == null ? null : entity.getAction().getActionRegPk(),
             entity.getAction() == null ? null : entity.getAction().getActionCode());
+    }
+
+    /**
+     * RULE-SEC-009 (REQ-SEC-037, ADR-SEC-062): revoking the screen's VIEW takes the role's other
+     * action grants on that screen ({@code roleGrantsOnScreen}) with it; revoking any other
+     * action takes nothing else.
+     */
+    public List<RoleActionGrant> cascadeOnRevoke(List<RoleActionGrant> roleGrantsOnScreen) {
+        if (!isGatewayAction(actionCode)) {
+            return List.of();
+        }
+        return roleGrantsOnScreen.stream()
+            .filter(grant -> !actionId.equals(grant.getAction().getActionRegPk()))
+            .toList();
     }
 
     /** RULE-SEC-007 exemption test: the gateway action itself needs no prior VIEW grant. */

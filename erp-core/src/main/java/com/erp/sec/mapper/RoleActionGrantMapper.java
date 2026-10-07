@@ -1,5 +1,6 @@
 package com.erp.sec.mapper;
 
+import com.erp.sec.dto.ActionGrantRevokeResponse;
 import com.erp.sec.dto.RoleActionGrantNodeResponse;
 import com.erp.sec.dto.RoleActionGrantResponse;
 import com.erp.sec.entity.ActionRegistry;
@@ -34,6 +35,13 @@ public class RoleActionGrantMapper {
             .actionId(entity.getAction() == null ? null : entity.getAction().getActionRegPk())
             .grantedBy(entity.getGrantedBy())
             .grantedAt(entity.getGrantedAt())
+            .build();
+    }
+
+    /** REQ-SEC-037 confirmation — every action grant the service actually deleted, the requested one included. */
+    public ActionGrantRevokeResponse toRevokeResponse(int revokedActionGrants) {
+        return ActionGrantRevokeResponse.builder()
+            .revokedActionGrants(revokedActionGrants)
             .build();
     }
 

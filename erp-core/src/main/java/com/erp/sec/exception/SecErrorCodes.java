@@ -38,7 +38,7 @@ public final class SecErrorCodes {
 
     /**
      * PLATFORM-STD (not found) — unknown role id.
-     * API: API-SEC-008, 014, 016, 017. HTTP 404.
+     * API: API-SEC-008, 014, 016, 017; the screen and action revokes (REQ-SEC-036/037). HTTP 404.
      */
     public static final String SEC_404_ROLE = "SEC-404-ROLE";
 
@@ -74,7 +74,7 @@ public final class SecErrorCodes {
 
     /**
      * PLATFORM-STD (not found) — grant does not exist.
-     * API: API-SEC-015. HTTP 404.
+     * API: API-SEC-015; the screen and action revokes (REQ-SEC-036/037). HTTP 404.
      */
     public static final String SEC_404_GRANT = "SEC-404-GRANT";
 
