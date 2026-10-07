@@ -61,7 +61,10 @@ class CoreLibraryRulesArchTest {
             // Jackson 3 (Spring Boot 4's JSON mapper) lives in tools.jackson — the successor of com.fasterxml;
             "tools.jackson..",
             // the AOP Alliance API that Spring AOP's MethodInterceptor is defined on (SecForbiddenAdvisor).
-            "org.aopalliance..");
+            "org.aopalliance..",
+            // the JDK's own XML API (module java.xml, like javax.xml): the hardened DOM parse of the SVG allow-list
+            // (SvgAllowList, TM-D review round 1, DEVIATIONS [TM-D]) — no new library.
+            "org.w3c.dom..", "org.xml.sax..");
 
     /** Rule 2: the only entities that may be global (no TENANT_ID), named in the step files. */
     static final Set<String> GLOBAL_ENTITIES = Set.of(
