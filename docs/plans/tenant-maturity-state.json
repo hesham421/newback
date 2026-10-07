@@ -61,17 +61,16 @@
         "V16__sec_user_profile.sql",
         "V17__notif_seed_password_changed.sql"
       ],
-      "status": "FIXING",
+      "status": "REVIEW",
       "branch": "tm/d-sec-user-profile-passwords",
       "worktree": ".worktrees/tm-d",
-      "attempts": 1,
+      "attempts": 2,
       "deviations": 12,
       "implementer_agent": "a13c59d7399aab600",
       "reviewer_agent": "a229488dd88b15f25",
       "review": {
-        "verdict": "FAIL",
-        "round": 1,
-        "findings": 6
+        "verdict": "pending",
+        "round": 2
       },
       "report": "docs/steps/tm-d-report.md",
       "merged_commit": null
@@ -372,6 +371,12 @@
       "step": "D",
       "event": "FIXING",
       "note": "reviewer FAIL: SVG sanitiser bypasses (namespace-prefixed script, CSS escapes, SMIL) -> allow-list XML validation; BCrypt 72-byte limit -> 500 -> policy cap; plus 4 low (missing part 500, RULE-NOTIF id, tenant-create doc, stored filename)"
+    },
+    {
+      "at": "2026-10-07T22:35:18Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "fix round 1 done d07cd20 (SVG allow-list parse, 72-byte cap, multipart 400, ids, docs, stored names; mvn 480/10, P-LIVE 171/171); round-2 review dispatched"
     }
   ]
 }
