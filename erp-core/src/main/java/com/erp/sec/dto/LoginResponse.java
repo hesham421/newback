@@ -25,4 +25,8 @@ public class LoginResponse {
 
     @Schema(description = "Lifetime in seconds - مدة الصلاحية بالثواني", example = "3600")
     private Long expiresIn;
+
+    @Schema(description = "tenant-maturity D: the user must change the password before anything else (always false for"
+        + " customers) - يلزم تغيير كلمة المرور قبل أي عملية أخرى", example = "false")
+    private Boolean passwordChangeRequired;
 }

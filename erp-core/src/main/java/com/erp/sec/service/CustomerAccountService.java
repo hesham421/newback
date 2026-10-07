@@ -211,6 +211,7 @@ public class CustomerAccountService {
             .accessToken(jwtTokenIssuer.issue(user, tokenRef, now))
             .tokenType(TOKEN_TYPE_BEARER)
             .expiresIn(jwtTokenIssuer.getExpiresInSeconds())
+            .passwordChangeRequired(Boolean.FALSE) // tenant-maturity D: customers are never flagged
             .build());
     }
 

@@ -55,6 +55,7 @@ public class UserRoleService {
     private final AuditLogEntryRepository auditLogEntryRepository;
     private final UserRoleAssignmentMapper mapper;
     private final UserMapper userMapper;
+    private final UserPhotoUrls photoUrls;
     private final RoleMapper roleMapper;
 
     /**
@@ -73,7 +74,7 @@ public class UserRoleService {
 
         List<RoleSummaryResponse> roles = replaceAssignments(user, request.getRoleIds());
 
-        return ServiceResult.success(userMapper.toResponse(user, roles), Status.UPDATED);
+        return ServiceResult.success(userMapper.toResponse(user, roles, photoUrls.of(user)), Status.UPDATED);
     }
 
     /**
