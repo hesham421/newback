@@ -26,7 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 /**
  * erp-core 1.3.0 (TM-D D.4) — {@link FileImageStoreApi} (XM-FILE-002) end to end in the PLATFORM tenant:
  * an accepted image is stored uncategorised and served on the public path at once (RULE-FILE-010,
- * ADR-FILE-001); PNG inline, an allowed safe SVG as an attachment; rejections write nothing
+ * ADR-FILE-008); PNG inline, an allowed safe SVG as an attachment; rejections write nothing
  * (RULE-FILE-008/009); discard withdraws the URL and is idempotent; {@code publicUrls} batches.
  */
 class FileImageStoreIntegrationTest extends AbstractIntegrationTest {

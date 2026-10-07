@@ -292,8 +292,8 @@ Change         : tenant-maturity plan package D.4 — shared image store (profil
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Ids continue from the highest number ever issued for FILE (tree, this repository's history and
-`governance-shared`): RULE-FILE-007, XM-FILE-001, API-FILE-008, no FILE ADR. This addendum adds
-XM-FILE-002, RULE-FILE-008..010 and ADR-FILE-001. **No endpoint, no schema change, no migration.**
+`governance-shared`): RULE-FILE-007, XM-FILE-001, API-FILE-008; FILE ADRs 001..007 are the as-built decisions of the analysis-coverage work (plan ADR-FILE-001 therefore becomes ADR-FILE-008). This addendum adds
+XM-FILE-002, RULE-FILE-008..010 and ADR-FILE-008. **No endpoint, no schema change, no migration.**
 
 ### 1. Cross-module surface (A7) — NEW / CHANGED
 | Kind | Id | Interface | Method | Contract |
@@ -314,7 +314,7 @@ field the store would ignore is left out.
 |---|---|---|---|---|---|---|
 | RULE-FILE-008 | FILE-001 (image store) | `storePublicImage` | The type is detected from the content only: PNG (`89 50 4E 47 0D 0A 1A 0A`), JPEG (`FF D8 FF`), WebP (`RIFF` … `WEBP` at bytes 8–11), SVG (UTF-8 text whose first element, after an optional BOM, XML declaration, comments and whitespace, is `<svg`). The detected type must be in the request's `allowedTypes` (else `TYPE_NOT_ALLOWED` — anything undetected included); the size must be 1..`maxBytes` (`EMPTY` / `TOO_LARGE`). The client file name and declared type are never used for the decision; the stored `CONTENT_TYPE` is the detected one. | — (the caller's code carries the message) | — | plan §6 D.4 |
 | RULE-FILE-009 | FILE-001 (image store) | `storePublicImage` of an SVG | SVG is accepted only when the request allows `image/svg+xml` (logos; photos never do) **and** the text passes the safety check, which rejects (`UNSAFE_SVG`), case-insensitively: a `<script` element, any `on…=` event-handler attribute, an `href` / `xlink:href` or a CSS `url(…)` whose value is not a same-document fragment (`#…`), `javascript:`, `@import`, `<!DOCTYPE` / `<!ENTITY`, `<foreignObject`. The SVG is rejected, never rewritten. | — | — | plan §6 D.4 |
-| RULE-FILE-010 | FILE-001 (image store) | `storePublicImage` / `discard`; public GET | An image-store document has **no category**, is stored `ACTIVE`, file type `IMAGE`, through the active storage provider, and is `PUBLIC` at once with a fresh random slug (`FileDocumentPublishedEvent` with `PUBLIC`). The public path serves a PUBLIC, ACTIVE document whose category allows public files **or that has no category**; only the image store creates PUBLIC documents without a category (`PATCH /visibility` keeps refusing them, `FILE_PUBLIC_NOT_ALLOWED`). `discard` = `DELETED` + `PRIVATE`. | — | — | ADR-FILE-001 |
+| RULE-FILE-010 | FILE-001 (image store) | `storePublicImage` / `discard`; public GET | An image-store document has **no category**, is stored `ACTIVE`, file type `IMAGE`, through the active storage provider, and is `PUBLIC` at once with a fresh random slug (`FileDocumentPublishedEvent` with `PUBLIC`). The public path serves a PUBLIC, ACTIVE document whose category allows public files **or that has no category**; only the image store creates PUBLIC documents without a category (`PATCH /visibility` keeps refusing them, `FILE_PUBLIC_NOT_ALLOWED`). `discard` = `DELETED` + `PRIVATE`. | — | — | ADR-FILE-008 |
 
 ### 3. Public serving of images — facts and open points
 | Kind | Item |
@@ -322,7 +322,7 @@ field the store would ignore is left out.
 | fact | `image/png`, `image/jpeg`, `image/webp` are in step 07's inline allow-list (`FileDocumentDomain.INLINE_SAFE_CONTENT_TYPES`): a photo URL renders inline in a browser tab and in `<img>`. Headers as for every public file: `Cache-Control: max-age=86400, public`, `ETag`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`. |
 | fact | A replacement gets a new slug (new URL), so the day-long cache never shows a stale photo; a discarded URL answers 404 `FILE_DOCUMENT_NOT_FOUND` from the origin at once. |
 | OPEN (for package E) | `image/svg+xml` is **not** inline-safe (deliberately, step 07): an SVG logo is served `attachment` (with `nosniff` and the sandbox CSP). `<img src="…">` renders it (the disposition only affects navigation, and an SVG in `<img>` runs no script), but opening the URL downloads it. E keeps the allow-list unchanged and relies on `<img>`; adding SVG to the inline list would be a FILE decision of its own (new ADR, 009+). |
-| RESOLVED | No `ALLOW_PUBLIC` category is needed or used: image-store documents are uncategorised (RULE-FILE-010, ADR-FILE-001). |
+| RESOLVED | No `ALLOW_PUBLIC` category is needed or used: image-store documents are uncategorised (RULE-FILE-010, ADR-FILE-008). |
 
 ### 4. Endpoints, error codes, permissions, entities
 No new FILE endpoint, error code, permission, entity field or LOV. The public GET
@@ -339,4 +339,4 @@ public document.
 ### 6. Decisions
 | Kind | ADR | Decision |
 |---|---|---|
-| NEW | ADR-FILE-001 | Profile photos and logos are PUBLIC documents with non-guessable slugs; image-store documents carry no category — `governance/analysis/decisions/FILE/ADR-FILE-001.md` |
+| NEW | ADR-FILE-008 | Profile photos and logos are PUBLIC documents with non-guessable slugs; image-store documents carry no category — `governance/analysis/decisions/FILE/ADR-FILE-008.md` |

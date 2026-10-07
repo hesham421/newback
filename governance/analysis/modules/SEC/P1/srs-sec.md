@@ -1446,7 +1446,7 @@ Pattern    : event
 Statement  : When a STAFF user uploads their own photo, or an administrator holding `PERM_SEC_USERS_UPDATE` uploads the photo of another STAFF user, the system shall store it through FILE's image store as a PUBLIC document with a random slug (owner `SEC_USER` / user id, module `SEC`), point `photoFileId` at it, discard the previous photo document and record `PROFILE_PHOTO_CHANGED`; removing the photo shall discard the document and clear `photoFileId`.
 Traces     : US-SEC-001, US-SEC-002
 Entities   : ENT-SEC-001
-Rationale  : RULE-SEC-061; XM-SEC-006; ADR-FILE-001 (public, non-guessable URL)
+Rationale  : RULE-SEC-061; XM-SEC-006; ADR-FILE-008 (public, non-guessable URL)
 Source     : docs/plans/tenant-maturity-plan.md §6 D.2, D.4
 Priority   : MEDIUM
 #### AC-SEC-093 — [REQ-SEC-087]

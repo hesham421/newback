@@ -152,10 +152,10 @@ None (no new FILE endpoint). The public GET serves uncategorised image-store doc
 ### PERMISSIONS / ERROR CODES — delta
 None.
 
-Last sequence per atom (highest ever issued): RULE: 010 · XM: 002 · API: 008 · ADR: 001 (ADR-FILE-002..008 are
-reserved by the as-built analysis session; the next free FILE ADR for this plan is 009).
+Last sequence per atom (highest ever issued): RULE: 010 · XM: 002 · API: 008 · ADR: 008 (ADR-FILE-001..007 are
+the as-built FILE ADRs of the analysis-coverage work; the next free FILE ADR is 009).
 
 ### DECISIONS
 | Kind | ADR | Subject |
 |---|---|---|
-| NEW | ADR-FILE-001 | Profile photos and logos are PUBLIC documents with non-guessable slugs (no category) |
+| NEW | ADR-FILE-008 | Profile photos and logos are PUBLIC documents with non-guessable slugs (no category) |

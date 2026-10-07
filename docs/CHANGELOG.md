@@ -42,7 +42,7 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   administrator: 400 `SEC-400-PASSWORD-POLICY` naming the field.
 - [TM-D] FILE: `FileImageStoreApi` (cross-module) stores a small public image for another module: type from the
   bytes, SVG only when allowed and free of active content, uncategorised, published under a random slug
-  (ADR-FILE-001); `FileDocumentLookupApi.publicUrls(Collection)`.
+  (ADR-FILE-008); `FileDocumentLookupApi.publicUrls(Collection)`.
 - [TM-D] NOTIF: template `STAFF_PASSWORD_CHANGED` (`V17__notif_seed_password_changed.sql`, every tenant) e-mailed to
   a staff user whose password was set or changed.
 - [TM-D] TENANT: `TenantLookupApi.summaryOf(tenantId)` (code and names).

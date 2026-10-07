@@ -13,7 +13,7 @@ import org.springframework.test.context.TestPropertySource;
 
 /**
  * erp-core 1.3.0 (TM-D) over HTTP: profile photos (REQ-SEC-087, RULE-SEC-061) through FILE's image store
- * (XM-FILE-002, RULE-FILE-010, ADR-FILE-001): public URL served inline without a token, replacement and
+ * (XM-FILE-002, RULE-FILE-010, ADR-FILE-008): public URL served inline without a token, replacement and
  * removal withdraw the old URL, rejected types and sizes, another user's photo, audit rows. The multipart
  * limits mirror the reference application's (above the photo limit), so the size check is the photo rule's,
  * not Spring's default 1 MB multipart ceiling.

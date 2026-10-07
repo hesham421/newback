@@ -1,8 +1,11 @@
-# ADR-FILE-001 — Profile photos and logos are PUBLIC documents with non-guessable slugs
+# ADR-FILE-008 — Profile photos and logos are PUBLIC documents with non-guessable slugs
 Status      : ACCEPTED (non-breaking)
 Stage       : implementation (erp-core 1.3.0)      Module: FILE       Version: erp-core 1.3.0
 Lane        : tenant-maturity plan package D (D.4, shared with package E)
 traces      : XM-FILE-002, RULE-FILE-008, RULE-FILE-009, RULE-FILE-010, XM-SEC-006, REQ-SEC-087
+
+Numbering: the tenant-maturity plan (§9) names this decision ADR-FILE-001. FILE ADRs 001..007 are the as-built
+decisions of the analysis-coverage work, so it takes ADR-FILE-008 (`docs/DEVIATIONS.md` `[TM-D]`).
 
 ## Context
 erp-core 1.3.0 stores two kinds of small images that every screen renders: a staff user's profile photo

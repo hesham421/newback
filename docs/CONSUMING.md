@@ -314,7 +314,7 @@ files are served at a stable URL once a category allows it (`allowPublic`) and t
 Since 1.3.0 `com.erp.file.crossmodule.FileImageStoreApi` stores a small public image for a core module
 (`storePublicImage(ImageStoreRequest)` → `ImageStoreResult`, `discard(id)`): the type is detected from the bytes
 (PNG, JPEG, WebP; SVG only when the request allows it and only without active content), the document is stored
-without a category and published at once under a random slug (ADR-FILE-001). Keep
+without a category and published at once under a random slug (ADR-FILE-008). Keep
 `spring.servlet.multipart.max-file-size` above the image limits (the reference app uses 15 MB): Spring's default
 1 MB ceiling answers an over-size upload before the image rule can (as a 500 today).
 

@@ -76,3 +76,12 @@ Paths cited below are relative to the erp-core repository at that tag. Policy id
 Scope exceptions: unchanged — no Camel, no external broker (the events bus is in-process,
 `com.erp.events`). The concrete SMS / WhatsApp / Push vendor stays an application decision, now realised
 as an application-supplied `ChannelProvider`.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| # | Policy-level delta | Kind | Source |
+|---|---|---|---|
+| 1 | A staff user is told by e-mail when their password is set by an administrator or changed by themselves: SEC publishes `UserPasswordChangedEvent(userId, byAdmin)` and NOTIF dispatches `STAFF_PASSWORD_CHANGED`, seeded in every tenant and copied to new ones. This is NOTIF's first consumption of an event it does not own (from the shared `com.erp.events` bus). | NEW | srs.md 1.3.0 (RULE-NOTIF-009, XM-NOTIF-003) |

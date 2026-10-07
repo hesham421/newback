@@ -32,7 +32,7 @@ import org.springframework.util.StringUtils;
 /**
  * XM-FILE-002 (tenant-maturity D.4) — the image store behind {@code FileImageStoreApi}: validates
  * (RULE-FILE-008/009, {@link ImageValidationDomainService}), stores through the active storage provider
- * and publishes at once with a random slug, uncategorised (RULE-FILE-010, ADR-FILE-001). Reached only
+ * and publishes at once with a random slug, uncategorised (RULE-FILE-010, ADR-FILE-008). Reached only
  * through the cross-module adapter; {@code isAuthenticated()} here, the consuming service owns the
  * permission. No caching (FILE is absent from the approved register).
  */
