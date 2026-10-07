@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "A,G",
+  "current_step": "G,C3",
   "steps": [
     {
       "id": "A",
@@ -13,20 +13,19 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "FIXING",
+      "status": "COMPLETE",
       "branch": "tm/a-tenant-analysis",
-      "worktree": ".worktrees/tm-a",
+      "worktree": null,
       "attempts": 1,
       "deviations": 1,
       "implementer_agent": "a3e7f307b14549283",
       "reviewer_agent": "ad3e343037a8fad2e",
       "review": {
-        "verdict": "PASS-with-findings",
-        "round": 1,
-        "findings": 3
+        "verdict": "PASS",
+        "round": 2
       },
       "report": "docs/steps/tm-a-report.md",
-      "merged_commit": null
+      "merged_commit": "ca02e2e"
     },
     {
       "id": "G",
@@ -79,9 +78,9 @@
       ],
       "wave": "2",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/c3-tenant-isolation-tests",
-      "worktree": null,
+      "worktree": ".worktrees/tm-c3",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -285,6 +284,18 @@
       "step": "A",
       "event": "FIXING",
       "note": "reviewer PASS with 3 low findings (prd template, provisioning overstated, 18->22 deviation); sent to implementer"
+    },
+    {
+      "at": "2026-10-07T19:51:19Z",
+      "step": "A",
+      "event": "COMPLETE",
+      "note": "merged ca02e2e; verify on main 390/10 (clean worktree; main checkout jar locked by another session's app on 7273)"
+    },
+    {
+      "at": "2026-10-07T19:51:19Z",
+      "step": "C3",
+      "event": "START",
+      "note": "wave 2 (C3) dispatched while G fixes"
     }
   ]
 }
