@@ -63,7 +63,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Orchestration for the three grant levels — ENT-SEC-007/008/009, API-SEC-014/015/016/017.
  * RULE-SEC-001/002/005/007 are decided by the grant Domain objects; RULE-SEC-003's cascade is
  * this service's own action (DATA-DOM-TRANSACTIONAL.md ENT-SEC-007, owner layer: service). The
- * 1.3.0 screen and action revokes ask the Domain objects for their cascade (RULE-SEC-008/009).
+ * 1.3.0 screen and action revokes ask the Domain objects for their cascade (RULE-SEC-054/055).
  */
 @Service
 @RequiredArgsConstructor
@@ -234,7 +234,7 @@ public class RoleGrantService {
     }
 
     /**
-     * REQ-SEC-036 — RULE-SEC-008: the role's action grants on the screen go with the screen grant,
+     * REQ-SEC-080 — RULE-SEC-054: the role's action grants on the screen go with the screen grant,
      * the cascade set decided by {@link RoleScreenGrantDomain#cascadeOnRevoke}.
      */
     @Transactional
@@ -248,7 +248,7 @@ public class RoleGrantService {
                 Status.NOT_FOUND, SecErrorCodes.SEC_404_GRANT, screenId));
 
         List<RoleActionGrant> actionGrants = RoleScreenGrantDomain.from(grant)
-            .cascadeOnRevoke(roleActionGrantRepository.findAllByRoleWithAction(roleId));
+            .cascadeOnRevoke(roleActionGrantRepository.findAllByRoleAndScreen(roleId, screenId));
 
         String principal = SecurityContextHelper.getCurrentUsername();
         roleActionGrantRepository.deleteAll(actionGrants);
@@ -270,7 +270,7 @@ public class RoleGrantService {
     }
 
     /**
-     * REQ-SEC-037 — RULE-SEC-009 (ADR-SEC-062): revoking the screen's VIEW also revokes the role's
+     * REQ-SEC-081 — RULE-SEC-055 (ADR-SEC-062): revoking the screen's VIEW also revokes the role's
      * other action grants on that screen; the screen grant itself stays.
      */
     @Transactional

@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * The screen-revoke confirmation (REQ-SEC-036) — how many action grants RULE-SEC-008's cascade
+ * The screen-revoke confirmation (REQ-SEC-080) — how many action grants RULE-SEC-054's cascade
  * removed alongside the screen grant itself.
  */
 @Data

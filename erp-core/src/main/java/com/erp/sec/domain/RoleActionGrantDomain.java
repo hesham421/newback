@@ -12,7 +12,7 @@ import java.util.List;
  * line verbatim: RULE-SEC-002 (QR-SEC-029, {@code SEC-409-NO-SCREEN-GRANT}) → RULE-SEC-007
  * (QR-SEC-030, {@code SEC-409-NO-VIEW-GRANT}, skipped when the granted action IS VIEW) →
  * RULE-SEC-005 (QR-SEC-031, {@code SEC-409-SOD-CONFLICT}) → {@code SEC-409-GRANT-DUP}. On revoke
- * it decides RULE-SEC-009's cascade set (ADR-SEC-062).
+ * it decides RULE-SEC-055's cascade set (ADR-SEC-062).
  */
 public final class RoleActionGrantDomain {
 
@@ -67,7 +67,7 @@ public final class RoleActionGrantDomain {
     }
 
     /**
-     * RULE-SEC-009 (REQ-SEC-037, ADR-SEC-062): revoking the screen's VIEW takes the role's other
+     * RULE-SEC-055 (REQ-SEC-081, ADR-SEC-062): revoking the screen's VIEW takes the role's other
      * action grants on that screen ({@code roleGrantsOnScreen}) with it; revoking any other
      * action takes nothing else.
      */

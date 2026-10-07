@@ -13,9 +13,9 @@ revoke a whole module (`DELETE /roles/{id}/modules/{moduleId}`), although ENT-SE
 (`SCREEN_REVOKED`, `ACTION_REVOKED`) had always promised it.
 
 - `DELETE /api/v1/sec/roles/{id}/screens/{screenId}` removes the screen grant and the role's action grants on that
-  screen (RULE-SEC-008). It answers `ScreenGrantRevokeResponse { revokedActionGrants }`.
+  screen (RULE-SEC-054). It answers `ScreenGrantRevokeResponse { revokedActionGrants }`.
 - `DELETE /api/v1/sec/roles/{id}/actions/{actionId}` removes one action grant. Revoking the screen's `VIEW` also
-  removes the role's other action grants on that screen; the screen grant stays (RULE-SEC-009, ADR-SEC-062). It
+  removes the role's other action grants on that screen; the screen grant stays (RULE-SEC-055, ADR-SEC-062). It
   answers `ActionGrantRevokeResponse { revokedActionGrants }`, where the count includes the requested grant.
 - Both need `PERM_SEC_ROLES_UPDATE`. They answer 404 `SEC-404-ROLE` when the role is not in the caller's tenant,
   then 404 `SEC-404-GRANT` when the role does not hold the grant. Each runs in one transaction and writes SEC audit
@@ -30,7 +30,7 @@ revoke a whole module (`DELETE /roles/{id}/modules/{moduleId}`), although ENT-SE
 
 | File | Section | Ids / content |
 |---|---|---|
-| `governance/analysis/modules/SEC/P1/srs-sec.md` | `## Implementation Addendum — erp-core 1.3.0` (after the 1.2.0 one) | REQ-SEC-036, AC-SEC-036, REQ-SEC-037, AC-SEC-037, RULE-SEC-008, RULE-SEC-009; SCR-REQ-SEC-005 B1/B3/B5 CHANGED (two B5 rows); endpoint table (method, path, permission, response DTO, errors with HTTP status, order of checks); audit (§5, catalogue cited: §A6, `module-registry-sec.md` AUTO-DECISIONS, `CHK_SEC_AUDIT_LOG_EVENT_TYPE` in V4 §5c); behaviour notes (§6: sessions, super role, Domain ownership, all cited to code); decisions (§7); frontend impact (§8); "no schema change, no migration" |
+| `governance/analysis/modules/SEC/P1/srs-sec.md` | `## Implementation Addendum — erp-core 1.3.0` (after the 1.2.0 one) | REQ-SEC-080, AC-SEC-086, REQ-SEC-081, AC-SEC-087, RULE-SEC-054, RULE-SEC-055; SCR-REQ-SEC-005 B1/B3/B5 CHANGED (two B5 rows); endpoint table (method, path, permission, response DTO, errors with HTTP status, order of checks); audit (§5, catalogue cited: §A6, `module-registry-sec.md` AUTO-DECISIONS, `CHK_SEC_AUDIT_LOG_EVENT_TYPE` in V4 §5c); behaviour notes (§6: sessions, super role, Domain ownership, all cited to code); decisions (§7); frontend impact (§8); "no schema change, no migration" |
 | `governance/analysis/modules/SEC/P1/registry-srs-sec.md` | same heading | registry deltas, counts REQ 37 · AC 37 · RULE 9, last sequence per atom |
 | `governance/analysis/modules/SEC/P0/business-policies-sec.md` | same heading | POL-SEC-002 extended to revocation (CHANGED); sessions-not-ended and super-role notes |
 | `governance/analysis/decisions/SEC/ADR-SEC-062.md` | new | "Revoking VIEW cascades vs refusing" (plan name ADR-SEC-041) — cascade with a counted response |
@@ -40,8 +40,8 @@ revoke a whole module (`DELETE /roles/{id}/modules/{moduleId}`), although ENT-SE
 ## Files changed
 
 Code (erp-core, `com.erp.sec`):
-- `domain/RoleScreenGrantDomain.java`: `cascadeOnRevoke(List<RoleActionGrant>)` (RULE-SEC-008).
-- `domain/RoleActionGrantDomain.java`: `cascadeOnRevoke(List<RoleActionGrant>)` (RULE-SEC-009).
+- `domain/RoleScreenGrantDomain.java`: `cascadeOnRevoke(List<RoleActionGrant>)` (RULE-SEC-054).
+- `domain/RoleActionGrantDomain.java`: `cascadeOnRevoke(List<RoleActionGrant>)` (RULE-SEC-055).
 - `repository/RoleScreenGrantRepository.java`: `findByRoleAndScreen`.
 - `repository/RoleActionGrantRepository.java`: `findByRoleAndAction`, `findAllByRoleAndScreen`.
 - `dto/ScreenGrantRevokeResponse.java` (new), `dto/ActionGrantRevokeResponse.java` (new).
@@ -83,9 +83,9 @@ Other decisions, all in the addendum:
 
 | # | Item (plan §8b + §10 DoD) | Evidence |
 |---|---|---|
-| 1 | Analysis entries (REQ-SEC-036/037, AC, RULE-SEC-008/009, B5, ADR) before the first code commit | `900a8fc` precedes `d298019` |
+| 1 | Analysis entries (REQ-SEC-080/081, AC, RULE-SEC-054/055, B5, ADR) before the first code commit | `900a8fc` precedes `d298019` |
 | 2 | `DELETE /roles/{id}/screens/{screenId}`, `PERM_SEC_ROLES_UPDATE`, `ScreenGrantRevokeResponse { revokedActionGrants }`, 404 role/grant, one transaction, audit `SCREEN_REVOKED` + one `ACTION_REVOKED` per cascaded action | `RoleGrantService.revokeScreen`; JUnit `revokeScreen_cascades…`; TC-CORE-SEC-035, SEC-038 PASS |
-| 3 | `DELETE /roles/{id}/actions/{actionId}`: VIEW cascades (RULE-SEC-009), otherwise one row | `RoleGrantService.revokeAction`; JUnit `revokeAction_ofView…`, `revokeAction_ofANonViewAction…`; TC-CORE-SEC-036, SEC-037 PASS |
+| 3 | `DELETE /roles/{id}/actions/{actionId}`: VIEW cascades (RULE-SEC-055), otherwise one row | `RoleGrantService.revokeAction`; JUnit `revokeAction_ofView…`, `revokeAction_ofANonViewAction…`; TC-CORE-SEC-036, SEC-037 PASS |
 | 4 | Module revoke unchanged | JUnit `moduleRevoke_stillCascades…`; TC-CORE-SEC-040 PASS |
 | 5 | Cascade decisions on the grant Domain objects | `RoleScreenGrantDomain.cascadeOnRevoke`, `RoleActionGrantDomain.cascadeOnRevoke`; `GrantRevokeDomainRulesTest` |
 | 6 | Sessions not terminated; super role keeps every authority (documented) | addendum §6; JUnit `revoke_takesEffectOnTheNextAuthorityRead_butASuperRoleKeepsEveryAuthority`; TC-CORE-SEC-037 (same token refused next request, menu 200) |

@@ -13,7 +13,7 @@ import java.util.List;
  * line: RULE-SEC-001 first — the role must hold the screen's module grant (QR-SEC-028 →
  * {@code SEC-409-NO-MODULE-GRANT}) — duplication second
  * ({@code UQ_SEC_ROLE_SCREEN_GRANT_ROLE_SCREEN} → {@code SEC-409-GRANT-DUP}). On revoke it
- * decides RULE-SEC-008's cascade set.
+ * decides RULE-SEC-054's cascade set.
  */
 public final class RoleScreenGrantDomain {
 
@@ -50,7 +50,7 @@ public final class RoleScreenGrantDomain {
     }
 
     /**
-     * RULE-SEC-008 (REQ-SEC-036): the action grants that go with this screen grant — every one of
+     * RULE-SEC-054 (REQ-SEC-080): the action grants that go with this screen grant — every one of
      * the role's action grants whose action belongs to this screen.
      */
     public List<RoleActionGrant> cascadeOnRevoke(List<RoleActionGrant> roleActionGrants) {

@@ -1334,7 +1334,11 @@ def test_sec_037_revoke_view_cascades(ctx):
     eq(rv_audit(ctx, "ACTION_REVOKED", role), sorted(f"{role}/{a}" for a in actions.values()), "three ACTION_REVOKED rows")
     st(api("POST", "/api/v1/sec/roles/search", t=t_rv, body={"size": 10}), 403, "SEC-403-FORBIDDEN",
        what="the same token on its next request: VIEW is gone")
-    st(api("GET", "/api/v1/sec/menu", t=t_rv), 200, what="the session was not terminated")
+    m = api("GET", "/api/v1/sec/menu", t=t_rv)
+    st(m, 200, what="the session was not terminated")
+    pages = [s.get("pageCode") for mod in (m.data or []) for s in mod.get("screens") or []]
+    check("SEC_ROLES" in pages, "the menu still lists SEC_ROLES (the screen grant stays; revoke the screen to remove it)",
+          "SEC_ROLES listed", pages)
 
 
 @tc("TC-CORE-SEC-038")

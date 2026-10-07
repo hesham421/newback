@@ -74,9 +74,9 @@ public interface RoleActionGrantRepository
                                              @Param("moduleRegPk") Long moduleRegPk);
 
     /**
-     * Locates the grant the action revoke (REQ-SEC-037) deletes; an empty result is the
+     * Locates the grant the action revoke (REQ-SEC-081) deletes; an empty result is the
      * {@code SEC-404-GRANT} path. {@code JOIN FETCH} loads the action and its screen for the
-     * RULE-SEC-009 decision and the {@code ACTION_REVOKED} audit entry (A.2.6).
+     * RULE-SEC-055 decision and the {@code ACTION_REVOKED} audit entry (A.2.6).
      */
     @Query("SELECT g FROM RoleActionGrant g JOIN FETCH g.action a JOIN FETCH a.screen "
         + "WHERE g.role.rolePk = :rolePk AND a.actionRegPk = :actionRegPk")
@@ -84,8 +84,8 @@ public interface RoleActionGrantRepository
                                                   @Param("actionRegPk") Long actionRegPk);
 
     /**
-     * The role's action grants on one screen — the facts RULE-SEC-008 (screen revoke) and
-     * RULE-SEC-009 (VIEW revoke) decide their cascade from. {@code JOIN FETCH} as above.
+     * The role's action grants on one screen — the facts RULE-SEC-054 (screen revoke) and
+     * RULE-SEC-055 (VIEW revoke) decide their cascade from. {@code JOIN FETCH} as above.
      */
     @Query("SELECT g FROM RoleActionGrant g JOIN FETCH g.action a JOIN FETCH a.screen s "
         + "WHERE g.role.rolePk = :rolePk AND s.screenRegPk = :screenRegPk")

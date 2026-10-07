@@ -36,7 +36,7 @@ public interface RoleScreenGrantRepository
                                              @Param("moduleRegPk") Long moduleRegPk);
 
     /**
-     * Locates the grant the screen revoke (REQ-SEC-036) deletes; an empty result is the
+     * Locates the grant the screen revoke (REQ-SEC-080) deletes; an empty result is the
      * {@code SEC-404-GRANT} path. {@code JOIN FETCH} loads the screen for the
      * {@code SCREEN_REVOKED} audit entry (A.2.6).
      */

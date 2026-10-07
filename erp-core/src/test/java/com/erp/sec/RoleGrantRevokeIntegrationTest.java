@@ -42,8 +42,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * erp-core 1.3.0, package TM-G: revoking one screen grant (REQ-SEC-036, RULE-SEC-008) or one action
- * grant (REQ-SEC-037, RULE-SEC-009 / ADR-SEC-062), their audit rows, their 404s, and the unchanged
+ * erp-core 1.3.0, package TM-G: revoking one screen grant (REQ-SEC-080, RULE-SEC-054) or one action
+ * grant (REQ-SEC-081, RULE-SEC-055 / ADR-SEC-062), their audit rows, their 404s, and the unchanged
  * module revoke. Shared test database, every write rolled back by the class-level transaction.
  */
 @Transactional

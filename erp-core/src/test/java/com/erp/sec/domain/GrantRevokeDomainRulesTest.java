@@ -10,7 +10,7 @@ import com.erp.sec.entity.ScreenRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** erp-core 1.3.0 (TM-G) — the cascade sets RULE-SEC-008 and RULE-SEC-009 decide on revoke. */
+/** erp-core 1.3.0 (TM-G) — the cascade sets RULE-SEC-054 and RULE-SEC-055 decide on revoke. */
 class GrantRevokeDomainRulesTest {
 
     private static final Role ROLE = Role.builder().rolePk(7L).build();

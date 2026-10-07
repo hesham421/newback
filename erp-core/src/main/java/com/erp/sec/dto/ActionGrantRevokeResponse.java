@@ -7,8 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * The action-revoke confirmation (REQ-SEC-037) — every action grant the call removed, the
- * requested one included: 1, or 1 + N when revoking VIEW cascaded N others (RULE-SEC-009).
+ * The action-revoke confirmation (REQ-SEC-081) — every action grant the call removed, the
+ * requested one included: 1, or 1 + N when revoking VIEW cascaded N others (RULE-SEC-055).
  */
 @Data
 @Builder

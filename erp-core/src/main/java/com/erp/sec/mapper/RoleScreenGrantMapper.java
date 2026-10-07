@@ -40,7 +40,7 @@ public class RoleScreenGrantMapper {
             .build();
     }
 
-    /** REQ-SEC-036 confirmation — the count comes from the cascade the service actually performed. */
+    /** REQ-SEC-080 confirmation — the count comes from the cascade the service actually performed. */
     public ScreenGrantRevokeResponse toRevokeResponse(int revokedActionGrants) {
         return ScreenGrantRevokeResponse.builder()
             .revokedActionGrants(revokedActionGrants)

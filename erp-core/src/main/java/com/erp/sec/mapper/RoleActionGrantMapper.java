@@ -38,7 +38,7 @@ public class RoleActionGrantMapper {
             .build();
     }
 
-    /** REQ-SEC-037 confirmation — every action grant the service actually deleted, the requested one included. */
+    /** REQ-SEC-081 confirmation — every action grant the service actually deleted, the requested one included. */
     public ActionGrantRevokeResponse toRevokeResponse(int revokedActionGrants) {
         return ActionGrantRevokeResponse.builder()
             .revokedActionGrants(revokedActionGrants)

@@ -28,8 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Thin controller for the 3-level grant editor — API-SEC-014/015/016/017 (SCR-REQ-SEC-005) and
- * the screen/action revokes (REQ-SEC-036/037). Every revoke answers 200 with the cascade count
- * RULE-SEC-003/008/009 produced, so none is the generic 204 delete.
+ * the screen/action revokes (REQ-SEC-080/081). Every revoke answers 200 with the cascade count
+ * RULE-SEC-003/054/055 produced, so none is the generic 204 delete.
  */
 @RestController
 @RequestMapping("/api/v1/sec/roles")
@@ -77,7 +77,7 @@ public class RoleGrantController {
 
     @DeleteMapping("/{id}/screens/{screenId}")
     @Operation(summary = "Revoke screen grant",
-        description = "سحب منح شاشة مع منح إجراءاتها (RULE-SEC-008)")
+        description = "سحب منح شاشة مع منح إجراءاتها (RULE-SEC-054)")
     public ResponseEntity<ApiResponse<ScreenGrantRevokeResponse>> revokeScreen(
             @PathVariable Long id,
             @PathVariable Long screenId) {
@@ -94,7 +94,7 @@ public class RoleGrantController {
 
     @DeleteMapping("/{id}/actions/{actionId}")
     @Operation(summary = "Revoke action grant",
-        description = "سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-009)")
+        description = "سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-055)")
     public ResponseEntity<ApiResponse<ActionGrantRevokeResponse>> revokeAction(
             @PathVariable Long id,
             @PathVariable Long actionId) {

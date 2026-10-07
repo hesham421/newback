@@ -20,10 +20,10 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
     `util.TokenHasher.sha256Hex(byte[])`.
 - `TenantContext.isPlatform()`.
 - [TM-G] SEC: revoke a single grant of a role. `DELETE /api/v1/sec/roles/{id}/screens/{screenId}` removes the
-  screen grant and the role's action grants on that screen (RULE-SEC-008) and answers
+  screen grant and the role's action grants on that screen (RULE-SEC-054) and answers
   `ScreenGrantRevokeResponse { revokedActionGrants }`; `DELETE /api/v1/sec/roles/{id}/actions/{actionId}` removes
   one action grant, and revoking a screen's `VIEW` also removes the role's other actions on that screen
-  (RULE-SEC-009, ADR-SEC-062), answering `ActionGrantRevokeResponse { revokedActionGrants }`. Both need
+  (RULE-SEC-055, ADR-SEC-062), answering `ActionGrantRevokeResponse { revokedActionGrants }`. Both need
   `PERM_SEC_ROLES_UPDATE`, answer 404 `SEC-404-ROLE` / `SEC-404-GRANT`, and write `SCREEN_REVOKED` /
   `ACTION_REVOKED` SEC audit entries. No migration; the module revoke is unchanged. Sessions are not ended (the
   next request sees the change); a super role keeps every authority, only its menu changes.
