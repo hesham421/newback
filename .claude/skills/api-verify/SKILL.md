@@ -2,10 +2,6 @@
 name: api-verify
 description: "API VERIFICATION (post-implementation). Generates one runnable script that exercises a module's real API in dependency order, plus a problems report — from that module's own api-docs (+ test-execution-manifest when present). Standalone, on demand, never a gate. Use after a backend module's endpoints are implemented and its api-docs are current."
 ---
-Paths below are under `governance/` — the project's governance tree, a plain folder at this repo's root
-(see `governance/README.md`). This track's partition is `governance/backend/modules/<MOD>/`.
-
-
 # Skill: api-verify
 
 ## Description
@@ -17,7 +13,8 @@ message, dependency, or data value of its own — anything not traceable to an i
 is skipped and named as skipped.
 
 This skill is **translation, not derivation**, and it is **module-agnostic** — it runs
-identically for any `<MOD>` (SEC, FIN, MDL, FILE, CU, NOTIF, or any module registered later).
+identically for any module (`sec`, `mdl`, `cu`, `file`, `notif`, `tenant`, `sequence`, `audit`,
+`report`, or any module added later).
 Nothing about a specific module is hard-coded here; every fact that can change — base path,
 envelope shape, error format, languages, permission pattern, output location — is read from
 [`governance/rules/api-verify-config.md`](../../../governance/rules/api-verify-config.md), never typed
@@ -27,7 +24,7 @@ it, not this skill.
 ## When to Use
 
 - A backend module's endpoints are implemented and its api-docs are current
-  (`governance/backend/modules/<MOD>/api-docs/`)
+  (`docs/api-docs/<module>/`)
 - Post-implementation verification against the real running API — not a code-review, not a
   substitute for `gov-validate-backend-feature`
 - On demand, invoked explicitly for a given `<MOD>` — never automatically, never as a gate
@@ -35,12 +32,14 @@ it, not this skill.
 ## When NOT to Use
 
 - Before the module's api-docs exist or are stale — regenerate them first
-  (`erp-app-reference/governance/governance-tools/api-doc-generator`); a stale doc produces a script that tests
+  (`python docs/api-docs/_tools/generate_all.py`, the driver of
+  `governance/tools/api-doc-generator`); a stale doc produces a script that tests
   the wrong contract
 - As a substitute for `gov-enforce-backend-contract` / `gov-validate-backend-feature` — those
   review code and architecture; this skill exercises the live HTTP surface
-- To design new test cases from scratch — that is `test-gen`'s job (test-execution-manifest);
-  this skill only consumes what `test-gen` and the api-docs already established
+- To design new test cases from scratch — that is a test plan's job (a test-execution-manifest,
+  when one is supplied with the run); this skill only consumes what such a manifest and the
+  api-docs already established
 
 ## Responsibilities
 
@@ -74,15 +73,15 @@ it, not this skill.
 
 ## Output
 
-- `governance/backend/modules/<MOD>/test-api/test_<mod>_apis.py` (or the language the run targets)
-- `governance/backend/modules/<MOD>/test-api/<mod>_problems_report.md`
+- `docs/test-api/test_<mod>_apis.py` (or the language the run targets)
+- `docs/test-api/<mod>_problems_report.md`
 
 ---
 
 ## 1. Inputs and tiers
 
 Read `governance/rules/api-verify-config.md` §1 for exact paths. Two tiers, decided by what
-`<MOD>`'s own governance folder actually contains — state which one at the start of the run:
+the run actually has — state which one at the start of the run:
 
 | Tier | Present | Generates |
 |---|---|---|
@@ -260,7 +259,7 @@ docs; FK ids threaded, never literal.
 
 | Consumes (read-only) | Produces | Never |
 |---|---|---|
-| api-docs, the test-execution-manifest (when present), run arguments, `api-verify-config.md` | `test_<mod>_apis.py`, `<mod>_problems_report.md` under `governance/backend/modules/<MOD>/test-api/`, the stage-I grant journal | a governance ID of any kind, a change to any line artifact, a gate verdict, a data fix against records it did not create — **one exception, and only one**: the bounded, journalled, self-revoked permission grant of stage I |
+| api-docs, the test-execution-manifest (when present), run arguments, `api-verify-config.md` | `test_<mod>_apis.py`, `<mod>_problems_report.md` under `docs/test-api/`, the stage-I grant journal | a governance ID of any kind, a change to any line artifact, a gate verdict, a data fix against records it did not create — **one exception, and only one**: the bounded, journalled, self-revoked permission grant of stage I |
 
 ## Related Skills
 

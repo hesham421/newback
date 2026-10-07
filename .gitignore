@@ -44,10 +44,8 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 tests/masterdata-test-results.json
-testsprite_tests/tmp/
-testsprite_tests/tmp/config.json
 
-# Python (governance-tools) — compiled bytecode is interpreter/machine
+# Python (governance/tools, docs/api-docs/_tools, docs/test-api) — compiled bytecode is interpreter/machine
 # specific and must never be committed
 __pycache__/
 *.pyc

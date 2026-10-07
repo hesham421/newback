@@ -1,5 +1,7 @@
 # /erp-core/orchestrate-plan
 
+> Note (2026-10-07): the erp-core plan is complete (steps 01–13, `erp-core-plan/execution-state.json`) and the governance is now vendored inside this repository under `governance/`; this command is kept as completed-plan history.
+
 Master orchestrator for the **erp-core technical plan** (`erp-core-plan/` at
 the repo root, steps 01–13). It is the plan-level counterpart of
 `orchestrate-module.md`, adapted to this task: there is no governance
