@@ -19,10 +19,13 @@ public final class TokenHasher {
 
     /** SHA-256 hash (lowercase hex) of an opaque token — the only form persisted. */
     public static String sha256Hex(String rawToken) {
+        return sha256Hex(rawToken.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** SHA-256 hash (lowercase hex) of arbitrary bytes (e.g. a stored file's content checksum). */
+    public static String sha256Hex(byte[] content) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
         } catch (NoSuchAlgorithmException e) {
             // SHA-256 is mandated by the Java platform, so this is an unreachable JVM-integrity
             // failure rather than a business error — never surfaced to a client.

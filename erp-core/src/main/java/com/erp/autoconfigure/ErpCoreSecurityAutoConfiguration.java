@@ -8,7 +8,6 @@ import com.erp.sec.security.JwtTokenValidator;
 import com.erp.sec.security.RealmEnforcementFilter;
 import com.erp.sec.security.SecSecurityErrorHandler;
 import com.erp.sec.service.MenuService;
-import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
 import com.erp.tenant.permission.TenantPermissions;
 import com.erp.tenant.repository.TenantRepository;
@@ -199,7 +198,7 @@ public class ErpCoreSecurityAutoConfiguration {
      */
     static boolean isPlatformOperator(org.springframework.security.core.Authentication authentication) {
         return authentication != null && authentication.isAuthenticated()
-            && Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(TenantContext.current())
+            && TenantContext.isPlatform()
             && authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(PLATFORM_TENANT_MANAGE_AUTHORITY::equals);

@@ -1,6 +1,6 @@
 package com.erp.sec.domain;
 
-import com.erp.common.domain.status.Status;
+import com.erp.common.domain.DomainRules;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.ModuleRegistry;
 import com.erp.sec.exception.SecErrorCodes;
@@ -26,10 +26,7 @@ public final class ModuleRegistryDomain {
      * @throws LocalizedException {@code SEC-409-MODULE-DUP} (409)
      */
     public static ModuleRegistryDomain create(String code, boolean codeAlreadyTaken) {
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                SecErrorCodes.SEC_409_MODULE_DUP, code);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, SecErrorCodes.SEC_409_MODULE_DUP, code);
         return new ModuleRegistryDomain(code, true);
     }
 

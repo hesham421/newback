@@ -1,5 +1,6 @@
 package com.erp.notif.channel;
 
+import com.erp.common.util.Strings;
 import com.erp.notif.entity.NotificationInboxItem;
 import com.erp.notif.repository.NotificationInboxRepository;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,6 @@ public class InAppChannelProvider implements ChannelProvider {
 
     /** NOTIF_INBOX.TITLE_* is VARCHAR(300); a substituted subject may be longer. */
     private static String title(String text) {
-        return text != null && text.length() > TITLE_MAX ? text.substring(0, TITLE_MAX) : text;
+        return Strings.truncate(text, TITLE_MAX);
     }
 }

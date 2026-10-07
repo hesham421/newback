@@ -1,5 +1,6 @@
 package com.erp.audit.web;
 
+import com.erp.common.util.Strings;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,8 +47,8 @@ public class RequestInfoHolder extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         RequestInfo previous = CURRENT.get();
-        CURRENT.set(new RequestInfo(truncate(request.getRemoteAddr(), MAX_IP),
-            truncate(request.getHeader(HttpHeaders.USER_AGENT), MAX_USER_AGENT)));
+        CURRENT.set(new RequestInfo(Strings.truncate(request.getRemoteAddr(), MAX_IP),
+            Strings.truncate(request.getHeader(HttpHeaders.USER_AGENT), MAX_USER_AGENT)));
         try {
             chain.doFilter(request, response);
         } finally {
@@ -57,9 +58,5 @@ public class RequestInfoHolder extends OncePerRequestFilter {
                 CURRENT.set(previous);
             }
         }
-    }
-
-    private static String truncate(String value, int max) {
-        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 }

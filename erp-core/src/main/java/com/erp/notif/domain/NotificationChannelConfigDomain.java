@@ -1,7 +1,6 @@
 package com.erp.notif.domain;
 
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.LocalizedException;
+import com.erp.common.domain.DomainRules;
 import com.erp.notif.entity.NotificationChannelConfig;
 import com.erp.notif.exception.NotifErrorCodes;
 
@@ -26,14 +25,8 @@ public final class NotificationChannelConfigDomain {
      * channelTypeId, pre-checked by the service).
      */
     public static NotificationChannelConfigDomain create(String channelTypeId, boolean channelAlreadyTaken) {
-        if (isBlank(channelTypeId)) {
-            throw new LocalizedException(Status.VALIDATION_ERROR,
-                NotifErrorCodes.NOTIF_CHANNEL_TYPE_REQUIRED);
-        }
-        if (channelAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                NotifErrorCodes.NOTIF_CHANNEL_CONFIG_DUPLICATE, channelTypeId);
-        }
+        DomainRules.assertNotBlank(NotifErrorCodes.NOTIF_CHANNEL_TYPE_REQUIRED, channelTypeId);
+        DomainRules.assertUnique(channelAlreadyTaken, NotifErrorCodes.NOTIF_CHANNEL_CONFIG_DUPLICATE, channelTypeId);
         return new NotificationChannelConfigDomain(channelTypeId, true);
     }
 
@@ -51,9 +44,6 @@ public final class NotificationChannelConfigDomain {
         return enabled;
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
 
     public String getChannelTypeId() {
         return channelTypeId;

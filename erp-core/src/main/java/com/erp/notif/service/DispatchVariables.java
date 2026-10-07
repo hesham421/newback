@@ -1,5 +1,6 @@
 package com.erp.notif.service;
 
+import com.erp.common.util.PlainJson;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import tools.jackson.core.type.TypeReference;
@@ -13,7 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 final class DispatchVariables {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper MAPPER = PlainJson.MAPPER;
     private static final TypeReference<LinkedHashMap<String, String>> TYPE = new TypeReference<>() { };
 
     private DispatchVariables() {

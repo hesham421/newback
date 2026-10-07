@@ -1,15 +1,12 @@
 package com.erp.sec.security;
 
+import com.erp.common.web.FilterErrorResponseWriter;
 import com.erp.sec.exception.SecErrorCodes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
-import org.springframework.context.NoSuchMessageException;
-import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -48,24 +45,6 @@ public class SecSecurityErrorHandler implements AuthenticationEntryPoint, Access
      */
     public void write(HttpServletRequest request, HttpServletResponse response,
                       int status, String errorCode) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write(
-            "{\"success\":false,\"error\":{\"code\":\"" + errorCode
-                + "\",\"message\":\"" + escape(resolve(errorCode, request))
-                + "\"},\"timestamp\":\"" + Instant.now() + "\"}");
-    }
-
-    private String resolve(String errorCode, HttpServletRequest request) {
-        try {
-            return messageSource.getMessage(errorCode, null, request.getLocale());
-        } catch (NoSuchMessageException e) {
-            return errorCode;
-        }
-    }
-
-    private String escape(String message) {
-        return message.replace("\\", "\\\\").replace("\"", "\\\"");
+        FilterErrorResponseWriter.write(messageSource, request, response, status, errorCode);
     }
 }

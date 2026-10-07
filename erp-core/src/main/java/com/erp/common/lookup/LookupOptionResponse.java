@@ -1,4 +1,4 @@
-package com.erp.notif.dto;
+package com.erp.common.lookup;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -7,9 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * API-NOTIF-006 lookup option (LOV-NOTIF-001 NOTIF_CHANNEL / LOV-NOTIF-002 NOTIF_STATUS). Slim,
- * code-driven read model — the NOTIF LOVs are runtime-loaded codes with no lookup table, so there is
- * no id or audit surface — a lean projection suited to dropdowns.
+ * One option of a module-owned lookup (LOV) served from MDL — a slim, code-driven read model for
+ * dropdowns, with no id or audit surface. See {@link OwnedLookups}.
  */
 @Data
 @Builder

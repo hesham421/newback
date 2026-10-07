@@ -1,5 +1,6 @@
 package com.erp.sec.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.RoleActionGrant;
@@ -51,9 +52,7 @@ public final class RoleActionGrantDomain {
         if (conflictingActionHeld) {
             throw new LocalizedException(Status.CONFLICT, SecErrorCodes.SEC_409_SOD_CONFLICT);
         }
-        if (grantAlreadyExists) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, SecErrorCodes.SEC_409_GRANT_DUP);
-        }
+        DomainRules.assertUnique(grantAlreadyExists, SecErrorCodes.SEC_409_GRANT_DUP);
         return new RoleActionGrantDomain(roleId, actionId, actionCode);
     }
 

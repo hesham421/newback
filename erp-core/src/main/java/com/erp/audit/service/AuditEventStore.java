@@ -2,6 +2,7 @@ package com.erp.audit.service;
 
 import com.erp.audit.crossmodule.AuditChange;
 import com.erp.audit.crossmodule.AuditEntry;
+import com.erp.common.util.PlainJson;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -45,7 +46,7 @@ public class AuditEventStore {
         + " VALUES (nextval('SEQ_CORE_AUDIT_EVENT'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?, ?, ?, ?, ?, 0)";
 
     /** A private mapper: the CHANGES shape is fixed, independent of the application's JSON settings. */
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper MAPPER = PlainJson.MAPPER;
 
     private final JdbcTemplate jdbcTemplate;
 

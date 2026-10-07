@@ -1,8 +1,8 @@
 package com.erp.file.controller;
 
+import com.erp.common.lookup.LookupOptionResponse;
 import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
-import com.erp.file.dto.LookupOptionResponse;
 import com.erp.file.service.FileLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

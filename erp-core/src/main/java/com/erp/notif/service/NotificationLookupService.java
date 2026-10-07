@@ -1,13 +1,13 @@
 package com.erp.notif.service;
 
 import com.erp.common.domain.status.ServiceResult;
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.LocalizedException;
+import com.erp.common.lookup.LookupOptionResponse;
+import com.erp.common.lookup.OwnedLookups;
 import com.erp.mdl.crossmodule.MdlLookupApi;
 import com.erp.mdl.crossmodule.LookupOptionView;
-import com.erp.notif.dto.LookupOptionResponse;
 import com.erp.notif.exception.NotifErrorCodes;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,39 +33,19 @@ public class NotificationLookupService {
     public static final String LOOKUP_NOTIF_CHANNEL = "NOTIF_CHANNEL";
     public static final String LOOKUP_NOTIF_STATUS = "NOTIF_STATUS";
 
+    /** The two LOVs this module fronts; any other key is refused before MDL is called. */
+    private static final Set<String> OWNED_KEYS = Set.of(LOOKUP_NOTIF_CHANNEL, LOOKUP_NOTIF_STATUS);
+
     private final MdlLookupApi mdlLookupApi;
 
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
     public ServiceResult<List<LookupOptionResponse>> get(String lookupKey) {
         log.debug("Resolving NOTIF lookup for key: {}", lookupKey);
-
-        String normalized = lookupKey == null ? null : lookupKey.trim().toUpperCase();
-        if (!LOOKUP_NOTIF_CHANNEL.equals(normalized) && !LOOKUP_NOTIF_STATUS.equals(normalized)) {
-            // NOTIF only fronts its own two LOVs — never a generic pass-through for arbitrary
-            // MDL keys it doesn't own, so reject before ever calling MDL.
-            throw new LocalizedException(
-                Status.NOT_FOUND, NotifErrorCodes.NOTIF_LOOKUP_KEY_UNKNOWN, lookupKey);
-        }
-
-        List<LookupOptionView> values;
-        try {
-            values = mdlLookupApi.readActiveValuesByKey(normalized);
-        } catch (LocalizedException ex) {
-            if (ex.getStatus() == Status.NOT_FOUND) {
-                // Translate MDL's own not-found (unseeded/deactivated type) into NOTIF's own
-                // error code — MDL_404_TYPE_KEY must never leak out of this module's API.
-                throw new LocalizedException(
-                    Status.NOT_FOUND, NotifErrorCodes.NOTIF_LOOKUP_KEY_UNKNOWN, lookupKey);
-            }
-            throw ex;
-        }
-
         // MDL already orders by sortOrder (QR-MDL-011); LookupOptionResponse has no sortOrder
         // field, so it is intentionally dropped here.
-        List<LookupOptionResponse> options = values.stream().map(NotificationLookupService::toResponse).toList();
-
-        return ServiceResult.success(options);
+        return ServiceResult.success(OwnedLookups.read(lookupKey, OWNED_KEYS, NotifErrorCodes.NOTIF_LOOKUP_KEY_UNKNOWN,
+            key -> mdlLookupApi.readActiveValuesByKey(key).stream().map(NotificationLookupService::toResponse).toList()));
     }
 
     private static LookupOptionResponse toResponse(LookupOptionView view) {

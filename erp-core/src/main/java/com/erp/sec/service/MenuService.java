@@ -15,7 +15,6 @@ import com.erp.sec.repository.RoleActionGrantRepository;
 import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.ScreenRegistryRepository;
 import com.erp.sec.repository.UserRepository;
-import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
 import java.util.HashSet;
 import java.util.List;
@@ -140,7 +139,7 @@ public class MenuService {
         if (!roleRepository.holdsActiveSuperRole(caller.getUserPk())) {
             return Set.copyOf(granted);
         }
-        List<String> excluded = Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(TenantContext.current())
+        List<String> excluded = TenantContext.isPlatform()
             ? List.of("") : List.of(PLATFORM_MODULE_CODE);
         Set<String> codes = new HashSet<>(granted);
         codes.addAll(actionRegistryRepository.findActiveAuthorityCodesExcludingModules(excluded));

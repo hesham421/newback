@@ -5,6 +5,21 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 
 ## [Unreleased]
 
+### Added
+- Shared helpers in `com.erp.common`, replacing copies that lived in two or more modules (no
+  behaviour change):
+  - `web.FilterErrorResponseWriter`: the hand-written error envelope of the SEC and tenant filters.
+  - `search.InstantFieldValueConverter`: ISO-8601 filter values to `Instant` (AUDIT, SEC).
+  - `util.SecurityContextHelper.currentCaller()` / `currentActorOrSystem()` / `currentRealm()` and the
+    `REALM_*` / `CUSTOMER_AUTHORITY` constants, which `DomainEvent` and `AuditApi` now alias.
+  - `lookup.LookupOptionResponse` and `lookup.OwnedLookups`: the MDL-backed lookup endpoints of FILE
+    and NOTIF (same JSON shape).
+  - `domain.StatusTransitions` (FILE document, NOTIF log) and `domain.DomainRules`
+    (`assertUnique` / `assertNotBlank`, used by the Domain objects).
+  - `util.Strings.truncate`, `util.UtcDates.startOfDay`, `util.PlainJson.MAPPER`,
+    `util.TokenHasher.sha256Hex(byte[])`.
+- `TenantContext.isPlatform()`.
+
 ### Changed
 - Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
   published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.

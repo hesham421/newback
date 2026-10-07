@@ -5,18 +5,14 @@ import com.erp.audit.entity.AuditEvent;
 import com.erp.audit.mapper.AuditEventMapper;
 import com.erp.audit.repository.AuditEventRepository;
 import com.erp.common.domain.status.ServiceResult;
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.CommonErrorCodes;
-import com.erp.common.exception.LocalizedException;
 import com.erp.common.search.FieldValueConverter;
+import com.erp.common.search.InstantFieldValueConverter;
 import com.erp.common.search.PageableBuilder;
 import com.erp.common.search.SearchFilter;
 import com.erp.common.search.SearchOperator;
 import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -46,16 +42,7 @@ public class AuditEventService {
     private static final String OCCURRED_AT = "occurredAt";
 
     /** The {@code from}/{@code to} bounds arrive as ISO-8601 instants; anything else is a 400. */
-    private static final FieldValueConverter INSTANT_CONVERTER = (field, rawValue) -> {
-        if (rawValue == null || rawValue instanceof Instant || !OCCURRED_AT.equals(field)) {
-            return rawValue;
-        }
-        try {
-            return Instant.parse(String.valueOf(rawValue).trim());
-        } catch (DateTimeParseException e) {
-            throw new LocalizedException(Status.VALIDATION_ERROR, CommonErrorCodes.VALIDATION_ERROR);
-        }
-    };
+    private static final FieldValueConverter INSTANT_CONVERTER = new InstantFieldValueConverter(Set.of(OCCURRED_AT));
 
     private final AuditEventRepository repository;
     private final AuditEventMapper mapper;

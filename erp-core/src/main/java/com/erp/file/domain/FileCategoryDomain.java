@@ -1,7 +1,6 @@
 package com.erp.file.domain;
 
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.LocalizedException;
+import com.erp.common.domain.DomainRules;
 import com.erp.file.entity.FileCategory;
 import com.erp.file.exception.FileErrorCodes;
 
@@ -21,10 +20,7 @@ public final class FileCategoryDomain {
 
     /** RULE-FILE-007 — construction-time uniqueness guard for a new category. */
     public static FileCategoryDomain create(String categoryCode, boolean codeAlreadyTaken) {
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                FileErrorCodes.FILE_CATEGORY_CODE_DUPLICATE, categoryCode);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, FileErrorCodes.FILE_CATEGORY_CODE_DUPLICATE, categoryCode);
         return new FileCategoryDomain(categoryCode);
     }
 
@@ -35,10 +31,7 @@ public final class FileCategoryDomain {
 
     /** RULE-FILE-007 — decision only: guards a categoryCode change against an existing code. */
     public void assertCodeAvailable(boolean codeAlreadyTaken) {
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                FileErrorCodes.FILE_CATEGORY_CODE_DUPLICATE, categoryCode);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, FileErrorCodes.FILE_CATEGORY_CODE_DUPLICATE, categoryCode);
     }
 
     public String getCategoryCode() {

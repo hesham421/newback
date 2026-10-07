@@ -1,6 +1,6 @@
 package com.erp.sec.domain;
 
-import com.erp.common.domain.status.Status;
+import com.erp.common.domain.DomainRules;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.Role;
 import com.erp.sec.exception.SecErrorCodes;
@@ -26,10 +26,7 @@ public final class RoleDomain {
      * @throws LocalizedException {@code SEC-409-ROLE-DUP} (409)
      */
     public static RoleDomain create(String code, boolean codeAlreadyTaken) {
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                SecErrorCodes.SEC_409_ROLE_DUP, code);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, SecErrorCodes.SEC_409_ROLE_DUP, code);
         return new RoleDomain(code, true);
     }
 

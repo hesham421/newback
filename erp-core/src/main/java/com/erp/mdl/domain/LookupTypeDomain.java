@@ -1,5 +1,6 @@
 package com.erp.mdl.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.mdl.entity.LookupType;
@@ -44,10 +45,7 @@ public final class LookupTypeDomain {
             throw new LocalizedException(Status.CONFLICT,
                 MdlErrorCodes.MDL_409_MODULE_NOT_REGISTERED);
         }
-        if (keyAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                MdlErrorCodes.MDL_409_TYPE_DUP, key);
-        }
+        DomainRules.assertUnique(keyAlreadyTaken, MdlErrorCodes.MDL_409_TYPE_DUP, key);
         return new LookupTypeDomain(key, ownerModuleCode);
     }
 

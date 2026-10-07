@@ -19,7 +19,6 @@ import com.erp.cu.entity.AppConfiguration;
 import com.erp.cu.exception.CuErrorCodes;
 import com.erp.cu.mapper.ConfigurationMapper;
 import com.erp.cu.repository.AppConfigurationRepository;
-import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
 import java.util.Optional;
 import java.util.Set;
@@ -212,8 +211,7 @@ public class ConfigurationService {
     private static Long owner(SettingScope scope) {
         Long current = TenantContext.require();
         SettingScope effective = scope == null ? SettingScope.TENANT : scope;
-        AppConfigurationDomain.assertScopeAllowed(effective,
-            Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(current));
+        AppConfigurationDomain.assertScopeAllowed(effective, TenantContext.isPlatform());
         return effective == SettingScope.PLATFORM ? null : current;
     }
 

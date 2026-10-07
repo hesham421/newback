@@ -52,6 +52,11 @@ public final class TenantContext {
         return tenantId;
     }
 
+    /** Whether the current tenant is the PLATFORM tenant; {@code false} when none is set. */
+    public static boolean isPlatform() {
+        return Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(CURRENT.get());
+    }
+
     /** Sets the current tenant. Whoever sets it owns clearing it ({@link #clear()} in a finally). */
     public static void set(Long tenantId) {
         CURRENT.set(Objects.requireNonNull(tenantId, "tenantId"));

@@ -1,5 +1,6 @@
 package com.erp.sec.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.ErrorDetail;
 import com.erp.common.exception.LocalizedException;
@@ -73,9 +74,7 @@ public final class UserDomain {
      * @throws LocalizedException {@code CUSTOMER_EMAIL_TAKEN} (Status.ALREADY_EXISTS → 409)
      */
     public static UserDomain createCustomer(String email, boolean customerEmailTaken) {
-        if (customerEmailTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, SecErrorCodes.CUSTOMER_EMAIL_TAKEN);
-        }
+        DomainRules.assertUnique(customerEmailTaken, SecErrorCodes.CUSTOMER_EMAIL_TAKEN);
         return new UserDomain(email, email, STATUS_PENDING_VERIFICATION, true);
     }
 

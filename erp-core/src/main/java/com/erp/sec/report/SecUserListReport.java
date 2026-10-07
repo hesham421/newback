@@ -6,6 +6,7 @@ import com.erp.common.search.SearchOperator;
 import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
+import com.erp.common.util.UtcDates;
 import com.erp.report.ColumnType;
 import com.erp.report.ParamType;
 import com.erp.report.ReportAuthorities;
@@ -15,9 +16,7 @@ import com.erp.report.ReportProvider;
 import com.erp.report.ReportResult;
 import com.erp.sec.entity.User;
 import com.erp.sec.repository.UserRepository;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,10 +103,10 @@ public class SecUserListReport implements ReportProvider {
             addFilter(filters, "isActiveFl", SearchOperator.EQUALS, Boolean.TRUE);
         }
         if (params.get("createdFrom") instanceof LocalDate from) {
-            addFilter(filters, "createdAt", SearchOperator.GREATER_THAN_OR_EQUAL, startOf(from));
+            addFilter(filters, "createdAt", SearchOperator.GREATER_THAN_OR_EQUAL, UtcDates.startOfDay(from));
         }
         if (params.get("createdTo") instanceof LocalDate to) {
-            addFilter(filters, "createdAt", SearchOperator.LESS_THAN, startOf(to.plusDays(1)));
+            addFilter(filters, "createdAt", SearchOperator.LESS_THAN, UtcDates.startOfDay(to.plusDays(1)));
         }
         Specification<User> spec = SpecBuilder.build(SearchRequest.builder().filters(filters).build(),
             new SetAllowedFields(FILTER_FIELDS), DefaultFieldValueConverter.INSTANCE);
@@ -142,7 +141,4 @@ public class SecUserListReport implements ReportProvider {
         return value == null ? null : value.toString().toUpperCase(java.util.Locale.ROOT);
     }
 
-    private static Instant startOf(LocalDate date) {
-        return date.atStartOfDay(ZoneOffset.UTC).toInstant();
-    }
 }

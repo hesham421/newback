@@ -1,12 +1,10 @@
 package com.erp.events;
 
+import com.erp.common.util.SecurityContextHelper;
 import com.erp.tenant.TenantContext;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Base class of every domain event published on the erp-core event bus (erp-core step 08).
@@ -36,16 +34,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public abstract class DomainEvent {
 
     /** Realm of a back-office (staff) caller. */
-    public static final String REALM_STAFF = "STAFF";
+    public static final String REALM_STAFF = SecurityContextHelper.REALM_STAFF;
 
     /** Realm of a self-registered customer (storefront account). */
-    public static final String REALM_CUSTOMER = "CUSTOMER";
+    public static final String REALM_CUSTOMER = SecurityContextHelper.REALM_CUSTOMER;
 
     /** Realm of code running without a caller (startup runners, jobs, asynchronous workers). */
-    public static final String REALM_SYSTEM = "SYSTEM";
+    public static final String REALM_SYSTEM = SecurityContextHelper.REALM_SYSTEM;
 
     /** The single authority of a customer-realm caller (erp-core step 06 plan). */
-    public static final String CUSTOMER_AUTHORITY = "ROLE_CUSTOMER";
+    public static final String CUSTOMER_AUTHORITY = SecurityContextHelper.CUSTOMER_AUTHORITY;
 
     /** Actor recorded when there is no caller. */
     public static final String SYSTEM_ACTOR = "system";
@@ -58,7 +56,8 @@ public abstract class DomainEvent {
 
     /** Captures the current tenant, actor and realm of the publishing thread. */
     protected DomainEvent() {
-        this(TenantContext.current(), currentActor(), currentRealm());
+        this(TenantContext.current(), SecurityContextHelper.currentActorOrSystem(),
+            SecurityContextHelper.currentRealm());
     }
 
     /** Explicit tenant, actor and realm (for an event published on behalf of someone else). */
@@ -100,29 +99,5 @@ public abstract class DomainEvent {
     public String toString() {
         return getType() + "[id=" + id + ", tenantId=" + tenantId + ", actor=" + actor + ", realm=" + realm
             + ", occurredAt=" + occurredAt + "]";
-    }
-
-    private static Authentication currentAuthentication() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-            || authentication instanceof AnonymousAuthenticationToken) {
-            return null;
-        }
-        return authentication;
-    }
-
-    private static String currentActor() {
-        Authentication authentication = currentAuthentication();
-        return authentication == null ? SYSTEM_ACTOR : authentication.getName();
-    }
-
-    private static String currentRealm() {
-        Authentication authentication = currentAuthentication();
-        if (authentication == null) {
-            return REALM_SYSTEM;
-        }
-        boolean customer = authentication.getAuthorities().stream()
-            .anyMatch(granted -> CUSTOMER_AUTHORITY.equals(granted.getAuthority()));
-        return customer ? REALM_CUSTOMER : REALM_STAFF;
     }
 }

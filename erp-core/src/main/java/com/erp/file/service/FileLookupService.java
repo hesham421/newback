@@ -1,13 +1,13 @@
 package com.erp.file.service;
 
 import com.erp.common.domain.status.ServiceResult;
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.LocalizedException;
-import com.erp.file.dto.LookupOptionResponse;
+import com.erp.common.lookup.LookupOptionResponse;
+import com.erp.common.lookup.OwnedLookups;
 import com.erp.file.exception.FileErrorCodes;
 import com.erp.mdl.crossmodule.MdlLookupApi;
 import com.erp.mdl.crossmodule.LookupOptionView;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,39 +42,19 @@ public class FileLookupService {
     public static final String TYPE_ARCHIVE = "ARCHIVE";
     public static final String TYPE_OTHER = "OTHER";
 
+    /** The two LOVs this module fronts; any other key is refused before MDL is called. */
+    private static final Set<String> OWNED_KEYS = Set.of(LOOKUP_FILE_TYPE, LOOKUP_FILE_STATUS);
+
     private final MdlLookupApi mdlLookupApi;
 
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
     public ServiceResult<List<LookupOptionResponse>> get(String lookupKey) {
         log.debug("Resolving FILE lookup for key: {}", lookupKey);
-
-        String normalized = lookupKey == null ? null : lookupKey.trim().toUpperCase();
-        if (!LOOKUP_FILE_TYPE.equals(normalized) && !LOOKUP_FILE_STATUS.equals(normalized)) {
-            // FILE only fronts its own two LOVs — never a generic pass-through for arbitrary
-            // MDL keys it doesn't own, so reject before ever calling MDL.
-            throw new LocalizedException(
-                Status.NOT_FOUND, FileErrorCodes.FILE_LOOKUP_KEY_UNKNOWN, lookupKey);
-        }
-
-        List<LookupOptionView> values;
-        try {
-            values = mdlLookupApi.readActiveValuesByKey(normalized);
-        } catch (LocalizedException ex) {
-            if (ex.getStatus() == Status.NOT_FOUND) {
-                // Translate MDL's own not-found (unseeded/deactivated type) into FILE's own
-                // error code — MDL_404_TYPE_KEY must never leak out of this module's API.
-                throw new LocalizedException(
-                    Status.NOT_FOUND, FileErrorCodes.FILE_LOOKUP_KEY_UNKNOWN, lookupKey);
-            }
-            throw ex;
-        }
-
         // MDL already orders by sortOrder (QR-MDL-011); LookupOptionResponse has no sortOrder
         // field, so it is intentionally dropped here.
-        List<LookupOptionResponse> options = values.stream().map(FileLookupService::toResponse).toList();
-
-        return ServiceResult.success(options);
+        return ServiceResult.success(OwnedLookups.read(lookupKey, OWNED_KEYS, FileErrorCodes.FILE_LOOKUP_KEY_UNKNOWN,
+            key -> mdlLookupApi.readActiveValuesByKey(key).stream().map(FileLookupService::toResponse).toList()));
     }
 
     private static LookupOptionResponse toResponse(LookupOptionView view) {

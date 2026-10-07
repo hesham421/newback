@@ -1,5 +1,6 @@
 package com.erp.cu.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.cu.entity.AppConfiguration;
@@ -35,12 +36,8 @@ public final class AppConfigurationDomain {
      * RULE-CU-001 (key uniqueness, pre-checked by the service via QR-CU-0006).
      */
     public static AppConfigurationDomain create(String configKey, String configValue, boolean keyAlreadyTaken) {
-        if (configKey == null || configKey.isBlank() || configValue == null || configValue.isBlank()) {
-            throw new LocalizedException(Status.VALIDATION_ERROR, CuErrorCodes.APP_CONFIGURATION_FIELDS_REQUIRED);
-        }
-        if (keyAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, CuErrorCodes.APP_CONFIGURATION_KEY_DUPLICATE, configKey);
-        }
+        DomainRules.assertNotBlank(CuErrorCodes.APP_CONFIGURATION_FIELDS_REQUIRED, configKey, configValue);
+        DomainRules.assertUnique(keyAlreadyTaken, CuErrorCodes.APP_CONFIGURATION_KEY_DUPLICATE, configKey);
         return new AppConfigurationDomain(configKey, true);
     }
 
@@ -51,9 +48,7 @@ public final class AppConfigurationDomain {
 
     /** RULE-CU-002 (required fields, UPDATE scope) — called before the service mutates the entity. */
     public void assertCanUpdate(String configValue) {
-        if (configValue == null || configValue.isBlank()) {
-            throw new LocalizedException(Status.VALIDATION_ERROR, CuErrorCodes.APP_CONFIGURATION_FIELDS_REQUIRED);
-        }
+        DomainRules.assertNotBlank(CuErrorCodes.APP_CONFIGURATION_FIELDS_REQUIRED, configValue);
     }
 
     /**

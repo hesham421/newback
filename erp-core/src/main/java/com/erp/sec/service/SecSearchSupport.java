@@ -1,14 +1,13 @@
 package com.erp.sec.service;
 
 import com.erp.common.domain.status.Status;
-import com.erp.common.exception.CommonErrorCodes;
 import com.erp.common.exception.LocalizedException;
 import com.erp.common.search.FieldValueConverter;
+import com.erp.common.search.InstantFieldValueConverter;
 import com.erp.common.search.SearchFilter;
 import com.erp.common.search.SearchOperator;
 import com.erp.sec.exception.SecErrorCodes;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Set;
 
@@ -52,16 +51,6 @@ final class SecSearchSupport {
      * String to an {@code Instant} column. A malformed value is client input, so it is a 400.
      */
     static FieldValueConverter instantFieldConverter(Set<String> instantFields) {
-        return (field, rawValue) -> {
-            if (rawValue == null || rawValue instanceof Instant || !instantFields.contains(field)) {
-                return rawValue;
-            }
-            try {
-                return Instant.parse(String.valueOf(rawValue).trim());
-            } catch (DateTimeParseException e) {
-                throw new LocalizedException(
-                    Status.VALIDATION_ERROR, CommonErrorCodes.VALIDATION_ERROR);
-            }
-        };
+        return new InstantFieldValueConverter(instantFields);
     }
 }

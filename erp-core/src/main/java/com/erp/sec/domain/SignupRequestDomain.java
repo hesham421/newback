@@ -1,5 +1,6 @@
 package com.erp.sec.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.SignupRequest;
@@ -31,9 +32,7 @@ public final class SignupRequestDomain {
      * @throws LocalizedException {@code SEC-409-SIGNUP-DUP} (Status.ALREADY_EXISTS → 409)
      */
     public static SignupRequestDomain create(String email, boolean emailAlreadyTaken) {
-        if (emailAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, SecErrorCodes.SEC_409_SIGNUP_DUP);
-        }
+        DomainRules.assertUnique(emailAlreadyTaken, SecErrorCodes.SEC_409_SIGNUP_DUP);
         return new SignupRequestDomain(email, STATUS_PENDING);
     }
 

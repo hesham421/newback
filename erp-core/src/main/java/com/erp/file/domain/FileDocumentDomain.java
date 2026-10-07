@@ -1,5 +1,6 @@
 package com.erp.file.domain;
 
+import com.erp.common.domain.StatusTransitions;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.file.entity.FileDocument;
@@ -23,11 +24,11 @@ public final class FileDocumentDomain {
     public static final String VISIBILITY_PRIVATE = "PRIVATE";
     public static final String VISIBILITY_PUBLIC = "PUBLIC";
 
-    private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
+    private static final StatusTransitions TRANSITIONS = new StatusTransitions(Map.of(
         STATUS_ACTIVE, Set.of(STATUS_ARCHIVED, STATUS_DELETED),
         STATUS_ARCHIVED, Set.of(STATUS_DELETED),
         STATUS_DELETED, Set.of()
-    );
+    ), FileErrorCodes.FILE_DOCUMENT_INVALID_TRANSITION);
 
     private final String currentStatus;
 
@@ -45,11 +46,7 @@ public final class FileDocumentDomain {
      * The service calls this before mutating fileStatusId.
      */
     public void assertCanTransitionTo(String targetStatus) {
-        Set<String> allowed = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Set.of());
-        if (targetStatus == null || !allowed.contains(targetStatus)) {
-            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
-                FileErrorCodes.FILE_DOCUMENT_INVALID_TRANSITION, currentStatus, targetStatus);
-        }
+        TRANSITIONS.assertAllowed(currentStatus, targetStatus);
     }
 
     /**

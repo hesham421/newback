@@ -1,5 +1,6 @@
 package com.erp.notif.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.notif.entity.NotificationTemplate;
@@ -29,18 +30,9 @@ public final class NotificationTemplateDomain {
     public static NotificationTemplateDomain create(String templateCode, String nameAr, String nameEn,
                                                     String bodyAr, String bodyEn,
                                                     boolean templateCodeAlreadyTaken) {
-        if (isBlank(templateCode) || isBlank(nameAr) || isBlank(nameEn)) {
-            throw new LocalizedException(Status.VALIDATION_ERROR,
-                NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED);
-        }
-        if (isBlank(bodyAr) || isBlank(bodyEn)) {
-            throw new LocalizedException(Status.VALIDATION_ERROR,
-                NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED);
-        }
-        if (templateCodeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                NotifErrorCodes.NOTIF_TEMPLATE_CODE_DUPLICATE, templateCode);
-        }
+        DomainRules.assertNotBlank(NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED, templateCode, nameAr, nameEn);
+        DomainRules.assertNotBlank(NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED, bodyAr, bodyEn);
+        DomainRules.assertUnique(templateCodeAlreadyTaken, NotifErrorCodes.NOTIF_TEMPLATE_CODE_DUPLICATE, templateCode);
         return new NotificationTemplateDomain(templateCode, true);
     }
 
@@ -63,15 +55,9 @@ public final class NotificationTemplateDomain {
 
     /** RULE-NOTIF-004 for UPDATE — both bodyAr and bodyEn required; called before the service mutates. */
     public void assertBilingualBody(String bodyAr, String bodyEn) {
-        if (isBlank(bodyAr) || isBlank(bodyEn)) {
-            throw new LocalizedException(Status.VALIDATION_ERROR,
-                NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED);
-        }
+        DomainRules.assertNotBlank(NotifErrorCodes.NOTIF_TEMPLATE_BILINGUAL_REQUIRED, bodyAr, bodyEn);
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
 
     public String getTemplateCode() {
         return templateCode;

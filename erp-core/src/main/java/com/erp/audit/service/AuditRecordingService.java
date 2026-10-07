@@ -1,11 +1,11 @@
 package com.erp.audit.service;
 
-import com.erp.audit.crossmodule.AuditApi;
 import com.erp.audit.crossmodule.AuditChange;
 import com.erp.audit.crossmodule.AuditEntry;
 import com.erp.audit.domain.AuditEventDomain;
 import com.erp.audit.web.RequestInfoHolder;
-import com.erp.events.DomainEvent;
+import com.erp.common.util.SecurityContextHelper;
+import com.erp.common.util.Strings;
 import com.erp.tenant.TenantContext;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -15,9 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 /**
@@ -63,24 +60,23 @@ public class AuditRecordingService {
     /** Validates {@code entry} and fills every default (see {@link AuditEntry}). */
     AuditEntry resolve(AuditEntry entry) {
         AuditEventDomain domain = AuditEventDomain.create(entry.getAction());
-        Authentication authentication = currentAuthentication();
         Optional<RequestInfoHolder.RequestInfo> request = RequestInfoHolder.current();
         return entry.toBuilder()
             .tenantId(entry.getTenantId() != null ? entry.getTenantId() : TenantContext.require())
             .occurredAt(entry.getOccurredAt() != null ? entry.getOccurredAt() : Instant.now())
-            .actor(truncate(entry.getActor() != null && !entry.getActor().isBlank()
-                ? entry.getActor() : actorOf(authentication), MAX_ACTOR))
-            .actorRealm(entry.getActorRealm() != null ? entry.getActorRealm() : realmOf(authentication))
-            .entityType(truncate(entry.getEntityType(), MAX_ENTITY_TYPE))
-            .entityId(truncate(entry.getEntityId(), MAX_ENTITY_ID))
-            .summaryAr(truncate(entry.getSummaryAr(), MAX_SUMMARY))
-            .summaryEn(truncate(entry.getSummaryEn(), MAX_SUMMARY))
+            .actor(Strings.truncate(entry.getActor() != null && !entry.getActor().isBlank()
+                ? entry.getActor() : SecurityContextHelper.currentActorOrSystem(), MAX_ACTOR))
+            .actorRealm(entry.getActorRealm() != null ? entry.getActorRealm() : SecurityContextHelper.currentRealm())
+            .entityType(Strings.truncate(entry.getEntityType(), MAX_ENTITY_TYPE))
+            .entityId(Strings.truncate(entry.getEntityId(), MAX_ENTITY_ID))
+            .summaryAr(Strings.truncate(entry.getSummaryAr(), MAX_SUMMARY))
+            .summaryEn(Strings.truncate(entry.getSummaryEn(), MAX_SUMMARY))
             .clearChanges()
             .changes(normalize(domain.recordableChanges(entry.getChanges())))
             .ip(entry.getIp() != null ? entry.getIp() : request.map(RequestInfoHolder.RequestInfo::ip).orElse(null))
             .userAgent(entry.getUserAgent() != null
                 ? entry.getUserAgent() : request.map(RequestInfoHolder.RequestInfo::userAgent).orElse(null))
-            .reference(truncate(entry.getReference(), MAX_REFERENCE))
+            .reference(Strings.truncate(entry.getReference(), MAX_REFERENCE))
             .build();
     }
 
@@ -100,32 +96,5 @@ public class AuditRecordingService {
         }
         String text = value instanceof TemporalAccessor ? value.toString() : String.valueOf(value);
         return text.length() <= MAX_VALUE_LENGTH ? text : text.substring(0, MAX_VALUE_LENGTH) + "…";
-    }
-
-    private static Authentication currentAuthentication() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-            || authentication instanceof AnonymousAuthenticationToken) {
-            return null;
-        }
-        return authentication;
-    }
-
-    private static String actorOf(Authentication authentication) {
-        return authentication == null || authentication.getName() == null
-            ? DomainEvent.SYSTEM_ACTOR : authentication.getName();
-    }
-
-    private static String realmOf(Authentication authentication) {
-        if (authentication == null) {
-            return AuditApi.REALM_SYSTEM;
-        }
-        boolean customer = authentication.getAuthorities().stream()
-            .anyMatch(granted -> DomainEvent.CUSTOMER_AUTHORITY.equals(granted.getAuthority()));
-        return customer ? AuditApi.REALM_CUSTOMER : AuditApi.REALM_STAFF;
-    }
-
-    private static String truncate(String value, int max) {
-        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 }

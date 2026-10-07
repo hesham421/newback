@@ -1,8 +1,8 @@
 package com.erp.notif.controller;
 
+import com.erp.common.lookup.LookupOptionResponse;
 import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
-import com.erp.notif.dto.LookupOptionResponse;
 import com.erp.notif.service.NotificationLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

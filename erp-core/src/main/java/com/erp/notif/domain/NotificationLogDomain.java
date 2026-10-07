@@ -1,7 +1,6 @@
 package com.erp.notif.domain;
 
-import com.erp.common.domain.status.Status;
-import com.erp.common.exception.LocalizedException;
+import com.erp.common.domain.StatusTransitions;
 import com.erp.notif.entity.NotificationLog;
 import com.erp.notif.exception.NotifErrorCodes;
 import java.util.Map;
@@ -28,14 +27,14 @@ public final class NotificationLogDomain {
     public static final String STATUS_CHANNEL_DISABLED = "CHANNEL_DISABLED";
     public static final String STATUS_SKIPPED_NO_PROVIDER = "SKIPPED_NO_PROVIDER";
 
-    private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
+    private static final StatusTransitions TRANSITIONS = new StatusTransitions(Map.of(
         STATUS_PENDING, Set.of(STATUS_QUEUED, STATUS_CHANNEL_DISABLED),
         STATUS_QUEUED, Set.of(STATUS_SENT, STATUS_FAILED, STATUS_SKIPPED_NO_PROVIDER),
         STATUS_SENT, Set.of(),
         STATUS_FAILED, Set.of(),
         STATUS_CHANNEL_DISABLED, Set.of(),
         STATUS_SKIPPED_NO_PROVIDER, Set.of()
-    );
+    ), NotifErrorCodes.NOTIF_LOG_INVALID_TRANSITION);
 
     private final String currentStatus;
 
@@ -53,11 +52,7 @@ public final class NotificationLogDomain {
      * The service calls this before mutating notificationStatusId.
      */
     public void assertCanTransitionTo(String targetStatus) {
-        Set<String> allowed = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Set.of());
-        if (targetStatus == null || !allowed.contains(targetStatus)) {
-            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
-                NotifErrorCodes.NOTIF_LOG_INVALID_TRANSITION, currentStatus, targetStatus);
-        }
+        TRANSITIONS.assertAllowed(currentStatus, targetStatus);
     }
 
     /**

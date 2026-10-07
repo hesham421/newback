@@ -1,5 +1,6 @@
 package com.erp.tenant.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
@@ -34,9 +35,7 @@ public final class TenantDomain {
         if (code == null || !CODE_PATTERN.matcher(code).matches()) {
             throw new LocalizedException(Status.VALIDATION_ERROR, TenantErrorCodes.TENANT_CODE_INVALID, code);
         }
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, TenantErrorCodes.TENANT_CODE_DUPLICATE, code);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, TenantErrorCodes.TENANT_CODE_DUPLICATE, code);
         return new TenantDomain(null, code, TenantConstants.STATUS_ACTIVE);
     }
 

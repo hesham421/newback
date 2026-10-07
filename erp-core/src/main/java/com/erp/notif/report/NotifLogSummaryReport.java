@@ -1,5 +1,6 @@
 package com.erp.notif.report;
 
+import com.erp.common.util.UtcDates;
 import com.erp.notif.repository.NotificationLogSummaryRepository;
 import com.erp.report.ColumnType;
 import com.erp.report.ParamType;
@@ -10,7 +11,6 @@ import com.erp.report.ReportProvider;
 import com.erp.report.ReportResult;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +37,8 @@ public class NotifLogSummaryReport implements ReportProvider {
     /** {@code NOTIF:REPORT:NOTIF_LOG_SUMMARY}. */
     public static final String AUTHORITY = ReportAuthorities.of(MODULE, CODE);
 
-    private static final Instant BEGINNING = LocalDate.of(1970, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant();
-    private static final Instant END = LocalDate.of(9999, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    private static final Instant BEGINNING = UtcDates.startOfDay(LocalDate.of(1970, 1, 1));
+    private static final Instant END = UtcDates.startOfDay(LocalDate.of(9999, 1, 1));
 
     private static final List<ReportColumn> COLUMNS = List.of(
         new ReportColumn("day", ColumnType.DATE, "اليوم", "Day"),
@@ -81,8 +81,8 @@ public class NotifLogSummaryReport implements ReportProvider {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority(T(com.erp.notif.report.NotifLogSummaryReport).AUTHORITY)")
     public ReportResult run(Map<String, Object> params, Pageable page) {
-        Instant from = params.get("dateFrom") instanceof LocalDate day ? startOf(day) : BEGINNING;
-        Instant to = params.get("dateTo") instanceof LocalDate day ? startOf(day.plusDays(1)) : END;
+        Instant from = params.get("dateFrom") instanceof LocalDate day ? UtcDates.startOfDay(day) : BEGINNING;
+        Instant to = params.get("dateTo") instanceof LocalDate day ? UtcDates.startOfDay(day.plusDays(1)) : END;
         List<Map<String, Object>> groups = summaryRepository.summarize(text(params.get("channel")),
                 text(params.get("status")), from, to).stream()
             .map(NotifLogSummaryReport::toRow)
@@ -107,7 +107,4 @@ public class NotifLogSummaryReport implements ReportProvider {
         return value == null ? "" : value.toString();
     }
 
-    private static Instant startOf(LocalDate day) {
-        return day.atStartOfDay(ZoneOffset.UTC).toInstant();
-    }
 }

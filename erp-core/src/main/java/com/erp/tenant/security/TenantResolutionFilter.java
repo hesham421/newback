@@ -1,5 +1,6 @@
 package com.erp.tenant.security;
 
+import com.erp.common.web.FilterErrorResponseWriter;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
 import com.erp.tenant.entity.Tenant;
@@ -10,15 +11,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.springframework.context.MessageSource;
-import org.springframework.context.NoSuchMessageException;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
@@ -193,29 +190,11 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Same envelope as {@code SecSecurityErrorHandler}, written by hand: this runs before the
-     * dispatcher, so neither {@code GlobalExceptionHandler} nor Jackson's converters are involved.
+     * Same envelope as {@code SecSecurityErrorHandler} ({@link FilterErrorResponseWriter}): this runs
+     * before the dispatcher, so neither {@code GlobalExceptionHandler} nor Jackson's converters are involved.
      */
     private void reject(HttpServletRequest request, HttpServletResponse response, int status,
                         String errorCode) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write(
-            "{\"success\":false,\"error\":{\"code\":\"" + errorCode
-                + "\",\"message\":\"" + escape(resolve(errorCode, request))
-                + "\"},\"timestamp\":\"" + Instant.now() + "\"}");
-    }
-
-    private String resolve(String errorCode, HttpServletRequest request) {
-        try {
-            return messageSource.getMessage(errorCode, null, request.getLocale());
-        } catch (NoSuchMessageException e) {
-            return errorCode;
-        }
-    }
-
-    private static String escape(String message) {
-        return message.replace("\\", "\\\\").replace("\"", "\\\"");
+        FilterErrorResponseWriter.write(messageSource, request, response, status, errorCode);
     }
 }

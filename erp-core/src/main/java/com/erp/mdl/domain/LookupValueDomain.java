@@ -1,6 +1,6 @@
 package com.erp.mdl.domain;
 
-import com.erp.common.domain.status.Status;
+import com.erp.common.domain.DomainRules;
 import com.erp.common.exception.LocalizedException;
 import com.erp.mdl.entity.LookupValue;
 import com.erp.mdl.exception.MdlErrorCodes;
@@ -31,10 +31,7 @@ public final class LookupValueDomain {
     public static LookupValueDomain create(Long lookupTypeId,
                                            String code,
                                            boolean codeAlreadyTakenInType) {
-        if (codeAlreadyTakenInType) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                MdlErrorCodes.MDL_409_VALUE_DUP, code);
-        }
+        DomainRules.assertUnique(codeAlreadyTakenInType, MdlErrorCodes.MDL_409_VALUE_DUP, code);
         return new LookupValueDomain(lookupTypeId, code);
     }
 

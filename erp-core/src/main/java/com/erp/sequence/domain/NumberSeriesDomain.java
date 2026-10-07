@@ -1,5 +1,6 @@
 package com.erp.sequence.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sequence.entity.NumberSeries;
@@ -35,9 +36,7 @@ public final class NumberSeriesDomain {
      */
     public static NumberSeriesDomain create(String code, String prefix, String pattern, ResetPolicy resetPolicy,
                                             boolean codeAlreadyTaken) {
-        if (codeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, SequenceErrorCodes.NUMBER_SERIES_CODE_DUPLICATE, code);
-        }
+        DomainRules.assertUnique(codeAlreadyTaken, SequenceErrorCodes.NUMBER_SERIES_CODE_DUPLICATE, code);
         NumberPattern parsed = NumberPattern.parse(pattern);
         parsed.assertDistinctUnder(resetPolicy);
         return new NumberSeriesDomain(code, resetPolicy, parsed, prefix, true);

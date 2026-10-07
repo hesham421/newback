@@ -1,5 +1,6 @@
 package com.erp.audit.crossmodule;
 
+import com.erp.common.util.SecurityContextHelper;
 import java.util.List;
 
 /**
@@ -24,9 +25,9 @@ public interface AuditApi {
     String ACTION_LOGOUT = "LOGOUT";
     String ACTION_PASSWORD_RESET = "PASSWORD_RESET";
 
-    String REALM_STAFF = "STAFF";
-    String REALM_CUSTOMER = "CUSTOMER";
-    String REALM_SYSTEM = "SYSTEM";
+    String REALM_STAFF = SecurityContextHelper.REALM_STAFF;
+    String REALM_CUSTOMER = SecurityContextHelper.REALM_CUSTOMER;
+    String REALM_SYSTEM = SecurityContextHelper.REALM_SYSTEM;
 
     /**
      * The global denylist: a change whose field name contains one of these words (case-insensitive)

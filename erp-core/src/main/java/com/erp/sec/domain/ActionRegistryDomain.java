@@ -1,5 +1,6 @@
 package com.erp.sec.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.ActionRegistry;
@@ -34,10 +35,7 @@ public final class ActionRegistryDomain {
             throw new LocalizedException(Status.CONFLICT,
                 SecErrorCodes.SEC_409_SCREEN_NOT_REGISTERED);
         }
-        if (permissionCodeAlreadyTaken) {
-            throw new LocalizedException(Status.ALREADY_EXISTS,
-                SecErrorCodes.SEC_409_ACTION_DUP, permissionCode);
-        }
+        DomainRules.assertUnique(permissionCodeAlreadyTaken, SecErrorCodes.SEC_409_ACTION_DUP, permissionCode);
         return new ActionRegistryDomain(permissionCode, true);
     }
 

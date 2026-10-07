@@ -34,10 +34,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLConnection;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -145,7 +142,7 @@ public class FileService {
 
         StorageProvider provider = storageProviders.active();
         String fileName = safeFileName(originalName);
-        FileDocument entity = mapper.toEntity(request, fileName, contentType, size, sha256Hex(content),
+        FileDocument entity = mapper.toEntity(request, fileName, contentType, size, TokenHasher.sha256Hex(content),
             deriveFileType(contentType), FileDocumentDomain.STATUS_ACTIVE, category, provider.key());
 
         // The id is assigned on persist (sequence), so the provider can name the object after it; the
@@ -398,14 +395,6 @@ public class FileService {
             stream.close();
         } catch (IOException e) {
             log.debug("Closing a download stream failed", e);
-        }
-    }
-
-    private static String sha256Hex(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException e) {
-            throw new LocalizedException(Status.INTERNAL_ERROR, CommonErrorCodes.INTERNAL_ERROR);
         }
     }
 

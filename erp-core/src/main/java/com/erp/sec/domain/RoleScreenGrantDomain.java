@@ -1,5 +1,6 @@
 package com.erp.sec.domain;
 
+import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.entity.RoleScreenGrant;
@@ -34,9 +35,7 @@ public final class RoleScreenGrantDomain {
         if (!roleHoldsModuleGrant) {
             throw new LocalizedException(Status.CONFLICT, SecErrorCodes.SEC_409_NO_MODULE_GRANT);
         }
-        if (grantAlreadyExists) {
-            throw new LocalizedException(Status.ALREADY_EXISTS, SecErrorCodes.SEC_409_GRANT_DUP);
-        }
+        DomainRules.assertUnique(grantAlreadyExists, SecErrorCodes.SEC_409_GRANT_DUP);
         return new RoleScreenGrantDomain(roleId, screenId);
     }
 
