@@ -120,3 +120,42 @@ assigned here.
 
 ### ERROR CODES — delta
 NEW: `FILE_PUBLIC_NOT_ALLOWED` (409), `FILE_STORAGE_UNAVAILABLE` (500). Source: docs/api-docs/file/index.md.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs.md` → "Implementation Addendum — erp-core 1.3.0". Ids continue from the
+highest ever issued (RULE-FILE-007, XM-FILE-001, no ADR).
+
+### ENTITIES — delta
+None (no field, no LOV value). Image-store documents are ordinary `FILE_DOCUMENT` rows without a category.
+
+### RULES — delta
+| Rule | Delta |
+|---|---|
+| RULE-FILE-008 | NEW: image type detected from the content (PNG / JPEG / WebP magic bytes, SVG text), must be allowed by the request; size 1..`maxBytes` |
+| RULE-FILE-009 | NEW: SVG only when the request allows it, and only if the safety check passes (no script, no `on…=`, no external `href`, no `javascript:`, no DOCTYPE / ENTITY, no `foreignObject`) — rejected, never rewritten |
+| RULE-FILE-010 | NEW: image-store documents are uncategorised, PUBLIC at once with a random slug, served on the public path; discard = DELETED + PRIVATE |
+| step 07 publish rule | CHANGED: the public lookup also serves an uncategorised PUBLIC document (only the image store creates one; `PATCH /visibility` unchanged) |
+
+### DEPENDENCIES — delta (exposed)
+| Kind | Id | Surface | Consumers |
+|---|---|---|---|
+| NEW | XM-FILE-002 | `FileImageStoreApi.storePublicImage` / `discard` | SEC (photos, XM-SEC-006); TENANT (logos, package E) |
+| CHANGED | XM-FILE-001 | `FileDocumentLookupApi` + `publicUrls(Collection<Long>)` | SEC (user lists) |
+
+### APIs — delta
+None (no new FILE endpoint). The public GET serves uncategorised image-store documents too.
+
+### PERMISSIONS / ERROR CODES — delta
+None.
+
+Last sequence per atom (highest ever issued): RULE: 010 · XM: 002 · API: 008 · ADR: 001 (ADR-FILE-002..008 are
+reserved by the as-built analysis session; the next free FILE ADR for this plan is 009).
+
+### DECISIONS
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-FILE-001 | Profile photos and logos are PUBLIC documents with non-guessable slugs (no category) |

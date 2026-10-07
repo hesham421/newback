@@ -109,3 +109,17 @@ ADR ids: ADR-TENANT-001 (ACCEPTED, as built) — `governance/analysis/decisions/
 Event
 "P1 completed: TENANT v1 (as built) — 1 entity, 23 requirements, 23 acceptance criteria, 9 rules, 1 screen requirement, 2 XM, 1 ADR"
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — what SEC's user profile and password policy change on the tenant side
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package D rows).
+
+| Kind | Id | Delta |
+|---|---|---|
+| CHANGED | XM-TENANT-001 | + `TenantLookupApi.summaryOf(Long)` → `Optional<TenantSummary>`; consumer SEC (`/me`) |
+| CHANGED | REQ-TENANT-001 | + 400 `SEC-400-PASSWORD-POLICY` (field `adminPassword`) from the SEC provisioning contributor |
+
+No new TENANT id, endpoint, entity field or error code from package D.

@@ -247,3 +247,21 @@ stated otherwise. No DBF ids are minted here.
   (step 05).
 - Analysis: `NOTIF_LOG` status lifecycle PENDING → SENT / FAILED / CHANNEL_DISABLED. Implemented: QUEUED
   is the persisted pending state and SKIPPED_NO_PROVIDER is a new final state (step 08; DEVIATIONS [08]).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration: `erp-core/src/main/resources/db/migration/core/V17__notif_seed_password_changed.sql` (seed only;
+the plan expected `V21__notif_seed_password_changed.sql` "if it lands separately" — it does, one logical
+change per file; numbers re-derived at creation time). No DDL.
+
+### Seed
+| Table | Rows | Values |
+|---|---|---|
+| NOTIF_TEMPLATE | one per `CORE_TENANT` row that has no `STAFF_PASSWORD_CHANGED` template yet | `TEMPLATE_CODE = 'STAFF_PASSWORD_CHANGED'`, `NAME_AR = 'إشعار تغيير كلمة مرور الموظف'`, `NAME_EN = 'Staff password changed'`, `SUBJECT_AR = 'تم تغيير كلمة المرور'`, `SUBJECT_EN = 'Your password was changed'`, `BODY_AR` / `BODY_EN` with `{changedAt}` and `{changedBy}`, `ATTACHMENT_FILE_ID` NULL, `IS_ACTIVE_FL = 1`, `CREATED_BY = 'SYSTEM'`, `CREATED_AT = CURRENT_TIMESTAMP`, `ID = nextval('SEQ_NOTIF_TEMPLATE')` |
+
+Pattern: `INSERT … SELECT … FROM CORE_TENANT t CROSS JOIN (VALUES …) WHERE NOT EXISTS (…)` like V11 §6, plus the
+`NOT EXISTS` guard against `UQ_NOTIF_TEMPLATE_CODE (TENANT_ID, TEMPLATE_CODE)` (an application may already
+have created a template of that code). Name widths: `NAME_EN` ≤ 100, `SUBJECT_*` ≤ 300.

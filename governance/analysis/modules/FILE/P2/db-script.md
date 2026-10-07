@@ -211,3 +211,17 @@ stated otherwise. No DBF ids are minted here.
 - Analysis: `UNIQUE (CATEGORY_CODE)`. Implemented: `(TENANT_ID, CATEGORY_CODE)` (step 05).
 - Added beyond the step file: `CONTENT_HASH` (ETag without hashing per request) and the three CHECKs
   (DEVIATIONS [07] "Design `FILE_DOCUMENT` columns").
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+**No schema change and no migration.** Image-store documents use the existing `FILE_DOCUMENT` columns:
+`FILE_CATEGORY_FK` NULL, `VISIBILITY = 'PUBLIC'` with a `PUBLIC_SLUG` (so `CHK_FILE_DOCUMENT_PUBLIC_SLUG` and
+`UQ_FILE_DOCUMENT_PUBLIC_SLUG` hold), `FILE_STATUS_ID = 'ACTIVE'`, `FILE_TYPE_ID = 'IMAGE'`, `OWNER_TYPE` /
+`OWNER_ID` / `MODULE_CODE` of the consumer (`SEC_USER` / user id / `SEC`). Discard sets `FILE_STATUS_ID =
+'DELETED'`, `VISIBILITY = 'PRIVATE'`, `PUBLIC_SLUG = NULL`.
+
+Query change (no DDL): the public lookup (`FileDocumentRepository.findPublicMetadataTupleBySlug`) accepts
+`FILE_CATEGORY_FK IS NULL` besides a category with `ALLOW_PUBLIC = TRUE` (RULE-FILE-010).

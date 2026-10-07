@@ -285,3 +285,58 @@ All analysed `FILE_*` codes are unchanged.
 ### 6. Dependencies — deltas
 tenant (`CORE_TENANT` FK, `TenantLookupApi`, path tenant resolution); events (`FileDocumentPublishedEvent`);
 audit (`@Audited`). — DEVIATIONS [07], [08], [10]
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store (profile photos now, tenant logos in package E)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for FILE (tree, this repository's history and
+`governance-shared`): RULE-FILE-007, XM-FILE-001, API-FILE-008, no FILE ADR. This addendum adds
+XM-FILE-002, RULE-FILE-008..010 and ADR-FILE-001. **No endpoint, no schema change, no migration.**
+
+### 1. Cross-module surface (A7) — NEW / CHANGED
+| Kind | Id | Interface | Method | Contract |
+|---|---|---|---|---|
+| NEW | XM-FILE-002 | `com.erp.file.crossmodule.FileImageStoreApi` | `ImageStoreResult storePublicImage(ImageStoreRequest request)` | `ImageStoreRequest { ownerType, ownerId, moduleCode, content (byte[]), fileName, maxBytes, allowedTypes (Set<String>) }`. Validates (RULE-FILE-008/009) and answers a **result, never a validation exception**: `ImageStoreResult.stored(StoredImage { documentId, publicUrl, contentType, size })` or `ImageStoreResult.rejected(ImageRejection)` with `ImageRejection` = `EMPTY`, `TOO_LARGE`, `TYPE_NOT_ALLOWED`, `UNSAFE_SVG`. The caller turns a rejection into its own code (SEC `SEC-400-PHOTO-INVALID`; package E `TENANT_LOGO_INVALID`). Stored in the **current tenant** (E wraps the call in `TenantContext.callAs`). Gate: `isAuthenticated()`; the consuming service carries its own permission. |
+| NEW | XM-FILE-002 | same | `void discard(Long documentId)` | Withdraws an image: the document becomes `DELETED` and `PRIVATE` (slug dropped, so its public URL answers 404 at once); bytes retained (RULE-FILE-006). Idempotent: an unknown or already deleted id is a no-op. |
+| NEW | XM-FILE-002 | same | constants `TYPE_PNG`, `TYPE_JPEG`, `TYPE_WEBP`, `TYPE_SVG` | the four content types an image request may allow (`image/png`, `image/jpeg`, `image/webp`, `image/svg+xml`) |
+| CHANGED | XM-FILE-001 | `FileDocumentLookupApi` | + `Map<Long, String> publicUrls(Collection<Long> documentIds)` | the public URLs of several documents of the current tenant in one query (ids without a servable public document are absent from the map); `publicUrl(Long)` unchanged. Used for user lists (one query per page, not per row). |
+
+Plan deltas (plan §6 D.4 names are proposals): the plan's `StoredImage storePublicImage(...)` answers
+`ImageStoreResult` wrapping `StoredImage`, because a rejection must reach the caller as a value (plan:
+"from a FILE validation result, never a raw exception"); the request carries no `contentType` — the
+type is detected from the bytes and a declared type is never trusted (RULE-FILE-002's principle), so a
+field the store would ignore is left out.
+
+### 2. Business rules (A4) — NEW
+| RULE-ID | Scope | Trigger | Statement | Message-AR | Message-EN | Source |
+|---|---|---|---|---|---|---|
+| RULE-FILE-008 | FILE-001 (image store) | `storePublicImage` | The type is detected from the content only: PNG (`89 50 4E 47 0D 0A 1A 0A`), JPEG (`FF D8 FF`), WebP (`RIFF` … `WEBP` at bytes 8–11), SVG (UTF-8 text whose first element, after an optional BOM, XML declaration, comments and whitespace, is `<svg`). The detected type must be in the request's `allowedTypes` (else `TYPE_NOT_ALLOWED` — anything undetected included); the size must be 1..`maxBytes` (`EMPTY` / `TOO_LARGE`). The client file name and declared type are never used for the decision; the stored `CONTENT_TYPE` is the detected one. | — (the caller's code carries the message) | — | plan §6 D.4 |
+| RULE-FILE-009 | FILE-001 (image store) | `storePublicImage` of an SVG | SVG is accepted only when the request allows `image/svg+xml` (logos; photos never do) **and** the text passes the safety check, which rejects (`UNSAFE_SVG`), case-insensitively: a `<script` element, any `on…=` event-handler attribute, an `href` / `xlink:href` whose value is not a same-document fragment (`#…`), `javascript:`, `<!DOCTYPE` / `<!ENTITY`, `<foreignObject`. The SVG is rejected, never rewritten. | — | — | plan §6 D.4 |
+| RULE-FILE-010 | FILE-001 (image store) | `storePublicImage` / `discard`; public GET | An image-store document has **no category**, is stored `ACTIVE`, file type `IMAGE`, through the active storage provider, and is `PUBLIC` at once with a fresh random slug (`FileDocumentPublishedEvent` with `PUBLIC`). The public path serves a PUBLIC, ACTIVE document whose category allows public files **or that has no category**; only the image store creates PUBLIC documents without a category (`PATCH /visibility` keeps refusing them, `FILE_PUBLIC_NOT_ALLOWED`). `discard` = `DELETED` + `PRIVATE`. | — | — | ADR-FILE-001 |
+
+### 3. Public serving of images — facts and open points
+| Kind | Item |
+|---|---|
+| fact | `image/png`, `image/jpeg`, `image/webp` are in step 07's inline allow-list (`FileDocumentDomain.INLINE_SAFE_CONTENT_TYPES`): a photo URL renders inline in a browser tab and in `<img>`. Headers as for every public file: `Cache-Control: max-age=86400, public`, `ETag`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`. |
+| fact | A replacement gets a new slug (new URL), so the day-long cache never shows a stale photo; a discarded URL answers 404 `FILE_DOCUMENT_NOT_FOUND` from the origin at once. |
+| OPEN (for package E) | `image/svg+xml` is **not** inline-safe (deliberately, step 07): an SVG logo is served `attachment` (with `nosniff` and the sandbox CSP). `<img src="…">` renders it (the disposition only affects navigation, and an SVG in `<img>` runs no script), but opening the URL downloads it. E keeps the allow-list unchanged and relies on `<img>`; adding SVG to the inline list would be a FILE decision of its own (new ADR, 009+). |
+| RESOLVED | No `ALLOW_PUBLIC` category is needed or used: image-store documents are uncategorised (RULE-FILE-010, ADR-FILE-001). |
+
+### 4. Endpoints, error codes, permissions, entities
+No new FILE endpoint, error code, permission, entity field or LOV. The public GET
+(`/api/v1/public/files/{tenantCode}/{publicSlug}`) now also serves uncategorised PUBLIC documents
+(RULE-FILE-010). `GET /api/v1/files/{id}` and the owner list show their `publicUrl` like any servable
+public document.
+
+### 5. Consumers
+| Consumer | Uses | Owner type / module | Limits |
+|---|---|---|---|
+| SEC (package D) | `storePublicImage`, `discard`, `publicUrl`, `publicUrls` | `SEC_USER` / user id / `SEC` | PNG, JPEG, WebP; 1 MB (SEC RULE-SEC-061) |
+| TENANT (package E, planned) | `storePublicImage` inside `TenantContext.callAs(tenantId)`, `discard` | `CORE_TENANT` / tenant id / `TENANT` | PNG, JPEG, WebP, SVG; 1 MB (plan §7 E.1/E.3) |
+
+### 6. Decisions
+| Kind | ADR | Decision |
+|---|---|---|
+| NEW | ADR-FILE-001 | Profile photos and logos are PUBLIC documents with non-guessable slugs; image-store documents carry no category — `governance/analysis/decisions/FILE/ADR-FILE-001.md` |

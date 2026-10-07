@@ -122,3 +122,23 @@ PERMISSION CATALOG — now code-defined
 - RULE-SEC-007 still holds: every screen needs a `VIEW` action, and non-VIEW actions are effective only
   together with it.
 - REMOVED: the 30 `PERM_FIN_*` constants and the 18 FIN migrations with their seeds (`fin` deleted) — docs/steps/01-report.md.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — passwords, profile, photo, staff `/me` (package G changed nothing here)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `P1/srs-sec.md` → "Implementation Addendum — erp-core 1.3.0" §9.
+
+Screens, actions, permissions: unchanged (set password and photo are `PERM_SEC_USERS_UPDATE` of `SEC_USERS`;
+`/api/v1/sec/me/**` is authentication-only, STAFF chain).
+
+Consumed modules
+| Kind | Module | Kind of link | What | Source |
+|---|---|---|---|---|
+| NEW | FILE | SOFT (in-core API) | `FileImageStoreApi` (store / discard a public image), `FileDocumentLookupApi.publicUrl(s)` — `SEC_USER.PHOTO_FILE_ID` (XM-SEC-006) | srs-sec.md 1.3.0 §9.7 |
+| CHANGED | tenant | in-core API | `TenantLookupApi.summaryOf` for `/me.tenant` | same |
+| NEW (consumer of SEC) | NOTIF | event bus | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` mail | NOTIF srs.md 1.3.0 addendum |
+
+Lookups owned: unchanged. `preferredLocale` (`ar`, `en`) is a CHECK-constrained value set on the column
+(`CHK_SEC_USER_LOCALE`), not a lookup type.

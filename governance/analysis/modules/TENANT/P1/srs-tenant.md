@@ -583,3 +583,16 @@ its REQs. No orphan, no dangling id.
 Both actions are effective only inside the PLATFORM tenant (RULE-TENANT-007). The frontend's PLATFORM
 screen archive is `governance/frontend/modules/PLATFORM/tests/`.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — what SEC's user profile and password policy change on the tenant side
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No TENANT id is minted by package D (other packages of the plan append their own rows to this 1.3.0
+section: C3 isolation tests, B profile / lifecycle, C events / token cut-off, E branding).
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | XM-TENANT-001 `TenantLookupApi` | + `Optional<TenantSummary> summaryOf(Long tenantId)` — `TenantSummary(Long id, String code, String nameAr, String nameEn)` in `com.erp.tenant.crossmodule`, plain values, never the entity; empty for an unknown id; no `@PreAuthorize` (code and names are what the login page and the shell show anyway). `codeOf` unchanged. Consumer: SEC `GET /api/v1/sec/me` (`tenant { code, nameAr, nameEn }`). Package E's public branding can reuse it. | SEC srs-sec.md 1.3.0 §9.5, §9.7 |
+| CHANGED | REQ-TENANT-001 (provision a tenant), SCR-REQ-TENANT-001 B5 create | `adminPassword` must meet SEC's password policy (SEC RULE-SEC-056: 8..200 characters, a letter and a digit by default): otherwise 400 `SEC-400-PASSWORD-POLICY` with `fieldErrors[0].field = adminPassword`, raised by SEC's provisioning contributor inside the provisioning transaction, so nothing is created. The first administrator is not flagged `passwordChangeRequired` (the platform operator hands the password over; package B's admin-reset is the recovery path). | SEC srs-sec.md 1.3.0 §9.9; RULE-SEC-058 |

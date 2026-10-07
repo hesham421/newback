@@ -134,3 +134,25 @@ NotificationLog: PENDING (transient) → QUEUED | CHANNEL_DISABLED; QUEUED → S
 
 ### ERROR CODES — delta
 NEW: `NOTIF_CHANNEL_UNAVAILABLE` (403), `INBOX_ITEM_NOT_FOUND` (404). Source: docs/api-docs/notif/index.md.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs.md` → "Implementation Addendum — erp-core 1.3.0".
+
+### RULES — delta
+| Rule | Delta |
+|---|---|
+| RULE-NOTIF-009 | NEW: `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail to the user (async, after commit, failures logged) |
+
+### DEPENDENCIES — delta
+| XM-ID | Type | Target | Module |
+|---|---|---|---|
+| XM-NOTIF-003 | EVENT-CONSUME | `UserPasswordChangedEvent` | events (SEC publishes) |
+
+### ENTITIES / APIs / PERMISSIONS / ERROR CODES — delta
+None. Template rows: + `STAFF_PASSWORD_CHANGED` (seed, V17).
+
+Last sequence per atom (highest ever issued): RULE: 009 · XM: 003 · API: 012 · US: 008.

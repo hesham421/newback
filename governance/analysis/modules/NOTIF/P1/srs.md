@@ -310,3 +310,35 @@ All analysed `NOTIF_*` codes are unchanged.
 Events now come from the shared `com.erp.events` module (not CU); SEC is read through NOTIF's
 `RecipientDirectory` port (`isActive`, `emailOf`, `currentRecipientId`) backed by `SecUserDirectoryApi`;
 tenant provisioning SPI; `@Audited` on templates. — DEVIATIONS [08], [10], [14]
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest ever issued for NOTIF (tree, this repository's history and `governance-shared`):
+RULE-NOTIF-008, XM-NOTIF-002. This addendum adds RULE-NOTIF-009 and XM-NOTIF-003. No endpoint, entity field,
+error code or permission changes.
+
+### 1. Business rules — NEW
+| RULE-ID | Scope | Trigger | Statement | Source |
+|---|---|---|---|---|
+| RULE-NOTIF-009 | ENTITY-NOTIF-001 | `UserPasswordChangedEvent` (core event bus, after commit) | NOTIF dispatches the template `STAFF_PASSWORD_CHANGED` on channel `EMAIL` to the event's user (`recipientId = userId`, `moduleCode = SEC`, `referenceType = SEC_USER`, `referenceId = userId`), with variables `changedAt` (the event's `occurredAt`, UTC, `yyyy-MM-dd HH:mm 'UTC'`) and `changedBy` (the event's actor: the administrator for an admin-set, the user for a self-change). Runs asynchronously on the core event executor inside the event's tenant; never on rollback. A failure (template missing or inactive, recipient inactive, channel disabled) is logged and never affects the password change. The usual rules then apply (RULE-NOTIF-007 recipient eligibility, async delivery, retries). | SEC REQ-SEC-089; plan §6 D.3 |
+
+The listener is `com.erp.notif.service.StaffPasswordChangedNotifier` (`@Async(ErpCoreEvents.EXECUTOR)` +
+`@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`, the step-08 listener pattern), calling
+NOTIF's own `DispatchService`. It is the first NOTIF reaction to a core event other than its own
+`NotificationRequestedEvent`; the event is a public `com.erp.events` type (the bus module every module may
+depend on), not an internal SEC type, so the build-create-service rule "never listen for another module's
+internal event" is respected. The earlier SEC mails (password reset, customer verification) keep calling
+`NotificationDispatchApi` directly because they carry a secret link the event must not carry.
+
+### 2. Cross-module (A7) — NEW
+| XM-ID | Type | From | To | What |
+|---|---|---|---|---|
+| XM-NOTIF-003 | EVENT-CONSUME | NOTIF | events (published by SEC) | `com.erp.events.UserPasswordChangedEvent(userId, byAdmin)` → RULE-NOTIF-009 |
+
+### 3. Templates (seed) — NEW
+| Code | Channel | Variables | Seeded by |
+|---|---|---|---|
+| `STAFF_PASSWORD_CHANGED` | EMAIL (any channel may use it) | `{changedAt}`, `{changedBy}` | `V17__notif_seed_password_changed.sql` for every tenant existing at migration time (skipped where the tenant already has a template of that code); later tenants copy it from PLATFORM through `NotifTenantProvisioningContributor` (unchanged, it copies every PLATFORM template) |

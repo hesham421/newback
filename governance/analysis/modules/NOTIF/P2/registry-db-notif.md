@@ -102,3 +102,18 @@ XM ids are assigned here.
 |---|---|---|---|
 | HARD-FK | CORE_TENANT | tenant (no analysis folder) | every `TENANT_ID` |
 | SOFT-READ | SEC_USER | SEC | `NOTIF_INBOX.RECIPIENT_USER_ID` (no FK), same pattern as XM-NOTIF-001; the physical table is `SEC_USER` |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script.md` → "Implementation Addendum — erp-core 1.3.0".
+
+### TABLES / COLUMNS / CONSTRAINTS — delta
+None (seed only).
+
+### SEED — delta
+| Table | Rows | Migration |
+|---|---|---|
+| NOTIF_TEMPLATE | `STAFF_PASSWORD_CHANGED` for every existing tenant (copied to later tenants from PLATFORM) | V17__notif_seed_password_changed.sql |

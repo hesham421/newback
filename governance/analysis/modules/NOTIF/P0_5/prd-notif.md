@@ -105,3 +105,13 @@ CHANGED behaviour of existing stories
 
 Scope note: "five channels, all built and enabled" (STORIES / POLICY-CLI-01) is realised as five
 channel codes plus `IN_APP`, with real core delivery for EMAIL and IN_APP only (step-08 plan).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW product capabilities
+| Capability | Actor | Implemented behaviour | Source |
+|---|---|---|---|
+| Password-change e-mail | staff user (recipient) | When an administrator sets a staff user's password or the user changes it, the user receives `STAFF_PASSWORD_CHANGED` (when and by whom). The template exists in every tenant and can be edited like any template. | srs.md 1.3.0 (RULE-NOTIF-009); V17 |
