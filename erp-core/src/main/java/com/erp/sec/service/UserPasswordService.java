@@ -8,6 +8,7 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.events.DomainEventPublisher;
 import com.erp.events.UserPasswordChangedEvent;
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.dto.AdminPasswordSetRequest;
 import com.erp.sec.dto.PasswordChangeRequest;
@@ -66,7 +67,8 @@ public class UserPasswordService {
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, SecErrorCodes.SEC_404_USER, id));
         Optional<User> caller = repository.findByUsername(SecurityContextHelper.getCurrentUsername());
         UserDomain.assertNotSelfForAdminPasswordSet(caller.map(c -> c.getUserPk().equals(id)).orElse(false));
-        passwordPolicyProvider.current().assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
 
         user.changePassword(passwordEncoder.encode(request.getNewPassword()),
             UserDomain.passwordChangeRequiredFor(request.getRequireChangeAtNextLogin()), Instant.now());
@@ -104,7 +106,8 @@ public class UserPasswordService {
 
         UserDomain.assertCurrentPasswordMatches(
             passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash()));
-        passwordPolicyProvider.current().assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
 
         user.changePassword(passwordEncoder.encode(request.getNewPassword()), false, Instant.now());
         User saved = repository.save(user);

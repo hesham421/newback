@@ -21,7 +21,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -110,10 +109,10 @@ public class UserController {
         return operationCode.craftResponse(passwordService.setPassword(id, request));
     }
 
-    @PutMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping("/{id}/photo")
     @Operation(summary = "Set a user's photo", description = "STAFF accounts only; PNG, JPEG or WebP, at most 1 MB; replaces the previous photo"
         + " - تعيين صورة مستخدم")
-    public ResponseEntity<ApiResponse<ProfilePhotoResponse>> setPhoto(
+    public ResponseEntity<ApiResponse<ProfilePhotoResponse>> setUserPhoto(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file) {
         return operationCode.craftResponse(profileService.setUserPhoto(id, file));
@@ -122,7 +121,7 @@ public class UserController {
     @DeleteMapping("/{id}/photo")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Remove a user's photo", description = "STAFF accounts only - إزالة صورة مستخدم")
-    public void removePhoto(@PathVariable Long id) {
+    public void removeUserPhoto(@PathVariable Long id) {
         profileService.removeUserPhoto(id);
     }
 

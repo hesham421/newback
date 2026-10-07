@@ -14,6 +14,7 @@ import com.erp.events.UserCreatedEvent;
 import com.erp.events.UserStatusChangedEvent;
 import com.erp.sec.crossmodule.UserContact;
 import com.erp.sec.domain.ActiveSessionDomain;
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.dto.RoleSummaryResponse;
 import com.erp.sec.dto.UserCreateRequest;
@@ -104,7 +105,8 @@ public class UserService {
         }
 
         // tenant-maturity D — RULE-SEC-056 before anything is looked up or written
-        passwordPolicyProvider.current().assertAcceptable(FIELD_PASSWORD, request.getPassword());
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_PASSWORD, request.getPassword());
 
         boolean usernameTaken = repository.existsByUsername(request.getUsername());
         boolean emailTaken = repository.existsByEmail(request.getEmail());

@@ -1,5 +1,6 @@
 package com.erp.sec.tenant;
 
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.entity.User;
 import com.erp.sec.service.PasswordPolicyProvider;
 import com.erp.common.domain.status.Status;
@@ -71,7 +72,8 @@ public class SecTenantProvisioningContributor implements TenantProvisioningContr
 
     @Override
     public void provision(TenantProvisioning p) {
-        passwordPolicyProvider.current().assertAcceptable(FIELD_ADMIN_PASSWORD, p.admin().rawPassword());
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_ADMIN_PASSWORD, p.admin().rawPassword());
         Long target = p.tenantId();
         Long source = p.sourceTenantId();
         String by = p.provisionedBy();

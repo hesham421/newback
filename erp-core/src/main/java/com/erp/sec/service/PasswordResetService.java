@@ -11,6 +11,7 @@ import com.erp.events.DomainEventPublisher;
 import com.erp.events.PasswordResetRequestedEvent;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.PasswordResetTokenDomain;
 import com.erp.sec.dto.ConfirmationResponse;
 import com.erp.sec.dto.PasswordResetCompleteRequest;
@@ -132,7 +133,8 @@ public class PasswordResetService {
 
         User user = token.getUser();
         // tenant-maturity D — RULE-SEC-056; the owner chose this password, so a forced change is satisfied
-        passwordPolicyProvider.current().assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
         user.changePassword(passwordEncoder.encode(request.getNewPassword()), false, now);
         userRepository.save(user);
 

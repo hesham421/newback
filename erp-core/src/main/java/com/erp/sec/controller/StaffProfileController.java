@@ -16,7 +16,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,14 +47,14 @@ public class StaffProfileController {
     @GetMapping
     @Operation(summary = "Get my profile", description = "No roles or permissions (the menu is the client's authority);"
         + " reachable while a password change is pending - جلب ملفي الشخصي (دون أدوار أو صلاحيات)")
-    public ResponseEntity<ApiResponse<StaffProfileResponse>> get() {
+    public ResponseEntity<ApiResponse<StaffProfileResponse>> getMyProfile() {
         return operationCode.craftResponse(service.getMyProfile());
     }
 
     @PatchMapping
     @Operation(summary = "Update my profile", description = "Only the supplied fields; null keeps, empty clears the optional ones"
         + " - تحديث ملفي الشخصي (الحقول المرسلة فقط)")
-    public ResponseEntity<ApiResponse<StaffProfileResponse>> update(
+    public ResponseEntity<ApiResponse<StaffProfileResponse>> updateMyProfile(
             @Valid @RequestBody StaffProfileUpdateRequest request) {
         return operationCode.craftResponse(service.updateMyProfile(request));
     }
@@ -63,24 +62,24 @@ public class StaffProfileController {
     @PutMapping("/password")
     @Operation(summary = "Change my password", description = "Needs the current password; ends my other sessions; clears a pending"
         + " forced change - تغيير كلمة المرور الخاصة بي")
-    public ResponseEntity<ApiResponse<PasswordChangeResponse>> changePassword(
+    public ResponseEntity<ApiResponse<PasswordChangeResponse>> changeMyPassword(
             @Valid @RequestBody PasswordChangeRequest request,
             HttpServletRequest httpRequest) {
         return operationCode.craftResponse(
             passwordService.changeOwnPassword(request, httpRequest.getHeader(HttpHeaders.AUTHORIZATION)));
     }
 
-    @PutMapping(value = "/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping("/photo")
     @Operation(summary = "Set my photo", description = "PNG, JPEG or WebP, at most 1 MB; replaces the previous photo"
         + " - تعيين صورتي (PNG أو JPEG أو WebP بحد أقصى 1 ميغابايت)")
-    public ResponseEntity<ApiResponse<ProfilePhotoResponse>> setPhoto(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ApiResponse<ProfilePhotoResponse>> setMyPhoto(@RequestParam("file") MultipartFile file) {
         return operationCode.craftResponse(service.setMyPhoto(file));
     }
 
     @DeleteMapping("/photo")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Remove my photo", description = "إزالة صورتي")
-    public void removePhoto() {
+    public void removeMyPhoto() {
         service.removeMyPhoto();
     }
 }
