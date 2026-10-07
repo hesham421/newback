@@ -31,13 +31,13 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/g-sec-grant-revoke",
       "worktree": ".worktrees/tm-g",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 4,
       "implementer_agent": "a4bca255ce095a936",
-      "reviewer_agent": null,
+      "reviewer_agent": "a141731810d9ee97b",
       "review": null,
       "report": "docs/steps/tm-g-report.md",
       "merged_commit": null
@@ -269,6 +269,12 @@
       "step": "A",
       "event": "REVIEW",
       "note": "implementer COMPLETE 8f6cf3a; reviewer dispatched"
+    },
+    {
+      "at": "2026-10-07T19:38:02Z",
+      "step": "G",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 9d3c3af (mvn 399/10, P-LIVE 156/156); reviewer dispatched"
     }
   ]
 }
