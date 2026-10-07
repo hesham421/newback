@@ -22,6 +22,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -118,6 +120,25 @@ public class GlobalExceptionHandler {
                 .build()))
             .build();
         return ResponseEntity.badRequest().body(ApiResponse.failure(error));
+    }
+
+    /**
+     * erp-core 1.3.0 (TM-D review round 1): a multipart request without its required part, or one the
+     * container refused (not multipart, or above {@code spring.servlet.multipart.*}), is a client error
+     * that fell through to the 500 catch-all. Same {@code VALIDATION_ERROR} code; the part is named in
+     * {@code fieldErrors} when Spring knows it.
+     */
+    @ExceptionHandler({MissingServletRequestPartException.class, MultipartException.class})
+    public ResponseEntity<ApiResponse<Void>> handleMultipart(Exception ex) {
+        String partName = ex instanceof MissingServletRequestPartException missing ? missing.getRequestPartName() : null;
+        log.warn("Invalid multipart request [{}]: {}", partName, ex.getMessage());
+        ApiError.ApiErrorBuilder error = ApiError.builder()
+            .code(CommonErrorCodes.VALIDATION_ERROR)
+            .message(resolveMessage(CommonErrorCodes.VALIDATION_ERROR, null));
+        if (partName != null) {
+            error.fieldErrors(List.of(FieldErrorItem.builder().field(partName).message(ex.getMessage()).build()));
+        }
+        return ResponseEntity.badRequest().body(ApiResponse.failure(error.build()));
     }
 
     // Added 2026-09-12 by an explicit recorded human decision, not by any pre-existing

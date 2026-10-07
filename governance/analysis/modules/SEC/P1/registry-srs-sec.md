@@ -150,3 +150,51 @@ Decisions
 | Kind | ADR | Subject |
 |---|---|---|
 | NEW | ADR-SEC-062 | Revoking VIEW cascades the screen's other action grants (plan name ADR-SEC-041; renumbered because ADR-SEC numbers up to 061 were issued historically) |
+
+Package D (tenant-maturity plan §6 D.1–D.3) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §9.
+
+Entities (package D)
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | ENT-SEC-001 User | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`, `photoFileId` (soft ref, XM-SEC-006), `passwordChangeRequired`, `passwordChangedAt` | V16__sec_user_profile.sql (DBF-SEC-117..123) |
+
+Consumed (package D)
+| Kind | Owner | What | Kind of link |
+|---|---|---|---|
+| NEW | FILE | `FileImageStoreApi` (XM-FILE-002), `FileDocumentLookupApi.publicUrl` / `publicUrls` — XM-SEC-006 | SOFT (in-core API, no FK) |
+| CHANGED | tenant | `TenantLookupApi.summaryOf` (XM-TENANT-001) | in-core API |
+| NEW (consumer) | NOTIF | reacts to `UserPasswordChangedEvent` (RULE-NOTIF-023) | event bus |
+
+Requirements — new / changed items (package D)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-082 / AC-SEC-088 | Password policy | US-SEC-001, US-SEC-002; RULE-SEC-056 |
+| NEW | REQ-SEC-083 / AC-SEC-089 | Administrator sets a staff user's password | US-SEC-002; RULE-SEC-057, RULE-SEC-058; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-084 / AC-SEC-090 | Forced password change (403 gate) | US-SEC-002; RULE-SEC-059 |
+| NEW | REQ-SEC-085 / AC-SEC-091 | A staff user changes their own password | US-SEC-001; RULE-SEC-060 |
+| NEW | REQ-SEC-086 / AC-SEC-092 | Staff profile `/me` (read, patch; no roles) | US-SEC-001; RULE-SEC-062; ADR-SEC-064 |
+| NEW | REQ-SEC-087 / AC-SEC-093 | Profile photo (own and another staff user's) | US-SEC-001, US-SEC-002; RULE-SEC-061; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-088 / AC-SEC-094 | Profile fields in user management, `passwordChangeRequired` at login | US-SEC-002; RULE-SEC-058, RULE-SEC-062; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-089 / AC-SEC-095 | Password-change event (NOTIF e-mail) | US-SEC-001 |
+| NEW | RULE-SEC-056 | Password policy (`PasswordPolicy`): 8..72 characters, ≤ 72 UTF-8 bytes (BCrypt), letter + digit; customers get the byte limit only | REQ-SEC-082 |
+| NEW | RULE-SEC-057 | No admin-set on oneself (`SEC-422-PASSWORD-SELF`) | REQ-SEC-083 |
+| NEW | RULE-SEC-058 | An administrator-chosen password must be changed (default TRUE) | REQ-SEC-083, REQ-SEC-088 |
+| NEW | RULE-SEC-059 | Forced-change gate (`SEC-403-PASSWORD-CHANGE-REQUIRED`) | REQ-SEC-084 |
+| NEW | RULE-SEC-060 | Self-change needs the current password (`SEC-403-PASSWORD-CURRENT-INVALID`) | REQ-SEC-085 |
+| NEW | RULE-SEC-061 | Profile photo: PNG/JPEG/WebP ≤ 1 MB, one per user (`SEC-400-PHOTO-INVALID`) | REQ-SEC-087 |
+| NEW | RULE-SEC-062 | Preferred locale `ar` / `en` (`CHK_SEC_USER_LOCALE`) | REQ-SEC-086, REQ-SEC-088 |
+| CHANGED | SCR-REQ-SEC-004 | B5 + set password, set / remove photo | REQ-SEC-083, REQ-SEC-087, REQ-SEC-088 |
+| CHANGED | REQ-SEC-007 (reset completion), REQ-SEC-009 (create user) | + RULE-SEC-056; reset completion clears the forced-change flag | — |
+
+Screens: no new SEC screen, page code or permission (the profile pages are authentication-only frontend routes).
+
+Counts in the current analysis after package D: REQ 45 · AC 45 · RULE 16 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued): REQ: 089 · AC: 095 · ENT: 014 · RULE: 062 · SCR-REQ: 010 ·
+DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064 (065 held spare for this run; the as-built SEC ADRs of the
+analysis-coverage session start at 066)
+
+Decisions (package D)
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-SEC-063 | An administrator-chosen password forces a change at next login (plan name ADR-SEC-039) |
+| NEW | ADR-SEC-064 | The staff `/me` payload carries no roles or permissions (plan name ADR-SEC-040) |

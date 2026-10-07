@@ -39,6 +39,7 @@ Read from `GlobalExceptionHandler.java`: the expression each handler passes to `
 | handleLocalizedException | LocalizedException | the thrown Status's HTTP status | the thrown error code | `detail.field()` when `detail.field()` is non-null, otherwise `detail.errorCode()` | `detail.field() != null ? detail.field() : detail.errorCode()` |
 | handleValidation | MethodArgumentNotValidException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `fe.getField()` | `fe.getField()` |
 | handleRequestParameter | MissingServletRequestParameterException, MethodArgumentTypeMismatchException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `parameterName` | `parameterName` |
+| handleMultipart | MissingServletRequestPartException, MultipartException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `partName` | `partName` |
 
 ## Pagination Envelope
 

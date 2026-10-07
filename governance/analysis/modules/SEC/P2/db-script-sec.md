@@ -738,3 +738,55 @@ stated otherwise. No DBF ids are minted here.
 - Analysis: `USERNAME` / `EMAIL` unique. Implemented: unique per `(TENANT_ID, REALM, …)` (steps 05, 06).
 - Kept as recorded (renames are not additive): `*_PK` primary-key names on SEC tables and the SEC vs
   CU/FILE/NOTIF audit-column type differences (DEVIATIONS [05]).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — user profile and password facts on `SEC_USER` (package G added no schema)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration: `erp-core/src/main/resources/db/migration/core/V16__sec_user_profile.sql` (the plan expected
+`V19__sec_user_profile.sql`; numbers are re-derived at creation time, plan §1.3 / §11 — `docs/DEVIATIONS.md`
+`[TM-D]`). Additive only: seven nullable or defaulted columns and one CHECK every existing row satisfies.
+DBF ids continue from the highest ever issued (DBF-SEC-116).
+
+### Table SEC_USER (ENT-SEC-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default |
+|---|---|---|---|---|---|---|
+| DBF-SEC-117 | PHONE | VARCHAR(30) | ENT-SEC-001.phone | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-118 | JOB_TITLE_AR | VARCHAR(150) | ENT-SEC-001.jobTitleAr | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-119 | JOB_TITLE_EN | VARCHAR(150) | ENT-SEC-001.jobTitleEn | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-120 | PREFERRED_LOCALE | VARCHAR(5) | ENT-SEC-001.preferredLocale (RULE-SEC-062) | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-121 | PHOTO_FILE_ID | BIGINT | ENT-SEC-001.photoFileId — soft reference to `FILE_DOCUMENT.ID`, **no FK** (XM-SEC-006) | REQ-SEC-087 | NULL | — |
+| DBF-SEC-122 | PASSWORD_CHANGE_REQUIRED_FL | BOOLEAN | ENT-SEC-001.passwordChangeRequired (RULE-SEC-058/059) | REQ-SEC-083, REQ-SEC-084, REQ-SEC-085 | NOT NULL | FALSE |
+| DBF-SEC-123 | PASSWORD_CHANGED_AT | TIMESTAMPTZ | ENT-SEC-001.passwordChangedAt | REQ-SEC-083, REQ-SEC-085, REQ-SEC-088 | NULL | — |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_SEC_USER_LOCALE` | `CHECK (PREFERRED_LOCALE IS NULL OR PREFERRED_LOCALE IN ('ar', 'en'))` | RULE-SEC-062; every existing row has NULL |
+No index (no new filter or join column), no sequence, no FK (`PHOTO_FILE_ID` is a soft reference by the
+platform's convention for FILE references: FILE rows can be soft-deleted and live in another module).
+
+### Script (`V16__sec_user_profile.sql`)
+```sql
+ALTER TABLE SEC_USER ADD COLUMN PHONE                       VARCHAR(30);
+ALTER TABLE SEC_USER ADD COLUMN JOB_TITLE_AR                VARCHAR(150);
+ALTER TABLE SEC_USER ADD COLUMN JOB_TITLE_EN                VARCHAR(150);
+ALTER TABLE SEC_USER ADD COLUMN PREFERRED_LOCALE            VARCHAR(5);
+ALTER TABLE SEC_USER ADD COLUMN PHOTO_FILE_ID               BIGINT;
+ALTER TABLE SEC_USER ADD COLUMN PASSWORD_CHANGE_REQUIRED_FL BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE SEC_USER ADD COLUMN PASSWORD_CHANGED_AT         TIMESTAMPTZ;
+
+ALTER TABLE SEC_USER ADD CONSTRAINT CHK_SEC_USER_LOCALE
+    CHECK (PREFERRED_LOCALE IS NULL OR PREFERRED_LOCALE IN ('ar', 'en'));
+```
+plus one `COMMENT ON COLUMN` per new column. Existing rows: `PASSWORD_CHANGE_REQUIRED_FL = FALSE`
+(no account is forced into a change by the upgrade), the other columns NULL.
+
+### XM register — NEW (consume direction)
+| XM id | From (column) | To (owner · object) | Kind | Validated by |
+|---|---|---|---|---|
+| XM-SEC-006 | `SEC_USER.PHOTO_FILE_ID` | FILE · `FILE_DOCUMENT.ID` (a PUBLIC image document owned `SEC_USER` / `USER_PK`, module `SEC`) | SOFT-READ, no FK | written only from `FileImageStoreApi.storePublicImage` results (XM-FILE-002); read through `FileDocumentLookupApi.publicUrl(s)` (XM-FILE-001) — a discarded or missing document simply yields no URL |
+
+### Deviations
+- Plan §6 D.1 names `V19__sec_user_profile.sql` → `V16__sec_user_profile.sql` (execution order D before B/E).

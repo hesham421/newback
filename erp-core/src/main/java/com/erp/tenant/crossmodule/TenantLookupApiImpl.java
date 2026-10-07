@@ -23,4 +23,11 @@ public class TenantLookupApiImpl implements TenantLookupApi {
     public Optional<String> codeOf(Long tenantId) {
         return tenantId == null ? Optional.empty() : repository.findById(tenantId).map(Tenant::getCode);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<TenantSummary> summaryOf(Long tenantId) {
+        return tenantId == null ? Optional.empty() : repository.findById(tenantId)
+            .map(tenant -> new TenantSummary(tenant.getId(), tenant.getCode(), tenant.getNameAr(), tenant.getNameEn()));
+    }
 }

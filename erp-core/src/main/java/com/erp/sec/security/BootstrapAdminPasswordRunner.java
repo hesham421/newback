@@ -6,6 +6,7 @@ import com.erp.sec.entity.User;
 import com.erp.sec.repository.UserRepository;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -71,7 +72,8 @@ public class BootstrapAdminPasswordRunner implements ApplicationRunner {
             return;
         }
 
-        admin.setPasswordHash(passwordEncoder.encode(password));
+        // tenant-maturity D: an operator-configured password, so no forced change (RULE-SEC-058)
+        admin.changePassword(passwordEncoder.encode(password), false, Instant.now());
         admin.activate();
         userRepository.save(admin);
         log.info("Bootstrap admin '{}' initialised from erp.core.security.bootstrap-admin-password (User ID: {})",

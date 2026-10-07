@@ -71,3 +71,16 @@ Paths cited below are relative to the erp-core repository at that tag. Policy id
 
 Scope exceptions: "external filesystem storage" is no longer excluded (see #2). PDF processing and an
 async file pipeline remain excluded.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids are not minted here; full text in `P1/srs.md` → "Implementation Addendum — erp-core 1.3.0".
+
+| # | Policy-level delta | Kind | Source |
+|---|---|---|---|
+| 1 | Other core modules store small public images (profile photos, tenant logos) through one FILE image store: the type is taken from the content (PNG, JPEG, WebP; SVG only where the caller allows it and only when it carries no active content), the size limit from the caller. | NEW | RULE-FILE-008/009 |
+| 2 | Such images are public at a non-guessable URL as soon as they are stored and stop being served the moment they are replaced or removed (ADR-FILE-008). They need no public category: the publication decision is the image store's, not tenant data. | NEW | RULE-FILE-010; ADR-FILE-008 |
+| 3 | 1.2.0 policy #4 (no active content on the platform origin) is unchanged: SVG stays an attachment on the public path. | unchanged | srs.md 1.3.0 §3 |

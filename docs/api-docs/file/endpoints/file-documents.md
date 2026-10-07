@@ -86,7 +86,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.listByOwner`, `FileService.listByOwner`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.listByOwner`, `FileService.listByOwner`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -320,7 +320,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.metadata`, `FileService.getMetadata`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.metadata`, `FileService.getMetadata`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -409,7 +409,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.archiveOrDelete`, `FileService.softDelete`, `FileService.resolveTargetStatus`, `FileDocumentDomain.from`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileDocumentDomain.assertCanTransitionTo`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.archiveOrDelete`, `FileService.softDelete`, `FileService.resolveTargetStatus`, `FileDocumentDomain.from`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileDocumentDomain.assertCanTransitionTo`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -566,7 +566,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.updateVisibility`, `FileService.updateVisibility`, `FileDocumentDomain.from`, `FileDocumentDomain.assertNotDeleted`, `FileDocumentDomain.assertCanBePublic`, `FileDocument.publish`, `PublicFileUrls.newSlug`, `FileDocument.unpublish`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.updateVisibility`, `FileService.updateVisibility`, `FileDocumentDomain.from`, `FileDocumentDomain.assertNotDeleted`, `FileDocumentDomain.assertCanBePublic`, `FileDocument.publish`, `PublicFileUrls.newSlug`, `FileDocument.unpublish`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

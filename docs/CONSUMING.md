@@ -140,6 +140,7 @@ should be `false`.
 |---|---|---|
 | `erp.core.security.bootstrap-admin-password` | empty | Sets the password of the seeded `admin` (SYS_ADMIN of tenant `PLATFORM`) once, on first start, and activates it. Without it nobody can log in as `admin`; there is no `admin/admin`. |
 | `erp.core.security.jwt.expiration-ms` | `3600000` | Access-token lifetime. |
+| `erp.core.security.password-policy.min-length` / `max-length` / `require-letter` / `require-digit` | `8` / `72` / `true` / `true` | The STAFF password policy (1.3.0); `max-length` above 72 fails startup and every password is also limited to 72 UTF-8 bytes (BCrypt; an Arabic letter takes 2): user create, reset completion, an administrator setting a password, the own change and a new tenant's first administrator answer 400 `SEC-400-PASSWORD-POLICY` otherwise. The message names the default composition; override the key in your bundle if you disable a requirement. Customer passwords get only the 72-byte limit. |
 | `erp.core.frontend.base-url`, `password-reset-path`, `customer-verify-path`, `customer-password-reset-path` | — / `/reset` / `/customer/verify` / `/customer/reset` | Links in e-mails. |
 | `erp.core.security.public-paths`, `customer-public-paths` | see `ErpCoreProperties.Security.DEFAULT_*` | Unauthenticated paths of the staff and customer chains. **Setting one replaces the whole list**, so start from the defaults. |
 | `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable. |
@@ -238,8 +239,9 @@ bean with the same name and the same order.
 
 Core publishes these events, all in `com.erp.events`: `UserCreatedEvent`, `UserStatusChangedEvent`,
 `CustomerRegisteredEvent`, `CustomerVerifiedEvent`, `PasswordResetRequestedEvent`, `TenantCreatedEvent`,
-`FileDocumentPublishedEvent`, `NotificationRequestedEvent`, `NotificationDispatchedEvent` and
-`NotificationFailedEvent`. Each extends `DomainEvent`, which carries `id` (the idempotency key),
+`FileDocumentPublishedEvent`, `NotificationRequestedEvent`, `NotificationDispatchedEvent`,
+`NotificationFailedEvent` and (1.3.0) `UserPasswordChangedEvent` (`userId`, `byAdmin`; NOTIF answers it with the
+`STAFF_PASSWORD_CHANGED` e-mail). Each extends `DomainEvent`, which carries `id` (the idempotency key),
 `occurredAt`, `tenantId`, `actor` and `realm`.
 
 ```java
@@ -307,8 +309,15 @@ provider implements `com.erp.file.storage.StorageProvider`: `key()`,
 
 Supporting a new key also needs a core migration that widens `CHK_FILE_DOCUMENT_STORAGE_PROVIDER`, so
 propose it to core. Other modules read files through
-`com.erp.file.crossmodule.FileDocumentLookupApi` (`isAvailable`, `publicUrl`). Public files are served at
-a stable URL once a category allows it (`allowPublic`) and the document's visibility is `PUBLIC`.
+`com.erp.file.crossmodule.FileDocumentLookupApi` (`isAvailable`, `publicUrl`, and since 1.3.0 `publicUrls`). Public
+files are served at a stable URL once a category allows it (`allowPublic`) and the document's visibility is `PUBLIC`.
+Since 1.3.0 `com.erp.file.crossmodule.FileImageStoreApi` stores a small public image for a core module
+(`storePublicImage(ImageStoreRequest)` → `ImageStoreResult`, `discard(id)`): the type is detected from the bytes
+(PNG, JPEG, WebP; SVG only when the request allows it and it passes a strict allow-list — logos must be plain /
+optimised SVG: SVGO, Inkscape "Optimized SVG", Figma or Illustrator export, no editor metadata), the document is stored
+without a category and published at once under a random slug (ADR-FILE-008). Keep
+`spring.servlet.multipart.max-file-size` above the image limits (the reference app uses 15 MB): Spring's default
+1 MB ceiling answers an over-size upload before the image rule can (400 `VALIDATION_ERROR` instead of the image error).
 
 ## 9. Audit
 

@@ -9,6 +9,9 @@
 - [PUT /api/v1/sec/users/{id}](#put-apiv1secusersid)
 - [PATCH /api/v1/sec/users/{id}](#patch-apiv1secusersid)
 - [DELETE /api/v1/sec/users/{id}](#delete-apiv1secusersid)
+- [PUT /api/v1/sec/users/{id}/password](#put-apiv1secusersidpassword)
+- [PUT /api/v1/sec/users/{id}/photo](#put-apiv1secusersidphoto)
+- [DELETE /api/v1/sec/users/{id}/photo](#delete-apiv1secusersidphoto)
 - [PUT /api/v1/sec/users/{id}/roles](#put-apiv1secusersidroles)
 
 ## POST /api/v1/sec/users
@@ -37,6 +40,11 @@ Schema: `UserCreateRequest` (application/json)
 | fullNameEn | string | Yes | maxLength: 200 | Full name (English) - الاسم الكامل بالإنجليزية | Ahmed Ali |
 | password | string | Yes | maxLength: 200 | Raw password, hashed server-side - كلمة المرور، تُجزَّأ في الخادم | N3wP@ssw0rd! |
 | roleIds | array<integer> | No |  | Optional role identifiers to assign at creation; omitted or empty creates the user with no roles - معرّفات الأدوار المطلوب إسنادها عند الإنشاء، اختيارية | [1, 2] |
+| phone | string | No | maxLength: 30; pattern: `^$|^\+?[0-9][0-9 -]{5,28}[0-9]$` | Phone, E.164-ish (tenant-maturity D) - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No | maxLength: 150 | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No | maxLength: 150 | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No | pattern: `^$|^(ar|en)$` | Preferred language: ar or en - اللغة المفضلة | ar |
+| requireChangeAtNextLogin | boolean | No |  | Whether the new user must change the password at the first sign-in; null means true (RULE-SEC-058) - إلزام المستخدم بتغيير كلمة المرور عند أول دخول | true |
 
 **Request Example**
 
@@ -50,7 +58,12 @@ Schema: `UserCreateRequest` (application/json)
   "roleIds": [
     1,
     2
-  ]
+  ],
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "requireChangeAtNextLogin": true
 }
 ```
 
@@ -71,6 +84,13 @@ Shape: `UserResponse`
 | realm | string | No |  | Auth realm: STAFF or CUSTOMER - نطاق المصادقة | STAFF |
 | lastLoginAt | string (date-time) | No |  | Last login timestamp - تاريخ آخر دخول |  |
 | isActiveFl | boolean | No |  | Active status - حالة التفعيل | true |
+| phone | string | No |  | Phone - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No |  | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No |  | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No |  | Preferred language: ar or en - اللغة المفضلة | ar |
+| photoUrl | string | No |  | Public URL of the photo, null without one - الرابط العام للصورة | /api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+| passwordChangeRequired | boolean | No |  | Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور | false |
+| passwordChangedAt | string (date-time) | No |  | When a person last set the password - وقت آخر تعيين لكلمة المرور |  |
 | roles | array<RoleSummaryResponse> | No |  | Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور — Role assigned to a user - دور مُسند إلى مستخدم |  |
 | roles[].roleId | integer (int64) | No |  | Role identifier - معرّف الدور | 1 |
 | roles[].code | string | No |  | Role code - رمز الدور | SEC_ADMIN |
@@ -95,6 +115,12 @@ _(partial — only fields with a documented example are shown)_
   "statusCode": "ACTIVE",
   "realm": "STAFF",
   "isActiveFl": true,
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "photoUrl": "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs",
+  "passwordChangeRequired": false,
   "roles": [
     {
       "roleId": 1,
@@ -110,10 +136,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.create`, `UserService.create`, `UserService.assertMayAssignRoles`, `UserDomain.create`, `UserMapper.toEntity`, `UserRoleService.replaceAssignments`, `UserMapper.toResponse`, `UserDomain.duplicate`, `new UserDomain()`, `UserRoleService.loadRequestedRoles`, `UserRoleAssignmentDomain.create`, `UserRoleService.holdsConflictingAction`, `UserRoleAssignmentMapper.toEntity`, `UserRoleService.appendRoleAudit`, `RoleMapper.toSummaryResponse`, `new UserRoleAssignmentDomain()`, `UserRoleService.conflictingCounterpartActions`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.create`, `UserService.create`, `UserService.assertMayAssignRoles`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `UserDomain.create`, `UserMapper.toEntity`, `UserDomain.passwordChangeRequiredFor`, `UserRoleService.replaceAssignments`, `UserMapper.toResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `UserDomain.duplicate`, `new UserDomain()`, `UserMapper.emptyToNull`, `UserRoleService.loadRequestedRoles`, `UserRoleAssignmentDomain.create`, `UserRoleService.holdsConflictingAction`, `UserRoleAssignmentMapper.toEntity`, `UserRoleService.appendRoleAudit`, `RoleMapper.toSummaryResponse`, `new PasswordPolicy()`, `new UserRoleAssignmentDomain()`, `UserRoleService.conflictingCounterpartActions`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PASSWORD-POLICY` | SEC_400_PASSWORD_POLICY | PasswordPolicy.assertAcceptable — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | PasswordPolicy.assertAcceptable |
 | 403 FORBIDDEN | `SEC-403-FORBIDDEN` | SEC_403_FORBIDDEN | UserService.assertMayAssignRoles |
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | UserRoleService.loadRequestedRoles |
 | 409 CONFLICT | `SEC-409-SOD-CONFLICT` | SEC_409_SOD_CONFLICT | UserRoleAssignmentDomain.create |
@@ -186,6 +214,13 @@ Shape: `paginated list of UserResponse (see Pagination Envelope in index.md)`
 | realm | string | No |  | Auth realm: STAFF or CUSTOMER - نطاق المصادقة | STAFF |
 | lastLoginAt | string (date-time) | No |  | Last login timestamp - تاريخ آخر دخول |  |
 | isActiveFl | boolean | No |  | Active status - حالة التفعيل | true |
+| phone | string | No |  | Phone - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No |  | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No |  | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No |  | Preferred language: ar or en - اللغة المفضلة | ar |
+| photoUrl | string | No |  | Public URL of the photo, null without one - الرابط العام للصورة | /api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+| passwordChangeRequired | boolean | No |  | Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور | false |
+| passwordChangedAt | string (date-time) | No |  | When a person last set the password - وقت آخر تعيين لكلمة المرور |  |
 | roles | array<RoleSummaryResponse> | No |  | Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور — Role assigned to a user - دور مُسند إلى مستخدم |  |
 | roles[].roleId | integer (int64) | No |  | Role identifier - معرّف الدور | 1 |
 | roles[].code | string | No |  | Role code - رمز الدور | SEC_ADMIN |
@@ -210,6 +245,12 @@ _(partial — only fields with a documented example are shown)_
   "statusCode": "ACTIVE",
   "realm": "STAFF",
   "isActiveFl": true,
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "photoUrl": "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs",
+  "passwordChangeRequired": false,
   "roles": [
     {
       "roleId": 1,
@@ -225,7 +266,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.search`, `UserService.search`, `UserSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `UserSearchRequest.getFullName`, `UserService.fullNameMatches`, `UserService.staffRealm`, `UserRoleService.rolesByUser`, `UserMapper.toResponse`, `UserSearchRequest.extractStringFilter`, `RoleMapper.toSummaryResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.search`, `UserService.search`, `UserSearchRequest.toCommonSearchRequest`, `SecSearchSupport.assertSortAllowed`, `UserSearchRequest.getFullName`, `UserService.fullNameMatches`, `UserService.staffRealm`, `UserRoleService.rolesByUser`, `UserPhotoUrls.of`, `UserMapper.toResponse`, `UserSearchRequest.extractStringFilter`, `RoleMapper.toSummaryResponse`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -275,6 +316,13 @@ Shape: `UserResponse`
 | realm | string | No |  | Auth realm: STAFF or CUSTOMER - نطاق المصادقة | STAFF |
 | lastLoginAt | string (date-time) | No |  | Last login timestamp - تاريخ آخر دخول |  |
 | isActiveFl | boolean | No |  | Active status - حالة التفعيل | true |
+| phone | string | No |  | Phone - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No |  | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No |  | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No |  | Preferred language: ar or en - اللغة المفضلة | ar |
+| photoUrl | string | No |  | Public URL of the photo, null without one - الرابط العام للصورة | /api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+| passwordChangeRequired | boolean | No |  | Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور | false |
+| passwordChangedAt | string (date-time) | No |  | When a person last set the password - وقت آخر تعيين لكلمة المرور |  |
 | roles | array<RoleSummaryResponse> | No |  | Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور — Role assigned to a user - دور مُسند إلى مستخدم |  |
 | roles[].roleId | integer (int64) | No |  | Role identifier - معرّف الدور | 1 |
 | roles[].code | string | No |  | Role code - رمز الدور | SEC_ADMIN |
@@ -299,6 +347,12 @@ _(partial — only fields with a documented example are shown)_
   "statusCode": "ACTIVE",
   "realm": "STAFF",
   "isActiveFl": true,
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "photoUrl": "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs",
+  "passwordChangeRequired": false,
   "roles": [
     {
       "roleId": 1,
@@ -314,7 +368,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.getById`, `UserService.getById`, `UserService.loadUser`, `UserMapper.toResponse`, `UserRoleService.rolesOf`, `RoleMapper.toSummaryResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.getById`, `UserService.getById`, `UserService.loadUser`, `UserMapper.toResponse`, `UserRoleService.rolesOf`, `UserPhotoUrls.of`, `RoleMapper.toSummaryResponse`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -357,6 +411,10 @@ Schema: `UserUpdateRequest` (application/json)
 | email | string | Yes | maxLength: 255 | Email address - البريد الإلكتروني | u2@example.com |
 | fullNameAr | string | Yes | maxLength: 200 | Full name (Arabic) - الاسم الكامل بالعربية | أحمد علي |
 | fullNameEn | string | Yes | maxLength: 200 | Full name (English) - الاسم الكامل بالإنجليزية | Ahmed Ali |
+| phone | string | No | maxLength: 30; pattern: `^$|^\+?[0-9][0-9 -]{5,28}[0-9]$` | Phone, E.164-ish (tenant-maturity D); null keeps, empty clears - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No | maxLength: 150 | Job title (Arabic); null keeps, empty clears - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No | maxLength: 150 | Job title (English); null keeps, empty clears - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No | pattern: `^$|^(ar|en)$` | Preferred language: ar or en; null keeps, empty clears - اللغة المفضلة | ar |
 
 **Request Example**
 
@@ -364,7 +422,11 @@ Schema: `UserUpdateRequest` (application/json)
 {
   "email": "u2@example.com",
   "fullNameAr": "أحمد علي",
-  "fullNameEn": "Ahmed Ali"
+  "fullNameEn": "Ahmed Ali",
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar"
 }
 ```
 
@@ -383,6 +445,13 @@ Shape: `UserResponse`
 | realm | string | No |  | Auth realm: STAFF or CUSTOMER - نطاق المصادقة | STAFF |
 | lastLoginAt | string (date-time) | No |  | Last login timestamp - تاريخ آخر دخول |  |
 | isActiveFl | boolean | No |  | Active status - حالة التفعيل | true |
+| phone | string | No |  | Phone - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No |  | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No |  | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No |  | Preferred language: ar or en - اللغة المفضلة | ar |
+| photoUrl | string | No |  | Public URL of the photo, null without one - الرابط العام للصورة | /api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+| passwordChangeRequired | boolean | No |  | Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور | false |
+| passwordChangedAt | string (date-time) | No |  | When a person last set the password - وقت آخر تعيين لكلمة المرور |  |
 | roles | array<RoleSummaryResponse> | No |  | Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور — Role assigned to a user - دور مُسند إلى مستخدم |  |
 | roles[].roleId | integer (int64) | No |  | Role identifier - معرّف الدور | 1 |
 | roles[].code | string | No |  | Role code - رمز الدور | SEC_ADMIN |
@@ -407,6 +476,12 @@ _(partial — only fields with a documented example are shown)_
   "statusCode": "ACTIVE",
   "realm": "STAFF",
   "isActiveFl": true,
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "photoUrl": "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs",
+  "passwordChangeRequired": false,
   "roles": [
     {
       "roleId": 1,
@@ -422,7 +497,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.update`, `UserService.update`, `UserService.loadUser`, `UserDomain.from`, `UserMapper.updateEntityFromRequest`, `UserMapper.toResponse`, `UserRoleService.rolesOf`, `UserDomain.assertEmailAvailable`, `new UserDomain()`, `RoleMapper.toSummaryResponse`, `UserDomain.duplicate`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.update`, `UserService.update`, `UserService.loadUser`, `UserDomain.from`, `UserMapper.updateEntityFromRequest`, `UserMapper.toResponse`, `UserRoleService.rolesOf`, `UserPhotoUrls.of`, `UserDomain.assertEmailAvailable`, `new UserDomain()`, `UserMapper.applyProfile`, `RoleMapper.toSummaryResponse`, `UserDomain.duplicate`, `UserMapper.emptyToNull`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -549,6 +624,187 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
 
+## PUT /api/v1/sec/users/{id}/password
+
+**Set a user's password**
+
+STAFF accounts only (404 SEC-404-USER otherwise), never your own (422 SEC-422-PASSWORD-SELF); ends every session of the user; by default the user must change it at the next sign-in - تعيين كلمة مرور مستخدم وإنهاء جلساته
+
+Operation ID: `setPassword`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PERM_SEC_USERS_UPDATE (found on service:UserPasswordService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+Schema: `AdminPasswordSetRequest` (application/json)
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| newPassword | string | Yes | maxLength: 200 | New raw password, hashed server-side - كلمة المرور الجديدة | N3wP@ssw0rd1 |
+| requireChangeAtNextLogin | boolean | No |  | Whether the user must change the password at the next sign-in (default true) - إلزام المستخدم بتغيير كلمة المرور عند الدخول التالي (افتراضيًا نعم) | true |
+
+**Request Example**
+
+```json
+{
+  "newPassword": "N3wP@ssw0rd1",
+  "requireChangeAtNextLogin": true
+}
+```
+
+### Response `200` — OK
+
+Shape: `PasswordChangeResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| userPk | integer (int64) | No |  | User identifier - معرّف المستخدم | 12 |
+| passwordChangeRequired | boolean | No |  | Whether the user must still change the password - هل يلزم المستخدم تغيير كلمة المرور | true |
+| passwordChangedAt | string (date-time) | No |  | When the password was set - وقت تعيين كلمة المرور |  |
+| sessionsTerminated | integer (int32) | No |  | Sessions of the user this change terminated - عدد جلسات المستخدم التي أُنهيت | 1 |
+
+**Response Example**
+
+_(partial — only fields with a documented example are shown)_
+
+```json
+{
+  "userPk": 12,
+  "passwordChangeRequired": true,
+  "sessionsTerminated": 1
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.setPassword`, `UserPasswordService.setPassword`, `UserDomain.assertNotSelfForAdminPasswordSet`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `UserDomain.passwordChangeRequiredFor`, `UserSessionTerminator.terminateOpenSessions`, `UserMapper.toPasswordChangeResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `ActiveSession.terminate`, `new PasswordPolicy()`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PASSWORD-POLICY` | SEC_400_PASSWORD_POLICY | PasswordPolicy.assertAcceptable — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | PasswordPolicy.assertAcceptable |
+| 404 NOT_FOUND | `SEC-404-USER` | SEC_404_USER | UserPasswordService.setPassword |
+| 422 UNPROCESSABLE_CONTENT | `SEC-422-PASSWORD-SELF` | SEC_422_PASSWORD_SELF | UserDomain.assertNotSelfForAdminPasswordSet |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## PUT /api/v1/sec/users/{id}/photo
+
+**Set a user's photo**
+
+STAFF accounts only; PNG, JPEG or WebP, at most 1 MB; replaces the previous photo - تعيين صورة مستخدم
+
+Operation ID: `setUserPhoto`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PERM_SEC_USERS_UPDATE (found on service:StaffProfileService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| file | string (binary) | Yes |  |  |
+
+### Response `200` — OK
+
+Shape: `ProfilePhotoResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| photoUrl | string | No |  | Public URL of the photo (no token needed) - الرابط العام للصورة | /api/v1/public/files/PLATFORM/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+
+**Response Example**
+
+```json
+{
+  "photoUrl": "/api/v1/public/files/PLATFORM/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs"
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.setUserPhoto`, `StaffProfileService.setUserPhoto`, `StaffProfileService.storePhoto`, `StaffProfileService.loadStaff`, `StaffProfileService.readBytes`, `UserDomain.assertPhotoAccepted`, `StaffProfileService.recordPhotoChange`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PHOTO-INVALID` | SEC_400_PHOTO_INVALID | UserDomain.assertPhotoAccepted — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | UserDomain.assertPhotoAccepted |
+| 404 NOT_FOUND | `SEC-404-USER` | SEC_404_USER | StaffProfileService.loadStaff |
+| 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | StaffProfileService.readBytes |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## DELETE /api/v1/sec/users/{id}/photo
+
+**Remove a user's photo**
+
+STAFF accounts only - إزالة صورة مستخدم
+
+Operation ID: `removeUserPhoto`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PERM_SEC_USERS_UPDATE (found on service:StaffProfileService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Response `204` — No Content
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.removeUserPhoto`, `StaffProfileService.removeUserPhoto`, `StaffProfileService.removePhoto`, `StaffProfileService.loadStaff`, `StaffProfileService.recordPhotoChange`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `SEC-404-USER` | SEC_404_USER | StaffProfileService.loadStaff |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
+
 ## PUT /api/v1/sec/users/{id}/roles
 
 **Assign roles to user**
@@ -603,6 +859,13 @@ Shape: `UserResponse`
 | realm | string | No |  | Auth realm: STAFF or CUSTOMER - نطاق المصادقة | STAFF |
 | lastLoginAt | string (date-time) | No |  | Last login timestamp - تاريخ آخر دخول |  |
 | isActiveFl | boolean | No |  | Active status - حالة التفعيل | true |
+| phone | string | No |  | Phone - الهاتف | +966 50 123 4567 |
+| jobTitleAr | string | No |  | Job title (Arabic) - المسمى الوظيفي بالعربية | محاسب |
+| jobTitleEn | string | No |  | Job title (English) - المسمى الوظيفي بالإنجليزية | Accountant |
+| preferredLocale | string | No |  | Preferred language: ar or en - اللغة المفضلة | ar |
+| photoUrl | string | No |  | Public URL of the photo, null without one - الرابط العام للصورة | /api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs |
+| passwordChangeRequired | boolean | No |  | Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور | false |
+| passwordChangedAt | string (date-time) | No |  | When a person last set the password - وقت آخر تعيين لكلمة المرور |  |
 | roles | array<RoleSummaryResponse> | No |  | Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور — Role assigned to a user - دور مُسند إلى مستخدم |  |
 | roles[].roleId | integer (int64) | No |  | Role identifier - معرّف الدور | 1 |
 | roles[].code | string | No |  | Role code - رمز الدور | SEC_ADMIN |
@@ -627,6 +890,12 @@ _(partial — only fields with a documented example are shown)_
   "statusCode": "ACTIVE",
   "realm": "STAFF",
   "isActiveFl": true,
+  "phone": "+966 50 123 4567",
+  "jobTitleAr": "محاسب",
+  "jobTitleEn": "Accountant",
+  "preferredLocale": "ar",
+  "photoUrl": "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs",
+  "passwordChangeRequired": false,
   "roles": [
     {
       "roleId": 1,
@@ -642,7 +911,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.assignRoles`, `UserRoleService.assign`, `UserRoleService.replaceAssignments`, `UserMapper.toResponse`, `UserRoleService.loadRequestedRoles`, `UserRoleAssignmentDomain.create`, `UserRoleService.holdsConflictingAction`, `UserRoleAssignmentMapper.toEntity`, `UserRoleService.appendRoleAudit`, `RoleMapper.toSummaryResponse`, `new UserRoleAssignmentDomain()`, `UserRoleService.conflictingCounterpartActions`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `UserController.assignRoles`, `UserRoleService.assign`, `UserRoleService.replaceAssignments`, `UserMapper.toResponse`, `UserPhotoUrls.of`, `UserRoleService.loadRequestedRoles`, `UserRoleAssignmentDomain.create`, `UserRoleService.holdsConflictingAction`, `UserRoleAssignmentMapper.toEntity`, `UserRoleService.appendRoleAudit`, `RoleMapper.toSummaryResponse`, `new UserRoleAssignmentDomain()`, `UserRoleService.conflictingCounterpartActions`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

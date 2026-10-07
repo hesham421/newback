@@ -50,6 +50,7 @@ Shape: `LoginResponse`
 | accessToken | string | No |  | Signed JWT access token - رمز الوصول الموقَّع | eyJhbGciOiJIUzI1NiJ9... |
 | tokenType | string | No |  | Token type - نوع الرمز | Bearer |
 | expiresIn | integer (int64) | No |  | Lifetime in seconds - مدة الصلاحية بالثواني | 3600 |
+| passwordChangeRequired | boolean | No |  | tenant-maturity D: the user must change the password before anything else (always false for customers) - يلزم تغيير كلمة المرور قبل أي عملية أخرى | false |
 
 **Response Example**
 
@@ -57,7 +58,8 @@ Shape: `LoginResponse`
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
   "tokenType": "Bearer",
-  "expiresIn": 3600
+  "expiresIn": 3600,
+  "passwordChangeRequired": false
 }
 ```
 
@@ -174,10 +176,12 @@ Shape: `ConfirmationResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `AuthController.completeReset`, `PasswordResetService.complete`, `PasswordResetTokenDomain.from`, `PasswordResetToken.markUsed`, `PasswordResetService.terminateOpenSessions`, `SecAuditEntries.accountEvent`, `PasswordResetTokenDomain.assertUsable`, `new PasswordResetTokenDomain()`, `ActiveSession.terminate`, `PasswordResetTokenDomain.assertUsable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `AuthController.completeReset`, `PasswordResetService.complete`, `PasswordResetTokenDomain.from`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `PasswordResetToken.markUsed`, `PasswordResetService.terminateOpenSessions`, `SecAuditEntries.accountEvent`, `PasswordResetTokenDomain.assertUsable`, `new PasswordResetTokenDomain()`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `ActiveSession.terminate`, `PasswordResetTokenDomain.assertUsable`, `new PasswordPolicy()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PASSWORD-POLICY` | SEC_400_PASSWORD_POLICY | PasswordPolicy.assertAcceptable — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | PasswordPolicy.assertAcceptable |
 | 409 CONFLICT | `SEC-409-RESET-TOKEN-INVALID` | SEC_409_RESET_TOKEN_INVALID | PasswordResetService.complete |
 | 409 CONFLICT | `SEC-409-RESET-TOKEN-INVALID` | SEC_409_RESET_TOKEN_INVALID | PasswordResetTokenDomain.assertUsable |
 

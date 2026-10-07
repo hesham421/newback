@@ -123,6 +123,7 @@ public class AuthService {
             .accessToken(jwtTokenIssuer.issue(user, tokenRef, now))
             .tokenType(TOKEN_TYPE_BEARER)
             .expiresIn(jwtTokenIssuer.getExpiresInSeconds())
+            .passwordChangeRequired(Boolean.TRUE.equals(user.getPasswordChangeRequiredFl()))
             .build());
     }
 

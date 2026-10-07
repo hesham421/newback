@@ -11,7 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * ENT-SEC-001 response — every field except {@code passwordHash}, which is never serialized
+ * ENT-SEC-001 response — every field except {@code passwordHash}, which is never serialized, and
+ * {@code photoFileId}, which is exposed as {@code photoUrl} (tenant-maturity D)
  * (POL-SEC-004). {@code roles} is populated on every user-shaped response; a user holding no
  * roles carries an empty array, never a missing key.
  */
@@ -49,6 +50,29 @@ public class UserResponse {
 
     @Schema(description = "Active status - حالة التفعيل", example = "true")
     private Boolean isActiveFl;
+
+    @Schema(description = "Phone - الهاتف", example = "+966 50 123 4567")
+    private String phone;
+
+    @Schema(description = "Job title (Arabic) - المسمى الوظيفي بالعربية", example = "محاسب")
+    private String jobTitleAr;
+
+    @Schema(description = "Job title (English) - المسمى الوظيفي بالإنجليزية", example = "Accountant")
+    private String jobTitleEn;
+
+    @Schema(description = "Preferred language: ar or en - اللغة المفضلة", example = "ar")
+    private String preferredLocale;
+
+    @Schema(description = "Public URL of the photo, null without one - الرابط العام للصورة",
+        example = "/api/v1/public/files/ACME/3q2-7wEjK9mZ0aBcDeFgHiJkLmNoPqRs")
+    private String photoUrl;
+
+    @Schema(description = "Whether the user must change the password at the next sign-in - هل يلزم المستخدم تغيير كلمة المرور", example = "false")
+    private Boolean passwordChangeRequired;
+
+    @Schema(description = "When a person last set the password - وقت آخر تعيين لكلمة المرور")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
+    private Instant passwordChangedAt;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(description = "Assigned roles; empty when the user holds none - الأدوار المُسندة، ومصفوفة فارغة إن لم يحمل المستخدم أي دور")

@@ -33,12 +33,43 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   never show one tenant's rows to another (a foreign id answers 404). New governance rule: every raw
   SQL statement on a tenant-scoped table names `TENANT_ID`.
 
+- [TM-D] SEC: an administrator sets a staff user's password (`PUT /api/v1/sec/users/{id}/password`,
+  `PERM_SEC_USERS_UPDATE`, never one's own: 422 `SEC-422-PASSWORD-SELF`); every session of the user ends and, by
+  default, the user must change it at the next sign-in. While that change is pending every STAFF call except
+  `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password` and logout answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`
+  (ADR-SEC-063). New `GET/PATCH /api/v1/sec/me` (own profile, no roles: ADR-SEC-064), `PUT /api/v1/sec/me/password`
+  (current password required: 403 `SEC-403-PASSWORD-CURRENT-INVALID`; the user's other sessions end), and photos
+  `PUT/DELETE /api/v1/sec/me/photo`, `PUT/DELETE /api/v1/sec/users/{id}/photo` (PNG/JPEG/WebP ≤ 1 MB, public URL;
+  400 `SEC-400-PHOTO-INVALID`). Migration `V16__sec_user_profile.sql` (phone, job titles, preferred locale, photo
+  reference, password-change flag and time). Audit actions `PASSWORD_SET_BY_ADMIN`, `PASSWORD_CHANGED`,
+  `PROFILE_PHOTO_CHANGED`; new core event `UserPasswordChangedEvent`.
+- [TM-D] SEC: one STAFF password policy, `erp.core.security.password-policy.*` (8..72 characters and at most 72 bytes,
+  a letter and a digit by default; a `max-length` above 72 fails startup), on user create, reset completion, admin-set, own change and a new tenant's first
+  administrator: 400 `SEC-400-PASSWORD-POLICY` naming the field.
+- [TM-D] FILE: `FileImageStoreApi` (cross-module) stores a small public image for another module: type from the
+  bytes, SVG only when allowed and free of active content, uncategorised, published under a random slug
+  (ADR-FILE-008); `FileDocumentLookupApi.publicUrls(Collection)`.
+- [TM-D] NOTIF: template `STAFF_PASSWORD_CHANGED` (`V17__notif_seed_password_changed.sql`, every tenant) e-mailed to
+  a staff user whose password was set or changed.
+- [TM-D] TENANT: `TenantLookupApi.summaryOf(tenantId)` (code and names).
+
 ### Changed
+- [TM-D] SEC: users created by an administrator (`POST /api/v1/sec/users`) must change their password at the first
+  sign-in unless the request says `requireChangeAtNextLogin: false`; the login response carries
+  `passwordChangeRequired`; user requests and responses gain `phone`, `jobTitleAr`, `jobTitleEn`,
+  `preferredLocale` (`ar` / `en`), responses also `photoUrl`, `passwordChangeRequired`, `passwordChangedAt`. On
+  `PUT /api/v1/sec/users/{id}` an absent new field keeps its value. Completing a password reset clears a pending
+  forced change. A new tenant's first administrator password must meet the policy.
 - Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
   published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.
   CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
 
 ### Fixed
+- [TM-D] A multipart request without its `file` part, a non-multipart request to a multipart endpoint, and an upload
+  above `spring.servlet.multipart.*` now answer 400 `VALIDATION_ERROR` (the part named in `fieldErrors` when known)
+  instead of 500. This also fixes the pre-existing 500 of `POST /api/v1/files` without a `file` part.
+- [TM-D] Passwords longer than BCrypt's 72 bytes (e.g. 80 ASCII characters, or 62 Arabic letters) answered 500 on every
+  password path; they now answer 400 `SEC-400-PASSWORD-POLICY` (staff and customer realms).
 - `JwtAuthenticationFilter` no longer puts a tenant left on a reused worker thread back after the
   request: the thread leaves the filter with no tenant, so a container error dispatch after
   `sendError` (which skips the filter) can no longer run under the stale tenant.

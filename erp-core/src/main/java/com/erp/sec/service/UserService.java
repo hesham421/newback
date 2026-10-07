@@ -14,6 +14,7 @@ import com.erp.events.UserCreatedEvent;
 import com.erp.events.UserStatusChangedEvent;
 import com.erp.sec.crossmodule.UserContact;
 import com.erp.sec.domain.ActiveSessionDomain;
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.dto.RoleSummaryResponse;
 import com.erp.sec.dto.UserCreateRequest;
@@ -59,6 +60,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class UserService {
 
+    /** UserCreateRequest's password field, named by SEC-400-PASSWORD-POLICY. */
+    private static final String FIELD_PASSWORD = "password";
+
     /** AUDIT_EVENT_TYPE code (CHK_SEC_AUDIT_LOG_EVENT_TYPE) written by the deactivate cascade. */
     private static final String EVENT_SESSION_TERMINATED = "SESSION_TERMINATED";
 
@@ -74,6 +78,9 @@ public class UserService {
     private final UserRoleService userRoleService;
     private final PasswordEncoder passwordEncoder;
     private final DomainEventPublisher eventPublisher;
+    // tenant-maturity D — password policy (RULE-SEC-056) and photo URLs (XM-SEC-006)
+    private final PasswordPolicyProvider passwordPolicyProvider;
+    private final UserPhotoUrls photoUrls;
 
     /**
      * API-SEC-006. SRS A6 defines no AUDIT_EVENT_TYPE for plain user creation, so no audit row is
@@ -97,13 +104,18 @@ public class UserService {
             assertMayAssignRoles();      // before the insert — a denial must write nothing at all
         }
 
+        // tenant-maturity D — RULE-SEC-056 before anything is looked up or written
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_PASSWORD, request.getPassword());
+
         boolean usernameTaken = repository.existsByUsername(request.getUsername());
         boolean emailTaken = repository.existsByEmail(request.getEmail());
 
         UserDomain.create(request.getUsername(), request.getEmail(), usernameTaken, emailTaken);
 
-        User saved = repository.save(
-            mapper.toEntity(request, passwordEncoder.encode(request.getPassword())));
+        // RULE-SEC-058: an administrator-chosen password must be changed unless the request says otherwise
+        User saved = repository.save(mapper.toEntity(request, passwordEncoder.encode(request.getPassword()),
+            UserDomain.passwordChangeRequiredFor(request.getRequireChangeAtNextLogin()), Instant.now()));
         log.info("Created User ID: {}", saved.getUserPk());
 
         // Same transaction as the insert above: an unknown role id rolls the user back too,
@@ -114,7 +126,7 @@ public class UserService {
         // erp-core step 08 — delivered to AFTER_COMMIT listeners only if this transaction commits
         eventPublisher.publish(new UserCreatedEvent(saved.getUserPk(), saved.getUsername()));
 
-        return ServiceResult.success(mapper.toResponse(saved, roles), Status.CREATED);
+        return ServiceResult.success(mapper.toResponse(saved, roles, null), Status.CREATED);
     }
 
     /** API-SEC-007 — username is immutable, so only email uniqueness is re-checked (QR-SEC-033). */
@@ -133,7 +145,7 @@ public class UserService {
         log.info("Updated User ID: {}", saved.getUserPk());
 
         return ServiceResult.success(
-            mapper.toResponse(saved, userRoleService.rolesOf(id)), Status.UPDATED);
+            mapper.toResponse(saved, userRoleService.rolesOf(id), photoUrls.of(saved)), Status.UPDATED);
     }
 
     /**
@@ -201,7 +213,7 @@ public class UserService {
 
         User entity = loadUser(id);
 
-        return ServiceResult.success(mapper.toResponse(entity, userRoleService.rolesOf(id)));
+        return ServiceResult.success(mapper.toResponse(entity, userRoleService.rolesOf(id), photoUrls.of(entity)));
     }
 
     /** API-SEC-005 — an empty match is success with empty content, never a 404 (CORE search contract). */
@@ -224,12 +236,13 @@ public class UserService {
         Page<User> result =
             repository.findAll(spec, PageableBuilder.from(commonRequest, ALLOWED_SORT_FIELDS));
 
-        // One query for the whole page — never one per row (A.2.6).
+        // One query for the whole page — never one per row (A.2.6); the photo URLs likewise (one FILE query).
         Map<Long, List<RoleSummaryResponse>> rolesByUser = userRoleService.rolesByUser(
             result.getContent().stream().map(User::getUserPk).toList());
+        Map<Long, String> photoUrlsByUser = photoUrls.of(result.getContent());
 
         return ServiceResult.success(result.map(user -> mapper.toResponse(
-            user, rolesByUser.getOrDefault(user.getUserPk(), List.of()))));
+            user, rolesByUser.getOrDefault(user.getUserPk(), List.of()), photoUrlsByUser.get(user.getUserPk()))));
     }
 
     /**

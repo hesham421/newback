@@ -1358,3 +1358,300 @@ entities, so nothing is written to `CORE_AUDIT_EVENT` (unchanged from 1.2.0).
 | NEW | Unchecking VIEW warns that the screen's other actions cascade (RULE-SEC-055), and that the screen stays in the role's menu (its endpoints answer 403) until the screen itself is unchecked (§6). To remove the menu entry, revoke the screen. |
 | NEW | For a role with `isSuper = true`, the tree shows that grants only shape its menu (§6). |
 | unchanged | No new screen, page code, permission or error code. |
+
+### 9. Package D — passwords, profile fields, photo, staff `/me`
+Change         : tenant-maturity plan package D — admin-set password, forced change, own password, profile fields, photo, staff `/me` (plan §6 D.1–D.3; D.4 is FILE's)
+Statement      : Sections 1–8 above (package G) are unchanged; §9–§17 record package D's implemented deltas.
+
+Ids continue from the highest number ever issued (after package G: REQ-SEC-081, AC-SEC-087, RULE-SEC-055,
+DBF-SEC-116, XM-SEC-005, ADR-SEC-062). Package D adds REQ-SEC-082..089, AC-SEC-088..095,
+RULE-SEC-056..062, DBF-SEC-117..123 (`P2/db-script-sec.md` 1.3.0 addendum), XM-SEC-006, ADR-SEC-063 and
+ADR-SEC-064. No ENT is added: the new fields belong to ENT-SEC-001. Migration `V16__sec_user_profile.sql`
+(the plan expected `V19`; the number is re-derived at creation time, plan §1.3 / §11).
+
+#### 9.1 Requirements (§A4) — NEW
+
+### REQ-SEC-082 — سياسة كلمة المرور / Password policy
+Pattern    : ubiquitous
+Statement  : The system shall accept a new STAFF password — on user create, password-reset completion, admin-set, self-change and the first administrator of a new tenant — only when it is `min-length`..`max-length` characters long (defaults 8..72) and at most 72 UTF-8 bytes (BCrypt's limit; review round 1) and, with the default policy, contains at least one letter and one digit; otherwise it shall refuse it with 400 `SEC-400-PASSWORD-POLICY`, naming the offending field.
+Traces     : US-SEC-001, US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-056; one policy in one place (`PasswordPolicy`, `com.erp.sec.domain`), configured by `erp.core.security.password-policy.*`
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Priority   : HIGH
+#### AC-SEC-088 — [REQ-SEC-082]
+Given the default policy
+When an administrator creates a user with password `short1` (6 characters), `abcdefgh` (no digit) or `12345678` (no letter)
+Then the system answers 400 `SEC-400-PASSWORD-POLICY` with `fieldErrors[0].field = password` and creates nothing;
+and with `Passw0rd!Tc1` the user is created;
+and a password of 73 ASCII bytes or of 62 Arabic letters (122 bytes) is refused the same way on every path (create, reset completion, admin-set, own change, tenant first administrator, customer register and reset), while exactly 72 bytes is accepted
+
+### REQ-SEC-083 — تعيين كلمة مرور مستخدم من المسؤول / Administrator sets a staff user's password
+Pattern    : event
+Statement  : When an administrator holding `PERM_SEC_USERS_UPDATE` sets the password of another STAFF user of the tenant, the system shall store the new password's hash, set `passwordChangedAt`, set `passwordChangeRequired` to the request's `requireChangeAtNextLogin` (default TRUE), terminate every open session of that user, record `PASSWORD_SET_BY_ADMIN` in the generic audit log and publish `UserPasswordChangedEvent(userId, byAdmin = true)`.
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001, ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §0 D3; RULE-SEC-057, RULE-SEC-058; ADR-SEC-063
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : HIGH
+#### AC-SEC-089 — [REQ-SEC-083]
+Given a STAFF user U with one open session, and an administrator A of the same tenant
+When A calls `PUT /api/v1/sec/users/{U}/password` with `{ newPassword }` only
+Then the system answers 200 `{ userPk, passwordChangeRequired: true, passwordChangedAt, sessionsTerminated: 1 }`, U's old token answers 401, U can log in with the new password and the login answers `passwordChangeRequired = true`;
+and when A targets their own user id the system answers 422 `SEC-422-PASSWORD-SELF`; a CUSTOMER or unknown id answers 404 `SEC-404-USER`
+
+### REQ-SEC-084 — إلزام تغيير كلمة المرور / Forced password change
+Pattern    : state-driven
+Statement  : While a STAFF user's `passwordChangeRequired` is TRUE, the system shall answer every request of that user's token with 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, except `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password` and `POST /api/v1/sec/auth/logout` (and the public paths).
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-059; enforced server-side, the client only routes (ADR-SEC-063)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 "Forced change enforcement"
+Priority   : HIGH
+#### AC-SEC-090 — [REQ-SEC-084]
+Given a user whose password was set by an administrator with the default `requireChangeAtNextLogin`
+When that user logs in and calls `GET /api/v1/sec/menu`, `GET /api/v1/sec/me` and then `PUT /api/v1/sec/me/password`
+Then the menu call answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, `/me` answers 200 with `passwordChangeRequired = true`, the change answers 200, and the same token then reaches the menu (200)
+
+### REQ-SEC-085 — تغيير المستخدم كلمة مروره / A staff user changes their own password
+Pattern    : event
+Statement  : When an authenticated STAFF user submits their current password and a new one, the system shall verify the current password, store the new hash, set `passwordChangedAt`, clear `passwordChangeRequired`, terminate the user's other open sessions (the calling session stays valid), record `PASSWORD_CHANGED` and publish `UserPasswordChangedEvent(userId, byAdmin = false)`.
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001, ENT-SEC-010
+Rationale  : RULE-SEC-060
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : HIGH
+#### AC-SEC-091 — [REQ-SEC-085]
+Given a STAFF user with two open sessions S1 and S2
+When the user calls `PUT /api/v1/sec/me/password` from S1 with a wrong `currentPassword`
+Then the system answers 403 `SEC-403-PASSWORD-CURRENT-INVALID` and changes nothing;
+and when the user repeats the call with the right current password
+Then the system answers 200 `{ sessionsTerminated: 1, passwordChangeRequired: false }`, S1 keeps working and S2 answers 401
+
+### REQ-SEC-086 — الملف الشخصي للموظف / Staff profile (`/me`)
+Pattern    : event
+Statement  : When an authenticated STAFF user requests their profile, the system shall return their own account fields, profile fields, photo URL, `passwordChangeRequired`, `lastLoginAt` and their tenant's code and names — and never their roles or permissions; when the user patches their profile, the system shall update only the supplied fields among `fullNameAr`, `fullNameEn`, `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`.
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001
+Rationale  : ADR-SEC-064 (ADR-SEC-005: the effective menu stays the only client authority); e-mail and username stay administrator-only (`PUT /users/{id}`)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : MEDIUM
+#### AC-SEC-092 — [REQ-SEC-086]
+Given a STAFF user
+When the user calls `GET /api/v1/sec/me`
+Then the payload carries `userPk`, `username`, `email`, `fullNameAr/En`, `phone`, `jobTitleAr/En`, `preferredLocale`, `photoUrl`, `passwordChangeRequired`, `lastLoginAt`, `tenant { code, nameAr, nameEn }` and no `roles` / `permissions` key;
+and `PATCH /api/v1/sec/me` with `{ "preferredLocale": "fr" }` answers 400 `VALIDATION_ERROR` (`fieldErrors[0].field = preferredLocale`), with `{ "phone": "+966 50 123 4567" }` answers 200 and changes only the phone
+
+### REQ-SEC-087 — صورة المستخدم / Profile photo
+Pattern    : event
+Statement  : When a STAFF user uploads their own photo, or an administrator holding `PERM_SEC_USERS_UPDATE` uploads the photo of another STAFF user, the system shall store it through FILE's image store as a PUBLIC document with a random slug (owner `SEC_USER` / user id, module `SEC`), point `photoFileId` at it, discard the previous photo document and record `PROFILE_PHOTO_CHANGED`; removing the photo shall discard the document and clear `photoFileId`.
+Traces     : US-SEC-001, US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-061; XM-SEC-006; ADR-FILE-008 (public, non-guessable URL)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2, D.4
+Priority   : MEDIUM
+#### AC-SEC-093 — [REQ-SEC-087]
+Given a STAFF user
+When the user uploads a PNG of 2 KB to `PUT /api/v1/sec/me/photo`
+Then the system answers 200 `{ photoUrl }` and `GET {photoUrl}` (no token) serves the PNG inline;
+and an executable, an SVG or a PNG larger than 1 MB answers 400 `SEC-400-PHOTO-INVALID` and leaves the previous photo in place;
+and a second upload answers a different `photoUrl` while the previous URL answers 404; `DELETE /api/v1/sec/me/photo` answers 204 and `/me.photoUrl` becomes null
+
+### REQ-SEC-088 — حقول الملف الشخصي في إدارة المستخدمين / Profile fields in user management and login
+Pattern    : event
+Statement  : The system shall accept `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` on user create and update (absent = unchanged, empty string = cleared), accept `requireChangeAtNextLogin` on create (default TRUE), return those fields plus `photoUrl`, `passwordChangeRequired` and `passwordChangedAt` on every user-shaped response, and return `passwordChangeRequired` on the staff login response.
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : plan §0 D4; RULE-SEC-058, RULE-SEC-062
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 (CHANGED rows)
+Priority   : MEDIUM
+#### AC-SEC-094 — [REQ-SEC-088]
+Given an administrator
+When they create a user without `requireChangeAtNextLogin` and with `preferredLocale = "ar"`, `phone = "+966501234567"`
+Then the response carries those values, `passwordChangeRequired = true` and a `passwordChangedAt`; the new user's login answers `passwordChangeRequired = true`;
+and `PUT /api/v1/sec/users/{id}` with `preferredLocale = "fr"` answers 400 `VALIDATION_ERROR`
+
+### REQ-SEC-089 — إشعار تغيير كلمة المرور / Password-change event
+Pattern    : event
+Statement  : When a STAFF password is set by an administrator or changed by its owner, the system shall publish `UserPasswordChangedEvent(userId, byAdmin)` on the core event bus after commit; NOTIF reacts by e-mailing the user the `STAFF_PASSWORD_CHANGED` template (NOTIF 1.3.0 addendum, RULE-NOTIF-023).
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001
+Rationale  : plan §6 D.3; the event carries ids only, never a password
+Source     : docs/plans/tenant-maturity-plan.md §6 D.3
+Priority   : LOW
+#### AC-SEC-095 — [REQ-SEC-089]
+Given an administrator sets a user's password
+When the transaction commits
+Then exactly one `UserPasswordChangedEvent` with that user's id and `byAdmin = true` is delivered, and a NOTIF log row with template `STAFF_PASSWORD_CHANGED`, channel `EMAIL` and that user as recipient exists; a rolled-back change publishes nothing
+
+#### 9.2 Business rules (§A5) — NEW
+
+### RULE-SEC-056 — سياسة كلمة المرور / Password policy
+Scope      : ENT-SEC-001
+Trigger    : on create / on password change (create, reset completion, admin-set, self-change, tenant first administrator)
+Statement  : A new password shall be `min-length`..`max-length` characters (8..72), at most 72 UTF-8 bytes whatever the characters (BCrypt hashes no more; an Arabic letter takes 2 bytes), and contain at least one letter (`require-letter`) and one digit (`require-digit`); properties `erp.core.security.password-policy.min-length|max-length|require-letter|require-digit`. A configured `max-length` above 72 fails startup (`@Max(72)`, review round 1).
+Data source: the request only
+Message    : ar: "كلمة المرور لا تستوفي سياسة كلمات المرور: من {0} إلى {1} حرفًا وبحد أقصى 72 بايت (الحرف العربي يشغل بايتين)، وتتضمن حرفًا ورقمًا على الأقل لحسابات الموظفين" · en: "The password does not meet the password policy: {0} to {1} characters and at most 72 bytes (a non-Latin letter takes 2 or 3), including at least one letter and one digit for staff accounts"
+Traces     : REQ-SEC-082
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Decided by : `PasswordPolicy` (`com.erp.sec.domain`, built from the properties by the services), error `SEC-400-PASSWORD-POLICY` (400). Not applied to the bootstrap admin password (`erp.core.security.bootstrap-admin-password`, operator configuration) The CUSTOMER realm gets only the byte limit (`PasswordPolicy.CUSTOMER`: 8..72 characters, ≤ 72 bytes, no composition rule; register and reset completion), because a longer password cannot be hashed (review round 1). The request DTOs keep `@Size(max = 200)` as a transport bound, so an over-long password answers this rule's code, not `VALIDATION_ERROR`.
+
+### RULE-SEC-057 — لا يعيّن المسؤول كلمة مروره بنفسه / No admin-set on oneself
+Scope      : ENT-SEC-001
+Trigger    : on admin-set password
+Statement  : The administrator-set endpoint shall refuse the caller's own account; one's own password changes through `PUT /api/v1/sec/me/password`, which asks for the current one.
+Data source: the caller's `SEC_USER` id (principal, STAFF realm) vs the path id
+Message    : ar: "لا يمكنك تعيين كلمة مرورك من هنا؛ استخدم تغيير كلمة المرور الخاصة بك" · en: "You cannot set your own password here; use your own password change"
+Traces     : REQ-SEC-083
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `UserDomain.assertNotSelfForAdminPasswordSet(...)`, error `SEC-422-PASSWORD-SELF` (422, BUSINESS_RULE_VIOLATION)
+
+### RULE-SEC-058 — كلمة مرور يحددها المسؤول تتطلب التغيير / An administrator-chosen password must be changed
+Scope      : ENT-SEC-001
+Trigger    : on create (POST /users) and on admin-set
+Statement  : A password chosen by an administrator marks the account `passwordChangeRequired = TRUE` unless the request says `requireChangeAtNextLogin = false`; only the owner's self-change or a completed password reset clears the flag. Accounts created by tenant provisioning, sign-up approval and the bootstrap runner are not flagged.
+Data source: request `requireChangeAtNextLogin` (null = TRUE)
+Message    : — (state, no message)
+Traces     : REQ-SEC-083, REQ-SEC-088
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 ("decision row"), §9 (plan ADR-SEC-039)
+Decided by : `UserDomain.passwordChangeRequiredFor(Boolean requested)`; ADR-SEC-063
+
+### RULE-SEC-059 — بوابة تغيير كلمة المرور / Forced-change gate
+Scope      : every STAFF endpoint
+Trigger    : on request (after authentication)
+Statement  : While the caller's `PASSWORD_CHANGE_REQUIRED_FL` is TRUE, only `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password`, `POST /api/v1/sec/auth/logout` and the public paths are served; every other request answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` in the standard error envelope.
+Data source: the `SEC_USER` row `JwtAuthenticationFilter` already loads for the token (no extra query, no token claim)
+Message    : ar: "يجب تغيير كلمة المرور قبل المتابعة" · en: "You must change your password before you continue"
+Traces     : REQ-SEC-084
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `PasswordChangeRequiredFilter` (staff chain, after `RealmEnforcementFilter`), flag carried on the authentication details (`AuthRealm.passwordChangeRequired`); ADR-SEC-063
+
+### RULE-SEC-060 — تغيير كلمة المرور يتطلب الحالية / Self-change needs the current password
+Scope      : ENT-SEC-001, ENT-SEC-010
+Trigger    : on self-change
+Statement  : The current password must match the stored hash; then the new password replaces it, the flag clears, and every other open session of the user is terminated (the calling session stays).
+Data source: ENT-SEC-001.passwordHash; ENT-SEC-010 (open sessions of the user, minus the caller's `tokenRef` = token `jti`)
+Message    : ar: "كلمة المرور الحالية غير صحيحة" · en: "The current password is incorrect"
+Traces     : REQ-SEC-085
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `UserDomain.assertCurrentPasswordMatches(...)` on the service's credential check (`PasswordEncoder.matches`, as at login — PLATFORM-STD ADR-SEC-002), error `SEC-403-PASSWORD-CURRENT-INVALID` (403)
+
+### RULE-SEC-061 — صورة المستخدم / Profile photo
+Scope      : ENT-SEC-001
+Trigger    : on photo upload / removal
+Statement  : A profile photo is a PNG, JPEG or WebP image (detected from its bytes, SVG refused) of 1 byte to 1 MB (1 048 576 bytes); a user has at most one photo; replacing or removing it discards the previous document (its public URL answers 404 at once).
+Data source: FILE's image-store validation result (RULE-FILE-008)
+Message    : ar: "يجب أن تكون الصورة بصيغة PNG أو JPEG أو WebP وبحجم لا يتجاوز 1 ميغابايت" · en: "The photo must be a PNG, JPEG or WebP image of at most 1 MB"
+Traces     : REQ-SEC-087
+Source     : docs/plans/tenant-maturity-plan.md §6 D.4
+Decided by : `UserDomain` — `PHOTO_TYPES`, `PHOTO_MAX_BYTES` (handed to FILE's image store) and `assertPhotoAccepted(...)` (a rejection → `SEC-400-PHOTO-INVALID` 400, `fieldErrors[0].field = file`); one Domain object per entity (A.0.7)
+
+### RULE-SEC-062 — اللغة المفضلة / Preferred locale
+Scope      : ENT-SEC-001
+Trigger    : on create / update / patch
+Statement  : `preferredLocale` is `ar`, `en` or empty (none); anything else is refused by validation (400 `VALIDATION_ERROR`) and by `CHK_SEC_USER_LOCALE`.
+Data source: request
+Message    : the shared `{validation.invalid}` message
+Traces     : REQ-SEC-086, REQ-SEC-088
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Decided by : DTO `@Pattern` + database CHECK
+
+#### 9.3 ENT-SEC-001 User — CHANGED (fields)
+| Kind | Field | Logical type | Required | Notes | Label-ar | Label-en |
+|---|---|---|---|---|---|---|
+| NEW | phone | text (≤ 30) | no | E.164-ish: optional `+`, digits, spaces, hyphens, 7..30 characters (`^\+?[0-9][0-9 -]{5,28}[0-9]$`) | الهاتف | Phone |
+| NEW | jobTitleAr / jobTitleEn | text (≤ 150) | no | bilingual like every label | المسمى الوظيفي (عربي/إنجليزي) | Job title (Arabic/English) |
+| NEW | preferredLocale | text (≤ 5) | no | `ar` / `en` (RULE-SEC-062); the frontend applies it at login | اللغة المفضلة | Preferred language |
+| NEW | photoFileId | number | no | soft reference to `FILE_DOCUMENT.ID` (XM-SEC-006), never exposed; clients get `photoUrl` | صورة المستخدم | Photo |
+| NEW | passwordChangeRequired | flag | yes (default FALSE) | RULE-SEC-058/059 | يلزم تغيير كلمة المرور | Password change required |
+| NEW | passwordChangedAt | date-time | no | set whenever a person sets a usable password (create, reset completion, admin-set, self-change, tenant first administrator, bootstrap admin) | تاريخ تغيير كلمة المرور | Password changed at |
+
+#### 9.4 SCR-REQ-SEC-004 Users — CHANGED
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | B1 Traces | + REQ-SEC-083, REQ-SEC-087, REQ-SEC-088 |
+| CHANGED | B3 Input | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` on the entry form; create also `requireChangeAtNextLogin` (default on); detail: "Set password" (second-level form) and "Photo" (upload / remove) |
+| unchanged | B4 Access | page code `SEC_USERS`; set password and photo are UPDATE (`PERM_SEC_USERS_UPDATE`) |
+
+B5 — API expectations, rows added:
+| Operation | Verb | Path | Inputs | Outputs | RULEs | Traces (REQ) |
+|---|---|---|---|---|---|---|
+| set password | PUT | /api/v1/sec/users/{id}/password | newPassword, requireChangeAtNextLogin | confirmation (flag, sessions ended) | RULE-SEC-056/057/058 | REQ-SEC-083 |
+| set photo | PUT | /api/v1/sec/users/{id}/photo | multipart `file` | photo URL | RULE-SEC-061 | REQ-SEC-087 |
+| remove photo | DELETE | /api/v1/sec/users/{id}/photo | — | 204 | RULE-SEC-061 | REQ-SEC-087 |
+
+No new SEC screen, page code or permission: the staff "my profile" and "change password" pages are
+authentication-only routes of the frontend (plan §8 F1 decision row, P2_5 addendum of the frontend).
+
+#### 9.5 Endpoints
+| Kind | Method | Path | Permission | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) |
+|---|---|---|---|---|---|---|
+| NEW | PUT | `/api/v1/sec/users/{id}/password` | `PERM_SEC_USERS_UPDATE` | `AdminPasswordSetRequest { newPassword (required, ≤ 200), requireChangeAtNextLogin (Boolean, null = true) }` | 200 `PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }` | 404 · `SEC-404-USER` (unknown or CUSTOMER id); 422 · `SEC-422-PASSWORD-SELF`; 400 · `SEC-400-PASSWORD-POLICY`; 400 · `VALIDATION_ERROR`; 403 · `SEC-403-FORBIDDEN`; 401 · `SEC-401-INVALID-CREDENTIALS` |
+| NEW | GET | `/api/v1/sec/me` | `isAuthenticated()` — STAFF chain (a customer token: 403 `REALM_MISMATCH`) | — | 200 `StaffProfileResponse { userPk, username, email, fullNameAr, fullNameEn, phone, jobTitleAr, jobTitleEn, preferredLocale, photoUrl, passwordChangeRequired, lastLoginAt, tenant { code, nameAr, nameEn } }` — no roles, no permissions | 401 |
+| NEW | PATCH | `/api/v1/sec/me` | same | `StaffProfileUpdateRequest { fullNameAr, fullNameEn, phone, jobTitleAr, jobTitleEn, preferredLocale }` — null = unchanged; empty string clears `phone`, `jobTitleAr/En`, `preferredLocale`; the names cannot be blank | 200 `StaffProfileResponse` | 400 · `VALIDATION_ERROR`; 401 |
+| NEW | PUT | `/api/v1/sec/me/password` | same | `PasswordChangeRequest { currentPassword, newPassword }` (both required, ≤ 200) | 200 `PasswordChangeResponse` | 403 · `SEC-403-PASSWORD-CURRENT-INVALID`; 400 · `SEC-400-PASSWORD-POLICY`; 400 · `VALIDATION_ERROR`; 401 |
+| NEW | PUT | `/api/v1/sec/me/photo` | same | multipart part `file` | 200 `ProfilePhotoResponse { photoUrl }` | 400 · `SEC-400-PHOTO-INVALID`; 401 |
+| NEW | DELETE | `/api/v1/sec/me/photo` | same | — | 204 (also when no photo is set) | 401 |
+| NEW | PUT | `/api/v1/sec/users/{id}/photo` | `PERM_SEC_USERS_UPDATE` | multipart part `file` | 200 `ProfilePhotoResponse { photoUrl }` | 404 · `SEC-404-USER`; 400 · `SEC-400-PHOTO-INVALID`; 403 · `SEC-403-FORBIDDEN`; 401 |
+| NEW | DELETE | `/api/v1/sec/users/{id}/photo` | `PERM_SEC_USERS_UPDATE` | — | 204 | 404 · `SEC-404-USER`; 403; 401 |
+| CHANGED | POST | `/api/v1/sec/users` | as before | `UserCreateRequest` + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` (optional), `requireChangeAtNextLogin` (Boolean, null = true) | `UserResponse` (below) | + 400 · `SEC-400-PASSWORD-POLICY` |
+| CHANGED | PUT | `/api/v1/sec/users/{id}` | as before | `UserUpdateRequest` + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` (null = unchanged, empty string = cleared) | `UserResponse` | as before |
+| CHANGED | GET / POST search / PUT / POST | every `UserResponse` | as before | — | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`, `photoUrl` (nullable), `passwordChangeRequired`, `passwordChangedAt` | — |
+| CHANGED | POST | `/api/v1/sec/auth/login` | public | — | `LoginResponse` + `passwordChangeRequired` (the customer login answers `false`, customers are never flagged) | — |
+| CHANGED | POST | `/api/v1/sec/auth/password-reset/complete` | public | — | unchanged | + 400 · `SEC-400-PASSWORD-POLICY`; completing a reset clears `passwordChangeRequired` and sets `passwordChangedAt` |
+| CHANGED (filter) | any | every STAFF-chain path except the three of RULE-SEC-059 and the public paths | — | — | — | + 403 · `SEC-403-PASSWORD-CHANGE-REQUIRED` while the caller's flag is set |
+
+New error codes (`SecErrorCodes`, both bundles): `SEC-400-PASSWORD-POLICY` (400, args min, max),
+`SEC-422-PASSWORD-SELF` (422), `SEC-403-PASSWORD-CURRENT-INVALID` (403),
+`SEC-403-PASSWORD-CHANGE-REQUIRED` (403), `SEC-400-PHOTO-INVALID` (400). Policy and photo errors also
+carry `fieldErrors[0]` naming the field (`password`, `newPassword`, `adminPassword`, `file`).
+
+Order of checks — admin-set: user (`SEC-404-USER`) → self (`SEC-422-PASSWORD-SELF`) → policy → write.
+Self-change: current password (`SEC-403-PASSWORD-CURRENT-INVALID`) → policy → write. Photo: user (404)
+→ image validation (`SEC-400-PHOTO-INVALID`) → store new → discard previous → write.
+
+#### 9.6 Sessions, audit, events
+| Operation | Sessions | `SEC_AUDIT_LOG` | `CORE_AUDIT_EVENT` (AuditApi action) | Event |
+|---|---|---|---|---|
+| admin-set password | every open session of the target terminated | one `SESSION_TERMINATED` per session (existing event type) | `PASSWORD_SET_BY_ADMIN` (actor = administrator, entity `SEC_USER` / target id) | `UserPasswordChangedEvent(userId, byAdmin = true)` |
+| self-change | the user's other open sessions terminated (caller's own kept) | one `SESSION_TERMINATED` per session | `PASSWORD_CHANGED` (actor = the user) | `UserPasswordChangedEvent(userId, byAdmin = false)` |
+| photo set / removed (own or another's) | — | — | `PROFILE_PHOTO_CHANGED` (actor = caller, entity `SEC_USER` / target id, summary "set" / "removed") | — |
+| PATCH `/me`, PUT `/users/{id}` | — | — | `UPDATE` rows of the `@Audited` User entity (unchanged mechanism) | — |
+No secret is audited: the summaries name no password, and the global denylist drops every field whose
+name contains `password` (`passwordChangeRequired`, `passwordChangedAt` included) from `CHANGES`.
+`UserPasswordChangedEvent` (`com.erp.events`, 11th core event) carries `userId` and `byAdmin` only.
+
+#### 9.7 Cross-module (XM)
+| Kind | Id | From → to | What | Kind of link |
+|---|---|---|---|---|
+| NEW | XM-SEC-006 | SEC → FILE | `SEC_USER.PHOTO_FILE_ID` → `FILE_DOCUMENT.ID`, written through `FileImageStoreApi` (XM-FILE-002: `storePublicImage`, `discard`), URLs read through `FileDocumentLookupApi.publicUrl` / `publicUrls` (XM-FILE-001, `publicUrls` NEW) | SOFT reference, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` convention, XM-NOTIF-002) |
+| CHANGED (consumed) | — | SEC → TENANT | `TenantLookupApi.summaryOf(tenantId)` (XM-TENANT-001, CHANGED in the TENANT 1.3.0 addendum) for `/me.tenant` | in-core API |
+| NEW (consumed by) | — | NOTIF ← events | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail (NOTIF RULE-NOTIF-023, XM-NOTIF-003) | event bus |
+| CHANGED (consumed by) | — | TENANT → SEC | tenant provisioning's first administrator password now passes RULE-SEC-056 inside `SecTenantProvisioningContributor` (400 `SEC-400-PASSWORD-POLICY`, field `adminPassword`) | provisioning SPI |
+
+#### 9.8 Decisions
+| Kind | ADR | Decision |
+|---|---|---|
+| NEW | ADR-SEC-063 (plan name ADR-SEC-039) | An administrator-chosen password forces a change at next login, default TRUE, enforced server-side by a filter that reads the flag from the user row already loaded per request — `governance/analysis/decisions/SEC/ADR-SEC-063.md` |
+| NEW | ADR-SEC-064 (plan name ADR-SEC-040) | The staff `/me` payload carries no roles or permissions — `governance/analysis/decisions/SEC/ADR-SEC-064.md` |
+
+#### 9.9 Behaviour notes and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| CHANGED (plan) | Plan: admin-set answers `UserStatusResponse`. Implemented: `PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }`, shared with the self-change (whose result the plan left open): a password change does not change `statusCode`, and the session count is what the administrator needs to know (the same fact B's tenant admin-reset returns). |
+| NEW (decision) | On `PUT /users/{id}` the four new optional fields follow "absent = unchanged, empty string = cleared", like the PATCH: a client built before 1.3.0 that does not send them never wipes values the user set on `/me`. |
+| NEW (scope) | The policy also guards the tenant's first administrator (`POST /api/v1/platform/tenants`, field `adminPassword`), which is a STAFF user create; the CUSTOMER realm gets only the 72-byte limit (review round 1), not the composition rule (out of the plan's list). |
+| NEW (scope) | The bootstrap admin password (`erp.core.security.bootstrap-admin-password`) is not policy-checked and not flagged (operator configuration at startup); `Test1234` meets the default policy anyway. |
+| NEW (open) | The policy has no history / reuse rule: a forced change may set the same password again. Recorded for a later version. |
+| NEW (open, review round 1) | The current-password check of `PUT /me/password` is not throttled (a stolen token could guess the current password), and admin-set has no super-role guard (an administrator holding `PERM_SEC_USERS_UPDATE` may set a super-role user's password). Recorded for a later version; not implemented. |
+| NEW (open, review round 1) | A bootstrap admin password above 72 bytes fails startup inside BCrypt (operator configuration; not policy-checked). |
+| NEW (note) | The session-termination loop of admin-set mirrors `UserService.deactivate` and `PasswordResetService.complete` (one `SESSION_TERMINATED` row per session). |
+
+#### 9.10 Frontend impact (read by the frontend repository — plan §8 F1)
+| Kind | Item |
+|---|---|
+| NEW | `passwordChangeRequired` on the login response and on `/me`: route to the change-password page; every other STAFF call answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` until `PUT /me/password` succeeds (the same token keeps working afterwards). |
+| NEW | Endpoints of §9.5 for the users screen (set password, photo) and the authentication-only "my profile" route; the profile carries no roles (ADR-SEC-064) — the menu stays the authority. |
+| NEW | Error codes `SEC-400-PASSWORD-POLICY`, `SEC-422-PASSWORD-SELF`, `SEC-403-PASSWORD-CURRENT-INVALID`, `SEC-403-PASSWORD-CHANGE-REQUIRED`, `SEC-400-PHOTO-INVALID` (messages in both languages). |
+| NEW | `photoUrl` is a public URL (no token); a replaced photo gets a new URL, so it can be cached freely. |
+| unchanged | No new page code, permission or menu entry. |

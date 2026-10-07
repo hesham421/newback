@@ -1,6 +1,7 @@
 package com.erp.autoconfigure;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.time.Duration;
@@ -115,6 +116,38 @@ public class ErpCoreProperties {
 
         /** Brute-force protection of the customer login (bucket4j, keyed {@code tenant:realm:username}). */
         private final LoginRateLimit customerLoginRateLimit = new LoginRateLimit();
+
+        /** tenant-maturity D — the STAFF password policy (RULE-SEC-056). */
+        @Valid
+        private final PasswordPolicySettings passwordPolicy = new PasswordPolicySettings();
+    }
+
+    /**
+     * tenant-maturity D — {@code erp.core.security.password-policy.*}: what a STAFF password must meet
+     * wherever a person chooses one. The {@code SEC-400-PASSWORD-POLICY} message names the default
+     * composition; an application that disables a requirement overrides that key in its own bundle.
+     */
+    @Getter
+    @Setter
+    public static class PasswordPolicySettings {
+
+        /** Fewest characters (code points). */
+        @Positive
+        private int minLength = 8;
+
+        /**
+         * Most characters (code points), at most 72: BCrypt hashes no more than 72 bytes, so a larger value
+         * fails startup (and the policy always refuses more than 72 UTF-8 bytes, whatever the characters).
+         */
+        @Positive
+        @Max(value = 72, message = "erp.core.security.password-policy.max-length must be at most 72: BCrypt hashes at most 72 bytes")
+        private int maxLength = 72;
+
+        /** At least one letter (any script). */
+        private boolean requireLetter = true;
+
+        /** At least one digit. */
+        private boolean requireDigit = true;
     }
 
     /** Login attempts allowed per key and period (erp-core step 06). */

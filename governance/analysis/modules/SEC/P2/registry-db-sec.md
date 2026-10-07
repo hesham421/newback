@@ -93,3 +93,24 @@ Lookups
 XM index
 SEC is no longer free of outbound references: every `TENANT_ID` is a HARD FK to `CORE_TENANT` (tenant
 module, no analysis folder; see `analysis/modules/SEC/P0/platform-summary.md` addendum). No XM id assigned.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — `SEC_USER` profile and password facts (package G added no schema)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-sec.md` → "Implementation Addendum — erp-core 1.3.0".
+
+Tables
+| Table | ENT | Delta | Migration |
+|---|---|---|---|
+| SEC_USER | ENT-SEC-001 | + `PHONE VARCHAR(30)`, `JOB_TITLE_AR VARCHAR(150)`, `JOB_TITLE_EN VARCHAR(150)`, `PREFERRED_LOCALE VARCHAR(5)`, `PHOTO_FILE_ID BIGINT`, `PASSWORD_CHANGE_REQUIRED_FL BOOLEAN NOT NULL DEFAULT FALSE`, `PASSWORD_CHANGED_AT TIMESTAMPTZ` (DBF-SEC-117..123); + `CHK_SEC_USER_LOCALE` | V16__sec_user_profile.sql |
+
+Lookups: unchanged (`PREFERRED_LOCALE` is a CHECK-constrained value set, `ar` / `en`).
+
+XM index
+| XM id | Direction | Target | Kind |
+|---|---|---|---|
+| XM-SEC-006 | SEC → FILE | `FILE_DOCUMENT.ID` from `SEC_USER.PHOTO_FILE_ID` | SOFT-READ, no FK |
+
+"P2 1.3.0: SEC — 13 tables (+1 V11 table), 123 DBF, 1 XM (XM-SEC-006)"

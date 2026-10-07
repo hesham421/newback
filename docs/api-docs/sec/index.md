@@ -39,6 +39,7 @@ Read from `GlobalExceptionHandler.java`: the expression each handler passes to `
 | handleLocalizedException | LocalizedException | the thrown Status's HTTP status | the thrown error code | `detail.field()` when `detail.field()` is non-null, otherwise `detail.errorCode()` | `detail.field() != null ? detail.field() : detail.errorCode()` |
 | handleValidation | MethodArgumentNotValidException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `fe.getField()` | `fe.getField()` |
 | handleRequestParameter | MissingServletRequestParameterException, MethodArgumentTypeMismatchException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `parameterName` | `parameterName` |
+| handleMultipart | MissingServletRequestPartException, MultipartException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `partName` | `partName` |
 
 ## Pagination Envelope
 
@@ -97,7 +98,7 @@ A code's value is also its i18n message key, so each row carries the message the
 |---|---|---|---|---|---|---|---|---|
 | SEC_401_INVALID_CREDENTIALS | `SEC-401-INVALID-CREDENTIALS` | exception\SecErrorCodes.java | Invalid credentials | بيانات الدخول غير صحيحة | UNAUTHORIZED | 401 UNAUTHORIZED | 2 endpoint(s) — see their Business Responses | PLATFORM-STD (ADR-SEC-002) — wrong/unknown credentials. API: API-SEC-001. HTTP 401. |
 | SEC_409_USER_DUP | `SEC-409-USER-DUP` | exception\SecErrorCodes.java | Username or email already in use | اسم المستخدم أو البريد الإلكتروني مستخدم بالفعل | ALREADY_EXISTS | 409 CONFLICT | 2 endpoint(s) — see their Business Responses | PLATFORM-STD (uniqueness) — duplicate username/email. API: API-SEC-006, 007. HTTP 409. |
-| SEC_404_USER | `SEC-404-USER` | exception\SecErrorCodes.java | User not found | المستخدم غير موجود | NOT_FOUND | 404 NOT_FOUND | 7 endpoint(s) — see their Business Responses | PLATFORM-STD (not found) — unknown user id. API: API-SEC-007, 008, 009, 010. HTTP 404. |
+| SEC_404_USER | `SEC-404-USER` | exception\SecErrorCodes.java | User not found | المستخدم غير موجود | NOT_FOUND | 404 NOT_FOUND | 15 endpoint(s) — see their Business Responses | PLATFORM-STD (not found) — unknown user id. API: API-SEC-007, 008, 009, 010. HTTP 404. |
 | SEC_409_SOD_CONFLICT | `SEC-409-SOD-CONFLICT` | exception\SecErrorCodes.java | This user already holds a conflicting action | هذا المستخدم يملك إجراءً متعارضًا بالفعل | CONFLICT | 409 CONFLICT | 3 endpoint(s) — see their Business Responses | RULE-SEC-005 — conflicting action pair on one user. API: API-SEC-008, 017. HTTP 409. |
 | SEC_404_ROLE | `SEC-404-ROLE` | exception\SecErrorCodes.java | Role not found | الدور غير موجود | NOT_FOUND | 404 NOT_FOUND | 10 endpoint(s) — see their Business Responses | PLATFORM-STD (not found) — unknown role id. API: API-SEC-008, 014, 016, 017; the screen and action revokes (REQ-SEC-080/081). HTTP 404. |
 | SEC_409_INVALID_TRANSITION | `SEC-409-INVALID-TRANSITION` | exception\SecErrorCodes.java | This transition is not allowed from the current status | لا يمكن تنفيذ هذا الانتقال من الحالة الحالية | CONFLICT | 409 CONFLICT | 2 endpoint(s) — see their Business Responses | PLATFORM-STD (lifecycle) — transition not allowed from current status. API: API-SEC-010, 011. HTTP 409. |
@@ -120,13 +121,18 @@ A code's value is also its i18n message key, so each row carries the message the
 | SEC_409_SIGNUP_DUP | `SEC-409-SIGNUP-DUP` | exception\SecErrorCodes.java | This email is already in use | البريد الإلكتروني مستخدم بالفعل | ALREADY_EXISTS | 409 CONFLICT | 1 endpoint(s) — see their Business Responses | PLATFORM-STD (uniqueness) — duplicate pending/registered email. API: API-SEC-002. HTTP 409. |
 | SEC_404_SESSION | `SEC-404-SESSION` | exception\SecErrorCodes.java | Session not found | الجلسة غير موجودة | NOT_FOUND | 404 NOT_FOUND | 1 endpoint(s) — see their Business Responses | PLATFORM-STD (not found) — unknown session id. API: API-SEC-026. HTTP 404. |
 | SEC_409_ALREADY_TERMINATED | `SEC-409-ALREADY-TERMINATED` | exception\SecErrorCodes.java | This session is already terminated | هذه الجلسة منتهية بالفعل | CONFLICT | 409 CONFLICT | 2 endpoint(s) — see their Business Responses | PLATFORM-STD (lifecycle) — session already terminated. API: API-SEC-026. HTTP 409. |
-| SEC_403_FORBIDDEN | `SEC-403-FORBIDDEN` | exception\SecErrorCodes.java | You are not authorized to perform this action | غير مصرح بهذا الإجراء | FORBIDDEN | 403 FORBIDDEN | 33 endpoint(s) — see their Other Possible Responses, via SecForbiddenAdvisor | PLATFORM-STD (RULE-SEC-007 + REQ-SEC-033, CORE interceptor) — missing module/screen/action grant. API: every secured API. HTTP 403. |
+| SEC_403_FORBIDDEN | `SEC-403-FORBIDDEN` | exception\SecErrorCodes.java | You are not authorized to perform this action | غير مصرح بهذا الإجراء | FORBIDDEN | 403 FORBIDDEN | 41 endpoint(s) — see their Other Possible Responses, via SecForbiddenAdvisor | PLATFORM-STD (RULE-SEC-007 + REQ-SEC-033, CORE interceptor) — missing module/screen/action grant. API: every secured API. HTTP 403. |
 | SEC_400_INVALID_SORT | `SEC-400-INVALID-SORT` | exception\SecErrorCodes.java | Unrecognized sort field | حقل الترتيب غير معروف | VALIDATION_ERROR | 400 BAD_REQUEST | 6 endpoint(s) — see their Business Responses | PLATFORM-STD (search contract) — unrecognized sort field. API: every search API. HTTP 400. |
 | REALM_MISMATCH | `REALM_MISMATCH` | exception\SecErrorCodes.java | This token belongs to another sign-in realm and cannot be used here | هذا الرمز يخص نطاق دخول آخر ولا يمكن استخدامه هنا |  |  | no throw site naming it in module source | A token of one realm used on the other realm's endpoints (staff ↔ customer). HTTP 403. |
 | CUSTOMER_EMAIL_TAKEN | `CUSTOMER_EMAIL_TAKEN` | exception\SecErrorCodes.java | A customer account with this e-mail address already exists | يوجد حساب عميل بهذا البريد الإلكتروني مسبقًا | ALREADY_EXISTS | 409 CONFLICT | 1 endpoint(s) — see their Business Responses | Customer registration with an e-mail that already has a customer account in the tenant. HTTP 409. |
 | CUSTOMER_NOT_VERIFIED | `CUSTOMER_NOT_VERIFIED` | exception\SecErrorCodes.java | Verify your e-mail address before signing in | أكّد بريدك الإلكتروني قبل تسجيل الدخول | FORBIDDEN | 403 FORBIDDEN | 1 endpoint(s) — see their Business Responses | Customer login before the e-mail was verified. HTTP 403. |
 | VERIFY_TOKEN_INVALID | `VERIFY_TOKEN_INVALID` | exception\SecErrorCodes.java | The verification link is invalid, expired or already used | رابط التأكيد غير صالح أو منتهي الصلاحية أو مستخدم مسبقًا | CONFLICT | 409 CONFLICT | 1 endpoint(s) — see their Business Responses | Unknown, expired or already used verification (or customer reset) token. HTTP 409. |
 | CUSTOMER_LOGIN_RATE_LIMITED | `CUSTOMER_LOGIN_RATE_LIMITED` | exception\SecErrorCodes.java | Too many sign-in attempts. Please wait a minute and try again | محاولات دخول كثيرة. يرجى الانتظار دقيقة ثم المحاولة مجددًا | TOO_MANY_REQUESTS | 429 TOO_MANY_REQUESTS | 1 endpoint(s) — see their Business Responses | Too many customer login attempts for one tenant:realm:username key (bucket4j). HTTP 429. |
+| SEC_400_PASSWORD_POLICY | `SEC-400-PASSWORD-POLICY` | exception\SecErrorCodes.java | The password does not meet the password policy: {0} to {1} characters and at most 72 bytes (a non-Latin letter takes 2 or 3), including at least one letter and one digit for staff accounts | كلمة المرور لا تستوفي سياسة كلمات المرور: من {0} إلى {1} حرفًا وبحد أقصى 72 بايت (الحرف العربي يشغل بايتين)، وتتضمن حرفًا ورقمًا على الأقل لحسابات الموظفين |  |  | 6 endpoint(s) — see their Business Responses | RULE-SEC-056 (tenant-maturity D) — a new STAFF password misses the password policy; args min, max. API: create user, reset completion, admin-set, self-change, tenant create. HTTP 400. |
+| SEC_422_PASSWORD_SELF | `SEC-422-PASSWORD-SELF` | exception\SecErrorCodes.java | You cannot set your own password here; use your own password change | لا يمكنك تعيين كلمة مرورك من هنا؛ استخدم تغيير كلمة المرور الخاصة بك | BUSINESS_RULE_VIOLATION | 422 UNPROCESSABLE_CONTENT | 1 endpoint(s) — see their Business Responses | RULE-SEC-057 — an administrator targets their own account with the admin-set endpoint. HTTP 422. |
+| SEC_403_PASSWORD_CURRENT_INVALID | `SEC-403-PASSWORD-CURRENT-INVALID` | exception\SecErrorCodes.java | The current password is incorrect | كلمة المرور الحالية غير صحيحة | FORBIDDEN | 403 FORBIDDEN | 1 endpoint(s) — see their Business Responses | RULE-SEC-060 — the self-change's current password does not match. HTTP 403. |
+| SEC_403_PASSWORD_CHANGE_REQUIRED | `SEC-403-PASSWORD-CHANGE-REQUIRED` | exception\SecErrorCodes.java | You must change your password before you continue | يجب تغيير كلمة المرور قبل المتابعة |  |  | no throw site naming it in module source | RULE-SEC-059 — the caller must change an administrator-chosen password first. HTTP 403. |
+| SEC_400_PHOTO_INVALID | `SEC-400-PHOTO-INVALID` | exception\SecErrorCodes.java | The photo must be a PNG, JPEG or WebP image of at most 1 MB | يجب أن تكون الصورة بصيغة PNG أو JPEG أو WebP وبحجم لا يتجاوز 1 ميغابايت |  |  | 2 endpoint(s) — see their Business Responses | RULE-SEC-061 — the uploaded photo is no PNG / JPEG / WebP of at most 1 MB. HTTP 400. |
 | VALIDATION_ERROR | `VALIDATION_ERROR` | com\erp\common\web\GlobalExceptionHandler.java | Validation failed | فشل التحقق من البيانات |  | 400 BAD_REQUEST | shared handler (any endpoint) | — |
 | METHOD_NOT_ALLOWED | `METHOD_NOT_ALLOWED` | com\erp\common\web\GlobalExceptionHandler.java | The HTTP method is not supported for this resource | طريقة الطلب غير مدعومة لهذا المورد |  | 405 METHOD_NOT_ALLOWED | shared handler (any endpoint) | — |
 | DATA_INTEGRITY_VIOLATION | `DATA_INTEGRITY_VIOLATION` | com\erp\common\web\GlobalExceptionHandler.java | The request could not be completed because it violates a data constraint | تعذّر إتمام الطلب لأنه يخالف قيدًا على البيانات |  | 409 CONFLICT | shared handler (any endpoint) | — |
@@ -214,6 +220,16 @@ Shared, module-independent mapping every business error code's `Status` resolves
 | POST | `/api/v1/sec/registry/screens` | Register a screen | [registerScreen](endpoints/module-registry.md#post-apiv1secregistryscreens) |
 | POST | `/api/v1/sec/registry/search` | Search the registry | [search_5](endpoints/module-registry.md#post-apiv1secregistrysearch) |
 
+### My Profile
+
+| Method | Path | Summary | Doc |
+|---|---|---|---|
+| GET | `/api/v1/sec/me` | Get my profile | [getMyProfile](endpoints/my-profile.md#get-apiv1secme) |
+| PATCH | `/api/v1/sec/me` | Update my profile | [updateMyProfile](endpoints/my-profile.md#patch-apiv1secme) |
+| PUT | `/api/v1/sec/me/password` | Change my password | [changeMyPassword](endpoints/my-profile.md#put-apiv1secmepassword) |
+| PUT | `/api/v1/sec/me/photo` | Set my photo | [setMyPhoto](endpoints/my-profile.md#put-apiv1secmephoto) |
+| DELETE | `/api/v1/sec/me/photo` | Remove my photo | [removeMyPhoto](endpoints/my-profile.md#delete-apiv1secmephoto) |
+
 ### Role Grants
 
 | Method | Path | Summary | Doc |
@@ -258,4 +274,7 @@ Shared, module-independent mapping every business error code's `Status` resolves
 | PUT | `/api/v1/sec/users/{id}` | Update user | [update_1](endpoints/users.md#put-apiv1secusersid) |
 | PATCH | `/api/v1/sec/users/{id}` | Reactivate user | [reactivate](endpoints/users.md#patch-apiv1secusersid) |
 | DELETE | `/api/v1/sec/users/{id}` | Deactivate user | [deactivate_1](endpoints/users.md#delete-apiv1secusersid) |
+| PUT | `/api/v1/sec/users/{id}/password` | Set a user's password | [setPassword](endpoints/users.md#put-apiv1secusersidpassword) |
+| PUT | `/api/v1/sec/users/{id}/photo` | Set a user's photo | [setUserPhoto](endpoints/users.md#put-apiv1secusersidphoto) |
+| DELETE | `/api/v1/sec/users/{id}/photo` | Remove a user's photo | [removeUserPhoto](endpoints/users.md#delete-apiv1secusersidphoto) |
 | PUT | `/api/v1/sec/users/{id}/roles` | Assign roles to user | [assignRoles](endpoints/users.md#put-apiv1secusersidroles) |

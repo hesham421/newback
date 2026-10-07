@@ -281,6 +281,19 @@ def login_staff(tenant, username, password):
     return api("POST", "/api/v1/sec/auth/login", tc=tenant, body={"username": username, "password": password})
 
 
+def first_login(tenant, username, password):
+    """TM-D: an account an administrator created must change its password before anything else (RULE-SEC-058/059,
+    ADR-SEC-063). The fixture users' first sign-in does that change (to the same password, no reuse rule) with
+    the login's own token, which keeps working afterwards; the login response is returned as before."""
+    r = login_staff(tenant, username, password)
+    tok = (r.data or {}).get("accessToken")
+    if tok and (r.data or {}).get("passwordChangeRequired"):
+        c = api("PUT", "/api/v1/sec/me/password", t=tok, body={"currentPassword": password, "newPassword": password})
+        if c.status != 200:
+            raise Blocked(f"first-login password change of {username} failed: {c.status} {c.excerpt(200)}")
+    return r
+
+
 def tenant_body(ctx, code, admin, name_en):
     return {"code": code, "nameAr": "مستأجر أ", "nameEn": name_en, "adminUsername": admin,
             "adminEmail": f"{admin}-{ctx.run}@t.test", "adminPassword": PW,
@@ -670,7 +683,7 @@ def test_tenant_013_staff_user_fixtures(ctx):
     st(r, 201)
     ctx.BOB_ID = (r.data or {}).get("userPk")
     eq((r.data or {}).get("realm"), "STAFF", "bob data.realm")
-    r = login_staff(ctx.TA, f"alice-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"alice-{ctx.run}", PW)
     st(r, 200)
     if (r.data or {}).get("accessToken"):
         ctx.T_ALICE = r.data["accessToken"]
@@ -729,7 +742,7 @@ def test_sec_006_no_permission_user_refused(ctx):
     r = api("POST", "/api/v1/sec/users", t=ctx.T_PLAT,
             body=user_body(f"p-noperm-{ctx.run}", f"p-noperm-{ctx.run}@t.test", "ب", "No Perm"))
     st(r, 201)
-    r = login_staff("PLATFORM", f"p-noperm-{ctx.run}", PW)
+    r = first_login("PLATFORM", f"p-noperm-{ctx.run}", PW)
     st(r, 200)
     if (r.data or {}).get("accessToken"):
         ctx.T_NOPERM = r.data["accessToken"]
@@ -802,7 +815,7 @@ def limited_user(ctx):
     st(r, 201)
     uid = (r.data or {}).get("userPk")
     st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_A, body={"roleIds": [role]}), 200)
-    r = login_staff(ctx.TA, f"lim-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"lim-{ctx.run}", PW)
     st(r, 200, what="login lim-{run}")
     t = (r.data or {}).get("accessToken")
     if not t:
@@ -1320,7 +1333,7 @@ def test_sec_037_revoke_view_cascades(ctx):
     st(r, 201, what="create rv-{run} in B")
     uid = (r.data or {}).get("userPk")
     st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_B, body={"roleIds": [role]}), 200)
-    r = login_staff(ctx.TB, f"rv-{ctx.run}", PW)
+    r = first_login(ctx.TB, f"rv-{ctx.run}", PW)
     st(r, 200, what="login rv-{run}")
     t_rv = (r.data or {}).get("accessToken")
     if not t_rv:
@@ -1378,6 +1391,289 @@ def test_sec_040_module_revoke_unchanged(ctx):
     eq(len(rv_audit(ctx, "MODULE_REVOKED", role)), 1, "one MODULE_REVOKED row")
     eq(len(rv_audit(ctx, "SCREEN_REVOKED", role)), 2, "two SCREEN_REVOKED rows")
     eq(len(rv_audit(ctx, "ACTION_REVOKED", role)), 3, "three ACTION_REVOKED rows")
+
+
+# ---------------------------------------------------------------------------------------------
+# TM-D (erp-core 1.3.0): passwords, forced change, staff /me, profile fields, photos — all in tenant B
+# (A's staff listing is asserted by TENANT-014 / REPORT-003). srs-sec.md 1.3.0 addendum §9.
+# ---------------------------------------------------------------------------------------------
+PWD_ADMIN_SET = "Admin-Set-Passw0rd1"
+PWD_OWN = "My-Own-Passw0rd2"
+
+
+def d_user(ctx, name, require=None, extra=None):
+    """A STAFF user `{name}-{run}` in B; `require` None leaves requireChangeAtNextLogin out (default TRUE)."""
+    body = user_body(f"{name}-{ctx.run}", f"{name}-{ctx.run}@t.test", "موظف", f"Staff {name}")
+    if require is not None:
+        body["requireChangeAtNextLogin"] = require
+    body.update(extra or {})
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=body)
+    st(r, 201, what=f"create {name}-{{run}} in B")
+    uid = (r.data or {}).get("userPk")
+    if not uid:
+        raise Blocked(f"no user {name}")
+    return uid, r
+
+
+def d_token(ctx, name, password):
+    r = login_staff(ctx.TB, f"{name}-{ctx.run}", password)
+    st(r, 200, what=f"login {name}-{{run}}")
+    tok = (r.data or {}).get("accessToken")
+    if not tok:
+        raise Blocked(f"no token for {name}")
+    return tok, r
+
+
+def d_photo(token, path, fname, content, ctype="image/png"):
+    return api("PUT", path, t=token, multipart=[("file", (fname, ctype, content))])
+
+
+@tc("TC-CORE-SEC-041")
+def test_sec_041_admin_set_password_forces_a_change(ctx):
+    uid, _ = d_user(ctx, "pwd", require=False)
+    ctx.PWD_ID = uid
+    t_old, _ = d_token(ctx, "pwd", PW)
+    r = api("PUT", f"/api/v1/sec/users/{uid}/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("userPk"), d.get("passwordChangeRequired"), d.get("sessionsTerminated")), (uid, True, 1),
+       "data.userPk / passwordChangeRequired / sessionsTerminated")
+    check(bool(d.get("passwordChangedAt")), "data.passwordChangedAt set", "present", d.get("passwordChangedAt"))
+    check(PWD_ADMIN_SET not in r.excerpt(2000) and "$2a$" not in r.excerpt(2000), "no secret in the response", "absent", "checked")
+    st(api("GET", "/api/v1/sec/me", t=t_old), 401, "SEC-401-INVALID-CREDENTIALS", what="the user's old session ended")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PW), 401, "SEC-401-INVALID-CREDENTIALS", what="old password refused")
+    t_new, r = d_token(ctx, "pwd", PWD_ADMIN_SET)
+    eq((r.data or {}).get("passwordChangeRequired"), True, "login data.passwordChangeRequired")
+    ctx.T_PWD = t_new
+    st(api("GET", "/api/v1/sec/menu", t=t_new), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    st(api("POST", "/api/v1/sec/users/search", t=t_new, body={"size": 5}), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    st(api("PATCH", "/api/v1/sec/me", t=t_new, body={"phone": "+966501234567"}), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    r = api("GET", "/api/v1/sec/me", t=t_new)
+    st(r, 200, what="GET /sec/me stays reachable")
+    eq((r.data or {}).get("passwordChangeRequired"), True, "/me data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-042")
+def test_sec_042_self_change_wrong_current_403(ctx):
+    r = api("PUT", "/api/v1/sec/me/password", t=ctx.T_PWD,
+            body={"currentPassword": "Not-The-Passw0rd", "newPassword": PWD_OWN})
+    st(r, 403, "SEC-403-PASSWORD-CURRENT-INVALID")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_PWD), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED", what="still flagged")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_ADMIN_SET), 200, what="password unchanged")
+
+
+@tc("TC-CORE-SEC-043")
+def test_sec_043_self_change_clears_the_flag_and_ends_other_sessions(ctx):
+    t_other, _ = d_token(ctx, "pwd", PWD_ADMIN_SET)
+    r = api("PUT", "/api/v1/sec/me/password", t=ctx.T_PWD,
+            body={"currentPassword": PWD_ADMIN_SET, "newPassword": PWD_OWN})
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("passwordChangeRequired"), False, "data.passwordChangeRequired")
+    check((d.get("sessionsTerminated") or 0) >= 2, "data.sessionsTerminated ≥ 2 (SEC-042's and this case's extra logins)",
+          ">=2", d.get("sessionsTerminated"))
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_PWD), 200, what="the same token now passes the gate")
+    st(api("GET", "/api/v1/sec/me", t=t_other), 401, "SEC-401-INVALID-CREDENTIALS", what="the other session ended")
+    r = login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_OWN)
+    st(r, 200)
+    eq((r.data or {}).get("passwordChangeRequired"), False, "login data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-044")
+def test_sec_044_admin_set_refusals(ctx):
+    me = api("GET", "/api/v1/sec/me", t=ctx.T_B)
+    st(me, 200, what="tb-admin's own id")
+    own = (me.data or {}).get("userPk")
+    st(api("PUT", f"/api/v1/sec/users/{own}/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET}),
+       422, "SEC-422-PASSWORD-SELF")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_B, body={"newPassword": "abcdefgh"})
+    st(r, 400, "SEC-400-PASSWORD-POLICY")
+    eq([f.get("field") for f in r.field_errors], ["newPassword"], "fieldErrors[*].field")
+    st(api("PUT", "/api/v1/sec/users/999999999/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET}),
+       404, "SEC-404-USER")
+    st(api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_A, body={"newPassword": PWD_ADMIN_SET}),
+       404, "SEC-404-USER", what="A's administrator on B's user")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_OWN), 200, what="nothing changed")
+
+
+@tc("TC-CORE-SEC-045")
+def test_sec_045_my_photo_png_is_public(ctx):
+    content = png_bytes(45)
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "me.png", content)
+    st(r, 200)
+    url = (r.data or {}).get("photoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TB}/"), "data.photoUrl on the public file path of B", "prefix", url)
+    ctx.PHOTO_URL = url
+    g = api("GET", url)
+    eq((g.status, g.body), (200, content), "anonymous GET serves the bytes")
+    eq(g.headers.get("content-type"), "image/png", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("inline"), "Content-Disposition inline", "inline",
+          g.headers.get("content-disposition"))
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), url, "/me data.photoUrl")
+
+
+@tc("TC-CORE-SEC-046")
+def test_sec_046_photo_rejects_exe_and_svg(ctx):
+    exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff" + b"\x00" * 64
+    for fname, ctype, content in (("tool.exe", "application/octet-stream", exe),
+                                  ("logo.svg", "image/svg+xml", b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>'),
+                                  ("fake.png", "image/png", exe)):
+        r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", fname, content, ctype)
+        st(r, 400, "SEC-400-PHOTO-INVALID", what=f"PUT /me/photo {fname}")
+        eq([f.get("field") for f in r.field_errors], ["file"], f"{fname} fieldErrors[*].field")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), ctx.PHOTO_URL, "previous photo kept")
+
+
+@tc("TC-CORE-SEC-047")
+def test_sec_047_me_has_no_roles(ctx):
+    r = api("GET", "/api/v1/sec/me", t=ctx.T_PWD)
+    st(r, 200)
+    d = r.data or {}
+    check(not ({"roles", "permissions", "authorities", "passwordHash", "photoFileId"} & set(d)),
+          "no roles / permissions / authorities / hash / file id keys", "absent", sorted(d))
+    need = {"userPk", "username", "email", "fullNameAr", "fullNameEn", "phone", "jobTitleAr", "jobTitleEn",
+            "preferredLocale", "photoUrl", "passwordChangeRequired", "lastLoginAt", "tenant"}
+    check(need <= set(d), "profile keys present", sorted(need), sorted(d))
+    eq((d.get("tenant") or {}).get("code"), ctx.TB, "data.tenant.code")
+    eq((d.get("tenant") or {}).get("nameEn"), "Tenant B", "data.tenant.nameEn")
+    st(api("GET", "/api/v1/sec/me"), 401, "SEC-401-INVALID-CREDENTIALS", what="no token")
+
+
+@tc("TC-CORE-SEC-048")
+def test_sec_048_photo_over_one_megabyte_rejected(ctx):
+    big = png_bytes(48) + b"\x00" * (1024 * 1024)
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "big.png", big)
+    st(r, 400, "SEC-400-PHOTO-INVALID")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), ctx.PHOTO_URL, "previous photo kept")
+
+
+@tc("TC-CORE-SEC-049")
+def test_sec_049_put_user_profile_fields(ctx):
+    base = {"email": f"pwd-{ctx.run}@t.test", "fullNameAr": "موظف", "fullNameEn": "Staff pwd"}
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B,
+            body={**base, "phone": "+966 50 123 4567", "jobTitleEn": "Clerk", "preferredLocale": "ar"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("phone"), d.get("jobTitleEn"), d.get("preferredLocale")), ("+966 50 123 4567", "Clerk", "ar"),
+       "data.phone / jobTitleEn / preferredLocale")
+    eq(d.get("photoUrl"), ctx.PHOTO_URL, "data.photoUrl")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B, body={**base, "preferredLocale": "fr"})
+    st(r, 400, "VALIDATION_ERROR")
+    eq([f.get("field") for f in r.field_errors], ["preferredLocale"], "fieldErrors[*].field")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B, body=base)
+    st(r, 200, what="PUT without the new fields")
+    eq(((r.data or {}).get("phone"), (r.data or {}).get("preferredLocale")), ("+966 50 123 4567", "ar"),
+       "absent fields keep their values")
+    r = api("GET", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B)
+    eq(((r.data or {}).get("preferredLocale"), (r.data or {}).get("passwordChangeRequired")), ("ar", False),
+       "GET data.preferredLocale / passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-050")
+def test_sec_050_created_user_must_change_and_policy_applies(ctx):
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B,
+            body=user_body(f"weak-{ctx.run}", f"weak-{ctx.run}@t.test", "ض", "Weak", "abcdefgh"))
+    st(r, 400, "SEC-400-PASSWORD-POLICY")
+    eq([f.get("field") for f in r.field_errors], ["password"], "fieldErrors[*].field")
+    uid, r = d_user(ctx, "fresh", extra={"phone": "+966501234567", "preferredLocale": "en"})
+    d = r.data or {}
+    eq((d.get("passwordChangeRequired"), d.get("phone"), d.get("preferredLocale"), d.get("photoUrl")),
+       (True, "+966501234567", "en", None), "data.passwordChangeRequired / phone / preferredLocale / photoUrl")
+    check(bool(d.get("passwordChangedAt")), "data.passwordChangedAt set", "present", d.get("passwordChangedAt"))
+    r = login_staff(ctx.TB, f"fresh-{ctx.run}", PW)
+    st(r, 200)
+    eq((r.data or {}).get("passwordChangeRequired"), True, "login data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-051")
+def test_sec_051_photo_replace_remove_and_admin_photo(ctx):
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "me2.png", png_bytes(51))
+    st(r, 200)
+    new_url = (r.data or {}).get("photoUrl")
+    check(new_url and new_url != ctx.PHOTO_URL, "a new URL", "differs", new_url)
+    st(api("GET", ctx.PHOTO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the replaced photo is withdrawn")
+    eq(api("GET", new_url).status, 200, "new URL served")
+    r = api("DELETE", "/api/v1/sec/me/photo", t=ctx.T_PWD)
+    eq(r.status, 204, "DELETE /me/photo status")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), None, "/me data.photoUrl")
+    st(api("GET", new_url), 404, "FILE_DOCUMENT_NOT_FOUND", what="the removed photo is withdrawn")
+    r = d_photo(ctx.T_B, f"/api/v1/sec/users/{ctx.PWD_ID}/photo", "by-admin.jpg",
+                b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + bytes(range(64)), "image/jpeg")
+    st(r, 200, what="administrator sets B user's photo")
+    admin_url = (r.data or {}).get("photoUrl")
+    eq((api("GET", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B).data or {}).get("photoUrl"), admin_url, "GET user data.photoUrl")
+    eq(api("GET", admin_url).headers.get("content-type"), "image/jpeg", "served as image/jpeg")
+    eq(api("DELETE", f"/api/v1/sec/users/{ctx.PWD_ID}/photo", t=ctx.T_B).status, 204, "DELETE /users/{id}/photo status")
+    st(d_photo(ctx.T_A, f"/api/v1/sec/users/{ctx.PWD_ID}/photo", "x.png", png_bytes(1)), 404, "SEC-404-USER",
+       what="A's administrator on B's user")
+
+
+@tc("TC-CORE-SEC-052")
+def test_sec_052_patch_me(ctx):
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD,
+            body={"phone": "+966 55 000 1111", "jobTitleAr": "محاسب", "jobTitleEn": "Accountant", "preferredLocale": "en"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("phone"), d.get("jobTitleEn"), d.get("preferredLocale"), d.get("fullNameEn")),
+       ("+966 55 000 1111", "Accountant", "en", "Staff pwd"), "data.phone / jobTitleEn / preferredLocale / fullNameEn")
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"preferredLocale": "fr"})
+    st(r, 400, "VALIDATION_ERROR")
+    eq([f.get("field") for f in r.field_errors], ["preferredLocale"], "fieldErrors[*].field")
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"phone": ""})
+    st(r, 200)
+    eq(((r.data or {}).get("phone"), (r.data or {}).get("preferredLocale")), (None, "en"), "empty clears, absent keeps")
+    st(api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"fullNameEn": "   "}), 400, "VALIDATION_ERROR")
+
+
+@tc("TC-CORE-SEC-053")
+def test_sec_053_password_change_mail_queued(ctx):
+    t = api("POST", "/api/v1/notifications/templates/search", t=ctx.T_B,
+            body={"filters": [{"field": "templateCode", "operator": "EQUALS", "value": "STAFF_PASSWORD_CHANGED"}]})
+    st(t, 200, what="B holds the STAFF_PASSWORD_CHANGED template (V17 / provisioning copy)")
+    tid = [x.get("id") for x in t.content]
+    eq(len(tid), 1, "one STAFF_PASSWORD_CHANGED template in B")
+    body = {"filters": [{"field": "recipientId", "operator": "EQUALS", "value": ctx.PWD_ID},
+                        {"field": "referenceType", "operator": "EQUALS", "value": "SEC_USER"}]}
+    r = poll(lambda: api("POST", "/api/v1/notifications/logs/search", t=ctx.T_B, body=body),
+             lambda r: r.status == 200 and len(r.content) >= 2
+             and all(x.get("notificationStatusId") not in ("PENDING", "QUEUED") for x in r.content), timeout=20)
+    st(r, 200)
+    rows = r.content
+    eq(len(rows), 2, "two rows: SEC-041's admin-set and SEC-043's self-change")
+    eq(sorted({(x.get("channelTypeId"), x.get("moduleCode"), x.get("templateId")) for x in rows}),
+       [("EMAIL", "SEC", tid[0] if tid else None)], "channel / module / template")
+    observe("STAFF_PASSWORD_CHANGED statuses", [x.get("notificationStatusId") for x in rows])
+
+
+@tc("TC-CORE-SEC-054")
+def test_sec_054_audit_rows(ctx):
+    def rows(action):
+        r = audit(ctx.T_B, entityType="SEC_USER", entityId=ctx.PWD_ID, action=action, size=50)
+        st(r, 200, what=f"audit {action}")
+        return r.content
+    set_rows = rows("PASSWORD_SET_BY_ADMIN")
+    eq([x.get("actor") for x in set_rows], ["tb-admin"], "PASSWORD_SET_BY_ADMIN actor")
+    eq([x.get("actor") for x in rows("PASSWORD_CHANGED")], [f"pwd-{ctx.run}"], "PASSWORD_CHANGED actor")
+    photo = rows("PROFILE_PHOTO_CHANGED")
+    eq(len(photo), 5, "PROFILE_PHOTO_CHANGED rows (SEC-045 set, SEC-051 replace, remove, admin set, admin remove)")
+    blob = json.dumps(set_rows + photo, ensure_ascii=False)
+    check(PWD_ADMIN_SET not in blob and PWD_OWN not in blob and "$2a$" not in blob, "no secret in the audit rows",
+          "absent", "checked")
+
+
+@tc("TC-CORE-SEC-055")
+def test_sec_055_passwords_over_72_bytes_refused(ctx):
+    ascii73 = "Aa1" + "x" * 70
+    arabic122 = "س" * 60 + "12"
+    exactly72 = "Aa1" + "x" * 69
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"long-{ctx.run}", f"long-{ctx.run}@t.test", "ط", "Long", ascii73))
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="create with 73 ASCII bytes")
+    eq([f.get("field") for f in r.field_errors], ["password"], "fieldErrors[*].field")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_B, body={"newPassword": arabic122})
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="admin-set with 62 Arabic letters (122 bytes)")
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"b72-{ctx.run}", f"b72-{ctx.run}@t.test", "ط", "B72", exactly72))
+    st(r, 201, what="create with exactly 72 bytes")
+    st(login_staff(ctx.TB, f"b72-{ctx.run}", exactly72), 200, what="login with the 72-byte password")
 
 
 # =============================================================================================
@@ -2168,7 +2464,7 @@ def test_report_011_per_report_grant(ctx):
     st(r, 201)
     uid = (r.data or {}).get("userPk")
     st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_A, body={"roleIds": [role]}), 200)
-    r = login_staff(ctx.TA, f"rpt-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"rpt-{ctx.run}", PW)
     st(r, 200)
     t = (r.data or {}).get("accessToken")
     ctx.T_RPT = t
@@ -2518,7 +2814,7 @@ def test_notif_014_customer_on_staff_inbox(ctx):
 def test_notif_015_staff_with_customer_name(ctx):
     e = f"c2-{ctx.run}@shop.test"
     st(api("POST", "/api/v1/sec/users", t=ctx.T_A, body=user_body(e, e, "موظف", "Staff", "StaffPass!9")), 201)
-    r = login_staff(ctx.TA, e, "StaffPass!9")
+    r = first_login(ctx.TA, e, "StaffPass!9")
     st(r, 200)
     t = (r.data or {}).get("accessToken")
     r = api("GET", "/api/v1/notif/inbox", t=t)
@@ -2728,7 +3024,7 @@ ORDER = {
                   *rng("SEQ", 3, 14),
                   *rng("SETTINGS", 4, 10),
                   *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "SEC-031", "SEC-033",
-                  *rng("SEC", 35, 40),
+                  *rng("SEC", 35, 40), *rng("SEC", 41, 55),
                   "NOTIF-001",
                   *rng("FILE", 1, 18), "FILE-024", *rng("FILE", 19, 21), "FILE-023",
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",

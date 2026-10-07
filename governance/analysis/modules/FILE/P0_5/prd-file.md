@@ -101,3 +101,19 @@ CHANGED behaviour of existing stories
 
 Scope exclusion "External filesystem storage — bytes in DB (BYTEA)" no longer holds: LOCAL and S3
 providers exist; DB remains the default.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW product capabilities
+| Capability | Actor | Implemented behaviour | Source |
+|---|---|---|---|
+| Profile photo stored as a public image | any staff user (SEC "my profile"), or an administrator for another user | PNG / JPEG / WebP, at most 1 MB, detected from the content; a PUBLIC file at a non-guessable URL; replacing or removing it withdraws the previous one. | srs.md 1.3.0 (RULE-FILE-008..010); ADR-FILE-008 |
+| Tenant logo stored as a public image (package E) | platform administrator | as above, plus SVG without active content; the logo belongs to the tenant it depicts. | srs.md 1.3.0 §5 (planned consumer) |
+
+CHANGED behaviour of existing stories
+| Story | Delta | Source |
+|---|---|---|
+| US-FILE-004 attach files to any module's records | A core module that needs a public image (photo, logo) uses the in-process `FileImageStoreApi` instead of the REST upload; such images carry no category. | XM-FILE-002; ADR-FILE-008 |

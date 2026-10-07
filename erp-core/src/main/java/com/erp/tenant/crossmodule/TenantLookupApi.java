@@ -11,4 +11,10 @@ public interface TenantLookupApi {
 
     /** The code of the tenant with this id, or empty when no such tenant exists. */
     Optional<String> codeOf(Long tenantId);
+
+    /**
+     * tenant-maturity D — the code and both names of the tenant with this id (e.g. SEC's staff
+     * {@code /me}), or empty when no such tenant exists.
+     */
+    Optional<TenantSummary> summaryOf(Long tenantId);
 }

@@ -374,9 +374,10 @@ public class FileService {
 
     /**
      * A LOCAL/S3 object written for a transaction that then rolls back would be orphaned (the row that
-     * names it never commits), so it is removed again. DB content rolls back with the row.
+     * names it never commits), so it is removed again. DB content rolls back with the row. Shared with
+     * {@link FileImageStoreService} (tenant-maturity D.4).
      */
-    private static void deleteOnRollback(StorageProvider provider, String storageRef) {
+    static void deleteOnRollback(StorageProvider provider, String storageRef) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }

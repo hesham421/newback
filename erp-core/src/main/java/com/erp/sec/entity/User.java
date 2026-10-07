@@ -116,6 +116,39 @@ public class User extends AuditableEntity {
     @Builder.Default
     private Boolean isActiveFl = Boolean.TRUE;
 
+    /** DBF-SEC-117 — tenant-maturity D: E.164-ish phone (the DTOs validate the pattern). */
+    @Size(max = 30, message = "{validation.size}")
+    @Column(name = "PHONE", length = 30)
+    private String phone;
+
+    /** DBF-SEC-118. */
+    @Size(max = 150, message = "{validation.size}")
+    @Column(name = "JOB_TITLE_AR", length = 150)
+    private String jobTitleAr;
+
+    /** DBF-SEC-119. */
+    @Size(max = 150, message = "{validation.size}")
+    @Column(name = "JOB_TITLE_EN", length = 150)
+    private String jobTitleEn;
+
+    /** DBF-SEC-120 — {@code ar} / {@code en} or null (CHK_SEC_USER_LOCALE, RULE-SEC-062). */
+    @Size(max = 5, message = "{validation.size}")
+    @Column(name = "PREFERRED_LOCALE", length = 5)
+    private String preferredLocale;
+
+    /** DBF-SEC-121 — soft reference to FILE_DOCUMENT.ID (XM-SEC-006, no FK); never returned, clients get the URL. */
+    @Column(name = "PHOTO_FILE_ID")
+    private Long photoFileId;
+
+    /** DBF-SEC-122 — native BOOLEAN; TRUE while an administrator-chosen password awaits its change (RULE-SEC-058/059). */
+    @Column(name = "PASSWORD_CHANGE_REQUIRED_FL", nullable = false)
+    @Builder.Default
+    private Boolean passwordChangeRequiredFl = Boolean.FALSE;
+
+    /** DBF-SEC-123 — when a person last set a usable password. */
+    @Column(name = "PASSWORD_CHANGED_AT")
+    private Instant passwordChangedAt;
+
     /**
      * Defaults only — the SRS treats {@code username} as a login identity and {@code email} as an
      * address (SRS A3 ENT-SEC-001); neither is an upper-cased natural key, so neither is
@@ -132,6 +165,9 @@ public class User extends AuditableEntity {
         if (realm == null) {
             realm = REALM_STAFF;
         }
+        if (passwordChangeRequiredFl == null) {
+            passwordChangeRequiredFl = Boolean.FALSE;
+        }
     }
 
     /** Field mutation only — the decision to (re)activate belongs to the service/API (API-SEC-010). */
@@ -143,6 +179,16 @@ public class User extends AuditableEntity {
     /** Field mutation only — a verified customer becomes ACTIVE (erp-core step 06). */
     public void markVerified() {
         this.statusCode = STATUS_ACTIVE;
+    }
+
+    /**
+     * Field mutation only — tenant-maturity D: a new password hash, when it was set and whether its owner
+     * must still change it. Whether the change is allowed and the flag's value are decided elsewhere.
+     */
+    public void changePassword(String newPasswordHash, boolean changeRequired, Instant changedAt) {
+        this.passwordHash = newPasswordHash;
+        this.passwordChangeRequiredFl = changeRequired;
+        this.passwordChangedAt = changedAt;
     }
 
     /** Field mutation only — ACTIVE→DISABLED per A7 state machine (API-SEC-009). */

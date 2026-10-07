@@ -186,3 +186,17 @@ CHANGED behaviour of existing stories
 | US-SEC-009 Admin dashboard | User and session counts cover STAFF accounts only. | CHANGELOG [1.1.0] Security |
 | US-SEC-011 Active sessions | Lists and terminates STAFF sessions only. | DEVIATIONS [14] |
 | US-SEC-012 Optional notification on password reset | Delivery is asynchronous with retries (NOTIF); the customer realm has its own reset mail. | DEVIATIONS [06], [08] |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — passwords, profile, photo, staff `/me` (package G's grant revoke is described in `P1/srs-sec.md` 1.3.0 §1–§8)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Capability | Who | What it does | Source |
+|---|---|---|---|---|
+| NEW | Set a user's password | security administrator | Sets another staff user's password from the Users screen; by default the user must change it at the next sign-in, and every session of the user ends. | srs-sec.md 1.3.0 §9 (REQ-SEC-083) |
+| NEW | Forced password change | staff user | After an administrator chose the password, only the profile, the password change and sign-out work until the user picks their own. | REQ-SEC-084 |
+| NEW | Change my password | staff user | Changes the own password, giving the current one; the user's other sessions end. | REQ-SEC-085 |
+| NEW | My profile | staff user | Reads and edits names, phone, job title and preferred language; uploads or removes a photo. | REQ-SEC-086, REQ-SEC-087 |
+| NEW | Password policy | anyone choosing a staff password | 8..72 characters (at most 72 bytes) with a letter and a digit (configurable up to 72). | REQ-SEC-082 |
+| NEW | Password-change e-mail | staff user | An e-mail tells the user that their password was changed and by whom. | REQ-SEC-089; NOTIF RULE-NOTIF-023 |

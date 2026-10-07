@@ -134,3 +134,16 @@ AUTO-DECISIONS revisited
 - "File bytes stored in PostgreSQL BYTEA" → DB provider is the default; LOCAL and S3 are selectable (step 07).
 - "Secure access via AES/GCM encrypted URL token" → unchanged; the single-use store is `DownloadTokenStore`
   (in-memory, or Redis when present) — DEVIATIONS [02], [03].
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+EXPOSED SURFACE — deltas
+| Surface | Delta | Source |
+|---|---|---|
+| `com.erp.file.crossmodule.FileImageStoreApi` (XM-FILE-002) | NEW: `storePublicImage(ImageStoreRequest)` → `ImageStoreResult`, `discard(Long)`; consumed by SEC (photos) and, in package E, TENANT (logos) | srs.md 1.3.0 §1 |
+| `FileDocumentLookupApi.publicUrls(Collection<Long>)` (XM-FILE-001) | NEW method | srs.md 1.3.0 §1 |
+
+Entities owned, permissions, dependencies: unchanged.

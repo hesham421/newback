@@ -101,6 +101,18 @@ public final class FileDocumentDomain {
             && STATUS_ACTIVE.equals(fileStatusId) && Boolean.TRUE.equals(categoryAllowPublic);
     }
 
+    /**
+     * tenant-maturity D.4 (RULE-FILE-010) — as above, but an uncategorised document (no
+     * {@code categoryId}: only the image store publishes one) needs no category permission. The public
+     * lookup query applies the same conditions.
+     */
+    public static boolean isPubliclyServable(String visibility, String publicSlug, String fileStatusId,
+                                             Long categoryId, Boolean categoryAllowPublic) {
+        return categoryId == null
+            ? VISIBILITY_PUBLIC.equals(visibility) && publicSlug != null && STATUS_ACTIVE.equals(fileStatusId)
+            : isPubliclyServable(visibility, publicSlug, fileStatusId, categoryAllowPublic);
+    }
+
     public String getCurrentStatus() {
         return currentStatus;
     }
