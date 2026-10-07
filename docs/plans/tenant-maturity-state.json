@@ -13,13 +13,13 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/a-tenant-analysis",
       "worktree": ".worktrees/tm-a",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 1,
       "implementer_agent": "a3e7f307b14549283",
-      "reviewer_agent": null,
+      "reviewer_agent": "ad3e343037a8fad2e",
       "review": null,
       "report": "docs/steps/tm-a-report.md",
       "merged_commit": null
@@ -263,6 +263,12 @@
       "step": "G",
       "event": "DISPATCH",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-07T19:35:56Z",
+      "step": "A",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 8f6cf3a; reviewer dispatched"
     }
   ]
 }
