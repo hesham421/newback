@@ -100,13 +100,13 @@ class CommentsAreNotCode(unittest.TestCase):
                 '    @PostMapping("/login")\n'
                 '    @SecurityRequirements // public: permitAll — the word public must not be read as a declaration\n'
                 '    @Operation(summary = "Login")\n'
-                '    public R login(@RequestBody Req r) { return xService.login(r); }\n}\n')
+                '    public R login(@RequestBody Req r) { return xService.login(r); }\n}\n', encoding="utf-8")
             (root / "XService.java").write_text(
                 'package x;\npublic class XService {\n    /* public void login(Req r) — commented out */\n'
-                '    public R login(Req r) { return null; }\n}\n')
+                '    public R login(Req r) { return null; }\n}\n', encoding="utf-8")
             controller_file, method = se.find_controller_for_endpoint(root, "POST", "/api/v1/x/auth/login")
             self.assertEqual(method, "login")
-            lookup = se.resolve_permission(controller_file.read_text(), method, root, controller_name="PubController")
+            lookup = se.resolve_permission(controller_file.read_text(encoding="utf-8"), method, root, controller_name="PubController")
             self.assertEqual(lookup.outcome, se.DECLARED_NONE)
             self.assertEqual(lookup.checked, ["PubController.login", "XService.login"])
 

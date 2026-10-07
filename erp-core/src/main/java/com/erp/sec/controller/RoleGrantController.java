@@ -2,6 +2,7 @@ package com.erp.sec.controller;
 
 import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
+import com.erp.sec.dto.ActionGrantRevokeResponse;
 import com.erp.sec.dto.ModuleGrantRevokeResponse;
 import com.erp.sec.dto.RoleActionGrantRequest;
 import com.erp.sec.dto.RoleActionGrantResponse;
@@ -10,6 +11,7 @@ import com.erp.sec.dto.RoleModuleGrantRequest;
 import com.erp.sec.dto.RoleModuleGrantResponse;
 import com.erp.sec.dto.RoleScreenGrantRequest;
 import com.erp.sec.dto.RoleScreenGrantResponse;
+import com.erp.sec.dto.ScreenGrantRevokeResponse;
 import com.erp.sec.service.RoleGrantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,9 +27,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Thin controller for the 3-level grant editor — API-SEC-014/015/016/017 (SCR-REQ-SEC-005).
- * Revoking a module answers 200 with the cascade counts RULE-SEC-003 produced, so it is not the
- * generic 204 delete.
+ * Thin controller for the 3-level grant editor — API-SEC-014/015/016/017 (SCR-REQ-SEC-005) and
+ * the screen/action revokes (REQ-SEC-080/081). Every revoke answers 200 with the cascade count
+ * RULE-SEC-003/054/055 produced, so none is the generic 204 delete.
  */
 @RestController
 @RequestMapping("/api/v1/sec/roles")
@@ -73,11 +75,29 @@ public class RoleGrantController {
         return operationCode.craftResponse(service.grantScreen(id, request));
     }
 
+    @DeleteMapping("/{id}/screens/{screenId}")
+    @Operation(summary = "Revoke screen grant",
+        description = "سحب منح شاشة مع منح إجراءاتها (RULE-SEC-054)")
+    public ResponseEntity<ApiResponse<ScreenGrantRevokeResponse>> revokeScreen(
+            @PathVariable Long id,
+            @PathVariable Long screenId) {
+        return operationCode.craftResponse(service.revokeScreen(id, screenId));
+    }
+
     @PostMapping("/{id}/actions")
     @Operation(summary = "Grant action to role", description = "منح إجراء لدور")
     public ResponseEntity<ApiResponse<RoleActionGrantResponse>> grantAction(
             @PathVariable Long id,
             @Valid @RequestBody RoleActionGrantRequest request) {
         return operationCode.craftResponse(service.grantAction(id, request));
+    }
+
+    @DeleteMapping("/{id}/actions/{actionId}")
+    @Operation(summary = "Revoke action grant",
+        description = "سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-055)")
+    public ResponseEntity<ApiResponse<ActionGrantRevokeResponse>> revokeAction(
+            @PathVariable Long id,
+            @PathVariable Long actionId) {
+        return operationCode.craftResponse(service.revokeAction(id, actionId));
     }
 }

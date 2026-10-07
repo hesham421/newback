@@ -75,7 +75,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationChannelController.create`, `NotificationChannelConfigService.create`, `NotificationChannelConfigService.normalize`, `NotificationChannelConfigDomain.create`, `NotificationChannelConfigMapper.toEntity`, `NotificationChannelConfigMapper.toResponse`, `NotificationChannelConfigDomain.isBlank`, `new NotificationChannelConfigDomain()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationChannelController.create`, `NotificationChannelConfigService.create`, `NotificationChannelConfigService.normalize`, `NotificationChannelConfigDomain.create`, `NotificationChannelConfigMapper.toEntity`, `NotificationChannelConfigMapper.toResponse`, `new NotificationChannelConfigDomain()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

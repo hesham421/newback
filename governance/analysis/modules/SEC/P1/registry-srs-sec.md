@@ -119,3 +119,34 @@ Requirements — new / changed items (counted from the srs addendum)
 Decisions
 No ADR raised by the implementation; deviations are recorded in the erp-core repository's
 `docs/DEVIATIONS.md` ([01], [04], [05], [06], [08], [10], [11], [14]).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package G — revoke a single screen or action grant
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-sec.md` → "Implementation Addendum — erp-core 1.3.0". Unlike
+the 1.2.0 addendum, this one mints ids, continuing from the highest number ever issued for SEC (the
+pre-vendoring analysis reached REQ-SEC-079, AC-SEC-085, RULE-SEC-053; see `srs-sec.md` 1.3.0 addendum).
+
+Entities, lookups, screens, consumed modules: unchanged (no ENT, DBF, lookup value, page code or
+permission added; no migration).
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-080 / AC-SEC-086 | Revoke a screen grant from a role (its action grants cascade) | US-SEC-005; RULE-SEC-054; SCR-REQ-SEC-005 |
+| NEW | REQ-SEC-081 / AC-SEC-087 | Revoke an action grant from a role (revoking VIEW cascades the screen's other action grants) | US-SEC-005; RULE-SEC-055; SCR-REQ-SEC-005 |
+| NEW | RULE-SEC-054 | Cascade revoke on screen-grant removal (ENT-SEC-008) | REQ-SEC-080 |
+| NEW | RULE-SEC-055 | Revoking VIEW cascades the screen's other action grants (ENT-SEC-009) | REQ-SEC-081 |
+| CHANGED | SCR-REQ-SEC-005 | B5 + `DELETE /api/v1/sec/roles/{id}/screens/{screenId}`, `DELETE /api/v1/sec/roles/{id}/actions/{actionId}` | REQ-SEC-080, REQ-SEC-081 |
+
+Counts in the current analysis after this addendum (base 33 REQ/AC + REQ/AC-SEC-034/035 of the 2026-09-11
+amendment + these two): REQ 37 · AC 37 · RULE 9 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued, incl. the pre-vendoring analysis): REQ: 081 · AC: 087 · ENT: 014 ·
+RULE: 055 · SCR-REQ: 010 · DBF: 116 · XM: 005 · QR: 054 · API: 050 · ADR: 062
+
+Decisions
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-SEC-062 | Revoking VIEW cascades the screen's other action grants (plan name ADR-SEC-041; renumbered because ADR-SEC numbers up to 061 were issued historically) |

@@ -9,6 +9,7 @@ import com.erp.sec.domain.RoleActionGrantDomain;
 import com.erp.sec.domain.RoleDomain;
 import com.erp.sec.domain.RoleModuleGrantDomain;
 import com.erp.sec.domain.RoleScreenGrantDomain;
+import com.erp.sec.dto.ActionGrantRevokeResponse;
 import com.erp.sec.dto.ModuleGrantRevokeResponse;
 import com.erp.sec.dto.RoleActionGrantNodeResponse;
 import com.erp.sec.dto.RoleActionGrantRequest;
@@ -20,6 +21,7 @@ import com.erp.sec.dto.RoleModuleGrantResponse;
 import com.erp.sec.dto.RoleScreenGrantNodeResponse;
 import com.erp.sec.dto.RoleScreenGrantRequest;
 import com.erp.sec.dto.RoleScreenGrantResponse;
+import com.erp.sec.dto.ScreenGrantRevokeResponse;
 import com.erp.sec.entity.ActionRegistry;
 import com.erp.sec.entity.AuditLogEntry;
 import com.erp.sec.entity.ModuleRegistry;
@@ -60,7 +62,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Orchestration for the three grant levels — ENT-SEC-007/008/009, API-SEC-014/015/016/017.
  * RULE-SEC-001/002/005/007 are decided by the grant Domain objects; RULE-SEC-003's cascade is
- * this service's own action (DATA-DOM-TRANSACTIONAL.md ENT-SEC-007, owner layer: service).
+ * this service's own action (DATA-DOM-TRANSACTIONAL.md ENT-SEC-007, owner layer: service). The
+ * 1.3.0 screen and action revokes ask the Domain objects for their cascade (RULE-SEC-054/055).
  */
 @Service
 @RequiredArgsConstructor
@@ -230,6 +233,80 @@ public class RoleGrantService {
             Status.SUCCESS);
     }
 
+    /**
+     * REQ-SEC-080 — RULE-SEC-054: the role's action grants on the screen go with the screen grant,
+     * the cascade set decided by {@link RoleScreenGrantDomain#cascadeOnRevoke}.
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
+    public ServiceResult<ScreenGrantRevokeResponse> revokeScreen(Long roleId, Long screenId) {
+        log.info("Revoking screen {} from Role ID: {}", screenId, roleId);
+
+        loadRole(roleId);
+        RoleScreenGrant grant = roleScreenGrantRepository.findByRoleAndScreen(roleId, screenId)
+            .orElseThrow(() -> new LocalizedException(
+                Status.NOT_FOUND, SecErrorCodes.SEC_404_GRANT, screenId));
+
+        List<RoleActionGrant> actionGrants = RoleScreenGrantDomain.from(grant)
+            .cascadeOnRevoke(roleActionGrantRepository.findAllByRoleAndScreen(roleId, screenId));
+
+        String principal = SecurityContextHelper.getCurrentUsername();
+        roleActionGrantRepository.deleteAll(actionGrants);
+        roleScreenGrantRepository.delete(grant);
+
+        for (RoleActionGrant actionGrant : actionGrants) {
+            ActionRegistry action = actionGrant.getAction();
+            appendAudit(EVENT_ACTION_REVOKED, principal, roleId + "/" + action.getActionRegPk(),
+                "سحب الإجراء ضمن سحب الشاشة: " + action.getNameAr(),
+                "Action revoked by screen cascade: " + action.getNameEn());
+        }
+        ScreenRegistry screen = grant.getScreen();
+        appendAudit(EVENT_SCREEN_REVOKED, principal, roleId + "/" + screen.getScreenRegPk(),
+            "سحب الشاشة من الدور: " + screen.getNameAr(),
+            "Screen revoked from role: " + screen.getNameEn());
+        log.info("Revoked screen grant for Role ID: {}, actions: {}", roleId, actionGrants.size());
+
+        return ServiceResult.success(screenGrantMapper.toRevokeResponse(actionGrants.size()), Status.SUCCESS);
+    }
+
+    /**
+     * REQ-SEC-081 — RULE-SEC-055 (ADR-SEC-062): revoking the screen's VIEW also revokes the role's
+     * other action grants on that screen; the screen grant itself stays.
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
+    public ServiceResult<ActionGrantRevokeResponse> revokeAction(Long roleId, Long actionId) {
+        log.info("Revoking action {} from Role ID: {}", actionId, roleId);
+
+        loadRole(roleId);
+        RoleActionGrant grant = roleActionGrantRepository.findByRoleAndAction(roleId, actionId)
+            .orElseThrow(() -> new LocalizedException(
+                Status.NOT_FOUND, SecErrorCodes.SEC_404_GRANT, actionId));
+
+        Long screenId = grant.getAction().getScreen().getScreenRegPk();
+        List<RoleActionGrant> cascaded = RoleActionGrantDomain.from(grant)
+            .cascadeOnRevoke(roleActionGrantRepository.findAllByRoleAndScreen(roleId, screenId));
+
+        String principal = SecurityContextHelper.getCurrentUsername();
+        roleActionGrantRepository.deleteAll(cascaded);
+        roleActionGrantRepository.delete(grant);
+
+        for (RoleActionGrant actionGrant : cascaded) {
+            ActionRegistry action = actionGrant.getAction();
+            appendAudit(EVENT_ACTION_REVOKED, principal, roleId + "/" + action.getActionRegPk(),
+                "سحب الإجراء ضمن سحب إجراء العرض: " + action.getNameAr(),
+                "Action revoked by VIEW cascade: " + action.getNameEn());
+        }
+        ActionRegistry action = grant.getAction();
+        appendAudit(EVENT_ACTION_REVOKED, principal, roleId + "/" + action.getActionRegPk(),
+            "سحب الإجراء من الدور: " + action.getNameAr(),
+            "Action revoked from role: " + action.getNameEn());
+        int revoked = cascaded.size() + 1;
+        log.info("Revoked action grant for Role ID: {}, action grants removed: {}", roleId, revoked);
+
+        return ServiceResult.success(actionGrantMapper.toRevokeResponse(revoked), Status.SUCCESS);
+    }
+
     /** API-SEC-016 — RULE-SEC-001 (QR-SEC-028) then the duplication guard, both in the Domain. */
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PERM_SEC_ROLES_UPDATE)")
@@ -319,6 +396,13 @@ public class RoleGrantService {
      */
     private Set<Long> conflictingCounterpartActions(Long actionId) {
         return Set.of();
+    }
+
+    /** {@code SEC-404-ROLE} when the role is not in the caller's tenant (the read is tenant-filtered). */
+    private Role loadRole(Long roleId) {
+        return roleRepository.findById(roleId)
+            .orElseThrow(() -> new LocalizedException(
+                Status.NOT_FOUND, SecErrorCodes.SEC_404_ROLE, roleId));
     }
 
     private void appendAudit(String eventTypeCode, String principal, String targetRef,

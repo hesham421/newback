@@ -2,6 +2,7 @@ package com.erp.sec.repository;
 
 import com.erp.sec.entity.RoleScreenGrant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -33,6 +34,16 @@ public interface RoleScreenGrantRepository
         + "WHERE g.role.rolePk = :rolePk AND s.module.moduleRegPk = :moduleRegPk")
     List<RoleScreenGrant> findCascadeTargets(@Param("rolePk") Long rolePk,
                                              @Param("moduleRegPk") Long moduleRegPk);
+
+    /**
+     * Locates the grant the screen revoke (REQ-SEC-080) deletes; an empty result is the
+     * {@code SEC-404-GRANT} path. {@code JOIN FETCH} loads the screen for the
+     * {@code SCREEN_REVOKED} audit entry (A.2.6).
+     */
+    @Query("SELECT g FROM RoleScreenGrant g JOIN FETCH g.screen s "
+        + "WHERE g.role.rolePk = :rolePk AND s.screenRegPk = :screenRegPk")
+    Optional<RoleScreenGrant> findByRoleAndScreen(@Param("rolePk") Long rolePk,
+                                                  @Param("screenRegPk") Long screenRegPk);
 
     /**
      * Every screen grant one role holds — the screen half of the grant-tree read. The screen's
