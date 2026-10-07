@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": null,
+  "current_step": "A,G",
   "steps": [
     {
       "id": "A",
@@ -13,9 +13,9 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/a-tenant-analysis",
-      "worktree": null,
+      "worktree": ".worktrees/tm-a",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -31,9 +31,9 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/g-sec-grant-revoke",
-      "worktree": null,
+      "worktree": ".worktrees/tm-g",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -239,5 +239,18 @@
     }
   ],
   "halts": [],
-  "log": []
+  "log": [
+    {
+      "at": "2026-10-07T19:15:57Z",
+      "step": "A",
+      "event": "START",
+      "note": "wave 1 dispatched (parallel with G)"
+    },
+    {
+      "at": "2026-10-07T19:15:57Z",
+      "step": "G",
+      "event": "START",
+      "note": "wave 1 dispatched (parallel with A)"
+    }
+  ]
 }
