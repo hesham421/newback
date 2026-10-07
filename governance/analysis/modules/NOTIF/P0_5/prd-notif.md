@@ -114,4 +114,4 @@ Statement      : Original analysis above is unchanged; this addendum records the
 NEW product capabilities
 | Capability | Actor | Implemented behaviour | Source |
 |---|---|---|---|
-| Password-change e-mail | staff user (recipient) | When an administrator sets a staff user's password or the user changes it, the user receives `STAFF_PASSWORD_CHANGED` (when and by whom). The template exists in every tenant and can be edited like any template. | srs.md 1.3.0 (RULE-NOTIF-009); V17 |
+| Password-change e-mail | staff user (recipient) | When an administrator sets a staff user's password or the user changes it, the user receives `STAFF_PASSWORD_CHANGED` (when and by whom). The template exists in every tenant and can be edited like any template. | srs.md 1.3.0 (RULE-NOTIF-023); V17 |

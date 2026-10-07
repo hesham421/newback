@@ -18,7 +18,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * RULE-NOTIF-009 (tenant-maturity D, XM-NOTIF-003) — e-mails {@code STAFF_PASSWORD_CHANGED} to the user
+ * RULE-NOTIF-023 (tenant-maturity D, XM-NOTIF-003) — e-mails {@code STAFF_PASSWORD_CHANGED} to the user
  * whose password an administrator set or who changed it (the public core event
  * {@link UserPasswordChangedEvent}). After commit, on the core event executor, inside the event's tenant;
  * a failure (template missing or inactive, recipient inactive) is logged and never touches the change.

@@ -20,7 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * erp-core 1.3.0 (TM-D D.3): a staff password set by an administrator or changed by its owner publishes
  * {@link UserPasswordChangedEvent} after commit (REQ-SEC-089), and NOTIF answers with a
- * {@code STAFF_PASSWORD_CHANGED} e-mail to that user (RULE-NOTIF-009). V17 seeded the template in every
+ * {@code STAFF_PASSWORD_CHANGED} e-mail to that user (RULE-NOTIF-023). V17 seeded the template in every
  * tenant; a tenant provisioned later copies it from PLATFORM.
  */
 class StaffPasswordChangedNotificationIntegrationTest extends AbstractAsyncIntegrationTest {

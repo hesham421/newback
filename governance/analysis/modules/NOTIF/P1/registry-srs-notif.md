@@ -145,7 +145,7 @@ Registry deltas only; full text in `srs.md` → "Implementation Addendum — erp
 ### RULES — delta
 | Rule | Delta |
 |---|---|
-| RULE-NOTIF-009 | NEW: `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail to the user (async, after commit, failures logged) |
+| RULE-NOTIF-023 | NEW: `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail to the user (async, after commit, failures logged) |
 
 ### DEPENDENCIES — delta
 | XM-ID | Type | Target | Module |
@@ -155,4 +155,4 @@ Registry deltas only; full text in `srs.md` → "Implementation Addendum — erp
 ### ENTITIES / APIs / PERMISSIONS / ERROR CODES — delta
 None. Template rows: + `STAFF_PASSWORD_CHANGED` (seed, V17).
 
-Last sequence per atom (highest ever issued): RULE: 009 · XM: 003 · API: 012 · US: 008.
+Last sequence per atom (highest ever issued): RULE: 023 · XM: 003 · API: 012 · US: 008.

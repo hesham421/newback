@@ -317,13 +317,13 @@ Change         : tenant-maturity plan package D.3 — password-change e-mail (`S
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Ids continue from the highest ever issued for NOTIF (tree, this repository's history and `governance-shared`):
-RULE-NOTIF-008, XM-NOTIF-002. This addendum adds RULE-NOTIF-009 and XM-NOTIF-003. No endpoint, entity field,
+RULE-NOTIF-008, XM-NOTIF-002; RULE-NOTIF-001..022 are the as-built NOTIF rules of the analysis-coverage work (agreed), so this addendum adds RULE-NOTIF-023 and XM-NOTIF-003 (review round 1; first written as RULE-NOTIF-009). The `V17__notif_seed_password_changed.sql` header comment still says RULE-NOTIF-009: a migration is not edited for a comment. No endpoint, entity field,
 error code or permission changes.
 
 ### 1. Business rules — NEW
 | RULE-ID | Scope | Trigger | Statement | Source |
 |---|---|---|---|---|
-| RULE-NOTIF-009 | ENTITY-NOTIF-001 | `UserPasswordChangedEvent` (core event bus, after commit) | NOTIF dispatches the template `STAFF_PASSWORD_CHANGED` on channel `EMAIL` to the event's user (`recipientId = userId`, `moduleCode = SEC`, `referenceType = SEC_USER`, `referenceId = userId`), with variables `changedAt` (the event's `occurredAt`, UTC, `yyyy-MM-dd HH:mm 'UTC'`) and `changedBy` (the event's actor: the administrator for an admin-set, the user for a self-change). Runs asynchronously on the core event executor inside the event's tenant; never on rollback. A failure (template missing or inactive, recipient inactive, channel disabled) is logged and never affects the password change. The usual rules then apply (RULE-NOTIF-007 recipient eligibility, async delivery, retries). | SEC REQ-SEC-089; plan §6 D.3 |
+| RULE-NOTIF-023 | ENTITY-NOTIF-001 | `UserPasswordChangedEvent` (core event bus, after commit) | NOTIF dispatches the template `STAFF_PASSWORD_CHANGED` on channel `EMAIL` to the event's user (`recipientId = userId`, `moduleCode = SEC`, `referenceType = SEC_USER`, `referenceId = userId`), with variables `changedAt` (the event's `occurredAt`, UTC, `yyyy-MM-dd HH:mm 'UTC'`) and `changedBy` (the event's actor: the administrator for an admin-set, the user for a self-change). Runs asynchronously on the core event executor inside the event's tenant; never on rollback. A failure (template missing or inactive, recipient inactive, channel disabled) is logged and never affects the password change. The usual rules then apply (RULE-NOTIF-007 recipient eligibility, async delivery, retries). | SEC REQ-SEC-089; plan §6 D.3 |
 
 The listener is `com.erp.notif.service.StaffPasswordChangedNotifier` (`@Async(ErpCoreEvents.EXECUTOR)` +
 `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`, the step-08 listener pattern), calling
@@ -336,7 +336,7 @@ internal event" is respected. The earlier SEC mails (password reset, customer ve
 ### 2. Cross-module (A7) — NEW
 | XM-ID | Type | From | To | What |
 |---|---|---|---|---|
-| XM-NOTIF-003 | EVENT-CONSUME | NOTIF | events (published by SEC) | `com.erp.events.UserPasswordChangedEvent(userId, byAdmin)` → RULE-NOTIF-009 |
+| XM-NOTIF-003 | EVENT-CONSUME | NOTIF | events (published by SEC) | `com.erp.events.UserPasswordChangedEvent(userId, byAdmin)` → RULE-NOTIF-023 |
 
 ### 3. Templates (seed) — NEW
 | Code | Channel | Variables | Seeded by |
