@@ -1230,3 +1230,127 @@ All analysed `SEC-*` codes are unchanged.
 | consumed | audit `AuditApi`, `@Audited`; report `ReportProvider` | DEVIATIONS [10], [11] |
 | exposed | `SecUserDirectoryApi.findCurrentUserId()` NEW (NOTIF inbox); `findUserIdsHoldingPermission` (REQ-SEC-035) has no consumer since FIN's removal; `findContact` (REQ-SEC-034) is realm-neutral (customers receive notifications) | DEVIATIONS [08], [14] |
 | exposed | permission SPI `com.erp.sec.permission.*` for every module | docs/steps/06-report.md |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package G — revoke a single screen or action grant (closes D7 of `docs/plans/tenant-maturity-plan.md`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Gap closed. ENT-SEC-008 and ENT-SEC-009 (§A3) list "delete (revoke)" among their operations, and the
+AUDIT_EVENT_TYPE lookup (§A6) carries `SCREEN_REVOKED` and `ACTION_REVOKED`, but SCR-REQ-SEC-005 B5
+listed only the module revoke, so no endpoint ever deleted one screen or one action grant: taking a
+single screen away meant revoking the whole module and granting the rest again. The ids below
+continue the module's sequence (last used: REQ-SEC-035, AC-SEC-035, RULE-SEC-007). No ENT, DBF or
+lookup value is added, and there is **no schema change and no migration**: both grant tables, their
+`SEQ_*`/`UQ_*`/`FK_*` objects and the `CHK_SEC_AUDIT_LOG_EVENT_TYPE` value set (V4__sec_schema.sql)
+already hold everything this addendum needs.
+
+### 1. Requirements (§A4) — NEW
+
+### REQ-SEC-036 — سحب منح شاشة من دور / Revoke a screen grant from a role
+Pattern    : event
+Statement  : When an administrator revokes a role's screen grant, the system shall delete that screen grant and every action grant that role holds on that screen, in one transaction.
+Traces     : US-SEC-005
+Entities   : ENT-SEC-002, ENT-SEC-008, ENT-SEC-009
+Rationale  : RULE-SEC-008; the screen-level counterpart of REQ-SEC-015 — an action grant never outlives its screen grant (RULE-SEC-002 read in reverse, POL-SEC-002)
+Source     : docs/plans/tenant-maturity-plan.md §0 D7, §8b
+Priority   : HIGH
+#### AC-SEC-036 — [REQ-SEC-036]
+Given a role holding a screen grant and three action grants on that screen (VIEW, CREATE, UPDATE)
+When an administrator revokes that screen grant
+Then the system deletes the screen grant and the three action grants, answers `revokedActionGrants = 3`, appends one `SCREEN_REVOKED` and three `ACTION_REVOKED` SEC audit-log entries (N + 1 = 4), and leaves the role's module grant and every other screen's grants untouched
+
+### REQ-SEC-037 — سحب منح إجراء من دور / Revoke an action grant from a role
+Pattern    : event
+Statement  : When an administrator revokes a role's action grant, the system shall delete that action grant; where the revoked action is the screen's VIEW gateway action, the system shall also delete every other action grant that role holds on the same screen.
+Traces     : US-SEC-005
+Entities   : ENT-SEC-002, ENT-SEC-006, ENT-SEC-009
+Rationale  : RULE-SEC-009, the inverse of RULE-SEC-007: without VIEW the screen's other action grants have no effect (REQ-SEC-030), so leaving them would keep dormant grants that silently come back the day VIEW is granted again — ADR-SEC-062
+Source     : docs/plans/tenant-maturity-plan.md §0 D7, §8b, §9 (plan name ADR-SEC-041)
+Priority   : HIGH
+#### AC-SEC-037 — [REQ-SEC-037]
+Given a role holding VIEW, CREATE and UPDATE on one screen
+When an administrator revokes the CREATE action grant
+Then the system deletes exactly that grant, answers `revokedActionGrants = 1` and appends one `ACTION_REVOKED` entry;
+and when the administrator then revokes the VIEW action grant
+Then the system deletes VIEW and UPDATE, answers `revokedActionGrants = 2`, appends two `ACTION_REVOKED` entries, and keeps the role's screen grant (only the action level is revoked)
+
+### 2. Business rules (§A5) — NEW
+
+### RULE-SEC-008 — الإلغاء المتسلسل عند سحب منح الشاشة / Cascade revoke on screen-grant removal
+Scope      : ENT-SEC-008
+Trigger    : on delete (screen grant)
+Statement  : The system shall delete every action grant of that screen for that role when its screen grant is revoked.
+Data source: ENT-SEC-009 (the role's action grants) · ENT-SEC-006 (the screen each action belongs to)
+Message    : ar: "سيتم سحب كل منح الإجراءات ضمن هذه الشاشة لهذا الدور" · en: "Every action grant under this screen for this role will be revoked"
+Traces     : REQ-SEC-036
+Source     : docs/plans/tenant-maturity-plan.md §8b
+Decided by : `RoleScreenGrantDomain` (the cascade set), not the service
+
+### RULE-SEC-009 — سحب العرض (VIEW) يسحب بقية إجراءات الشاشة / Revoking VIEW cascades the screen's other action grants
+Scope      : ENT-SEC-009
+Trigger    : on delete (action grant whose action code is the gateway `VIEW`)
+Statement  : The system shall delete every other action grant that role holds on the same screen when the role's VIEW action grant on that screen is revoked; revoking any other action deletes that action grant only.
+Data source: ENT-SEC-009 (the role's action grants on that screen) · ENT-SEC-006 (which registered action is VIEW, and the screen it belongs to)
+Message    : ar: "سحب إجراء العرض (VIEW) يسحب بقية إجراءات هذه الشاشة لهذا الدور" · en: "Revoking VIEW also revokes this role's other actions on this screen"
+Traces     : REQ-SEC-037
+Source     : docs/plans/tenant-maturity-plan.md §8b; ADR-SEC-062
+Decided by : `RoleActionGrantDomain` (the gateway test `isGatewayAction` and the cascade set), not the service
+
+### 3. SCR-REQ-SEC-005 — CHANGED
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | B1 Traces | + REQ-SEC-036, REQ-SEC-037 |
+| CHANGED | B3 Input | Unchecking a **screen** in the grant tree revokes that screen grant (REQ-SEC-036 / RULE-SEC-008: its action grants cascade). Unchecking an **action** revokes that action grant (REQ-SEC-037); unchecking the screen's **VIEW** action cascades the screen's other action grants (RULE-SEC-009). The response count lets the client name what went. |
+| unchanged | B4 Access | both revokes are grant-tree edits under UPDATE (`PERM_SEC_ROLES_UPDATE`) |
+
+B5 — API expectations, two rows added (the six existing rows are unchanged):
+| Operation | Verb | Path | Inputs | Outputs | RULEs | Traces (REQ) |
+|---|---|---|---|---|---|---|
+| revoke screen | DELETE | /api/v1/sec/roles/{id}/screens/{screenId} | — | confirmation (cascade count) | RULE-SEC-008 | REQ-SEC-036 |
+| revoke action | DELETE | /api/v1/sec/roles/{id}/actions/{actionId} | — | confirmation (cascade count) | RULE-SEC-009 | REQ-SEC-037 |
+
+### 4. Endpoints
+| Kind | Method | Path | Permission | Response (200, `ApiResponse<T>`) | Errors (HTTP · code) | Notes |
+|---|---|---|---|---|---|---|
+| NEW | DELETE | `/api/v1/sec/roles/{id}/screens/{screenId}` | `PERM_SEC_ROLES_UPDATE` | `ScreenGrantRevokeResponse { int revokedActionGrants }` — the action grants RULE-SEC-008 removed with the screen grant | 404 · `SEC-404-ROLE` (no role `{id}` in the caller's tenant — another tenant's role answers the same); 404 · `SEC-404-GRANT` (the role holds no grant for `{screenId}`, an unknown screen id included); 403 · `SEC-403-FORBIDDEN` (caller lacks the permission); 401 · `SEC-401-INVALID-CREDENTIALS` (no or invalid token) | `{screenId}` is the registry id `screenRegPk`, as in `POST /screens`. One transaction: the screen grant and its action grants. 200 with a body, not 204 — same reason as the module revoke (the cascade count). |
+| NEW | DELETE | `/api/v1/sec/roles/{id}/actions/{actionId}` | `PERM_SEC_ROLES_UPDATE` | `ActionGrantRevokeResponse { int revokedActionGrants }` — **every** action grant this call removed, the requested one included: `1` for a non-VIEW action, `1 + N` when the action is VIEW and the role held N other actions on that screen | 404 · `SEC-404-ROLE`; 404 · `SEC-404-GRANT` (the role holds no grant for `{actionId}`, an unknown action id included); 403 · `SEC-403-FORBIDDEN`; 401 · `SEC-401-INVALID-CREDENTIALS` | `{actionId}` is the registry id `actionRegPk`, as in `POST /actions`. One transaction. The role's screen grant is kept even when VIEW goes. |
+| unchanged | DELETE | `/api/v1/sec/roles/{id}/modules/{moduleId}` | `PERM_SEC_ROLES_UPDATE` | `ModuleGrantRevokeResponse` | 404 · `SEC-404-GRANT` | RULE-SEC-003 cascade exactly as before (no role pre-check added to it) |
+
+Order of checks on both new endpoints: role (`SEC-404-ROLE`) → grant (`SEC-404-GRANT`) → cascade
+decided by the Domain object → delete → audit. No new error code: `SEC-404-ROLE` and `SEC-404-GRANT`
+already exist in `SecErrorCodes` and in both message bundles (`messages.properties`,
+`messages_ar.properties`). Revoking from an inactive role is allowed (revoking only narrows access).
+
+### 5. Audit
+| Endpoint | SEC_AUDIT_LOG rows (`eventTypeCode`, `targetRef`) |
+|---|---|
+| revoke screen | one `ACTION_REVOKED` (`<roleId>/<actionRegPk>`) per cascaded action grant, then one `SCREEN_REVOKED` (`<roleId>/<screenRegPk>`) — N + 1 rows, the `revokeModule` pattern |
+| revoke action | one `ACTION_REVOKED` (`<roleId>/<actionRegPk>`) for the requested grant and one per action grant RULE-SEC-009 cascaded — `revokedActionGrants` rows |
+
+Both codes are already in the catalogue: §A6 AUDIT_EVENT_TYPE (rows `SCREEN_REVOKED`, `ACTION_REVOKED`),
+`module-registry-sec.md` AUTO-DECISIONS, and the `CHK_SEC_AUDIT_LOG_EVENT_TYPE` constraint of
+`V4__sec_schema.sql` (§5c); `RoleGrantService` already declares both constants for the module cascade.
+Actor = the calling user (`SEC_AUDIT_LOG.ACTOR_ID`), details bilingual. Grants are not `@Audited`
+entities, so nothing is written to `CORE_AUDIT_EVENT` (unchanged from 1.2.0).
+
+### 6. Behaviour notes (verified in code)
+| Kind | Note | Source |
+|---|---|---|
+| NEW (note) | **Sessions are not terminated.** A revoke takes effect on the role's users' next request: `JwtAuthenticationFilter.authenticate` re-reads the caller's authorities on every authenticated request through `MenuService.effectiveAuthorityCodes()` (QR-SEC-027, `RoleActionGrantRepository.findEffectiveGrantsForUser`), and the menu is read live by `MenuService` on each `GET /api/v1/sec/menu`. Nothing is cached in the token. | erp-core/src/main/java/com/erp/sec/security/JwtAuthenticationFilter.java (`authenticate`); erp-core/src/main/java/com/erp/sec/service/MenuService.java |
+| NEW (note) | **A super role keeps every authority.** For a role with `IS_SUPER = TRUE` (every tenant's `SYS_ADMIN`), `MenuService.withSuperRole` adds every active catalog authority on top of the grants (`RoleRepository.holdsActiveSuperRole`), so revoking its screen or action grants removes no authority; only its navigation menu changes, because the menu is built from grants (`ScreenRegistryRepository.findEffectiveScreensForUser`). Administrators find this surprising; the frontend shows it as a hint (F4). | MenuService.java (`withSuperRole`, `effectiveAuthorityCodes`); this file's 1.2.0 addendum §2 "Super role"; docs/steps/06-report.md "Super role" |
+| NEW (note) | The cascade decisions live on the Domain objects: `RoleScreenGrantDomain.cascadeOnRevoke(...)` (RULE-SEC-008) and `RoleActionGrantDomain.cascadeOnRevoke(...)` (RULE-SEC-009, gateway test `isGatewayAction`). The service loads the facts, asks the Domain object, deletes and audits. | build-create-entity "Domain Companion Object" |
+| unchanged | RULE-SEC-003 (module revoke cascade), RULE-SEC-001/002/007 on the grant side | — |
+
+### 7. Decisions
+| Kind | ADR | Decision |
+|---|---|---|
+| NEW | ADR-SEC-062 (plan name ADR-SEC-041; numbers up to 061 were issued historically, `docs/governance-vendoring-report.md` Appendix A) | Revoking VIEW **cascades** the screen's other action grants with a counted response, rather than refusing while other action grants exist — `governance/analysis/decisions/SEC/ADR-SEC-062.md` |
+
+### 8. Frontend impact (read by the frontend repository — plan §8 F4)
+| Kind | Item |
+|---|---|
+| NEW | Two endpoints above, for the grant tree's uncheck of a screen or an action. The screen revoke's confirm dialog can name the cascade from the grant tree (`GET /roles/{id}/grants`) before the call; the response count confirms it after. |
+| NEW | Unchecking VIEW warns that the screen's other actions cascade (RULE-SEC-009). |
+| NEW | For a role with `isSuper = true`, the tree shows that grants only shape its menu (§6). |
+| unchanged | No new screen, page code, permission or error code. |

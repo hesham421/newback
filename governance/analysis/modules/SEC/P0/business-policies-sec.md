@@ -145,3 +145,17 @@ Paths cited below are relative to the erp-core repository at that tag. Policy id
 | 10 | POL-SEC-005 trigger example (FIN entry-creator vs period-close approver): the `fin` module was removed from erp-core, so no consumer declares a conflicting pair; the guard stays implemented and inert. | CHANGED (context) | 01-STEP; docs/steps/01-report.md |
 
 Scope exceptions: MFA and SSO remain excluded (erp-core plan README §6 also excludes OAuth/OIDC).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package G — revoke a single screen or action grant
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids are NOT minted here; each delta is labelled NEW / CHANGED / REMOVED. Full text in
+`P1/srs-sec.md` → "Implementation Addendum — erp-core 1.3.0".
+
+| # | Policy-level delta | Kind | Source |
+|---|---|---|---|
+| 1 | POL-SEC-002 (no orphaned screen/action grant) now also holds on removal, one level at a time: an administrator can revoke a single screen grant, and the role's action grants on that screen go with it (RULE-SEC-008), or a single action grant; revoking a screen's VIEW also revokes the role's other actions on that screen, because without VIEW they have no effect (RULE-SEC-009, ADR-SEC-062). Before 1.3.0 only a whole module could be revoked. | CHANGED (scope extended to revocation) | docs/plans/tenant-maturity-plan.md §0 D7, §8b |
+| 2 | A revoke applies to the role's users from their next request; their sessions are not ended. | NEW | srs-sec.md 1.3.0 addendum §6 |
+| 3 | A super role (every tenant's `SYS_ADMIN`) keeps every permission whatever its grants (1.2.0 addendum #6); revoking its screens or actions changes only its menu. | NEW (clarification) | srs-sec.md 1.3.0 addendum §6 |

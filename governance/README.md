@@ -23,7 +23,7 @@ governance/
     platform/               PROJECT-OVERVIEW.md (the platform as implemented) ·
                             project-registry.md (live modules, screens, contract, test suites)
     domain/                 domain-profile.md (the original domain analysis, verbatim)
-    decisions/<MOD>/        the ADRs that still describe the current code (SEC 13, MDL 12)
+    decisions/<MOD>/        the ADRs that still describe the current code (SEC 14, MDL 12)
     modules/<MOD>/          P0 (policies, module registry, platform summary) · P0_5 (PRD) ·
                             P1 (SRS + registry) · P2 (DB script + registry) · P2_5 (UI/UX spec,
                             flow diagram — FILE, NOTIF, MDL) — verbatim, for SEC, MDL, CU, FILE, NOTIF;
