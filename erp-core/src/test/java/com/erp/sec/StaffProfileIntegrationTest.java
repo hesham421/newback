@@ -97,6 +97,30 @@ class StaffProfileIntegrationTest extends AbstractStaffAccountIntegrationTest {
         assertThat(stored).isEqualTo("ar");
     }
 
+    /**
+     * Review round 1: a multipart request without the {@code file} part, a non-multipart request, and an
+     * upload above Spring's default 1 MB multipart ceiling (this context keeps it) answer 400, not 500.
+     */
+    @Test
+    void malformedOrOversizePhotoRequests_answer400ValidationError() {
+        String username = unique("mp-");
+        createUser(username, false);
+        String token = login(username, PASSWORD);
+
+        HttpResponse<String> missing = api.putFile(token, "/api/v1/sec/me/photo", "other", "x.png", new byte[] {1, 2, 3});
+        assertThat(missing.statusCode()).as(missing.body()).isEqualTo(400);
+        assertThat(errorCode(missing)).isEqualTo("VALIDATION_ERROR");
+        assertThat((String) JsonPath.read(missing.body(), "$.error.fieldErrors[0].field")).isEqualTo("file");
+
+        HttpResponse<String> notMultipart = api.put(token, "/api/v1/sec/me/photo", "{}");
+        assertThat(notMultipart.statusCode()).as(notMultipart.body()).isEqualTo(400);
+        assertThat(errorCode(notMultipart)).isEqualTo("VALIDATION_ERROR");
+
+        HttpResponse<String> oversize = api.putFile(token, "/api/v1/sec/me/photo", "big.png", new byte[2 * 1024 * 1024]);
+        assertThat(oversize.statusCode()).as(oversize.body()).isEqualTo(400);
+        assertThat(errorCode(oversize)).isEqualTo("VALIDATION_ERROR");
+    }
+
     @Test
     void theDatabaseRefusesAnUnknownLocale_too() {
         String username = unique("chk-");

@@ -130,9 +130,14 @@ public final class StaffApiClient {
 
     /** tenant-maturity D — {@code PUT} of a multipart body with one part {@code file}. */
     public HttpResponse<String> putFile(String token, String path, String fileName, byte[] content) {
+        return putFile(token, path, "file", fileName, content);
+    }
+
+    /** {@code PUT} of a multipart body with one part named {@code partName}. */
+    public HttpResponse<String> putFile(String token, String path, String partName, String fileName, byte[] content) {
         String boundary = "----erp" + UUID.randomUUID().toString().replace("-", "");
         ByteArrayOutputStream multipart = new ByteArrayOutputStream();
-        multipart.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
+        multipart.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + partName + "\"; filename=\""
             + fileName + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         multipart.writeBytes(content);
         multipart.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
