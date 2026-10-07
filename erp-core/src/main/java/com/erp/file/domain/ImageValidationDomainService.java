@@ -2,6 +2,9 @@ package com.erp.file.domain;
 
 import com.erp.file.crossmodule.FileImageStoreApi;
 import com.erp.file.crossmodule.ImageRejection;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
@@ -11,17 +14,15 @@ import java.util.regex.Pattern;
 /**
  * RULE-FILE-008 / RULE-FILE-009 (tenant-maturity D.4) — the image store's decisions: the content type is
  * detected from the bytes only (PNG / JPEG / WebP magic numbers, SVG text), must be one the caller allows,
- * the size must be 1..maxBytes, and an SVG must carry no script, event handler, external reference,
- * DOCTYPE / ENTITY or {@code foreignObject} (rejected, never rewritten). Pure decisions, no I/O.
+ * the size must be 1..maxBytes, and an SVG must pass {@link SvgAllowList} (strict UTF-8, secure parse, only
+ * allow-listed SVG elements and attributes, local references only). Pure decisions, no I/O.
  */
 public final class ImageValidationDomainService {
 
     private static final byte[] PNG_MAGIC = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
-
-    private static final Pattern EVENT_HANDLER = Pattern.compile("[\\s/\"']on[a-z0-9_.:-]*\\s*=");
-    private static final Pattern HREF = Pattern.compile("(?:xlink:)?href\\s*=\\s*(\"|')?\\s*([^\"'\\s>]*)");
-    private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(\"|')?\\s*([^\"')\\s]*)");
     private static final Pattern SVG_ROOT = Pattern.compile("^<svg[\\s>/]");
+    private static final Pattern DECLARED_ENCODING =
+        Pattern.compile("^<\\?xml[^>]*\\bencoding\\s*=\\s*[\"']([^\"']+)[\"']");
 
     private ImageValidationDomainService() {
         throw new UnsupportedOperationException("Utility class — cannot be instantiated");
@@ -47,7 +48,7 @@ public final class ImageValidationDomainService {
         if (type == null || allowedTypes == null || !allowedTypes.contains(type)) {
             return new Verdict(null, ImageRejection.TYPE_NOT_ALLOWED);
         }
-        if (FileImageStoreApi.TYPE_SVG.equals(type) && !isSafeSvg(new String(content, StandardCharsets.UTF_8))) {
+        if (FileImageStoreApi.TYPE_SVG.equals(type) && !isSafeSvg(content)) {
             return new Verdict(null, ImageRejection.UNSAFE_SVG);
         }
         return new Verdict(type, null);
@@ -68,29 +69,32 @@ public final class ImageValidationDomainService {
     }
 
     /**
-     * RULE-FILE-009 — false when the SVG text holds a {@code <script}, an {@code on…=} attribute, an
-     * {@code href} / CSS {@code url(…)} that is not a same-document fragment, {@code javascript:},
-     * {@code <!DOCTYPE} / {@code <!ENTITY} or {@code <foreignObject}.
+     * RULE-FILE-009 — the bytes are strict UTF-8 (no other declared encoding) and the document passes the
+     * SVG allow-list; anything unparseable is unsafe.
      */
-    public static boolean isSafeSvg(String svg) {
-        String text = svg.toLowerCase(Locale.ROOT);
-        if (text.contains("<script") || text.contains("javascript:") || text.contains("<!doctype")
-            || text.contains("<!entity") || text.contains("<foreignobject") || text.contains("@import")) {
+    public static boolean isSafeSvg(byte[] content) {
+        String text;
+        try {
+            text = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(content)).toString();
+        } catch (CharacterCodingException e) {
             return false;
         }
-        if (EVENT_HANDLER.matcher(text).find()) {
+        if (text.startsWith("\uFEFF")) {
+            text = text.substring(1);
+        }
+        Matcher encoding = DECLARED_ENCODING.matcher(text);
+        if (encoding.find() && !"utf-8".equalsIgnoreCase(encoding.group(1).trim())) {
             return false;
         }
-        return onlyFragments(HREF.matcher(text)) && onlyFragments(CSS_URL.matcher(text));
+        return SvgAllowList.accepts(text);
     }
 
-    private static boolean onlyFragments(Matcher matcher) {
-        while (matcher.find()) {
-            if (!matcher.group(2).startsWith("#")) {
-                return false;
-            }
-        }
-        return true;
+    /** {@link #isSafeSvg(byte[])} over the UTF-8 bytes of {@code svg}. */
+    public static boolean isSafeSvg(String svg) {
+        return svg != null && isSafeSvg(svg.getBytes(StandardCharsets.UTF_8));
     }
 
     /** SVG text: after an optional BOM, XML declaration, comments, DOCTYPE and whitespace, the root is {@code <svg}. */
