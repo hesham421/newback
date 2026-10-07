@@ -56,6 +56,7 @@ Shape: `LoginResponse`
 | accessToken | string | No |  | Signed JWT access token - رمز الوصول الموقَّع | eyJhbGciOiJIUzI1NiJ9... |
 | tokenType | string | No |  | Token type - نوع الرمز | Bearer |
 | expiresIn | integer (int64) | No |  | Lifetime in seconds - مدة الصلاحية بالثواني | 3600 |
+| passwordChangeRequired | boolean | No |  | tenant-maturity D: the user must change the password before anything else (always false for customers) - يلزم تغيير كلمة المرور قبل أي عملية أخرى | false |
 
 **Response Example**
 
@@ -63,7 +64,8 @@ Shape: `LoginResponse`
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
   "tokenType": "Bearer",
-  "expiresIn": 3600
+  "expiresIn": 3600,
+  "passwordChangeRequired": false
 }
 ```
 
