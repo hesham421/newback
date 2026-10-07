@@ -233,7 +233,7 @@ public class TenantService {
         TenantDomain domain = TenantDomain.from(tenant);
 
         Integer terminated = TenantContext.callAs(id, () -> new TransactionTemplate(transactionManager)
-            .execute(status -> resetInsideTenant(domain, request)));
+            .execute(status -> resetInsideTenant(request, domain)));
         log.info("Password of administrator {} of tenant ID: {} reset; sessions terminated: {}",
             request.getUsername(), id, terminated);
 
@@ -263,7 +263,7 @@ public class TenantService {
     }
 
     /** Runs inside tenant {@code domain}'s transaction: facts from SEC, decision here, write by SEC. */
-    private int resetInsideTenant(TenantDomain domain, TenantAdminResetRequest request) {
+    private int resetInsideTenant(TenantAdminResetRequest request, TenantDomain domain) {
         Optional<RecoveryTarget> target = adminRecovery.findRecoveryTarget(request.getUsername());
         domain.assertCanResetAdministrator(request.getUsername(), target.isPresent(),
             target.map(RecoveryTarget::superRole).orElse(false));

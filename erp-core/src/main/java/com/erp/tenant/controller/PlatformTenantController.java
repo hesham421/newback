@@ -76,7 +76,7 @@ public class PlatformTenantController {
     @PutMapping("/{id}")
     @Operation(summary = "Update a tenant's names and profile",
         description = "The code and the status never change here - تعديل أسماء المستأجر وملفه")
-    public ResponseEntity<ApiResponse<TenantResponse>> update(
+    public ResponseEntity<ApiResponse<TenantResponse>> updateTenant(
             @PathVariable Long id,
             @Valid @RequestBody TenantUpdateRequest request) {
         return operationCode.craftResponse(service.update(id, request));
