@@ -6,6 +6,7 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.common.util.TokenHasher;
 import com.erp.events.DomainEventPublisher;
 import com.erp.events.FileDocumentPublishedEvent;
+import com.erp.file.crossmodule.FileImageStoreApi;
 import com.erp.file.crossmodule.ImageStoreRequest;
 import com.erp.file.crossmodule.ImageStoreResult;
 import com.erp.file.crossmodule.StoredImage;
@@ -22,6 +23,8 @@ import com.erp.file.storage.StorageTarget;
 import com.erp.file.storage.StoredObject;
 import com.erp.tenant.TenantContext;
 import java.io.ByteArrayInputStream;
+import java.util.Locale;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,7 +44,10 @@ import org.springframework.util.StringUtils;
 @Slf4j
 public class FileImageStoreService {
 
-    private static final String DEFAULT_FILE_NAME = "image";
+    private static final String DEFAULT_BASE_NAME = "image";
+    private static final Map<String, String> EXTENSIONS = Map.of(
+        FileImageStoreApi.TYPE_PNG, "png", FileImageStoreApi.TYPE_JPEG, "jpg",
+        FileImageStoreApi.TYPE_WEBP, "webp", FileImageStoreApi.TYPE_SVG, "svg");
 
     private final FileDocumentRepository repository;
     private final FileMapper mapper;
@@ -66,7 +72,7 @@ public class FileImageStoreService {
         }
 
         StorageProvider provider = storageProviders.active();
-        String fileName = StringUtils.hasText(request.fileName()) ? request.fileName() : DEFAULT_FILE_NAME;
+        String fileName = storedFileName(request.baseName(), verdict.contentType());
         UploadRequest owner = UploadRequest.builder()
             .ownerType(request.ownerType())
             .ownerId(request.ownerId())
@@ -110,6 +116,12 @@ public class FileImageStoreService {
                 log.info("Discarded public image ID: {}", documentId);
             });
         return ServiceResult.success(null);
+    }
+
+    /** RULE-FILE-010 — {@code <base>.<ext>} from the detected type; the base is reduced to {@code [a-z0-9_-]}. */
+    static String storedFileName(String baseName, String contentType) {
+        String base = baseName == null ? "" : baseName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
+        return (base.isEmpty() ? DEFAULT_BASE_NAME : base) + "." + EXTENSIONS.getOrDefault(contentType, "bin");
     }
 
     /** RULE-FILE-005 — a caller bug, not a user error: every image has an owner. */

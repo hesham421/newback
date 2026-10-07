@@ -69,7 +69,8 @@ class FileImageStoreIntegrationTest extends AbstractIntegrationTest {
         assertThat(result.image().size()).isEqualTo(png.length);
         assertThat(result.image().publicUrl()).startsWith("/api/v1/public/files/PLATFORM/");
         Map<String, Object> row = jdbcTemplate.queryForMap("SELECT FILE_CATEGORY_FK, VISIBILITY, FILE_STATUS_ID, FILE_TYPE_ID,"
-            + " CONTENT_TYPE, OWNER_TYPE, MODULE_CODE FROM FILE_DOCUMENT WHERE ID = ?", result.image().documentId());
+            + " CONTENT_TYPE, OWNER_TYPE, MODULE_CODE, FILE_NAME FROM FILE_DOCUMENT WHERE ID = ?", result.image().documentId());
+        assertThat(row).as("the name comes from the detected type, never the client").containsEntry("file_name", "polyhtml.png");
         assertThat(row.get("file_category_fk")).isNull();
         assertThat(row).containsEntry("visibility", "PUBLIC").containsEntry("file_status_id", "ACTIVE")
             .containsEntry("file_type_id", "IMAGE").containsEntry("content_type", "image/png")
@@ -80,6 +81,8 @@ class FileImageStoreIntegrationTest extends AbstractIntegrationTest {
         assertThat(served.body()).isEqualTo(png);
         assertThat(served.headers().firstValue("Content-Disposition")).hasValueSatisfying(v -> assertThat(v).startsWith("inline"));
         assertThat(served.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
+        assertThat(served.headers().firstValue("Content-Disposition")).hasValueSatisfying(v -> assertThat(v)
+            .contains("polyhtml.png").doesNotContain(".html\""));
 
         assertThat(lookupApi.publicUrl(result.image().documentId())).hasValue(result.image().publicUrl());
         assertThat(lookupApi.publicUrls(List.of(result.image().documentId(), 987_654_321L)))
@@ -129,6 +132,6 @@ class FileImageStoreIntegrationTest extends AbstractIntegrationTest {
     }
 
     private static ImageStoreRequest request(byte[] content, long maxBytes, Set<String> allowed) {
-        return new ImageStoreRequest("TEST_OWNER", 4711L, "TEST", content, "image.bin", maxBytes, allowed);
+        return new ImageStoreRequest("TEST_OWNER", 4711L, "TEST", content, "../poly.html", maxBytes, allowed);
     }
 }

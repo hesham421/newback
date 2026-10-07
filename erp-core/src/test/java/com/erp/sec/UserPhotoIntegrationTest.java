@@ -54,6 +54,8 @@ class UserPhotoIntegrationTest extends AbstractStaffAccountIntegrationTest {
         assertThat(document).containsEntry("owner_type", "SEC_USER").containsEntry("owner_id", id)
             .containsEntry("module_code", "SEC").containsEntry("visibility", "PUBLIC").containsEntry("file_status_id", "ACTIVE");
         assertThat(document.get("file_category_fk")).isNull();
+        assertThat(jdbcTemplate.queryForObject("SELECT d.FILE_NAME FROM FILE_DOCUMENT d JOIN SEC_USER u ON u.PHOTO_FILE_ID = d.ID"
+            + " WHERE u.USER_PK = ?", String.class, id)).as("never the client's name (me2.png)").isEqualTo("photo.png");
 
         HttpResponse<String> removed = api.delete(token, "/api/v1/sec/me/photo");
         assertThat(removed.statusCode()).isEqualTo(204);

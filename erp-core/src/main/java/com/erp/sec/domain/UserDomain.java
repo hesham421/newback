@@ -40,6 +40,9 @@ public final class UserDomain {
     public static final String PHOTO_OWNER_TYPE = "SEC_USER";
     public static final String PHOTO_MODULE_CODE = "SEC";
 
+    /** Base name of a stored photo; FILE adds the extension of the detected type (never the client's name). */
+    public static final String PHOTO_BASE_NAME = "photo";
+
     /** The multipart part name of a photo upload. */
     private static final String FIELD_PHOTO_FILE = "file";
 

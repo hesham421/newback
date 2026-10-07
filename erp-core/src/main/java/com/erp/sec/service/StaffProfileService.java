@@ -101,7 +101,7 @@ public class StaffProfileService {
         log.info("Setting the photo of User ID: {}", user.getUserPk());
         ImageStoreResult result = fileImageStoreApi.storePublicImage(new ImageStoreRequest(
             UserDomain.PHOTO_OWNER_TYPE, user.getUserPk(), UserDomain.PHOTO_MODULE_CODE, readBytes(file),
-            file == null ? null : file.getOriginalFilename(), UserDomain.PHOTO_MAX_BYTES, UserDomain.PHOTO_TYPES));
+            UserDomain.PHOTO_BASE_NAME, UserDomain.PHOTO_MAX_BYTES, UserDomain.PHOTO_TYPES));
         UserDomain.assertPhotoAccepted(result.isStored());
 
         Long previous = user.getPhotoFileId();
