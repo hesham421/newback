@@ -136,7 +136,7 @@ None (no field, no LOV value). Image-store documents are ordinary `FILE_DOCUMENT
 | Rule | Delta |
 |---|---|
 | RULE-FILE-008 | NEW: image type detected from the content (PNG / JPEG / WebP magic bytes, SVG text), must be allowed by the request; size 1..`maxBytes` |
-| RULE-FILE-009 | NEW: SVG only when the request allows it, and only if it passes the allow-list (strict UTF-8, hardened parse without DOCTYPE/entities, SVG-namespace static elements and listed attributes only, local `#` references only, no CSS escapes / `@import` / external `url()`) — rejected, never rewritten (review round 1) |
+| RULE-FILE-009 | NEW: SVG only when the request allows it, and only if it passes the allow-list (strict UTF-8, hardened parse, comments + one `<svg>` root and no processing instruction, SVG-namespace static elements, listed attributes plus inert `data-*`, local `#` references, CSS without escapes / `//` / at-rules but `@media` / fetching functions, `url(#…)` only, `<style>` without comments, depth ≤ 64, ≤ 100 flat `<use>`) — rejected, never rewritten (review rounds 1–2) |
 | RULE-FILE-010 | NEW: image-store documents are uncategorised, PUBLIC at once with a random slug, served on the public path; discard = DELETED + PRIVATE |
 | step 07 publish rule | CHANGED: the public lookup also serves an uncategorised PUBLIC document (only the image store creates one; `PATCH /visibility` unchanged) |
 

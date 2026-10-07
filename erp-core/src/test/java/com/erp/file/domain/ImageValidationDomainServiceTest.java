@@ -14,7 +14,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * erp-core 1.3.0 (TM-D D.4) — RULE-FILE-008 (type from the bytes, size) and RULE-FILE-009 (SVG allow-list),
  * including every bypass of the review-round-1 probe (namespace prefixes, CSS escapes, SMIL, xml:base,
- * DOCTYPE / entities, non-UTF-8).
+ * DOCTYPE / entities, non-UTF-8) and of round 2 (processing instructions, split style text, URL-less CSS
+ * fetches, nested {@code <use>}, depth).
  */
 class ImageValidationDomainServiceTest {
 
@@ -149,6 +150,130 @@ class ImageValidationDomainServiceTest {
             .contentType()).isEqualTo("image/png");
         assertThat(ImageValidationDomainService.check(concat(Arrays.copyOf(JPEG, 3), utf8("<script>")), 1_000, RASTER)
             .contentType()).isEqualTo("image/jpeg");
+    }
+
+    /** Review round 2: the reviewer's SvgProbe2 attack set plus the CSS-grammar cases (NS / BS placeholders). */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        // processing instructions anywhere (document level included)
+        "<?xml version=\"1.0\"?><?xml-stylesheet type=\"text/css\" href=\"http://evil/x.css\"?><svg NS><rect/></svg>",
+        "<?xml-stylesheet type=\"text/xsl\" href=\"/x.xsl\"?><svg NS><rect/></svg>",
+        "<svg NS><rect/></svg><?xml-stylesheet href=\"http://evil/x.css\"?>",
+        "<svg NS><?xml-stylesheet href=\"http://evil/x.css\"?><rect/></svg>",
+        // style text split by comments or CDATA
+        "<svg NS><style>@imp<!-- x -->ort 'http://evil/x.css';</style></svg>",
+        "<svg NS><style>rect{fill:u<!-- x -->rl(http://evil/x)}</style></svg>",
+        "<svg NS><style>rect{fill:u<![CDATA[rl(http://evil/x)}]]></style></svg>",
+        "<svg NS><style>rect{fill:url(#a)} x{behavior:java<!---->script:alert(1)}</style></svg>",
+        "<svg NS><style><!-- rect{fill:red} --></style></svg>",
+        "<svg NS><style>rect{fill:red}<title>x</title></style></svg>",
+        // CSS functions and rules that fetch without url(
+        "<svg NS><style>svg{background-image:image-set('http://evil/x.png' 1x)}</style></svg>",
+        "<svg NS><style>svg{background-image:-webkit-image-set('x.png' 1x)}</style></svg>",
+        "<svg NS><style>svg{background-image:image-set(\"x.png\" 1x)}</style></svg>",
+        "<svg NS><style>svg{background:image('x.png')}</style></svg>",
+        "<svg NS><style>svg{background:cross-fade(url(#a), 'x.png')}</style></svg>",
+        "<svg NS><style>svg{background:src('x.png')}</style></svg>",
+        "<svg NS><style>svg{background:element(#a)}</style></svg>",
+        "<svg NS><style>svg{background:paint(x)}</style></svg>",
+        "<svg NS><style>@font-face{font-family:x;src:url(http://evil/f.woff)}</style></svg>",
+        "<svg NS><style>@font-face{font-family:x;src:local(x)}</style></svg>",
+        "<svg NS><style>@namespace svg url(http://www.w3.org/2000/svg);</style></svg>",
+        "<svg NS><style>@charset 'utf-8';</style></svg>",
+        "<svg NS><style>rect{fill:url( '//evil/x' )}</style></svg>",
+        "<svg NS><rect style=\"fill:image-set('http://evil/x.png' 1x)\"/></svg>",
+        "<svg NS><rect style=\"cursor:url(x.cur),auto\"/></svg>",
+        "<svg NS><rect fill=\"image-set('//evil/x.png' 1x)\"/></svg>",
+        "<svg NS><rect style=\"fill:ur/**/l(http://evil/x)\"/></svg>",
+        "<svg NS><style>rect{fill:url(data:image/png;base64,AA)}</style></svg>",
+        "<svg NS><style>rect{-moz-binding:url(#x)}</style></svg>",
+        "<svg NS><rect style=\"fill:url(#x);stroke:url(http://evil)\"/></svg>",
+        "<svg NS><rect style=\"fill:u&#x5c;rl(http://evil)\"/></svg>",
+        "<svg NS><style>rect{fill:u&#x5c;rl(http://evil)}</style></svg>",
+        // namespaces, roots, elements and attributes of SvgProbe2
+        "<svg NS><Script>alert(1)</Script></svg>",
+        "<SVG NS/>",
+        "<svg NS><g xmlns=\"http://www.w3.org/1999/xhtml\"><script>alert(1)</script></g></svg>",
+        "<svg xmlns=\"http://www.w3.org/1999/xhtml\"><script>alert(1)</script></svg>",
+        "<svg NS xmlns:s=\"http://www.w3.org/2000/svg\" s:onload=\"alert(1)\"/>",
+        "<svg NS><use href=\"#x javascript:alert(1)\"/></svg>",
+        "<svg NS xmlns:xlink=\"http://www.w3.org/1999/xlink\"><use xlink:href=\"data:image/svg+xml,x#a\"/></svg>",
+        "<svg NS><text><![CDATA[x]]></text></svg>",
+        "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\"><svg NS/>",
+        "<svg NS data-x=\"javascript:alert(1)\"/>",
+        "<svg NS><g data-src=\"//evil/x\"/></svg>",
+        // still refused on purpose: editor metadata (export plain / optimised SVG)
+        "<svg NS xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" viewBox=\"0 0 10 10\"><metadata id=\"m\"><rdf:RDF/></metadata><rect width=\"10\" height=\"10\"/></svg>",
+        "<svg NS xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\" viewBox=\"0 0 10 10\"><sodipodi:namedview id=\"n\"/><rect width=\"10\" height=\"10\"/></svg>",
+        "<svg NS xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"><g inkscape:label=\"L\"/></svg>",
+        // nested <use> references (renderer amplification)
+        "<svg NS><defs><rect id=\"a\"/><use id=\"b\" href=\"#a\"/></defs><use href=\"#b\"/></svg>",
+        "<svg NS><defs><rect id=\"a\"/><g id=\"b\"><use href=\"#a\"/></g></defs><use href=\"#b\"/></svg>",
+        "<svg NS><g id=\"self\"><use href=\"#self\"/></g></svg>",
+    })
+    void roundTwoAttacksAndRefusedExports_areRejected(String template) {
+        String svg = template.replace("NS", NS).replace("BS", BS);
+        assertThat(ImageValidationDomainService.isSafeSvg(svg)).as(svg).isFalse();
+    }
+
+    /** Review round 2: the legitimate exports of SvgProbe2 (Figma, Illustrator incl. data-name, Sketch) still pass. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "<svg NS><defs><rect id=\"x\" width=\"1\" height=\"1\"/></defs><use href=\"#x\"/></svg>",
+        "﻿<svg NS><rect width=\"1\" height=\"1\"/></svg>",
+        "﻿<?xml version=\"1.0\" encoding=\"UTF-8\"?><svg NS/>",
+        "<!-- logo --><svg NS><rect/></svg>",
+        "<svg NS><!-- <script>alert(1)</script> --><rect/></svg>",
+        "<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" NS><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M12 2L2 22h20L12 2z\" fill=\"#0A84FF\"/></svg>",
+        "<svg width=\"40\" height=\"40\" viewBox=\"0 0 40 40\" fill=\"none\" NS><g clip-path=\"url(#clip0_1_2)\"><rect width=\"40\" height=\"40\" rx=\"8\" fill=\"#111\"/></g><defs><clipPath id=\"clip0_1_2\"><rect width=\"40\" height=\"40\" fill=\"white\"/></clipPath></defs></svg>",
+        "<svg NS viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f00\"/><stop offset=\"1\" stop-color=\"#00f\" stop-opacity=\".5\"/></linearGradient></defs><circle cx=\"50\" cy=\"50\" r=\"40\" fill=\"url(#g)\"/><text x=\"50\" y=\"55\" font-family=\"'Segoe UI', Arial\" text-anchor=\"middle\">ACME</text></svg>",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Generator: Adobe Illustrator 24.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->\n<svg version=\"1.1\" id=\"Layer_1\" NS xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\" viewBox=\"0 0 100 100\" style=\"enable-background:new 0 0 100 100;\" xml:space=\"preserve\">\n<style type=\"text/css\">\n\t.st0{fill:#FF0000;}\n</style>\n<circle class=\"st0\" cx=\"50\" cy=\"50\" r=\"40\"/>\n</svg>",
+        "<svg NS viewBox=\"0 0 10 10\"><g id=\"Layer_2\" data-name=\"Layer 2 (final)\"><rect width=\"10\" height=\"10\"/></g></svg>",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><svg width=\"20px\" height=\"20px\" viewBox=\"0 0 20 20\" version=\"1.1\" NS xmlns:xlink=\"http://www.w3.org/1999/xlink\"><title>logo</title><desc>Created with Sketch.</desc><g id=\"Page-1\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\"><circle fill=\"#D8D8D8\" cx=\"10\" cy=\"10\" r=\"10\"></circle></g></svg>",
+        "<svg NS><style>.a{fill:rgb(1,2,3);stroke:hsl(10 50% 50%)} @media (prefers-color-scheme: dark) and (min-width: 10px){.a{fill:#fff}} /* note */</style><rect class=\"a\" transform=\"translate(1 2) rotate(45 5 5) scale(2)\"/></svg>",
+        "<svg NS><style><![CDATA[.b{fill:url(#g);filter:drop-shadow(0 0 1px #000)}]]></style><rect class=\"b\"/></svg>",
+    })
+    void roundTwoLegitimateExports_areAccepted(String template) {
+        String svg = template.replace("NS", NS);
+        assertThat(ImageValidationDomainService.isSafeSvg(svg)).as(svg).isTrue();
+    }
+
+    @Test
+    void useAmplificationAndDepth_areBounded() {
+        StringBuilder amplified = new StringBuilder("<svg " + NS + "><defs><rect id=\"a0\" width=\"1\" height=\"1\"/>");
+        for (int i = 1; i <= 12; i++) {
+            amplified.append("<g id=\"a").append(i).append("\">");
+            for (int j = 0; j < 10; j++) {
+                amplified.append("<use href=\"#a").append(i - 1).append("\"/>");
+            }
+            amplified.append("</g>");
+        }
+        amplified.append("</defs><use href=\"#a12\"/></svg>");
+        assertThat(ImageValidationDomainService.isSafeSvg(amplified.toString())).as("10^12 instances").isFalse();
+
+        assertThat(ImageValidationDomainService.isSafeSvg(uses(SvgAllowList.MAX_USE_ELEMENTS))).isTrue();
+        assertThat(ImageValidationDomainService.isSafeSvg(uses(SvgAllowList.MAX_USE_ELEMENTS + 1))).isFalse();
+
+        assertThat(ImageValidationDomainService.isSafeSvg(nested(SvgAllowList.MAX_DEPTH))).isTrue();
+        assertThat(ImageValidationDomainService.isSafeSvg(nested(SvgAllowList.MAX_DEPTH + 1))).isFalse();
+        assertThat(ImageValidationDomainService.isSafeSvg(nested(140_000))).isFalse();
+
+        StringBuilder wide = new StringBuilder("<svg " + NS + ">");
+        while (wide.length() < 1_000_000) {
+            wide.append("<rect/>");
+        }
+        assertThat(ImageValidationDomainService.isSafeSvg(wide.append("</svg>").toString())).as("wide, 1 MB").isTrue();
+    }
+
+    /** {@code count} flat {@code <use>} references to one rectangle. */
+    private static String uses(int count) {
+        return "<svg " + NS + "><defs><rect id=\"r\" width=\"1\" height=\"1\"/></defs>"
+            + "<use href=\"#r\"/>".repeat(count) + "</svg>";
+    }
+
+    /** An {@code <svg>} root (depth 1) holding {@code depth - 1} nested {@code <g>}. */
+    private static String nested(int depth) {
+        return "<svg " + NS + ">" + "<g>".repeat(depth - 1) + "</g>".repeat(depth - 1) + "</svg>";
     }
 
     private static byte[] utf8(String text) {

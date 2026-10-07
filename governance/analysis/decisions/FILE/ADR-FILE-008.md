@@ -52,6 +52,8 @@ Reasons:
   `Content-Security-Policy: sandbox; default-src 'none'`. An `<img src>` renders it regardless of the
   disposition; opening the URL directly downloads it. E keeps it so (open point recorded in the FILE 1.3.0
   addendum, not changed by D).
+- SVG logos (package E) must be plain / optimised SVG: RULE-FILE-009 is an allow-list (review rounds 1–2) that
+  refuses editor metadata, DOCTYPE, processing instructions, fetching CSS and nested `<use>`.
 - Image-store documents appear in FILE's owner list (`GET /api/v1/files?ownerType=SEC_USER&ownerId=…&moduleCode=SEC`)
   with their `publicUrl`, like any document.
 - Non-breaking: no schema change; existing category-gated public files behave exactly as before.
