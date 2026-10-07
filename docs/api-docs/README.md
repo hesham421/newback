@@ -93,5 +93,10 @@ Five modules pass every assertion: SEC, TENANT, MDL, SEQUENCE and REPORT. These 
 | AUDIT | business-errors 0/1 | `AUDIT_ACTION_INVALID` is thrown only on the write path (`AuditApi`, cross-module). The single HTTP endpoint is a read. The result is correct, but the assertion has no waiver mechanism here. |
 | APP | permissions, business-errors | `DevPasswordResetController` delegates to `com.erp.sec.service.DevPasswordResetSupportService`, which is outside the app's source root (`SERVICE_SOURCE_MISSING`). |
 
+Not a `check` failure, but a known gap of the business-error extraction: errors raised by a module through the
+tenant provisioning SPI (`TenantProvisioningContributor` implementations, e.g. SEC's 400 `SEC-400-PASSWORD-POLICY` for
+`adminPassword` since 1.3.0) are not reached by the generator's call walk from `POST /api/v1/platform/tenants`, so
+they appear only in that endpoint's description (TM-D review round 1).
+
 The affected endpoints document the outcome explicitly (for example "**Authorization**: not extracted — no controller method matching this route was found")
 instead of claiming that no permission is required. Do not fix these by hand-editing the docs.
