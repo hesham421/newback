@@ -13,14 +13,18 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "FIXING",
       "branch": "tm/a-tenant-analysis",
       "worktree": ".worktrees/tm-a",
       "attempts": 1,
       "deviations": 1,
       "implementer_agent": "a3e7f307b14549283",
       "reviewer_agent": "ad3e343037a8fad2e",
-      "review": null,
+      "review": {
+        "verdict": "PASS-with-findings",
+        "round": 1,
+        "findings": 3
+      },
       "report": "docs/steps/tm-a-report.md",
       "merged_commit": null
     },
@@ -275,6 +279,12 @@
       "step": "G",
       "event": "REVIEW",
       "note": "implementer COMPLETE 9d3c3af (mvn 399/10, P-LIVE 156/156); reviewer dispatched"
+    },
+    {
+      "at": "2026-10-07T19:43:03Z",
+      "step": "A",
+      "event": "FIXING",
+      "note": "reviewer PASS with 3 low findings (prd template, provisioning overstated, 18->22 deviation); sent to implementer"
     }
   ]
 }
