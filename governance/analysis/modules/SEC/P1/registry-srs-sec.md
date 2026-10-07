@@ -163,7 +163,7 @@ Consumed (package D)
 |---|---|---|---|
 | NEW | FILE | `FileImageStoreApi` (XM-FILE-002), `FileDocumentLookupApi.publicUrl` / `publicUrls` — XM-SEC-006 | SOFT (in-core API, no FK) |
 | CHANGED | tenant | `TenantLookupApi.summaryOf` (XM-TENANT-001) | in-core API |
-| NEW (consumer) | NOTIF | reacts to `UserPasswordChangedEvent` (RULE-NOTIF-009) | event bus |
+| NEW (consumer) | NOTIF | reacts to `UserPasswordChangedEvent` (RULE-NOTIF-023) | event bus |
 
 Requirements — new / changed items (package D)
 | Kind | Id | Title | Traces |
@@ -176,7 +176,7 @@ Requirements — new / changed items (package D)
 | NEW | REQ-SEC-087 / AC-SEC-093 | Profile photo (own and another staff user's) | US-SEC-001, US-SEC-002; RULE-SEC-061; SCR-REQ-SEC-004 |
 | NEW | REQ-SEC-088 / AC-SEC-094 | Profile fields in user management, `passwordChangeRequired` at login | US-SEC-002; RULE-SEC-058, RULE-SEC-062; SCR-REQ-SEC-004 |
 | NEW | REQ-SEC-089 / AC-SEC-095 | Password-change event (NOTIF e-mail) | US-SEC-001 |
-| NEW | RULE-SEC-056 | Password policy (`PasswordPolicy`) | REQ-SEC-082 |
+| NEW | RULE-SEC-056 | Password policy (`PasswordPolicy`): 8..72 characters, ≤ 72 UTF-8 bytes (BCrypt), letter + digit; customers get the byte limit only | REQ-SEC-082 |
 | NEW | RULE-SEC-057 | No admin-set on oneself (`SEC-422-PASSWORD-SELF`) | REQ-SEC-083 |
 | NEW | RULE-SEC-058 | An administrator-chosen password must be changed (default TRUE) | REQ-SEC-083, REQ-SEC-088 |
 | NEW | RULE-SEC-059 | Forced-change gate (`SEC-403-PASSWORD-CHANGE-REQUIRED`) | REQ-SEC-084 |

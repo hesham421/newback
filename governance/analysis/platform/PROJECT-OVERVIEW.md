@@ -56,7 +56,7 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   `<MODULE>_REPORTS` screens and `<MODULE>:REPORT:<CODE>` authorities automatically.
 - **Public login throttling.** Pre-authentication endpoints are rate limited in SEC
   (`LoginRateLimiter`, bucket4j).
-- **Staff passwords (1.3.0).** One password policy (`erp.core.security.password-policy.*`, 8..200 characters
+- **Staff passwords (1.3.0).** One password policy (`erp.core.security.password-policy.*`, 8..72 characters
   with a letter and a digit by default); a password chosen by an administrator must be changed by its
   owner before any other STAFF call is served (403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, ADR-SEC-063).
 

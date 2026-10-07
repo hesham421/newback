@@ -4,16 +4,23 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.ErrorDetail;
 import com.erp.common.exception.LocalizedException;
 import com.erp.sec.exception.SecErrorCodes;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
  * RULE-SEC-056 — the one STAFF password policy (tenant-maturity D): length {@code minLength..maxLength}
- * (code points) and, when required, at least one letter and one digit (any script). Applied wherever a
- * person chooses a staff password: user create, reset completion, admin-set, self-change, a new tenant's
- * first administrator (and package B's tenant admin-reset). Built from
- * {@code erp.core.security.password-policy.*} by {@code com.erp.sec.service.PasswordPolicyProvider}.
+ * (code points, at most {@value #MAX_BYTES}), at most {@value #MAX_BYTES} UTF-8 bytes (BCrypt hashes no
+ * more) and, when required, a letter and a digit (any script). Built from
+ * {@code erp.core.security.password-policy.*} by {@code PasswordPolicyProvider}; {@link #CUSTOMER} holds the
+ * customer realm to its 8-character minimum and the same byte limit.
  */
 public final class PasswordPolicy {
+
+    /** The most bytes BCrypt hashes; a longer password cannot be stored (review round 1). */
+    public static final int MAX_BYTES = 72;
+
+    /** Customer passwords: 8..72 characters and bytes, no composition rule (only the hash limit is added). */
+    public static final PasswordPolicy CUSTOMER = create(8, MAX_BYTES, false, false);
 
     private final int minLength;
     private final int maxLength;
@@ -27,10 +34,11 @@ public final class PasswordPolicy {
         this.requireDigit = requireDigit;
     }
 
-    /** A policy with these settings; {@code minLength} is at least 1 and {@code maxLength} at least {@code minLength}. */
+    /** A policy with these settings, lengths clamped to {@code 1 <= minLength <= maxLength <= MAX_BYTES}. */
     public static PasswordPolicy create(int minLength, int maxLength, boolean requireLetter, boolean requireDigit) {
-        int min = Math.max(1, minLength);
-        return new PasswordPolicy(min, Math.max(min, maxLength), requireLetter, requireDigit);
+        int max = Math.min(MAX_BYTES, Math.max(1, maxLength));
+        int min = Math.min(max, Math.max(1, minLength));
+        return new PasswordPolicy(min, max, requireLetter, requireDigit);
     }
 
     /** Whether {@code rawPassword} meets the policy ({@code null} never does). */
@@ -39,7 +47,8 @@ public final class PasswordPolicy {
             return false;
         }
         int length = rawPassword.codePointCount(0, rawPassword.length());
-        if (length < minLength || length > maxLength) {
+        if (length < minLength || length > maxLength
+            || rawPassword.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) {
             return false;
         }
         boolean hasLetter = rawPassword.codePoints().anyMatch(Character::isLetter);

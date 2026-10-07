@@ -24,7 +24,7 @@ class PasswordPolicyIntegrationTest extends AbstractStaffAccountIntegrationTest 
             assertThat(refused.statusCode()).as(weak).isEqualTo(400);
             assertThat(errorCode(refused)).isEqualTo("SEC-400-PASSWORD-POLICY");
             assertThat((String) JsonPath.read(refused.body(), "$.error.fieldErrors[0].field")).isEqualTo("password");
-            assertThat((String) JsonPath.read(refused.body(), "$.error.message")).contains("8").contains("200");
+            assertThat((String) JsonPath.read(refused.body(), "$.error.message")).contains("8").contains("72").contains("72 bytes");
             assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEC_USER WHERE USERNAME = ?", Integer.class, username))
                 .isZero();
         }
@@ -58,6 +58,64 @@ class PasswordPolicyIntegrationTest extends AbstractStaffAccountIntegrationTest 
         assertThat((Boolean) JsonPath.read(login.body(), "$.data.passwordChangeRequired")).isFalse();
         assertThat(jdbcTemplate.queryForObject("SELECT PASSWORD_CHANGED_AT IS NOT NULL FROM SEC_USER WHERE USER_PK = ?",
             Boolean.class, id)).isTrue();
+    }
+
+    /** Review round 1: BCrypt hashes at most 72 bytes — every password path answers 400, never 500. */
+    @Test
+    void everyPasswordPath_refusesMoreThanSeventyTwoBytes_with400_andAcceptsExactlySeventyTwo() {
+        String ascii73 = "Aa1" + "x".repeat(70);
+        String arabic122 = "س".repeat(60) + "12";
+        String exactly72 = "Aa1" + "x".repeat(69);
+        assertThat(ascii73.length()).isEqualTo(73);
+        assertThat(exactly72.getBytes(java.nio.charset.StandardCharsets.UTF_8)).hasSize(72);
+
+        for (String tooLong : new String[] {ascii73, arabic122}) {
+            assertPolicy(api.post(adminToken, "/api/v1/sec/users", userBody(unique("long-"), tooLong, false)), "password");
+        }
+        String username = unique("bytes-");
+        HttpResponse<String> created = api.post(adminToken, "/api/v1/sec/users", userBody(username, exactly72, false));
+        assertThat(created.statusCode()).as("create with exactly 72 bytes").isEqualTo(201);
+        long id = ((Number) JsonPath.read(created.body(), "$.data.userPk")).longValue();
+
+        assertPolicy(api.put(adminToken, "/api/v1/sec/users/" + id + "/password", "{\"newPassword\":\"" + ascii73 + "\"}"),
+            "newPassword");
+        assertPolicy(api.put(adminToken, "/api/v1/sec/users/" + id + "/password", "{\"newPassword\":\"" + arabic122 + "\"}"),
+            "newPassword");
+        assertThat(api.put(adminToken, "/api/v1/sec/users/" + id + "/password",
+            "{\"newPassword\":\"" + exactly72 + "\",\"requireChangeAtNextLogin\":false}").statusCode()).isEqualTo(200);
+
+        String token = login(username, exactly72);
+        assertPolicy(api.put(token, "/api/v1/sec/me/password",
+            "{\"currentPassword\":\"" + exactly72 + "\",\"newPassword\":\"" + ascii73 + "\"}"), "newPassword");
+        assertThat(api.put(token, "/api/v1/sec/me/password",
+            "{\"currentPassword\":\"" + exactly72 + "\",\"newPassword\":\"" + "Bb2" + "y".repeat(69) + "\"}").statusCode())
+            .isEqualTo(200);
+
+        String raw = UUID.randomUUID().toString();
+        jdbcTemplate.update("INSERT INTO SEC_PWD_RESET_TOKEN (PWD_RESET_TOKEN_PK, TENANT_ID, USER_ID, TOKEN_HASH, REQUESTED_AT,"
+                + " EXPIRES_AT, CREATED_BY, CREATED_AT) SELECT nextval('SEQ_SEC_PWD_RESET_TOKEN'), u.TENANT_ID, u.USER_PK, ?,"
+                + " now(), now() + interval '1 hour', 'test', now() FROM SEC_USER u WHERE u.USER_PK = ?",
+            TokenHasher.sha256Hex(raw), id);
+        assertPolicy(api.postAnonymous(tenant, "/api/v1/sec/auth/password-reset/complete",
+            "{\"token\":\"" + raw + "\",\"newPassword\":\"" + arabic122 + "\"}"), "newPassword");
+        assertThat(api.postAnonymous(tenant, "/api/v1/sec/auth/password-reset/complete",
+            "{\"token\":\"" + raw + "\",\"newPassword\":\"" + exactly72 + "\"}").statusCode()).isEqualTo(200);
+
+        String platformToken = api.token("PLATFORM", StaffApiClient.platformOperator(jdbcTemplate, passwordEncoder));
+        String code = StaffApiClient.unique("LONG");
+        assertPolicy(api.post(platformToken, "/api/v1/platform/tenants", "{\"code\":\"" + code
+            + "\",\"nameAr\":\"م\",\"nameEn\":\"Long\",\"adminUsername\":\"admin\",\"adminEmail\":\"a@" + code.toLowerCase()
+            + ".test\",\"adminPassword\":\"" + ascii73 + "\",\"adminFullNameAr\":\"م\",\"adminFullNameEn\":\"A\"}"),
+            "adminPassword");
+
+        assertPolicy(api.postAnonymous(tenant, "/api/v1/public/customers/register", "{\"email\":\"" + unique("cust-")
+            + "@tmd.test\",\"password\":\"" + arabic122 + "\",\"fullName\":\"Buyer\"}"), "password");
+    }
+
+    private static void assertPolicy(HttpResponse<String> response, String field) {
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(400);
+        assertThat(errorCode(response)).isEqualTo("SEC-400-PASSWORD-POLICY");
+        assertThat((String) JsonPath.read(response.body(), "$.error.fieldErrors[0].field")).isEqualTo(field);
     }
 
     @Test

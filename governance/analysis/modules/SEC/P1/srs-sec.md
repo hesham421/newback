@@ -1373,7 +1373,7 @@ ADR-SEC-064. No ENT is added: the new fields belong to ENT-SEC-001. Migration `V
 
 ### REQ-SEC-082 — سياسة كلمة المرور / Password policy
 Pattern    : ubiquitous
-Statement  : The system shall accept a new STAFF password — on user create, password-reset completion, admin-set, self-change and the first administrator of a new tenant — only when it is `min-length`..`max-length` characters long (defaults 8..200) and, with the default policy, contains at least one letter and one digit; otherwise it shall refuse it with 400 `SEC-400-PASSWORD-POLICY`, naming the offending field.
+Statement  : The system shall accept a new STAFF password — on user create, password-reset completion, admin-set, self-change and the first administrator of a new tenant — only when it is `min-length`..`max-length` characters long (defaults 8..72) and at most 72 UTF-8 bytes (BCrypt's limit; review round 1) and, with the default policy, contains at least one letter and one digit; otherwise it shall refuse it with 400 `SEC-400-PASSWORD-POLICY`, naming the offending field.
 Traces     : US-SEC-001, US-SEC-002
 Entities   : ENT-SEC-001
 Rationale  : RULE-SEC-056; one policy in one place (`PasswordPolicy`, `com.erp.sec.domain`), configured by `erp.core.security.password-policy.*`
@@ -1383,7 +1383,8 @@ Priority   : HIGH
 Given the default policy
 When an administrator creates a user with password `short1` (6 characters), `abcdefgh` (no digit) or `12345678` (no letter)
 Then the system answers 400 `SEC-400-PASSWORD-POLICY` with `fieldErrors[0].field = password` and creates nothing;
-and with `Passw0rd!Tc1` the user is created
+and with `Passw0rd!Tc1` the user is created;
+and a password of 73 ASCII bytes or of 62 Arabic letters (122 bytes) is refused the same way on every path (create, reset completion, admin-set, own change, tenant first administrator, customer register and reset), while exactly 72 bytes is accepted
 
 ### REQ-SEC-083 — تعيين كلمة مرور مستخدم من المسؤول / Administrator sets a staff user's password
 Pattern    : event
@@ -1472,7 +1473,7 @@ and `PUT /api/v1/sec/users/{id}` with `preferredLocale = "fr"` answers 400 `VALI
 
 ### REQ-SEC-089 — إشعار تغيير كلمة المرور / Password-change event
 Pattern    : event
-Statement  : When a STAFF password is set by an administrator or changed by its owner, the system shall publish `UserPasswordChangedEvent(userId, byAdmin)` on the core event bus after commit; NOTIF reacts by e-mailing the user the `STAFF_PASSWORD_CHANGED` template (NOTIF 1.3.0 addendum, RULE-NOTIF-009).
+Statement  : When a STAFF password is set by an administrator or changed by its owner, the system shall publish `UserPasswordChangedEvent(userId, byAdmin)` on the core event bus after commit; NOTIF reacts by e-mailing the user the `STAFF_PASSWORD_CHANGED` template (NOTIF 1.3.0 addendum, RULE-NOTIF-023).
 Traces     : US-SEC-001
 Entities   : ENT-SEC-001
 Rationale  : plan §6 D.3; the event carries ids only, never a password
@@ -1488,12 +1489,12 @@ Then exactly one `UserPasswordChangedEvent` with that user's id and `byAdmin = t
 ### RULE-SEC-056 — سياسة كلمة المرور / Password policy
 Scope      : ENT-SEC-001
 Trigger    : on create / on password change (create, reset completion, admin-set, self-change, tenant first administrator)
-Statement  : A new password shall be `min-length`..`max-length` characters (8..200) and contain at least one letter (`require-letter`) and one digit (`require-digit`); properties `erp.core.security.password-policy.min-length|max-length|require-letter|require-digit`.
+Statement  : A new password shall be `min-length`..`max-length` characters (8..72), at most 72 UTF-8 bytes whatever the characters (BCrypt hashes no more; an Arabic letter takes 2 bytes), and contain at least one letter (`require-letter`) and one digit (`require-digit`); properties `erp.core.security.password-policy.min-length|max-length|require-letter|require-digit`. A configured `max-length` above 72 fails startup (`@Max(72)`, review round 1).
 Data source: the request only
-Message    : ar: "كلمة المرور لا تستوفي سياسة كلمات المرور: من {0} إلى {1} حرفًا، وتتضمن حرفًا ورقمًا على الأقل" · en: "The password does not meet the password policy: {0} to {1} characters, including at least one letter and one digit"
+Message    : ar: "كلمة المرور لا تستوفي سياسة كلمات المرور: من {0} إلى {1} حرفًا وبحد أقصى 72 بايت (الحرف العربي يشغل بايتين)، وتتضمن حرفًا ورقمًا على الأقل لحسابات الموظفين" · en: "The password does not meet the password policy: {0} to {1} characters and at most 72 bytes (a non-Latin letter takes 2 or 3), including at least one letter and one digit for staff accounts"
 Traces     : REQ-SEC-082
 Source     : docs/plans/tenant-maturity-plan.md §6 D.1
-Decided by : `PasswordPolicy` (`com.erp.sec.domain`, built from the properties by the services), error `SEC-400-PASSWORD-POLICY` (400). Not applied to the bootstrap admin password (`erp.core.security.bootstrap-admin-password`, operator configuration) nor to the CUSTOMER realm (register / reset keep their 8..200 length check) — see §15.
+Decided by : `PasswordPolicy` (`com.erp.sec.domain`, built from the properties by the services), error `SEC-400-PASSWORD-POLICY` (400). Not applied to the bootstrap admin password (`erp.core.security.bootstrap-admin-password`, operator configuration) The CUSTOMER realm gets only the byte limit (`PasswordPolicy.CUSTOMER`: 8..72 characters, ≤ 72 bytes, no composition rule; register and reset completion), because a longer password cannot be hashed (review round 1). The request DTOs keep `@Size(max = 200)` as a transport bound, so an over-long password answers this rule's code, not `VALIDATION_ERROR`.
 
 ### RULE-SEC-057 — لا يعيّن المسؤول كلمة مروره بنفسه / No admin-set on oneself
 Scope      : ENT-SEC-001
@@ -1625,7 +1626,7 @@ name contains `password` (`passwordChangeRequired`, `passwordChangedAt` included
 |---|---|---|---|---|
 | NEW | XM-SEC-006 | SEC → FILE | `SEC_USER.PHOTO_FILE_ID` → `FILE_DOCUMENT.ID`, written through `FileImageStoreApi` (XM-FILE-002: `storePublicImage`, `discard`), URLs read through `FileDocumentLookupApi.publicUrl` / `publicUrls` (XM-FILE-001, `publicUrls` NEW) | SOFT reference, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` convention, XM-NOTIF-002) |
 | CHANGED (consumed) | — | SEC → TENANT | `TenantLookupApi.summaryOf(tenantId)` (XM-TENANT-001, CHANGED in the TENANT 1.3.0 addendum) for `/me.tenant` | in-core API |
-| NEW (consumed by) | — | NOTIF ← events | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail (NOTIF RULE-NOTIF-009, XM-NOTIF-003) | event bus |
+| NEW (consumed by) | — | NOTIF ← events | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail (NOTIF RULE-NOTIF-023, XM-NOTIF-003) | event bus |
 | CHANGED (consumed by) | — | TENANT → SEC | tenant provisioning's first administrator password now passes RULE-SEC-056 inside `SecTenantProvisioningContributor` (400 `SEC-400-PASSWORD-POLICY`, field `adminPassword`) | provisioning SPI |
 
 #### 9.8 Decisions
@@ -1639,9 +1640,11 @@ name contains `password` (`passwordChangeRequired`, `passwordChangedAt` included
 |---|---|
 | CHANGED (plan) | Plan: admin-set answers `UserStatusResponse`. Implemented: `PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }`, shared with the self-change (whose result the plan left open): a password change does not change `statusCode`, and the session count is what the administrator needs to know (the same fact B's tenant admin-reset returns). |
 | NEW (decision) | On `PUT /users/{id}` the four new optional fields follow "absent = unchanged, empty string = cleared", like the PATCH: a client built before 1.3.0 that does not send them never wipes values the user set on `/me`. |
-| NEW (scope) | The policy also guards the tenant's first administrator (`POST /api/v1/platform/tenants`, field `adminPassword`), which is a STAFF user create; the CUSTOMER realm keeps its 8..200 length rule (out of the plan's list). |
+| NEW (scope) | The policy also guards the tenant's first administrator (`POST /api/v1/platform/tenants`, field `adminPassword`), which is a STAFF user create; the CUSTOMER realm gets only the 72-byte limit (review round 1), not the composition rule (out of the plan's list). |
 | NEW (scope) | The bootstrap admin password (`erp.core.security.bootstrap-admin-password`) is not policy-checked and not flagged (operator configuration at startup); `Test1234` meets the default policy anyway. |
 | NEW (open) | The policy has no history / reuse rule: a forced change may set the same password again. Recorded for a later version. |
+| NEW (open, review round 1) | The current-password check of `PUT /me/password` is not throttled (a stolen token could guess the current password), and admin-set has no super-role guard (an administrator holding `PERM_SEC_USERS_UPDATE` may set a super-role user's password). Recorded for a later version; not implemented. |
+| NEW (open, review round 1) | A bootstrap admin password above 72 bytes fails startup inside BCrypt (operator configuration; not policy-checked). |
 | NEW (note) | The session-termination loop of admin-set mirrors `UserService.deactivate` and `PasswordResetService.complete` (one `SESSION_TERMINATED` row per session). |
 
 #### 9.10 Frontend impact (read by the frontend repository — plan §8 F1)

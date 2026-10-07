@@ -140,7 +140,7 @@ should be `false`.
 |---|---|---|
 | `erp.core.security.bootstrap-admin-password` | empty | Sets the password of the seeded `admin` (SYS_ADMIN of tenant `PLATFORM`) once, on first start, and activates it. Without it nobody can log in as `admin`; there is no `admin/admin`. |
 | `erp.core.security.jwt.expiration-ms` | `3600000` | Access-token lifetime. |
-| `erp.core.security.password-policy.min-length` / `max-length` / `require-letter` / `require-digit` | `8` / `200` / `true` / `true` | The STAFF password policy (1.3.0): user create, reset completion, an administrator setting a password, the own change and a new tenant's first administrator answer 400 `SEC-400-PASSWORD-POLICY` otherwise. The message names the default composition; override the key in your bundle if you disable a requirement. Customer passwords keep their 8..200 length rule. |
+| `erp.core.security.password-policy.min-length` / `max-length` / `require-letter` / `require-digit` | `8` / `72` / `true` / `true` | The STAFF password policy (1.3.0); `max-length` above 72 fails startup and every password is also limited to 72 UTF-8 bytes (BCrypt; an Arabic letter takes 2): user create, reset completion, an administrator setting a password, the own change and a new tenant's first administrator answer 400 `SEC-400-PASSWORD-POLICY` otherwise. The message names the default composition; override the key in your bundle if you disable a requirement. Customer passwords get only the 72-byte limit. |
 | `erp.core.frontend.base-url`, `password-reset-path`, `customer-verify-path`, `customer-password-reset-path` | — / `/reset` / `/customer/verify` / `/customer/reset` | Links in e-mails. |
 | `erp.core.security.public-paths`, `customer-public-paths` | see `ErpCoreProperties.Security.DEFAULT_*` | Unauthenticated paths of the staff and customer chains. **Setting one replaces the whole list**, so start from the defaults. |
 | `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable. |
@@ -316,7 +316,7 @@ Since 1.3.0 `com.erp.file.crossmodule.FileImageStoreApi` stores a small public i
 (PNG, JPEG, WebP; SVG only when the request allows it and only without active content), the document is stored
 without a category and published at once under a random slug (ADR-FILE-008). Keep
 `spring.servlet.multipart.max-file-size` above the image limits (the reference app uses 15 MB): Spring's default
-1 MB ceiling answers an over-size upload before the image rule can (as a 500 today).
+1 MB ceiling answers an over-size upload before the image rule can (400 `VALIDATION_ERROR` instead of the image error).
 
 ## 9. Audit
 

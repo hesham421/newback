@@ -57,5 +57,7 @@ Reasons:
   data only, no assertion dropped; `docs/steps/tm-d-report.md`).
 - `AuthRealm` gains a second component; the one-argument constructor stays (flag FALSE), so existing
   callers are unchanged.
+- Open (review round 1, not implemented): the current-password check of `PUT /me/password` is not throttled, and
+  admin-set has no guard against setting a super-role user's password; both are recorded for a later version.
 - Non-breaking at the schema level: `PASSWORD_CHANGE_REQUIRED_FL` defaults to FALSE, so no account is
   forced into a change by the upgrade.

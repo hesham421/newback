@@ -198,5 +198,5 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | NEW | Forced password change | staff user | After an administrator chose the password, only the profile, the password change and sign-out work until the user picks their own. | REQ-SEC-084 |
 | NEW | Change my password | staff user | Changes the own password, giving the current one; the user's other sessions end. | REQ-SEC-085 |
 | NEW | My profile | staff user | Reads and edits names, phone, job title and preferred language; uploads or removes a photo. | REQ-SEC-086, REQ-SEC-087 |
-| NEW | Password policy | anyone choosing a staff password | 8..200 characters with a letter and a digit (configurable). | REQ-SEC-082 |
-| NEW | Password-change e-mail | staff user | An e-mail tells the user that their password was changed and by whom. | REQ-SEC-089; NOTIF RULE-NOTIF-009 |
+| NEW | Password policy | anyone choosing a staff password | 8..72 characters (at most 72 bytes) with a letter and a digit (configurable up to 72). | REQ-SEC-082 |
+| NEW | Password-change e-mail | staff user | An e-mail tells the user that their password was changed and by whom. | REQ-SEC-089; NOTIF RULE-NOTIF-023 |
