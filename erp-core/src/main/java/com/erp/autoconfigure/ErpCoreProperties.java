@@ -115,6 +115,34 @@ public class ErpCoreProperties {
 
         /** Brute-force protection of the customer login (bucket4j, keyed {@code tenant:realm:username}). */
         private final LoginRateLimit customerLoginRateLimit = new LoginRateLimit();
+
+        /** tenant-maturity D — the STAFF password policy (RULE-SEC-056). */
+        @Valid
+        private final PasswordPolicySettings passwordPolicy = new PasswordPolicySettings();
+    }
+
+    /**
+     * tenant-maturity D — {@code erp.core.security.password-policy.*}: what a STAFF password must meet
+     * wherever a person chooses one. The {@code SEC-400-PASSWORD-POLICY} message names the default
+     * composition; an application that disables a requirement overrides that key in its own bundle.
+     */
+    @Getter
+    @Setter
+    public static class PasswordPolicySettings {
+
+        /** Fewest characters (code points). */
+        @Positive
+        private int minLength = 8;
+
+        /** Most characters (code points). */
+        @Positive
+        private int maxLength = 200;
+
+        /** At least one letter (any script). */
+        private boolean requireLetter = true;
+
+        /** At least one digit. */
+        private boolean requireDigit = true;
     }
 
     /** Login attempts allowed per key and period (erp-core step 06). */

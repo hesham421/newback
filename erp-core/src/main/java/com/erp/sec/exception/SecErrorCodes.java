@@ -193,4 +193,22 @@ public final class SecErrorCodes {
 
     /** Too many customer login attempts for one tenant:realm:username key (bucket4j). HTTP 429. */
     public static final String CUSTOMER_LOGIN_RATE_LIMITED = "CUSTOMER_LOGIN_RATE_LIMITED";
+
+    /**
+     * RULE-SEC-056 (tenant-maturity D) — a new STAFF password misses the password policy; args min, max.
+     * API: create user, reset completion, admin-set, self-change, tenant create. HTTP 400.
+     */
+    public static final String SEC_400_PASSWORD_POLICY = "SEC-400-PASSWORD-POLICY";
+
+    /** RULE-SEC-057 — an administrator targets their own account with the admin-set endpoint. HTTP 422. */
+    public static final String SEC_422_PASSWORD_SELF = "SEC-422-PASSWORD-SELF";
+
+    /** RULE-SEC-060 — the self-change's current password does not match. HTTP 403. */
+    public static final String SEC_403_PASSWORD_CURRENT_INVALID = "SEC-403-PASSWORD-CURRENT-INVALID";
+
+    /** RULE-SEC-059 — the caller must change an administrator-chosen password first. HTTP 403. */
+    public static final String SEC_403_PASSWORD_CHANGE_REQUIRED = "SEC-403-PASSWORD-CHANGE-REQUIRED";
+
+    /** RULE-SEC-061 — the uploaded photo is no PNG / JPEG / WebP of at most 1 MB. HTTP 400. */
+    public static final String SEC_400_PHOTO_INVALID = "SEC-400-PHOTO-INVALID";
 }

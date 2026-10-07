@@ -77,6 +77,9 @@ public class PasswordResetService {
     private static final String COMPLETE_CONFIRMATION_AR = "تم تحديث كلمة المرور";
     private static final String COMPLETE_CONFIRMATION_EN = "Your password has been updated";
 
+    /** PasswordResetCompleteRequest's new-password field, named by SEC-400-PASSWORD-POLICY (tenant-maturity D). */
+    private static final String FIELD_NEW_PASSWORD = "newPassword";
+
     private final PasswordResetTokenRepository repository;
     private final UserRepository userRepository;
     private final AuditLogEntryRepository auditLogEntryRepository;
@@ -86,6 +89,7 @@ public class PasswordResetService {
     private final DomainEventPublisher eventPublisher;
     // erp-core step 10 — PASSWORD_RESET also goes to the generic audit log (one timeline)
     private final AuditApi auditApi;
+    private final PasswordPolicyProvider passwordPolicyProvider;
 
     /**
      * The base of the UI that hosts the reset screen ({@code erp.core.frontend.base-url}) and the
@@ -127,7 +131,9 @@ public class PasswordResetService {
         PasswordResetTokenDomain.from(token).assertUsable(now, User.REALM_STAFF, token.getUser().getRealm());
 
         User user = token.getUser();
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        // tenant-maturity D — RULE-SEC-056; the owner chose this password, so a forced change is satisfied
+        passwordPolicyProvider.current().assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
+        user.changePassword(passwordEncoder.encode(request.getNewPassword()), false, now);
         userRepository.save(user);
 
         token.markUsed();

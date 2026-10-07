@@ -1,6 +1,7 @@
 package com.erp.sec.tenant;
 
 import com.erp.sec.entity.User;
+import com.erp.sec.service.PasswordPolicyProvider;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.CommonErrorCodes;
 import com.erp.common.exception.LocalizedException;
@@ -54,8 +55,13 @@ public class SecTenantProvisioningContributor implements TenantProvisioningContr
 
     private static final String STATUS_ACTIVE = "ACTIVE";
 
+    /** TenantCreateRequest's field, named by SEC-400-PASSWORD-POLICY (tenant-maturity D). */
+    private static final String FIELD_ADMIN_PASSWORD = "adminPassword";
+
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
+    // tenant-maturity D — the first administrator's password meets RULE-SEC-056 (field adminPassword)
+    private final PasswordPolicyProvider passwordPolicyProvider;
 
     /** First: the administrator and roles depend on nothing else being provisioned. */
     @Override
@@ -65,6 +71,7 @@ public class SecTenantProvisioningContributor implements TenantProvisioningContr
 
     @Override
     public void provision(TenantProvisioning p) {
+        passwordPolicyProvider.current().assertAcceptable(FIELD_ADMIN_PASSWORD, p.admin().rawPassword());
         Long target = p.tenantId();
         Long source = p.sourceTenantId();
         String by = p.provisionedBy();
@@ -123,8 +130,8 @@ public class SecTenantProvisioningContributor implements TenantProvisioningContr
         TenantProvisioning.Administrator admin = p.admin();
         jdbcTemplate.update(
             "INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR, FULL_NAME_EN,"
-                + " STATUS_CODE, REALM, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
-                + " VALUES (nextval('SEQ_SEC_USER'), ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, now())",
+                + " STATUS_CODE, REALM, IS_ACTIVE_FL, PASSWORD_CHANGED_AT, CREATED_BY, CREATED_AT)"
+                + " VALUES (nextval('SEQ_SEC_USER'), ?, ?, ?, ?, ?, ?, ?, ?, TRUE, now(), ?, now())",
             target, admin.username(), admin.email(), passwordEncoder.encode(admin.rawPassword()),
             admin.fullNameAr(), admin.fullNameEn(), STATUS_ACTIVE, User.REALM_STAFF, by);
 
