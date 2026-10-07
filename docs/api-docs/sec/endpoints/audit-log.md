@@ -121,7 +121,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 400 BAD_REQUEST | `SEC-400-INVALID-SORT` | SEC_400_INVALID_SORT | SecSearchSupport.assertSortAllowed |
-| 400 BAD_REQUEST | `VALIDATION_ERROR` | VALIDATION_ERROR | SecSearchSupport.instantFieldConverter |
 
 ### Other Possible Responses
 

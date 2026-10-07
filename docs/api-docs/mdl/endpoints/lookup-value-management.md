@@ -185,7 +185,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `MDL-404-TYPE` | MDL_404_TYPE | LookupValueService.create |
-| 409 CONFLICT | `MDL-409-VALUE-DUP` | MDL_409_VALUE_DUP | LookupValueDomain.create |
 
 ### Other Possible Responses
 

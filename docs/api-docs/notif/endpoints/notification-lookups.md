@@ -43,11 +43,7 @@ Shape: `array of LookupOptionResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationLookupController.get`, `NotificationLookupService.get`, `NotificationLookupService.toResponse`).
-
-| HTTP Status | Code | Constant | Raised at |
-|---|---|---|---|
-| 404 NOT_FOUND | `NOTIF_LOOKUP_KEY_UNKNOWN` | NOTIF_LOOKUP_KEY_UNKNOWN | NotificationLookupService.get |
+None reached — walked `NotificationLookupController.get`, `NotificationLookupService.get`, `NotificationLookupService.toResponse` and found no throw site naming a module error code.
 
 ### Other Possible Responses
 

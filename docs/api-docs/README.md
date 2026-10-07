@@ -7,10 +7,10 @@ code or its annotations and regenerate.
 
 | | |
 |---|---|
-| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`) |
+| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`). 2026-10-07 (TM-G, branch `tm/g-sec-grant-revoke`): whole app regenerated from the 1.3.0-SNAPSHOT build — `sec/` gains the screen and action revokes; the other modules' updates are the pre-existing drift of the `com.erp.common` shared-helper refactor (throw sites moved to `DomainRules` and shared helpers, `NOT_FOUND` row) |
 | Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference`, profile `dev`. The documented API is that of erp-core **1.1.0** (tag `v1.1.0` → `10a6811`), which contains the Phase D fix loop. OpenAPI `info.version` reads `v0`. |
 | Generator | `governance/tools/api-doc-generator` (unchanged; moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07), driven by `_tools/generate_all.py` |
-| Operations | **105** (86 paths) |
+| Operations | **107** (88 paths) |
 
 ## Modules
 
@@ -22,7 +22,7 @@ the catalog.
 
 | Module | Folder | Operations | Endpoint files |
 |---|---|---:|---|
-| SEC: identity, roles, staff and customer auth, customer accounts | [`sec/`](sec/index.md) | 40 | active-sessions, audit-log, authentication, customer-accounts-public, customer-accounts-self, menu, module-registry, role-grants, roles, security-dashboard, sign-up-requests, users |
+| SEC: identity, roles, staff and customer auth, customer accounts | [`sec/`](sec/index.md) | 42 | active-sessions, audit-log, authentication, customer-accounts-public, customer-accounts-self, menu, module-registry, role-grants, roles, security-dashboard, sign-up-requests, users |
 | TENANT: platform tenant provisioning | [`tenant/`](tenant/index.md) | 5 | platform-tenants |
 | FILE: files, categories, public files | [`file/`](file/index.md) | 14 | file-categories, file-documents, file-lookups, public-files |
 | NOTIF: templates, channels, dispatch, logs, inbox (staff and customer) | [`notif/`](notif/index.md) | 18 | notification-channels, notification-dispatch, notification-inbox, notification-logs, notification-lookups, notification-templates |
@@ -32,7 +32,7 @@ the catalog.
 | AUDIT: generic audit events | [`audit/`](audit/index.md) | 1 | audit-log |
 | REPORT: report definitions, run and export | [`report/`](report/index.md) | 4 | reports |
 | APP: reference-app endpoints (dev profile only) | [`app/`](app/index.md) | 1 | dev-support |
-| **Total** | | **105** | |
+| **Total** | | **107** | |
 
 Notes:
 - `/api/v1/customers/me/inbox/**` is served by `com.erp.notif.controller.NotificationInboxController`, so it is
@@ -79,7 +79,7 @@ The generator's own per-module discovery is bypassed (see `docs/DEVIATIONS.md`, 
 
 `_tools/check_completeness.py` lists every (method, path) in `/v3/api-docs` and checks that each one is
 documented under exactly one `<module>/endpoints/*.md`. It also checks that no documented endpoint is
-missing from the app. The result at generation time was 105/105, with 0 missing, 0 duplicated and 0 stale.
+missing from the app. The result at generation time was 107/107, with 0 missing, 0 duplicated and 0 stale.
 
 ## `check` results at generation time
 

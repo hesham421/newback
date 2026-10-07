@@ -88,11 +88,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `RoleController.create`, `RoleService.create`, `RoleService.normalize`, `RoleDomain.create`, `RoleMapper.toEntity`, `RoleMapper.toResponse`, `new RoleDomain()`).
-
-| HTTP Status | Code | Constant | Raised at |
-|---|---|---|---|
-| 409 CONFLICT | `SEC-409-ROLE-DUP` | SEC_409_ROLE_DUP | RoleDomain.create |
+None reached — walked `RoleController.create`, `RoleService.create`, `RoleService.normalize`, `RoleDomain.create`, `RoleMapper.toEntity`, `RoleMapper.toResponse`, `new RoleDomain()` and found no throw site naming a module error code.
 
 ### Other Possible Responses
 

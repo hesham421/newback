@@ -4,10 +4,12 @@
 **Endpoints in this file:**
 
 - [POST /api/v1/sec/roles/{id}/actions](#post-apiv1secrolesidactions)
+- [DELETE /api/v1/sec/roles/{id}/actions/{actionId}](#delete-apiv1secrolesidactionsactionid)
 - [GET /api/v1/sec/roles/{id}/grants](#get-apiv1secrolesidgrants)
 - [POST /api/v1/sec/roles/{id}/modules](#post-apiv1secrolesidmodules)
 - [DELETE /api/v1/sec/roles/{id}/modules/{moduleId}](#delete-apiv1secrolesidmodulesmoduleid)
 - [POST /api/v1/sec/roles/{id}/screens](#post-apiv1secrolesidscreens)
+- [DELETE /api/v1/sec/roles/{id}/screens/{screenId}](#delete-apiv1secrolesidscreensscreenid)
 
 ## POST /api/v1/sec/roles/{id}/actions
 
@@ -80,7 +82,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-ACTION` | SEC_404_ACTION | RoleGrantService.grantAction |
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantAction |
-| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-SCREEN-GRANT` | SEC_409_NO_SCREEN_GRANT | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-VIEW-GRANT` | SEC_409_NO_VIEW_GRANT | RoleActionGrantDomain.create |
 | 409 CONFLICT | `SEC-409-SOD-CONFLICT` | SEC_409_SOD_CONFLICT | RoleActionGrantDomain.create |
@@ -93,6 +94,60 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
 | 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## DELETE /api/v1/sec/roles/{id}/actions/{actionId}
+
+**Revoke action grant**
+
+سحب منح إجراء؛ سحب العرض (VIEW) يسحب بقية إجراءات الشاشة (RULE-SEC-009)
+
+Operation ID: `revokeAction`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PERM_SEC_ROLES_UPDATE (found on service:RoleGrantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+| actionId | integer | Yes |  |
+
+### Response `200` — OK
+
+Shape: `ActionGrantRevokeResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| revokedActionGrants | integer (int32) | No |  | Action grants removed, the requested one included - عدد منح الإجراءات المسحوبة بما فيها المطلوب | 1 |
+
+**Response Example**
+
+```json
+{
+  "revokedActionGrants": 1
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `RoleGrantController.revokeAction`, `RoleGrantService.revokeAction`, `RoleGrantService.loadRole`, `RoleActionGrantDomain.from`, `RoleGrantService.appendAudit`, `RoleActionGrantMapper.toRevokeResponse`, `RoleActionGrantDomain.cascadeOnRevoke`, `new RoleActionGrantDomain()`, `RoleActionGrantDomain.isGatewayAction`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `SEC-404-GRANT` | SEC_404_GRANT | RoleGrantService.revokeAction |
+| 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.loadRole |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
 
 ## GET /api/v1/sec/roles/{id}/grants
 
@@ -273,7 +328,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-MODULE` | SEC_404_MODULE | RoleGrantService.grantModule |
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantModule |
-| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleModuleGrantDomain.create |
 
 ### Other Possible Responses
 
@@ -410,7 +464,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.grantScreen |
 | 404 NOT_FOUND | `SEC-404-SCREEN` | SEC_404_SCREEN | RoleGrantService.grantScreen |
-| 409 CONFLICT | `SEC-409-GRANT-DUP` | SEC_409_GRANT_DUP | RoleScreenGrantDomain.create |
 | 409 CONFLICT | `SEC-409-NO-MODULE-GRANT` | SEC_409_NO_MODULE_GRANT | RoleScreenGrantDomain.create |
 
 ### Other Possible Responses
@@ -421,3 +474,57 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |
 | 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## DELETE /api/v1/sec/roles/{id}/screens/{screenId}
+
+**Revoke screen grant**
+
+سحب منح شاشة مع منح إجراءاتها (RULE-SEC-008)
+
+Operation ID: `revokeScreen`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PERM_SEC_ROLES_UPDATE (found on service:RoleGrantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+| screenId | integer | Yes |  |
+
+### Response `200` — OK
+
+Shape: `ScreenGrantRevokeResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| revokedActionGrants | integer (int32) | No |  | Cascaded action grants removed - عدد منح الإجراءات المسحوبة | 3 |
+
+**Response Example**
+
+```json
+{
+  "revokedActionGrants": 3
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `RoleGrantController.revokeScreen`, `RoleGrantService.revokeScreen`, `RoleGrantService.loadRole`, `RoleScreenGrantDomain.from`, `RoleGrantService.appendAudit`, `RoleScreenGrantMapper.toRevokeResponse`, `RoleScreenGrantDomain.cascadeOnRevoke`, `new RoleScreenGrantDomain()`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `SEC-404-GRANT` | SEC_404_GRANT | RoleGrantService.revokeScreen |
+| 404 NOT_FOUND | `SEC-404-ROLE` | SEC_404_ROLE | RoleGrantService.loadRole |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | SEC_403_FORBIDDEN (`SEC-403-FORBIDDEN`) | An authorization check was found for this endpoint (@PreAuthorize/@Secured); SecForbiddenAdvisor wraps `com.erp.sec.service.*`, catches AccessDeniedException and re-raises it as this module code, so the shared ACCESS_DENIED handler is not reached. |

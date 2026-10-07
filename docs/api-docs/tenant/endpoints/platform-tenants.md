@@ -159,7 +159,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 400 BAD_REQUEST | `TENANT_CODE_INVALID` | TENANT_CODE_INVALID | TenantDomain.create |
-| 409 CONFLICT | `TENANT_CODE_DUPLICATE` | TENANT_CODE_DUPLICATE | TenantDomain.create |
 | 409 CONFLICT | `TENANT_CODE_DUPLICATE` | TENANT_CODE_DUPLICATE | TenantService.create |
 
 ### Other Possible Responses

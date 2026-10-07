@@ -190,7 +190,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.upload`, `FileService.store`, `FileService.requireOwnership`, `FileService.readBytes`, `FileService.resolveCategory`, `FileService.sniffContentType`, `FileService.fallbackContentType`, `FileValidationDomainService.assertContentTypeAllowed`, `FileValidationDomainService.assertContentSizeAllowed`, `FileValidationDomainService.assertRequestSizeAllowed`, `StorageProviderRegistry.active`, `FileService.safeFileName`, `FileMapper.toEntity`, `FileService.sha256Hex`, `FileService.deriveFileType`, `FileService.deleteOnRollback`, `FileMapper.toMetadataResponse`, `FileService.isBlank`, `FileService.afterCompletion`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.upload`, `FileService.store`, `FileService.requireOwnership`, `FileService.readBytes`, `FileService.resolveCategory`, `FileService.sniffContentType`, `FileService.fallbackContentType`, `FileValidationDomainService.assertContentTypeAllowed`, `FileValidationDomainService.assertContentSizeAllowed`, `FileValidationDomainService.assertRequestSizeAllowed`, `StorageProviderRegistry.active`, `FileService.safeFileName`, `FileMapper.toEntity`, `FileService.deriveFileType`, `FileService.deleteOnRollback`, `FileMapper.toMetadataResponse`, `FileService.isBlank`, `FileService.afterCompletion`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -201,7 +201,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | 415 UNSUPPORTED_MEDIA_TYPE | `FILE_DOCUMENT_TYPE_NOT_ALLOWED` | FILE_DOCUMENT_TYPE_NOT_ALLOWED | FileValidationDomainService.assertContentTypeAllowed |
 | 422 UNPROCESSABLE_CONTENT | `FILE_CATEGORY_INACTIVE` | FILE_CATEGORY_INACTIVE | FileService.resolveCategory |
 | 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | FileService.readBytes |
-| 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | FileService.sha256Hex |
 
 ### Other Possible Responses
 
@@ -416,7 +415,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 |---|---|---|---|
 | 400 BAD_REQUEST | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileService.resolveTargetStatus |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.softDelete |
-| 422 UNPROCESSABLE_CONTENT | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileDocumentDomain.assertCanTransitionTo |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |
 
 ### Other Possible Responses

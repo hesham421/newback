@@ -91,7 +91,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
-| 409 CONFLICT | `FILE_CATEGORY_CODE_DUPLICATE` | FILE_CATEGORY_CODE_DUPLICATE | FileCategoryDomain.create |
 | 409 CONFLICT | `FILE_CATEGORY_CODE_DUPLICATE` | FILE_CATEGORY_CODE_DUPLICATE | FileCategoryService.create |
 
 ### Other Possible Responses

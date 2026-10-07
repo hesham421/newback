@@ -93,7 +93,6 @@ Raised by this endpoint's own rules. Each row cites the throw site it was read f
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 400 BAD_REQUEST | `SEQUENCE_PATTERN_INVALID` | SEQUENCE_PATTERN_INVALID | NumberPattern.invalid |
-| 409 CONFLICT | `NUMBER_SERIES_CODE_DUPLICATE` | NUMBER_SERIES_CODE_DUPLICATE | NumberSeriesDomain.create |
 
 ### Other Possible Responses
 
