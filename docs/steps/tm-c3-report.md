@@ -44,13 +44,15 @@ nullable `TENANT_ID` column (:50) and no `@TenantId`.
 
 | Commit | Files |
 |---|---|
-| 7043a47 docs(analysis) | `governance/analysis/modules/TENANT/P1/srs-tenant.md`, `registry-srs-tenant.md` |
-| 2d62418 test(architecture) | NEW `erp-core/src/test/java/com/erp/architecture/TenantScopedEntityTest.java`; `CoreLibraryRulesArchTest.java` (rule 2 reads the same list) |
-| 274fb20 test(tenant) | `erp-core/src/test/java/com/erp/tenant/TenantIsolationIntegrationTest.java` (+7 tests, helpers); `TenantHttp.java` (+`put`, +`uploadPng`) |
-| 640e767 docs(governance) | `governance/rules/GOVERNANCE-RULES.md` (Governance Rules +1 item); `.claude/skills/gov-validate-backend-feature/SKILL.md` (automatic rejection +1 item) |
-| e6615ab test(api) | `docs/test-api/core-test-plan.md` (§9 +1 row, §4/§6 unchanged); NEW `docs/test-api/results/20261008T001118-P-LIVE.json`, `…-P-LIVE-report.md` |
-| c532b19 docs(check) | `docs/CHANGELOG.md` (`[TM-C3]` under Unreleased → Added); `docs/DEVIATIONS.md` (`## [TM-C3]`, 5 entries) |
-| (this commit) | NEW `docs/steps/tm-c3-report.md` |
+| ff4121a docs(analysis) | `governance/analysis/modules/TENANT/P1/srs-tenant.md`, `registry-srs-tenant.md` |
+| efcf437 test(architecture) | NEW `erp-core/src/test/java/com/erp/architecture/TenantScopedEntityTest.java`; `CoreLibraryRulesArchTest.java` (rule 2 reads the same list) |
+| bcb40f4 test(tenant) | `erp-core/src/test/java/com/erp/tenant/TenantIsolationIntegrationTest.java` (+7 tests, helpers); `TenantHttp.java` (+`put`, +`uploadPng`) |
+| f4ddda9 docs(governance) | `governance/rules/GOVERNANCE-RULES.md` (Governance Rules +1 item); `.claude/skills/gov-validate-backend-feature/SKILL.md` (automatic rejection +1 item) |
+| 9f28a87 test(api) | `docs/test-api/core-test-plan.md` (§9 +1 row, §4/§6 unchanged); NEW `docs/test-api/results/20261008T003132-P-LIVE.json`, `…-P-LIVE-report.md` |
+| 67fe979 docs(check) | `docs/CHANGELOG.md` (`[TM-C3]` under Unreleased → Added); `docs/DEVIATIONS.md` (`## [TM-C3]`, 5 entries) |
+| 0e50353 docs(steps) | NEW `docs/steps/tm-c3-report.md` |
+| b1aafc0 docs(analysis), review round 1 | `srs-tenant.md` (N1 wording) |
+| (this commit) | review round 1: run files replaced, this report |
 
 No migration used (C3 has no reserved number). Nothing deleted.
 
@@ -80,14 +82,14 @@ All are recorded in `docs/DEVIATIONS.md` under `[TM-C3]`.
 | 1 | ArchUnit `TenantScopedEntityTest`: every `@Entity` extends `AuditableEntity` / carries `@TenantId`, except the documented global set; the message says to add a global entity explicitly | ✅ | `TenantScopedEntityTest` 2/2 green; global list = 5 classes verified in the code |
 | 2 | The rule bites | ✅ | temporary probe, not committed (output below) |
 | 3 | Integration test: two tenants, one row per module in SEC, MDL, FILE, NOTIF, CU, SEQUENCE, AUDIT; search/getById sees only its own rows; cross-tenant id → 404 | ✅ | `TenantIsolationIntegrationTest` 13/13 green (6 step-05 + 7 new) |
-| 4 | Review rule in GOVERNANCE-RULES.md + `gov-validate-backend-feature` checklist item | ✅ | commit 640e767 |
+| 4 | Review rule in GOVERNANCE-RULES.md + `gov-validate-backend-feature` checklist item | ✅ | commit f4ddda9 |
 | 5 | Audit of current `JdbcTemplate` / native SQL | ✅ | 15 statements, 0 violations (table below) |
-| 6 | Full P-LIVE HTTP suite, no regression, archived | ✅ | RUN 261008001171, 150/150 PASS |
-| 7 | `core-test-plan.md` §9 row naming the two classes; §6 untouched | ✅ | commit e6615ab; the run report's JUnit verification: 0 names not found |
-| 8 | CHANGELOG `[TM-C3]`, DEVIATIONS, this report | ✅ | c532b19, this commit |
-| DoD 1 | Analysis entries before the first code commit | ✅ | 7043a47 precedes 2d62418 |
+| 6 | Full P-LIVE HTTP suite, no regression, archived | ✅ | RUN 261008003190, 156/156 PASS |
+| 7 | `core-test-plan.md` §9 row naming the two classes; §6 untouched | ✅ | commit 9f28a87; the run report's JUnit verification: 0 names not found |
+| 8 | CHANGELOG `[TM-C3]`, DEVIATIONS, this report | ✅ | 67fe979, this commit |
+| DoD 1 | Analysis entries before the first code commit | ✅ | ff4121a precedes efcf437 |
 | DoD 2 | Code matches the entry; deviations in addendum + DEVIATIONS | ✅ | table below; the addendum already states the MDL/AUDIT/CU 404 forms |
-| DoD 3 | `mvn -q verify` green (ArchUnit incl. `TenantScopedEntityTest`, `MigrationNamingTest`, JaCoCo ≥ 60 %) | ✅ | erp-core 399/0/0/0, erp-app-reference 10/0/0/0; lines 77.69 % |
+| DoD 3 | `mvn -q verify` green (ArchUnit incl. `TenantScopedEntityTest`, `MigrationNamingTest`, JaCoCo ≥ 60 %) | ✅ | erp-core 408/0/0/0, erp-app-reference 10/0/0/0; lines 78.83 % |
 | DoD 4 | api-docs regenerated, `check_completeness.py` clean | n/a | no endpoint/DTO change (orchestrator: no regeneration) |
 | DoD 5 | test plan extended; api-verify run archived | ✅ | §9 row; run archived under `docs/test-api/results/` |
 | DoD 6 | CHANGELOG line | ✅ | `[Unreleased]` → Added |
@@ -156,15 +158,16 @@ explicitly so a reviewer does not flag it.
 ## Verification output
 
 - `mvn -q verify` from the repo root, after deleting every `target/` in the worktree: exit 0.
-  - erp-core: tests 399, failures 0, errors 0, skipped 0.
+  - erp-core: tests 408, failures 0, errors 0, skipped 0.
   - erp-app-reference: tests 10, failures 0, errors 0, skipped 0.
-  - JaCoCo erp-core lines 77.69 % (gate 60 %).
+  - JaCoCo erp-core lines 78.83 % (gate 60 %).
 - HTTP suite, profile P-LIVE, full: app built from this branch, port 18104, fresh database `erp_tm_c3` (dropped
   afterwards), bootstrap password `Test1234`.
-  - RUN `261008001171`: **150 PASS / 0 FAIL / 0 BLOCKED** (the 22 cases of other profiles show as SKIPPED in
+  - RUN `261008003190`: **156 PASS / 0 FAIL / 0 BLOCKED** (the 22 cases of other profiles show as SKIPPED in
     the report).
-  - Archived: `docs/test-api/results/20261008T001118-P-LIVE.json` and `…-P-LIVE-report.md`. The report was
-    written with `core_verify_report.build` and `OUT` redirected; `core-verify-report.md` is untouched.
+  - Archived: `docs/test-api/results/20261008T003132-P-LIVE.json` and `…-P-LIVE-report.md`. The report was
+    written with G's `--instance` / `--code-under-test` / `--report-out` flags (after the rebase onto
+    origin/main); `core-verify-report.md` is untouched.
   - §9 JUnit names not found: 0.
 - `check_completeness.py`: not run. There was no api-docs regeneration (no endpoint change).
 
@@ -188,5 +191,31 @@ plan owner).
 - `TenantHttp` now offers `put()` and `uploadPng()` for tenant-package tests.
 - C.6 (`ScopedValue` spike) must pass `TenantIsolationIntegrationTest`. That is this class; the plan calls it
   `TenantIsolationIT`.
-- My branch has no `--instance` / `--report-out` flags (they come with TM-G). The run report was produced by
-  calling `core_verify_report.build` with `OUT` redirected. After G merges, use its flags.
+- Archive a package's HTTP run with `--instance` / `--code-under-test`, then `--report <json> --report-out
+  docs/test-api/results/<ts>-P-LIVE-report.md`. Without them the report carries stale defaults (review round 1).
+
+## Review round 1
+
+Verdict: FAIL on one docs finding (code, tests and analysis passed) plus nit N1. Fixes:
+
+1. **Rebased onto origin/main** (now includes package G). Conflicts arose only in the append blocks, and both
+   sides were kept, TM-G first: `docs/test-api/core-test-plan.md` §9 (the TM-G row, then the TM-C3 row),
+   `docs/CHANGELOG.md` (the `[TM-G]` line, then `[TM-C3]`) and `docs/DEVIATIONS.md` (`## [TM-G]`, then
+   `## [TM-C3]`). There were no other conflicts.
+2. **Stale run report replaced.** The first archived report (`20261008T001118-P-LIVE-report.md`, RUN
+   `261008001171`) carried `core_verify_report.py`'s defaults: "erp-core 1.0.0", branch `step/14-api-verify`,
+   port 7272, database `erp_phase_d2`. Both files of that run were removed with `git rm`. The full P-LIVE suite
+   was then re-run on the rebased branch:
+   - setup: fresh `erp_tm_c3` on port 18104 (dropped afterwards), with
+     `--instance "erp-app-reference jar, port 18104, fresh PostgreSQL 16 database erp_tm_c3, profile dev, P-LIVE"`
+     and `--code-under-test "branch tm/c3-tenant-isolation-tests at b1aafc0, 1.3.0-SNAPSHOT"`;
+   - result: RUN `261008003190`, **156/156 PASS** (150 + G's 6), 0 FAIL, 0 BLOCKED;
+   - §9 JUnit names not found: 0;
+   - archived as `docs/test-api/results/20261008T003132-P-LIVE.json` + `-P-LIVE-report.md` (via `--report-out`).
+3. **N1:** REQ-TENANT-024 and AC-TENANT-024 now say "every JPA entity of erp-core" (the scan covers erp-core's
+   classpath; the reference application declares no entity), aligned with RULE-TENANT-010. The edit is inside
+   C3's own 1.3.0 section.
+4. **`mvn -q verify`** on the rebased branch, with every `target/` deleted first: exit 0.
+   - erp-core: 408 tests, 0 failures, 0 errors, 0 skipped.
+   - erp-app-reference: 10 tests, 0 failures, 0 errors, 0 skipped.
+   - JaCoCo erp-core lines: 78.83 %.
