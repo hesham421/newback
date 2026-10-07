@@ -61,13 +61,13 @@
         "V16__sec_user_profile.sql",
         "V17__notif_seed_password_changed.sql"
       ],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/d-sec-user-profile-passwords",
       "worktree": ".worktrees/tm-d",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 12,
       "implementer_agent": "a13c59d7399aab600",
-      "reviewer_agent": null,
+      "reviewer_agent": "a229488dd88b15f25",
       "review": null,
       "report": "docs/steps/tm-d-report.md",
       "merged_commit": null
@@ -356,6 +356,12 @@
       "step": "C3",
       "event": "COMPLETE",
       "note": "merged 260778a; verify 408/10; P-LIVE 156/156 archived (run 261008003190)"
+    },
+    {
+      "at": "2026-10-07T21:25:55Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 79b612f (mvn 432/10, P-LIVE 170/170, api-docs 115 ops); security-focused review dispatched"
     }
   ]
 }
