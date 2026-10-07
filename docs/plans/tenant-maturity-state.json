@@ -81,20 +81,19 @@
       ],
       "wave": "2",
       "migrations": [],
-      "status": "FIXING",
+      "status": "COMPLETE",
       "branch": "tm/c3-tenant-isolation-tests",
-      "worktree": ".worktrees/tm-c3",
+      "worktree": null,
       "attempts": 1,
       "deviations": 5,
       "implementer_agent": "ac59dc8798c2f6e2b",
       "reviewer_agent": "abd36c5aa783de8be",
       "review": {
-        "verdict": "FAIL",
-        "round": 1,
-        "findings": 1
+        "verdict": "PASS",
+        "round": 2
       },
       "report": "docs/steps/tm-c3-report.md",
-      "merged_commit": null
+      "merged_commit": "260778a"
     },
     {
       "id": "B",
@@ -351,6 +350,12 @@
       "step": "D",
       "event": "DISPATCH",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-07T20:36:10Z",
+      "step": "C3",
+      "event": "COMPLETE",
+      "note": "merged 260778a; verify 408/10; P-LIVE 156/156 archived (run 261008003190)"
     }
   ]
 }
