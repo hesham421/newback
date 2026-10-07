@@ -78,7 +78,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Create (provision) a tenant with its first administrator**
 
-إنشاء مستأجر وتجهيزه مع أول مدير له
+adminPassword must meet the STAFF password policy: 400 SEC-400-PASSWORD-POLICY (fieldErrors[0].field = adminPassword), raised by SEC's provisioning contributor; nothing is created - إنشاء مستأجر وتجهيزه مع أول مدير له؛ يجب أن تستوفي كلمة مرور المدير سياسة كلمات المرور
 
 Operation ID: `create_3`
 

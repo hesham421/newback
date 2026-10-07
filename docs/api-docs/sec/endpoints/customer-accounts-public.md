@@ -145,10 +145,12 @@ Shape: `ConfirmationResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PublicCustomerController.completePasswordReset`, `CustomerAccountService.completePasswordReset`, `PasswordResetTokenDomain.from`, `UserDomain.from`, `User.markVerified`, `PasswordResetToken.markUsed`, `SecAuditEntries.accountEvent`, `PasswordResetTokenDomain.assertUsable`, `UserDomain.awaitsVerification`, `new PasswordResetTokenDomain()`, `new UserDomain()`, `PasswordResetTokenDomain.assertUsable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PublicCustomerController.completePasswordReset`, `CustomerAccountService.completePasswordReset`, `PasswordResetTokenDomain.from`, `PasswordPolicy.assertAcceptable`, `UserDomain.from`, `User.markVerified`, `PasswordResetToken.markUsed`, `SecAuditEntries.accountEvent`, `PasswordResetTokenDomain.assertUsable`, `UserDomain.awaitsVerification`, `new PasswordResetTokenDomain()`, `PasswordPolicy.accepts`, `new UserDomain()`, `PasswordResetTokenDomain.assertUsable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PASSWORD-POLICY` | SEC_400_PASSWORD_POLICY | PasswordPolicy.assertAcceptable — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | PasswordPolicy.assertAcceptable |
 | 409 CONFLICT | `SEC-409-RESET-TOKEN-INVALID` | SEC_409_RESET_TOKEN_INVALID | CustomerAccountService.completePasswordReset |
 | 409 CONFLICT | `SEC-409-RESET-TOKEN-INVALID` | SEC_409_RESET_TOKEN_INVALID | PasswordResetTokenDomain.assertUsable |
 
@@ -305,10 +307,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PublicCustomerController.register`, `CustomerAccountService.register`, `UserDomain.createCustomer`, `CustomerAccountMapper.toEntity`, `CustomerAccountService.dispatch`, `CustomerAccountMapper.toResponse`, `new UserDomain()`, `InternalCallerContext.call`, `CustomerAccountService.actionLink`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PublicCustomerController.register`, `CustomerAccountService.register`, `UserDomain.createCustomer`, `PasswordPolicy.assertAcceptable`, `CustomerAccountMapper.toEntity`, `CustomerAccountService.dispatch`, `CustomerAccountMapper.toResponse`, `new UserDomain()`, `PasswordPolicy.accepts`, `InternalCallerContext.call`, `CustomerAccountService.actionLink`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 400 BAD_REQUEST | `SEC-400-PASSWORD-POLICY` | SEC_400_PASSWORD_POLICY | PasswordPolicy.assertAcceptable — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | PasswordPolicy.assertAcceptable |
 | 409 CONFLICT | `CUSTOMER_EMAIL_TAKEN` | CUSTOMER_EMAIL_TAKEN | UserDomain.createCustomer |
 
 ### Other Possible Responses
