@@ -93,12 +93,12 @@ POL-TENANT-009 — الرمز لا يعمل في مستأجر آخر / A token n
   Status    : CONFIRMED (as built)
 
 POL-TENANT-010 — المستأجر الجديد يبدأ من كتالوج المنصة / A new tenant starts from the platform catalog
-  Statement (ar) : عند إنشاء مستأجر، يجب على النظام منحه نسخة من بيانات المنصة المرجعية (الأدوار ومنحها عدا وحدة PLATFORM، القوائم المرجعية، إعدادات القنوات بلا بيانات اعتماد، القوالب بلا مرفقات، سلاسل الترقيم بعدّاد يبدأ من 1) ومديرًا أوّل نشطًا يحمل الدور `SYS_ADMIN`.
-  Statement (en) : When a tenant is created, the system shall give it a copy of the platform's reference data (roles and their grants except the PLATFORM module, the lookup catalog, channel configurations without credentials, templates without attachments, number series with the counter at 1) and an ACTIVE first administrator holding `SYS_ADMIN`.
+  Statement (ar) : عند إنشاء مستأجر، يجب على النظام منحه نسخة من بيانات المنصة المرجعية (أدوار الكتالوج الأربعة SYS_ADMIN وCU_ADMIN وNOTIF_ADMIN وFILE_ADMIN فقط ومنحها عدا وحدة PLATFORM — الأدوار الأخرى التي ينشئها المشغّل في المنصة لا تُنسخ، القوائم المرجعية، إعدادات القنوات بلا بيانات اعتماد، القوالب بلا مرفقات، سلاسل الترقيم بعدّاد يبدأ من 1) ومديرًا أوّل نشطًا يحمل الدور `SYS_ADMIN`.
+  Statement (en) : When a tenant is created, the system shall give it a copy of the platform's reference data (only the four catalog roles `SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` and their grants except the PLATFORM module — other roles an operator created in PLATFORM are not copied; the lookup catalog, channel configurations without credentials, templates without attachments, number series with the counter at 1) and an ACTIVE first administrator holding `SYS_ADMIN`.
   Pattern   : event
   Trigger   : Tenant creation
   Rationale : without it the new tenant would have no role, no lookup or template and nobody able to log in
-  Source    : sec/tenant/SecTenantProvisioningContributor.java:66-148; mdl/tenant/MdlTenantProvisioningContributor.java:31-55; notif/tenant/NotifTenantProvisioningContributor.java:32-53; sequence/tenant/SequenceTenantProvisioningContributor.java:32-44
+  Source    : sec/tenant/SecTenantProvisioningContributor.java:40 (`CATALOG_ROLE_CODES`), :80 (`r.CODE IN (...)`), :66-148; mdl/tenant/MdlTenantProvisioningContributor.java:31-55; notif/tenant/NotifTenantProvisioningContributor.java:32-53; sequence/tenant/SequenceTenantProvisioningContributor.java:32-44
   Status    : CONFIRMED (as built)
 
 POL-TENANT-011 — كلمة مرور المدير الأول لا تُخزَّن ولا تُسجَّل صريحة / The first administrator's password is never kept in clear

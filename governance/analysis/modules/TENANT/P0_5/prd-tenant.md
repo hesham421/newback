@@ -106,13 +106,35 @@ US-TENANT-008
    tenant/service/TenantService.java:99-102.
 6. The administrator signs in with `X-Tenant-Code: <code>`.
 
-## STORIES EXCLUDED (justified)
-  — Rename, delete or measure a tenant: not built (module-registry-tenant.md; business-policies-tenant.md
-    SCOPE EXCEPTIONS). Planned as 1.3.0 addenda (tenant-maturity plan package B).
+## TRACEABILITY — story → policy
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-001 | POL-TENANT-001, POL-TENANT-004, POL-TENANT-006, POL-TENANT-010, POL-TENANT-011 | tenant/service/TenantService.java:68-103 |
+| US-TENANT-002 | POL-TENANT-006 | tenant/service/TenantService.java:105-139 |
+| US-TENANT-003 | POL-TENANT-002, POL-TENANT-003, POL-TENANT-005, POL-TENANT-006 | tenant/service/TenantService.java:141-160 |
+| US-TENANT-004 | POL-TENANT-007, POL-TENANT-008, POL-TENANT-009 | tenant/security/TenantResolutionFilter.java:81-128 |
+| US-TENANT-005 | POL-TENANT-008, POL-TENANT-009 | tenant/security/TenantResolutionFilter.java:131-158 |
+| US-TENANT-006 | POL-TENANT-004, POL-TENANT-010 | tenant/TenantProvisioningContributor.java:22-31 |
+| US-TENANT-007 | — (scope only) | tenant/crossmodule/TenantLookupApi.java:10-14 |
+| US-TENANT-008 | POL-TENANT-007 | tenant/TenantContext.java:47-92 |
+Every policy POL-TENANT-001 … POL-TENANT-011 appears in at least one row above (001, 011 → US-001;
+002, 003, 005 → US-003; 004, 010 → US-001/US-006; 006 → US-001/002/003; 007 → US-004/US-008;
+008, 009 → US-004/US-005).
 
-## SCOPE EXCLUSIONS
-  — Schema-per-tenant, RLS, billing, per-tenant feature flags (ADR-TENANT-001; 05-STEP "Out of scope").
+## RESOLVED DECISIONS (dialogue)
+| # | Question | Recommended | Confirmed by user | Sources |
+|---|---|---|---|---|
+| 1 | Row-level (discriminator) or schema-per-tenant? | row-level, shared schema | fixed decision of erp-core plan step 05, as built | ADR-TENANT-001 |
+No other question: the stories describe built behaviour, read from the code.
 
-## OPEN ITEMS
-None.
+## DEFERRED
+| US | Reason | Activation trigger |
+|---|---|---|
+| (rename, delete or measure a tenant) | not built (module-registry-tenant.md; business-policies-tenant.md SCOPE EXCEPTIONS) | tenant-maturity plan package B (1.3.0 addenda; edit and usage only — no delete) |
+| (schema-per-tenant, RLS, billing, per-tenant feature flags) | out of scope (ADR-TENANT-001; 05-STEP "Out of scope") | explicit future request |
+
+## APPROVAL
+Approved by : n/a — as-built baseline (the stories describe implemented behaviour, erp-core 1.2.0)   Date : 2026-10-07
+Later changes are appended as "Implementation Addendum — erp-core 1.3.0" sections, never by rewriting
+the stories above.
 ══════════════════════════════════════════════════════════════════

@@ -85,8 +85,9 @@ constraints) and `:113` (21 tenant-aware entities). Base tables without `TENANT_
 `SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG` (and `flyway_schema_history`) — same test, `:28-29`.
 
 Other tenant rows written by V10 (not DBF): the registry module `PLATFORM`, screen `PLATFORM_TENANTS`, the
-actions `PERM_PLATFORM_TENANTS_VIEW` and `PLATFORM_TENANT_MANAGE`, and their three grants to the PLATFORM
-tenant's `SYS_ADMIN` (V10:213-244) — SEC's global catalog tables and tenant-1 grant rows; since step 06
+actions `PERM_PLATFORM_TENANTS_VIEW` and `PLATFORM_TENANT_MANAGE` (V10:213-228), and three grant statements
+producing four grant rows for the PLATFORM tenant's `SYS_ADMIN` — one module grant, one screen grant, two
+action grants (V10:230-244) — SEC's global catalog tables and tenant-1 grant rows; since step 06
 `TenantPermissions` re-declares the same catalog rows in code (tenant/permission/TenantPermissions.java:28-45).
 
 ## 2. XM REGISTER — TENANT v1

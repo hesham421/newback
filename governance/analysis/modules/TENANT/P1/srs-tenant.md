@@ -80,7 +80,7 @@ Priority   : HIGH
 #### AC-TENANT-001 — [REQ-TENANT-001]
 Given an authenticated PLATFORM operator and a request with a free, well-formed code and a complete first administrator
 When the operator posts it to `POST /api/v1/platform/tenants`
-Then the system answers 201 with `statusCode = ACTIVE`, the new tenant holds copies of PLATFORM's roles, lookups, templates, channels and series, and its administrator can log in with `X-Tenant-Code` (TC-CORE-TENANT-005, -006, -012)
+Then the system answers 201 with `statusCode = ACTIVE`, the new tenant holds copies of PLATFORM's four catalog roles `SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` with their grants (minus the `PLATFORM` module; other PLATFORM roles are not copied — sec/tenant/SecTenantProvisioningContributor.java:40, :80) and of its lookups, templates, channels and series, and its administrator can log in with `X-Tenant-Code` (TC-CORE-TENANT-005, -006, -012)
 
 ### REQ-TENANT-002 — رفض رمز غير صالح / Reject an invalid tenant code
 Pattern    : unwanted

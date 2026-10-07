@@ -41,7 +41,7 @@ RULE 009 (010) · SCR-REQ 001 (002) · XM 002 (003) · DBF 032 (033) · ADR 001 
 - `governance/README.md` — layout: ADR counts `SEC 13, MDL 12, TENANT 1`; TENANT P0–P2 described as a non-verbatim as-built baseline; documentation-map row. The README holds no total file count (`git ls-files governance | wc -l`: 264 → 273).
 - `governance/rules/GOVERNANCE-RULES.md` — the "Module analysis" row lists TENANT (same list as CLAUDE.md; not named in the package text, changed so the two lists agree).
 - `CLAUDE.md` — repository-structure line of the analysed modules gains TENANT.
-- `docs/DEVIATIONS.md` — `## [TM-A] tenant-maturity A`, one entry.
+- `docs/DEVIATIONS.md` — `## [TM-A] tenant-maturity A`, one entry (a second added in review round 1).
 
 **Created (this commit)** — `docs/steps/tm-a-report.md`.
 
@@ -123,6 +123,25 @@ $ git ls-files governance | wc -l   → 273 (264 before)
 ```
 
 No `mvn` totals, HTTP suite or api-docs run: documentation-only package.
+
+## Review round 1
+
+Reviewer verdict: PASS with findings. Fixed in commit `docs(governance): TENANT analysis review fixes`:
+1. `P0_5/prd-tenant.md` — added `## TRACEABILITY — story → policy` (format of `SEC/P0_5/prd-sec.md` /
+   `MDL/P0_5/prd-mdl.md`; every POL-TENANT-001…011 covered) and aligned the closing sections with that
+   template: `RESOLVED DECISIONS (dialogue)`, `DEFERRED`, `APPROVAL` (the former "stories excluded" and
+   "scope exclusions" content moved into DEFERRED; APPROVAL states the as-built baseline).
+2. Provisioning wording made exact: POL-TENANT-010 (`P0/business-policies-tenant.md`, ar + en) and
+   AC-TENANT-001 (`P1/srs-tenant.md`) now say only the four catalog roles `SYS_ADMIN`, `CU_ADMIN`,
+   `NOTIF_ADMIN`, `FILE_ADMIN` and their grants are copied (other PLATFORM roles are not), citing
+   `sec/tenant/SecTenantProvisioningContributor.java:40`, `:80`.
+3. `docs/DEVIATIONS.md` `[TM-A]` — second entry: plan §3 "the 18 TENANT_ID columns" → 22 documented
+   (V10's 18 + V11:68, V13:40, V14:33, V15:18; `TenantSchemaIntegrationTest:51` asserts 22).
+4. `ADR-TENANT-001.md` — states that `CU_APP_CONFIGURATION.TENANT_ID` is nullable since V14:66 (unique by the
+   expression index of V14:68); `P2/db-script-tenant.md` — V10 §6 writes three grant statements producing four
+   grant rows (module, screen, two actions; V10:230-244), catalog rows at V10:213-228.
+
+Path check after the fixes (9 analysis files): `references checked: 1194`, `errors: 0`.
 
 ## Skills checked
 

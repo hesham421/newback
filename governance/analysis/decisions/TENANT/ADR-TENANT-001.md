@@ -30,6 +30,8 @@ plan (`erp-core-plan/00-README-EXECUTION-PLAN.md` §6) and as the step's own out
 - every tenant-scoped table carries `TENANT_ID BIGINT NOT NULL` without default, a FK to
   `CORE_TENANT(ID)` and an index, and every unique constraint leads with `TENANT_ID`
   (`V10__tenant_schema.sql:63-138`, `:174-203`; 22 columns today, `../../modules/TENANT/P2/db-script-tenant.md`);
+  the one exception is `CU_APP_CONFIGURATION.TENANT_ID`, nullable since `V14__sequence_and_settings.sql:66`
+  (NULL = platform default, unique by the expression index of `:68`);
 - the tenant-aware base entity `AuditableEntity` carries `@TenantId tenantId` (Hibernate discriminator
   multi-tenancy) and the `CurrentTenantIdentifierResolver` returns the request tenant from `TenantContext`
   (`erp-core/src/main/java/com/erp/common/domain/AuditableEntity.java:35-37`,

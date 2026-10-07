@@ -219,3 +219,4 @@ bind later steps.
 ## [TM-A] tenant-maturity A
 
 - [TM-A] Plan §3 screen id `SCR-TENANT-001` → written `SCR-REQ-TENANT-001` (`PLATFORM_TENANTS`): every analysed module numbers its screen requirements `SCR-REQ-<MOD>-NNN` (e.g. `SCR-REQ-SEC-005`), and package A mirrors SEC's id style.
+- [TM-A] plan §3 "the 18 TENANT_ID columns" → 22 documented (V10's 18 + SEC_CUSTOMER_VERIFY_TOKEN V11:68, NOTIF_INBOX V13:40, CORE_NUMBER_SERIES V14:33, CORE_AUDIT_EVENT V15:18) (the plan counted V10 only; TenantSchemaIntegrationTest:51 asserts 22)
