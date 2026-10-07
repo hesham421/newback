@@ -601,7 +601,7 @@ migration is added.
 
 ### REQ-TENANT-024 — ضمان عزل المستأجرين / Tenant isolation guarantee
 Pattern    : ubiquitous
-Statement  : The system shall keep every tenant-scoped entity under Hibernate's tenant discriminator — every `@Entity` under `com.erp` extends `AuditableEntity` and so carries `@TenantId` on `TENANT_ID`, except the documented global set (RULE-TENANT-010) — so that a caller's search, list and read by id in every core module return only its own tenant's rows and an id of another tenant answers 404; and every raw SQL statement on a tenant-scoped table shall name `TENANT_ID` (RULE-TENANT-011).
+Statement  : The system shall keep every tenant-scoped entity under Hibernate's tenant discriminator — every JPA entity of erp-core (every `@Entity` under `com.erp` in erp-core; the reference application declares none) extends `AuditableEntity` and so carries `@TenantId` on `TENANT_ID`, except the documented global set (RULE-TENANT-010) — so that a caller's search, list and read by id in every core module return only its own tenant's rows and an id of another tenant answers 404; and every raw SQL statement on a tenant-scoped table shall name `TENANT_ID` (RULE-TENANT-011).
 Traces     : US-TENANT-004
 Entities   : ENT-TENANT-001 (FK target); every tenant-scoped entity (21 classes, listed in §3)
 Rationale  : POL-TENANT-007; REQ-TENANT-016 made checkable by the build (plan §5 C.3)
@@ -611,7 +611,7 @@ Priority   : HIGH
 Given two tenants A and B provisioned through `POST /api/v1/platform/tenants`, and in each of them one row of SEC (a role), MDL (a lookup type), FILE (a document), NOTIF (a template), CU (a configuration override), SEQUENCE (a number series) and AUDIT (the `CORE_AUDIT_EVENT` row written when the role was created)
 When A's administrator searches or lists each module and asks for B's row by its id
 Then every row A receives belongs to tenant A and includes A's new row, never B's; B's id answers 404 with the module's not-found code — `SEC-404-ROLE` (`GET /api/v1/sec/roles/{id}`), `MDL-404-TYPE` (`PUT /api/v1/mdl/lookup-types/{id}`: MDL has no read-by-id endpoint; B's row stays unchanged), `FILE_DOCUMENT_NOT_FOUND` (`GET /api/v1/files/{id}`), `NOTIF_TEMPLATE_NOT_FOUND` (`GET /api/v1/notifications/templates/{id}`), `APP_CONFIGURATION_NOT_FOUND` (`GET /api/v1/common/configurations/{key}` with B's key), `NUMBER_SERIES_NOT_FOUND` (`GET /api/v1/sequence/series/{id}`); AUDIT has no read-by-id endpoint, so `GET /api/v1/audit/events?entityId=<B's role id>` answers an empty page to A while B finds its row; B sees its own rows the same way (`TenantIsolationIntegrationTest`)
-And when a production `@Entity` under `com.erp` outside the global set does not extend `AuditableEntity`, or a class of the global set carries `@TenantId` or is not an entity, the build fails naming the class and telling the developer to make it tenant-scoped or to add it to the global list explicitly (`TenantScopedEntityTest`)
+And when a JPA entity of erp-core (a production `@Entity` under `com.erp` on erp-core's classpath) outside the global set does not extend `AuditableEntity`, or a class of the global set carries `@TenantId` or is not an entity, the build fails naming the class and telling the developer to make it tenant-scoped or to add it to the global list explicitly (`TenantScopedEntityTest`)
 
 ### 2. Business rules (§A5) — NEW
 
