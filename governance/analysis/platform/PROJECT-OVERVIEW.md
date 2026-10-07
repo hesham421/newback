@@ -79,3 +79,4 @@ Release policy: `docs/RELEASE.md` (SemVer; MINOR = additive only; core migration
 | How was it built, step by step? | `erp-core-plan/`, `docs/steps/NN-report.md` |
 | How is it verified over HTTP? | `docs/test-api/` (core suite), `governance/backend/modules/<MOD>/test-api/` (legacy adapted suites), `governance/frontend/modules/<MOD>/tests/` (the frontend's E2E archive) |
 | Which modules and screens exist? | `governance/analysis/platform/project-registry.md` |
+| How does multi-tenancy work (tenant resolution, provisioning, the `TENANT_ID` columns)? | `governance/analysis/modules/TENANT/` (as-built baseline of 1.2.0) and `governance/analysis/decisions/TENANT/ADR-TENANT-001.md` |

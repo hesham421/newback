@@ -16,7 +16,7 @@ on a screen is `PERM_<PAGE_CODE>_<ACTION>`, `VIEW` being the gateway action.
 | Module | Package | Analysis (`governance/analysis/…`) | Permission module → screens (page codes) | API contract (`docs/api-docs/…`, operations) | Test suites |
 |---|---|---|---|---|---|
 | SEC — identity, roles, grants, staff and customer auth | `com.erp.sec` | `modules/SEC/` P0–P2 (+ addenda), `implementation-notes.md` · `decisions/SEC/` 13 ADRs | `SEC` → `SEC_LOGIN`, `SEC_SIGNUP`, `SEC_PWD_RESET`, `SEC_USERS`, `SEC_ROLES`, `SEC_MODULE_REGISTRY`, `SEC_DASHBOARD`, `SEC_AUDIT_LOG`, `SEC_SESSIONS` | `sec/` — 40 | `docs/test-api/` (TC-CORE) · `governance/backend/modules/SEC/test-api/` · `governance/frontend/modules/SEC/tests/` (auth, cross-cutting, customer portal, SEC screens) |
-| TENANT — platform tenant provisioning | `com.erp.tenant` | — (erp-core plan step 05, `docs/steps/05-report.md`) | `PLATFORM` → `PLATFORM_TENANTS` | `tenant/` — 5 | `docs/test-api/` · `governance/frontend/modules/PLATFORM/tests/` |
+| TENANT — platform tenant provisioning | `com.erp.tenant` | `modules/TENANT/` P0–P2 (as-built baseline of 1.2.0, written 2026-10-07 from the code; erp-core plan step 05, `docs/steps/05-report.md`) · `decisions/TENANT/` 1 ADR | `PLATFORM` → `PLATFORM_TENANTS` | `tenant/` — 5 | `docs/test-api/` · `governance/frontend/modules/PLATFORM/tests/` |
 | FILE — files, categories, public files | `com.erp.file` | `modules/FILE/` P0–P2_5 (+ addenda) · `decisions/FILE/` none | `FILE` → `FILE_CATEGORIES`, `FILE_BROWSER` | `file/` — 14 | `docs/test-api/` · `governance/backend/modules/FILE/test-api/` · `governance/frontend/modules/FILE/tests/` |
 | NOTIF — templates, channels, dispatch, logs, inbox | `com.erp.notif` | `modules/NOTIF/` P0–P2_5 (+ addenda) · `decisions/NOTIF/` none | `NOTIF` → `NOTIF_TEMPLATES`, `NOTIF_CHANNELS`, `NOTIF_LOG` | `notif/` — 18 | `docs/test-api/` · `governance/backend/modules/NOTIF/test-api/` · `governance/frontend/modules/NOTIF/tests/` |
 | MDL — master-data lookups | `com.erp.mdl` | `modules/MDL/` P0–P2_5 (+ addenda) · `decisions/MDL/` 12 ADRs | `MDL` → `MDL_LOOKUPS`, `MDL_TYPE_REGISTRY` | `mdl/` — 11 | `governance/backend/modules/MDL/test-api/` · `governance/frontend/modules/MDL/tests/` |
@@ -38,6 +38,7 @@ Packages without an HTTP surface: `com.erp.common` (foundation), `com.erp.events
 | CU | v1 (legacy path) | the `SettingsApi`, platform defaults and tenant overrides, `PLATFORM_SETTINGS` |
 | FILE | v1 (legacy path) | the `StorageProvider` SPI, public files, download tokens, `PUBLISH` action |
 | NOTIF | v1 (legacy path) | event-driven delivery, claim lease and retry bounds, `ChannelProvider` SPI, the customer inbox |
+| TENANT | v1 (as-built baseline: written after the code, from erp-core 1.2.0; no 1.2.0 addendum) | — (the baseline itself records the tenant module, the resolution order, provisioning and the 22 `TENANT_ID` columns; 1.3.0 changes are appended as addenda) |
 
 The ADRs kept under `governance/analysis/decisions/` are those whose decision still describes
 the current code (search endpoints are `POST …/search`, no by-id read in MDL, the SEC lookups
