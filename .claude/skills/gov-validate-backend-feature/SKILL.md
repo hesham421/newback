@@ -232,6 +232,8 @@ Full checklist in [`gov-enforce-caching-rules`](../gov-enforce-caching-rules/SKI
 - A child mapper `toEntity()` without the parent FK parameter
 - A business-rule condition inlined in a service instead of delegated to `<Entity>Domain`
 - `<Entity>Domain` annotated with `@Component`/`@Service`/`@Entity`, or accessing a repository
+- A `JdbcTemplate` / native SQL statement on a tenant-scoped table that does not name `TENANT_ID`
+  explicitly (`GOVERNANCE-RULES.md` → Governance Rules; TENANT RULE-TENANT-011)
 
 ### Shared-layer compliance gate (CU.1–CU.8)
 

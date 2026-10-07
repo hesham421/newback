@@ -178,6 +178,11 @@ repository as a prompt plus a gap row and goes through "Analysis first" (root `C
   complete, the test plan extended and `docs/CHANGELOG.md` updated. A deliberate deviation
   updates the addendum and is recorded in `docs/DEVIATIONS.md`; code and analysis are never
   left disagreeing silently.
+- Every `JdbcTemplate` / native SQL statement on a tenant-scoped table names `TENANT_ID`
+  explicitly: as the inserted value, as a predicate on every tenant-scoped table and join of a
+  read, update or delete, or as the selected column of a deliberate cross-tenant scan whose
+  follow-up work runs tenant by tenant. Raw SQL bypasses Hibernate's `@TenantId` discriminator
+  (TENANT RULE-TENANT-011); `gov-validate-backend-feature` checks it.
 
 ---
 
