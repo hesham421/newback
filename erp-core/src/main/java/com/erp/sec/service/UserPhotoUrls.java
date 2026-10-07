@@ -16,18 +16,18 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-class UserPhotoUrls {
+public class UserPhotoUrls {
 
     private final FileDocumentLookupApi fileDocumentLookupApi;
 
     /** The photo URL of {@code user}, or {@code null}. */
-    String of(User user) {
+    public String of(User user) {
         return user == null || user.getPhotoFileId() == null ? null
             : fileDocumentLookupApi.publicUrl(user.getPhotoFileId()).orElse(null);
     }
 
     /** Photo URLs keyed by {@code userPk}; users without a servable photo are absent. */
-    Map<Long, String> of(Collection<User> users) {
+    public Map<Long, String> of(Collection<User> users) {
         Map<Long, String> urlsByDocument = fileDocumentLookupApi.publicUrls(
             users.stream().map(User::getPhotoFileId).filter(Objects::nonNull).toList());
         Map<Long, String> urlsByUser = new HashMap<>();

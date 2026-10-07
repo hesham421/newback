@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-class UserSessionTerminator {
+public class UserSessionTerminator {
 
     /** AUDIT_EVENT_TYPE code (CHK_SEC_AUDIT_LOG_EVENT_TYPE). */
     private static final String EVENT_SESSION_TERMINATED = "SESSION_TERMINATED";
@@ -32,7 +32,7 @@ class UserSessionTerminator {
      * Terminates every open session of {@code user} except the one whose {@code tokenRef} is
      * {@code keepTokenRef} (null keeps none) and answers how many it ended.
      */
-    int terminateOpenSessions(User user, String keepTokenRef, String detailsAr, String detailsEn) {
+    public int terminateOpenSessions(User user, String keepTokenRef, String detailsAr, String detailsEn) {
         String principal = SecurityContextHelper.getCurrentUsername();
         User actor = userRepository.findByUsername(principal).orElse(null);
         Instant now = Instant.now();
