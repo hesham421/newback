@@ -34,19 +34,19 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/g-sec-grant-revoke",
-      "worktree": ".worktrees/tm-g",
+      "worktree": null,
       "attempts": 2,
       "deviations": 6,
       "implementer_agent": "a4bca255ce095a936",
       "reviewer_agent": "a141731810d9ee97b",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-g-report.md",
-      "merged_commit": null
+      "merged_commit": "486a8a8"
     },
     {
       "id": "D",
@@ -317,6 +317,12 @@
       "step": "G",
       "event": "REVIEW",
       "note": "fix round 1 done 0e0c7a2: ids renumbered (REQ-SEC-080/081...), generator binds common-helper codes (28/29 rows restored), menu note; round-2 review dispatched"
+    },
+    {
+      "at": "2026-10-07T20:14:36Z",
+      "step": "G",
+      "event": "COMPLETE",
+      "note": "merged 486a8a8; verify 399/10, generator 65 OK; doc conflicts (README count, DEVIATIONS) resolved append-both"
     }
   ]
 }
