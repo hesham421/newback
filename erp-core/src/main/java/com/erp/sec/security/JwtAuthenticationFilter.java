@@ -148,12 +148,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             if (User.REALM_CUSTOMER.equals(realm)) {
-                install(username, realm, List.of(new SimpleGrantedAuthority(ROLE_CUSTOMER)));
+                install(username, new AuthRealm(realm), List.of(new SimpleGrantedAuthority(ROLE_CUSTOMER)));
                 return true;
             }
-            install(username, realm, List.of());
+            // tenant-maturity D (ADR-SEC-063): the forced-change flag travels from this row, no extra query
+            AuthRealm details = new AuthRealm(realm, Boolean.TRUE.equals(user.getPasswordChangeRequiredFl()));
+            install(username, details, List.of());
             Set<String> codes = menuService.effectiveAuthorityCodes().getData();
-            install(username, realm, toAuthorities(codes));
+            install(username, details, toAuthorities(codes));
             return true;
         } catch (RuntimeException e) {
             SecurityContextHolder.clearContext();
@@ -162,10 +164,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private static void install(String username, String realm, List<GrantedAuthority> authorities) {
+    private static void install(String username, AuthRealm details, List<GrantedAuthority> authorities) {
         UsernamePasswordAuthenticationToken authentication =
             new UsernamePasswordAuthenticationToken(username, null, authorities);
-        authentication.setDetails(new AuthRealm(realm));
+        authentication.setDetails(details);
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 

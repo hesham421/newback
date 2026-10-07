@@ -5,6 +5,7 @@ import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtAuthenticationFilter;
 import com.erp.sec.security.JwtTokenValidator;
+import com.erp.sec.security.PasswordChangeRequiredFilter;
 import com.erp.sec.security.RealmEnforcementFilter;
 import com.erp.sec.security.SecSecurityErrorHandler;
 import com.erp.sec.service.MenuService;
@@ -140,7 +141,10 @@ public class ErpCoreSecurityAutoConfiguration {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
             .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF,
-                properties.getSecurity().getPublicPaths(), securityErrorHandler), TenantResolutionFilter.class);
+                properties.getSecurity().getPublicPaths(), securityErrorHandler), TenantResolutionFilter.class)
+            // tenant-maturity D (RULE-SEC-059): a pending forced password change blocks all but three calls
+            .addFilterAfter(new PasswordChangeRequiredFilter(properties.getSecurity().getPublicPaths(),
+                securityErrorHandler), RealmEnforcementFilter.class);
         return http.build();
     }
 
