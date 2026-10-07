@@ -44,6 +44,13 @@ JAVA_KEYWORDS = {
 MODIFIERS = {"public", "protected", "private", "static", "final", "synchronized", "default", "abstract"}
 CONSTRUCTOR = "<init>"
 NEW_RE = re.compile(r"\bnew\s+([A-Z]\w*)\s*\(")
+# A throw whose code is a plain identifier (a parameter or a field), not a Class.CONSTANT:
+# the code is supplied by whoever calls the helper, so the throw site is the caller's.
+IDENT_THROW_RE = re.compile(r"new\s+LocalizedException\s*\(\s*Status\.(\w+)\s*,\s*([a-z]\w*)\s*[,)]")
+FIELD_ASSIGN_TEMPLATE = r"\bthis\.{name}\s*=\s*(\w+)\s*;"
+STATIC_CALL_RE = re.compile(r"(?<![\w.])([A-Z]\w*)\s*\.\s*(\w+)\s*\(")
+INSTANCE_CALL_RE = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*\.\s*(\w+)\s*\(")
+CODE_ARG_RE = re.compile(r"^\s*\w+\s*\.\s*([A-Z][A-Z0-9_]*)\s*$")
 
 
 @dataclass
@@ -172,6 +179,133 @@ def _parse_class(path: Path) -> Optional[ClassInfo]:
     return info
 
 
+@dataclass
+class CodeHelpers:
+    """Helpers that throw a code their caller supplies (e.g. com.erp.common's DomainRules,
+    OwnedLookups, StatusTransitions). Read from source, never listed by name:
+    - params: (Class, method) -> [(parameter index carrying the code, Status)]
+    - bound:  Class -> (constructor parameter index carrying the code, {method: Status})
+    - fixed:  Class -> [(code, Status)] thrown with a constant, reached by instantiating the class
+    """
+    params: dict[tuple[str, str], list[tuple[int, str]]] = field(default_factory=dict)
+    bound: dict[str, tuple[int, dict[str, str]]] = field(default_factory=dict)
+    fixed: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+
+
+def _param_names(params_raw: str) -> list[str]:
+    names = []
+    depth = 0
+    current = ""
+    for ch in params_raw + ",":
+        if ch in "<([":
+            depth += 1
+        elif ch in ">)]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            words = re.sub(r"@[\w.]+(?:\([^)]*\))?", "", current).split()
+            if words:
+                names.append(words[-1])
+            current = ""
+        else:
+            current += ch
+    return names
+
+
+def _call_args(text: str, open_index: int) -> list[str]:
+    """Top-level argument texts of the call whose '(' is at open_index."""
+    inner = text[open_index + 1:_paren_end(text, open_index) - 1]
+    args, depth, current = [], 0, ""
+    for ch in inner:
+        if ch in "([{<":
+            depth += 1
+        elif ch in ")]}>":
+            depth -= 1
+        if ch == "," and depth == 0:
+            args.append(current)
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        args.append(current)
+    return args
+
+
+def index_code_helpers(roots: list[Path]) -> CodeHelpers:
+    helpers = CodeHelpers()
+    for root in roots:
+        for path in sorted(Path(root).rglob("*.java")):
+            info = _parse_class(path)
+            if not info:
+                continue
+            for name in sorted(info.methods):
+                for mi in info.methods[name]:
+                    names = _param_names(mi.params_raw)
+                    for m in IDENT_THROW_RE.finditer(mi.body):
+                        status, ident = m.groups()
+                        if ident in names and name != CONSTRUCTOR:
+                            entry = (names.index(ident), status)
+                            slot = helpers.params.setdefault((info.name, name), [])
+                            if entry not in slot:
+                                slot.append(entry)
+                            continue
+                        for ctor in info.methods.get(CONSTRUCTOR, []):
+                            assigned = re.search(FIELD_ASSIGN_TEMPLATE.format(name=re.escape(ident)), ctor.body)
+                            ctor_names = _param_names(ctor.params_raw)
+                            if assigned and assigned.group(1) in ctor_names:
+                                _, methods = helpers.bound.setdefault(
+                                    info.name, (ctor_names.index(assigned.group(1)), {}))
+                                methods.setdefault(name, status)
+                                break
+                    for m in THROW_RE.finditer(mi.body):
+                        entry = (m.group(2), m.group(1))
+                        if entry not in helpers.fixed.setdefault(info.name, []):
+                            helpers.fixed[info.name].append(entry)
+    return helpers
+
+
+def _helper_throws(cls: ClassInfo, body: str, site: str, helpers: Optional[CodeHelpers],
+                   classes: dict[str, ClassInfo]) -> list[BusinessError]:
+    """Codes a body raises through a helper: the code constant is an argument of the call (or
+    of the constructor that built the helper object held in a field), the Status is the
+    helper's own throw. A shared class instantiated here contributes its constant throws."""
+    if not helpers:
+        return []
+    found: list[BusinessError] = []
+
+    def add(code_arg: str, status: str) -> None:
+        m = CODE_ARG_RE.match(code_arg)
+        if m:
+            found.append(BusinessError(code=m.group(1), value=m.group(1), throw_site=site, kind="thrown",
+                                       status=status))
+
+    for m in STATIC_CALL_RE.finditer(body):
+        holder, name = m.groups()
+        for index, status in helpers.params.get((holder, name), []):
+            args = _call_args(body, m.end() - 1)
+            if index < len(args):
+                add(args[index], status)
+    for m in INSTANCE_CALL_RE.finditer(body):
+        receiver, name = m.groups()
+        holder = cls.fields.get(receiver)
+        if holder not in helpers.bound:
+            continue
+        index, methods = helpers.bound[holder]
+        if name not in methods:
+            continue
+        init = re.search(r"\b" + re.escape(receiver) + r"\s*=\s*new\s+" + re.escape(holder) + r"\s*\(", cls.clean)
+        if init:
+            args = _call_args(cls.clean, init.end() - 1)
+            if index < len(args):
+                add(args[index], methods[name])
+    for m in NEW_RE.finditer(body):
+        holder = m.group(1)
+        if holder in classes:
+            continue
+        for code, status in helpers.fixed.get(holder, []):
+            found.append(BusinessError(code=code, value=code, throw_site=site, kind="thrown", status=status))
+    return found
+
+
 def index_module_source(source_root: Path) -> dict[str, ClassInfo]:
     classes: dict[str, ClassInfo] = {}
     for path in sorted(source_root.rglob("*.java")):
@@ -283,7 +417,8 @@ def site_label(cls_name: str, method_name: str) -> str:
 
 
 def walk_endpoint(classes: dict[str, ClassInfo], controller: str, method_name: str,
-                  max_depth: int = MAX_DEPTH) -> tuple[list[BusinessError], BusinessErrorWalk]:
+                  max_depth: int = MAX_DEPTH,
+                  helpers: Optional[CodeHelpers] = None) -> tuple[list[BusinessError], BusinessErrorWalk]:
     walk = BusinessErrorWalk()
     errors: list[BusinessError] = []
     seen: set[tuple[str, str, int]] = set()
@@ -305,6 +440,7 @@ def walk_endpoint(classes: dict[str, ClassInfo], controller: str, method_name: s
         walk.visited.append(site)
         detail_status = aggregate_detail_status(method.body) or detail_status
         errors.extend(_throws_in(method.body, site, detail_status))
+        errors.extend(_helper_throws(cls, method.body, site, helpers, classes))
         if depth >= max_depth:
             if _calls_in(cls, method, classes):
                 walk.depth_limit_hit = True
@@ -330,7 +466,8 @@ def find_access_denied_overrides(classes: dict[str, ClassInfo]) -> list[AccessDe
     return overrides
 
 
-def count_throw_sites(classes: dict[str, ClassInfo]) -> dict[str, list[str]]:
+def count_throw_sites(classes: dict[str, ClassInfo],
+                      helpers: Optional[CodeHelpers] = None) -> dict[str, list[str]]:
     """Code constant -> every Class.method naming it at a throw site or as an
     ErrorDetail, across the whole module source. The expected side of the
     walk's coverage ratio."""
@@ -339,7 +476,8 @@ def count_throw_sites(classes: dict[str, ClassInfo]) -> dict[str, list[str]]:
         cls = classes[name]
         for method_name in sorted(cls.methods):
             for mi in cls.methods[method_name]:
-                for be in _throws_in(mi.body, site_label(name, method_name)):
+                site = site_label(name, method_name)
+                for be in _throws_in(mi.body, site) + _helper_throws(cls, mi.body, site, helpers, classes):
                     if be.throw_site not in sites.setdefault(be.code, []):
                         sites[be.code].append(be.throw_site)
     return sites
@@ -354,20 +492,27 @@ def _status_rank(http_status: Optional[str]) -> int:
 
 def attach_business_errors(document: ApiDocument, classes: dict[str, ClassInfo],
                            controller_of: dict[int, tuple[str, str]],
-                           status_http: dict[str, str]) -> None:
+                           status_http: dict[str, str],
+                           helpers: Optional[CodeHelpers] = None) -> None:
     """controller_of maps id(endpoint) -> (ControllerClass, method). Resolves
     each bound code's wire value and HTTP status through the tables the document
     already carries, and records per-code binding counts on document.error_codes."""
     values = {c.name: c.value for c in document.error_codes}
     registered_status = {c.name: c.status for c in document.error_codes if c.status}
-    sites = count_throw_sites(classes)
+    sites = count_throw_sites(classes, helpers)
+    helper_status: dict[str, str] = {}
+    for name in sorted(classes):
+        for method_name in sorted(classes[name].methods):
+            for mi in classes[name].methods[method_name]:
+                for be in _helper_throws(classes[name], mi.body, "", helpers, classes):
+                    helper_status.setdefault(be.code, be.status)
     bound_counts: dict[str, int] = {}
 
     for ep in document.endpoints:
         located = controller_of.get(id(ep))
         if not located:
             continue
-        errors, walk = walk_endpoint(classes, *located)
+        errors, walk = walk_endpoint(classes, *located, helpers=helpers)
         ep.business_walk = walk
         unique: dict[tuple[str, Optional[str], str, str], BusinessError] = {}
         for be in errors:
@@ -392,6 +537,11 @@ def attach_business_errors(document: ApiDocument, classes: dict[str, ClassInfo],
     if document.auth_entry_point:
         via_codes[document.auth_entry_point.code] = document.auth_entry_point.handler
     for code in document.error_codes:
+        if not code.status and code.name in helper_status:
+            # The pairing is spelled out at a helper's call site (the code is its argument, the
+            # Status its throw's) -- the same evidence a direct throw gives.
+            code.status = helper_status[code.name]
+            code.http_status = http_status_label(status_http.get(code.status))
         code.throw_sites = sites.get(code.name, [])
         code.bound_endpoints = bound_counts.get(code.name, 0)
         if code.name in via_codes:

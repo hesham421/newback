@@ -112,7 +112,9 @@ def build_document(context: RepositoryContext):
         message_bundle_extractor.attach_messages(document.error_codes, bundles)
 
     if source_root is not None:
-        business_error_extractor.attach_business_errors(document, classes, controller_of, status_http)
+        helpers = business_error_extractor.index_code_helpers(
+            [source_root] + list(context.common_source_roots or []))
+        business_error_extractor.attach_business_errors(document, classes, controller_of, status_http, helpers)
         response_status_extractor.attach_response_statuses(
             document, classes, controller_of, status_http, context.common_source_roots,
             error_mapping_extractor.http_status_label)
