@@ -5,59 +5,46 @@ Lives at   : backend/.claude/commands/generate-module-setup.md, so it
              auto-loads as a Claude Code slash command
 ```
 
-## Precondition — the shared submodule is mounted (mechanical, not a judgement)
-
-This runs BEFORE Step 0, so it can name no derived variable — it tests the one
-path that is fixed by the `.gitmodules` entry, not by the profile:
+## Precondition — the governance tree is present (mechanical, not a judgement)
 
 ```bash
-test -f governance/shared/platform/profile-summary.json || echo "MISSING"
+test -f governance/README.md || echo "MISSING"
 ```
 
-If MISSING: `git submodule update --init governance/shared`, then start over.
-api-docs live only in that submodule now. A checkout cloned without
-`--recursive` has none, every path here still reads plausibly, and the failure
-surfaces phases later as a contract that cannot be resolved. Stop here instead.
+If MISSING you are not at the repo root (or on a branch from before governance
+moved into this repo). Stop here instead of guessing paths.
 
-## Step 0 — resolve the factory's facts (mechanical, never typed)
+## Step 0 — the fixed facts (layout and phase lists)
 
-Every factory fact this command needs — the active profile, where governance
-sits, and this track's ordered phase list — is published by the factory to one
-file. Read it; do not restate anything it carries. A phase list typed here goes
-stale the moment the profile gains a phase, and the symptom is a test phase
-that runs before the phase it was supposed to wait for.
+Governance is a plain folder in this repo (`governance/`, see its `README.md`).
+The layout and this track's ordered phase lists are fixed for the project:
 
 ```bash
-SUMMARY=governance/shared/platform/profile-summary.json
-test -f "$SUMMARY" || { echo "MISSING — run 'gov.py publish profile-summary' in the factory"; exit 1; }
-
-PROFILE=$(jq -r .profile            "$SUMMARY")
-MODULES=governance/shared/$(jq -r .paths.modules "$SUMMARY")
-PART=governance/shared/$(jq -r '.tracks.backend.partition' "$SUMMARY")   # {MOD} still unexpanded — this track's own partition
-DELIVERY=governance/shared/$(jq -r '.tracks.backend.delivery' "$SUMMARY") # {MOD} still unexpanded — the delivered packages
-EXEC_PHASES=$(jq -r '.tracks.backend.plans.exec.phases[].key' "$SUMMARY")
+MODULES=governance/analysis/modules
+PART=governance/backend/modules/{MOD}            # {MOD} still unexpanded — this track's own partition
+DELIVERY=governance/backend/modules/{MOD}/packages   # {MOD} still unexpanded — the backend packages
+EXEC_PHASES="CORE DATA-DOM SVC-API DOC INT-C INT-R SEC-BE ALIGN-BE"
+# test phases: TEST-PLAN-BE (subs RULE-SCENARIOS, API-SCENARIOS) then INT-XM (integration, no subs)
+TEST_PHASES="TEST-PLAN-BE INT-XM"
 ```
+
+A new phase is added by editing these lists here (and in `/orchestrate-module`).
 
 Then, for the module being set up:
 
 ```bash
 MBASE=$MODULES/$MODULE                          # the module's analysis (stages, _state, manifest) — read-only
 MINE=$(echo "$PART" | sed "s/{MOD}/$MODULE/")       # this repo's own partition: execution-state.json, api-docs/, test-api/
-PKGS=$(echo "$DELIVERY" | sed "s/{MOD}/$MODULE/")   # the factory's delivered packages for this module — read-only
+PKGS=$(echo "$DELIVERY" | sed "s/{MOD}/$MODULE/")   # this module's backend packages — read-only
 ```
 
 `$MBASE` and `$PKGS` are **read-only** to this repo; it writes only under `$MINE`
-(`$MINE/api-docs/` included — never `$MINE/packages/`, that is the factory's). A write
-anywhere else under `governance/shared/` is out of this track's partition.
-What actually STOPS it is `.governance-scope`: `./scripts/governance scope`
-sparse-checks the submodule down to the partitions this track may read, so the
-other track's tree is not on disk to be written. (`CODEOWNERS` in the shared
-repo does NOT stop it — it names one owner for every path, draws no
-backend/frontend line, can only request a review, and is bypassed entirely by
-the direct push `./scripts/governance push` makes. Do not rely on it.)
+(`$MINE/api-docs/` included — never `$MINE/packages/`, those are the plan's). A write
+anywhere else under `governance/` (`analysis/`, `frontend/`) is out of this
+track's partition; nothing mechanical stops it, so review catches it.
 
-**Path resolution — every governance path lives inside `governance/shared/`.**
-The analysis, the plans and this repo's partition are all in that submodule;
+**Path resolution — every governance path lives inside `governance/`.**
+The analysis, the plans and this repo's partition are all in that folder;
 this repo's own tree holds only tools, skills and commands. So in this file and
 in everything it generates, a bare `packages/…` resolves under `$PKGS`,
 a bare `execution-state.json` / `api-docs/` / `test-api/` under `$MINE`, and a
@@ -67,8 +54,7 @@ backend repo root, from a `governance/modules/…` path (that tree does not
 exist), or from `frontend/`.
 
 **`$EXEC_PHASES` is the authority for `gated_by_phases`.** Intersect it with the
-phases actually found on disk — never type the list, and never let a phase the
-profile declares go missing from the gate.
+phases actually found on disk, and never let a listed phase go missing from the gate.
 
 ## Your Task
 
@@ -84,7 +70,7 @@ collides with every other module's setup, and silently overwrites whatever
 module was generated last).
 
 **Write every governance path into the generated commands FULLY EXPANDED** —
-`governance/shared/backend/modules/<MODULE>/packages/backend-execution/…`, not
+`governance/backend/modules/<MODULE>/packages/backend-execution/…`, not
 `packages/backend-execution/…` and not `$PKGS/…`. A generated command is run
 standalone by a session that never read this file, so it carries no variable
 bindings and no bare-path convention; a bare path there is a path that session
@@ -92,7 +78,7 @@ has to guess. The templates below use `$MBASE` / `$MINE` / `$PKGS` **as
 placeholders to substitute**, never as text to copy through.
 
 `execute-backend-test.md` is this module's test-verification command — it
-regenerates this module's api-docs via `governance/governance-tools/api-doc-generator`
+regenerates this module's api-docs via `erp-app-reference/governance/governance-tools/api-doc-generator`
 (so verification always runs against the real, current implementation, never a
 stale snapshot) and then drives the `api-verify` skill
 (`.claude/skills/api-verify/SKILL.md`, this repo's sole adopted backend API
@@ -100,8 +86,8 @@ verification mechanism) to turn those api-docs — plus the test-execution-manif
 when present — into one runnable script, a problems report, and one coverage
 table, all scoped to this module alone.
 The generated command is **fully self-contained**: it depends only on
-`governance/governance-tools/api-doc-generator`, the `api-verify` skill,
-`governance/shared/platform/rules/api-verify-config.md`, and this module's own artifacts under
+`erp-app-reference/governance/governance-tools/api-doc-generator`, the `api-verify` skill,
+`governance/rules/api-verify-config.md`, and this module's own artifacts under
 `$MBASE/` (analysis) and `$MINE/` (this repo's partition) — never on an external governance/mechanism
 doc, and never on TestSprite (retired as this project's backend test
 mechanism — do not reintroduce a `TestSprite` MCP dependency here). Every rule
@@ -163,9 +149,8 @@ In particular, for a vN module:
   Test phase(s) section)
 - write `execution-state.json` to `$MINE/execution-state.json`
 - `api_docs_path` = `$MINE/api-docs/`
-  — NOT `$MBASE/api-docs/`. api-docs are the ONE artifact this repo does
-  not keep: they live in the shared repo, which is their single copy, and
-  the frontend reads that same copy. They are also NOT version-suffixed —
+  — NOT `$MBASE/api-docs/`. api-docs have one copy, in this track's
+  partition, and the frontend reads that same copy. They are also NOT version-suffixed —
   they are derived from the running application, so there is one current
   set per module, not one per plan version. STEP 0.3 of the test phase and
   the `Writes to` line of `/generate-api-docs` already name this exact path;
@@ -200,10 +185,9 @@ From the scan results:
   `ALIGN-BE` first, which is the last phase to run.
 - For each SUB file, read the first 40 lines and count the tasks
 
-Expected phases, in strict order: **`$EXEC_PHASES` from Step 0**, which is the
-profile's own ordered list. Include only the ones actually present on disk, and
-keep that order. Do not type the list here — it went stale twice before, and a
-phase missing from the gate is invisible until the test phase runs without it.
+Expected phases, in strict order: **`$EXEC_PHASES` from Step 0**. Include only
+the ones actually present on disk, and keep that order. A phase missing from the
+gate is invisible until the test phase runs without it.
 
 ### Test phase(s) — two delivered shapes, both real; check the filesystem, never assume
 
@@ -220,19 +204,16 @@ unit, e.g. `API-SCENARIOS.md`, `RULE-SCENARIOS.md`, `INT-XM.md`, alongside
 The folder is flat, so **it cannot tell you by itself which `.md` is a test
 PHASE and which is a SUB of one** — and the answer differs per module. Do not
 guess it from the file list, and do not carry a table of which module does
-what. The profile already declares it, exactly as it declares
-`$EXEC_PHASES`:
+what. Step 0 declares it, exactly as it declares `$EXEC_PHASES`:
 
-```bash
-TEST_PHASES=$(jq -r '.tracks.backend.plans.test.phases[].key' "$SUMMARY")
-# per phase: .sub_labels[] are its subs; .integration marks the cross-module one
-jq -r '.tracks.backend.plans.test.phases[]
-       | "\(.key)\tintegration=\(.integration)\tsubs=\((.sub_labels // [])|join(","))"' "$SUMMARY"
-```
+| Test phase | Subs (in order) | Integration |
+|---|---|---|
+| `TEST-PLAN-BE` | `RULE-SCENARIOS`, `API-SCENARIOS` | no |
+| `INT-XM` | — | yes |
 
 - A declared phase is **present** for this module when its evidence is on disk:
   a phase with `sub_labels` → at least one `<label>.md` exists in the folder
-  (each existing label becomes a SUB, in the profile's order); a phase without
+  (each existing label becomes a SUB, in the table's order); a phase without
   them (the `integration: true` one) → its own `<key>.md` exists, and it is
   recorded as a phase entry with `"subs": []`.
 - Declared but absent on disk → omit it. Do NOT fabricate a placeholder. A
@@ -243,7 +224,7 @@ jq -r '.tracks.backend.plans.test.phases[]
 - **Corroborate when you can.** When `$PKGS/backend-test/state.json` exists it
   carries `units[]` — e.g. `["SUB:RULE-SCENARIOS","SUB:API-SCENARIOS","PHASE:INT-XM"]`
   — the splitter's own record of the SUB/PHASE split. Read it and confirm it
-  agrees with the profile-derived answer; if the two disagree, STOP and report
+  agrees with the table-derived answer; if the two disagree, STOP and report
   the disagreement rather than picking one. It is absent for some modules,
   which is why it corroborates rather than decides.
 - `header_file` is that folder's `*-HEADER.md` if one exists, else its
@@ -299,9 +280,8 @@ Record weight and task count for every sub found.
 ## Step 2 — Generate `execution-state.json`
 
 Location: `$MINE/execution-state.json`  (resolved in Step 0.5 — v1 = no suffix, vN = /vN).
-**Not** `$MBASE/…`: that is the factory's analysis tree, read-only here. The
-factory overwrites it on the next publish, so a write there is lost, not
-merged — and nothing in the shared repo refuses it for you.
+**Not** `$MBASE/…`: that is the analysis tree, read-only here (owned by the
+project owner, see `governance/README.md`) — and nothing refuses it for you.
 
 ```json
 {
@@ -337,9 +317,9 @@ merged — and nothing in the shared repo refuses it for you.
 ```
 
 Every `$VAR` above is written into the file **expanded** — a real repo-relative
-path such as `governance/shared/backend/modules/<MODULE>/api-docs/`, never the
+path such as `governance/backend/modules/<MODULE>/api-docs/`, never the
 literal `$MINE`. (Every state file in this repo carried a
-`governance/shared/erp/modules/<MODULE>/api-docs/` for a while — a path that
+`governance/erp/modules/<MODULE>/api-docs/` for a while — a path that
 exists nowhere; that is what an unexpanded-then-guessed value looks like
 later.)
 
@@ -351,8 +331,8 @@ Rules:
   phase(s) (e.g. `INT-XM`) as additional array elements.
 - List only phases/subs actually found in Step 1 — never a fixed name.
 - Each element's `gated_by_phases` is `$EXEC_PHASES` (Step 0) filtered to the
-  phases that exist for this module, in the profile's order — derived, never
-  typed. If a phase the profile declares is missing from disk, say so rather
+  phases that exist for this module, in `$EXEC_PHASES` order. If a listed
+  phase is missing from disk, say so rather
   than dropping it silently: a gate that waits for nothing passes for the wrong
   reason.
 - `header_file` is the path resolved for that phase in Step 1 (Shape A:
@@ -489,8 +469,8 @@ api-docs or output.
 
 Execute API verification for [MODULE] — only for what's actually complete.
 
-> **Self-contained.** This command needs `governance/governance-tools/api-doc-generator`,
-> the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`), `governance/shared/platform/rules/api-verify-config.md`,
+> **Self-contained.** This command needs `erp-app-reference/governance/governance-tools/api-doc-generator`,
+> the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`), `governance/rules/api-verify-config.md`,
 > and this module's own artifacts under `$MBASE/` and `$MINE/`. Every rule it relies
 > on is written below or in those two files — it reads no other external mechanism/governance
 > doc, never stops waiting on one, and never calls TestSprite (retired as this project's
@@ -521,8 +501,8 @@ and its one-line scenario. This list is the **REQUIRED COVERAGE** for this
 run — it is what the system's own analysis says must be tested, independent
 of whatever `api-verify` later discovers from the api-docs. If the recorded
 path no longer holds a plan, or it holds no `TC-*` block, re-check the OTHER
-shape before concluding anything — the delivery shape can change between
-factory publishes. Only if both are genuinely empty, STOP and report it:
+shape before concluding anything — the package shape can change when a
+plan is re-split. Only if both are genuinely empty, STOP and report it:
 there is nothing governed to verify.
 
 ### 0.2 — Gate Check (MANDATORY)
@@ -545,7 +525,7 @@ STOP. Do not regenerate api-docs and do not invoke `api-verify`.
 possibly-outdated copy. Regenerate this module's api-docs from the real,
 current implementation first:
 ```bash
-cd governance/governance-tools/api-doc-generator
+cd erp-app-reference/governance/governance-tools/api-doc-generator
 python3 generate.py --module [MODULE] --function generate
 ```
 (consult that tool's own `README.md` for `--function generate` vs `update` vs
@@ -555,30 +535,13 @@ python3 generate.py --module [MODULE] --function generate
 proceeding to STEP 0.4 — do not invoke `api-verify` against missing or
 unrefreshed api-docs.
 
-**Then publish them, or they reach nobody.** That directory is inside the
-`governance/shared` submodule — a separate repository. Files written there are
-untracked in *that* repo, so `api-verify` here reads them while the factory and
-the frontend still read the previously pushed commit. Regenerating and stopping
-is indistinguishable from success until something downstream contradicts it:
+**Then commit them, or they reach nobody.** `$MINE/api-docs/` is inside this
+repo's `governance/` folder; the frontend reads what is committed and pushed
+here, not this working tree:
 
 ```bash
-cd governance/shared
-git fetch origin main
-git merge-base --is-ancestor HEAD origin/main \
-  && git checkout main \
-  || echo "HEAD is NOT on origin/main — do not checkout; commit here and push HEAD:main"
-git add -A && git commit -m "api-docs([MODULE]): regenerated" && git push
-cd ../.. && git add governance/shared && git commit -m "bump shared" && git push
+git add "$MINE/api-docs" && git commit -m "api-docs([MODULE]): regenerated"
 ```
-
-Getting onto a branch is not optional housekeeping: a submodule is checked out
-on a *commit*, not a branch, so a plain `git push` has no branch to push to and
-the commit never leaves this machine. But `git checkout main` is only harmless
-**while the checked-out commit is an ancestor of `origin/main`** — hence the
-guard above. If it is not (this checkout has been pinned off-branch before),
-checking out `main` silently moves you off the tree you just generated against;
-commit where you are and `git push HEAD:main` instead. Full sequence and both
-failure modes: `/generate-api-docs`.
 
 ### 0.4 — Confirm the app is reachable
 `http://localhost:7272/actuator/health` (start it with `mvn spring-boot:run`
@@ -602,7 +565,7 @@ Invoke the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`) for
   when present (Full tier: happy-path CRUD + negative RULE checks, dependency
   order read verbatim from the manifest) — otherwise Minimal tier (happy-path
   CRUD only, FK order inferred, negatives stated as skipped and why);
-- `governance/shared/platform/rules/api-verify-config.md` for every stack convention (base path,
+- `governance/rules/api-verify-config.md` for every stack convention (base path,
   envelope shapes, error-code format, permission pattern) — never re-derived
   here.
 
@@ -647,8 +610,7 @@ TC-[MODULE]-0NN    │ XM-… / UXD-…       │ …               │ ✗ none
 - A delivered `TC-*` with no matching `test_<entity>()` reference is a
   **coverage gap** — list it prominently; it is never dropped silently.
 - Integration `TC-*` — those tracing `XM-*` or `UXD-*`, which come from a phase
-  the profile marks `integration` (Step 0's summary carries the flag; the name
-  is the profile's to choose) — are checked here exactly like any other: a cross-module
+  Step 0 marks as integration (`INT-XM`) — are checked here exactly like any other: a cross-module
   dependency with no exercising test is a gap, same as an uncovered `AC-*`.
 - Record the coverage ratio: `<covered>/<total>` REQUIRED-COVERAGE TCs.
 

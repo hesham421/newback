@@ -10,7 +10,7 @@ Execute the current phase for MDL — with context safety check.
 ## STEP 0 — Context Safety Assessment (MANDATORY)
 
 ### 0.1 — Read state, identify PENDING subs in the requested phase
-Read `governance/shared/backend/modules/MDL/execution-state.json`. Confirm the requested
+Read `governance/backend/modules/MDL/execution-state.json`. Confirm the requested
 PHASE matches `current_phase` (or is otherwise the next PENDING phase in
 order). Identify all subs under it with `status: PENDING`.
 
@@ -40,16 +40,16 @@ Proceed? [waits for confirmation]
 
 ### 1.0 — Read shared context once (before the per-sub loop)
 - The phase's `[PHASE]-HEADER.md` under
-  `governance/shared/backend/modules/MDL/packages/backend-execution/[PHASE]/` if present —
+  `governance/backend/modules/MDL/packages/backend-execution/[PHASE]/` if present —
   only `SVC-API` has one (`SVC-API-HEADER.md`); no other phase in this module
   has a HEADER file.
-- `governance/shared/backend/modules/MDL/packages/backend-execution/_SECTIONS.md` — plan-level
+- `governance/backend/modules/MDL/packages/backend-execution/_SECTIONS.md` — plan-level
   content that lives OUTSIDE every phase (Plan Index, DB Alignment Manifest,
   Error Catalog, Agent Handoff Summary). Read once for orientation; it is
   context, not a sub.
 
 ### Per sub:
-1. Read `governance/shared/backend/modules/MDL/packages/backend-execution/[PHASE]/[SUB].md`
+1. Read `governance/backend/modules/MDL/packages/backend-execution/[PHASE]/[SUB].md`
    completely (the SUB file is named by its phase-qualified label, e.g.
    `SVC-API-CRUD.md`; for a single-file phase the SUB file is `[PHASE].md`,
    e.g. `CORE/CORE.md`, `DATA-DOM/DATA-DOM.md`)
@@ -61,7 +61,7 @@ Proceed? [waits for confirmation]
 5. Execute all tasks in order
 6. Run the phase's validation skill (`gov-validate-backend-feature`) after
    the last task
-7. Mark sub COMPLETE in `governance/shared/backend/modules/MDL/execution-state.json`
+7. Mark sub COMPLETE in `governance/backend/modules/MDL/execution-state.json`
 
 ### Blocked items — OQ
 OQ-blocked task → skip, add to `blocked[]`, mark in code:

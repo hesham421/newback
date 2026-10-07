@@ -1,0 +1,12 @@
+{
+  "module": "SEC",
+  "version": 1,
+  "scope": "stage:P-1",
+  "counts": {
+    "CRITICAL": 0,
+    "MAJOR": 0,
+    "MINOR": 0
+  },
+  "clean": true,
+  "findings": []
+}

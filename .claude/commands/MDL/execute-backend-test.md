@@ -2,9 +2,9 @@
 
 Execute API verification for MDL — only for what's actually complete.
 
-> **Self-contained.** This command needs `governance/governance-tools/api-doc-generator`,
-> the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`), `governance/shared/platform/rules/api-verify-config.md`,
-> and this module's own artifacts under `governance/shared/analysis/modules/MDL/`. Every rule it relies
+> **Self-contained.** This command needs `erp-app-reference/governance/governance-tools/api-doc-generator`,
+> the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`), `governance/rules/api-verify-config.md`,
+> and this module's own artifacts under `governance/analysis/modules/MDL/`. Every rule it relies
 > on is written below or in those two files — it reads no other external mechanism/governance
 > doc, never stops waiting on one, and never calls TestSprite (retired as this project's
 > backend test mechanism).
@@ -17,7 +17,7 @@ Execute API verification for MDL — only for what's actually complete.
 ## STEP 0 — Plan Load, Gate Check, API-Doc Regeneration + Assessment
 
 ### 0.1 — Load the delivered test-gen plan (the REQUIRED COVERAGE)
-Read every `TC-MDL-<seq>` block out of `governance/shared/analysis/modules/MDL/test_gen/backend-test-plan-mdl.md`
+Read every `TC-MDL-<seq>` block out of `governance/analysis/modules/MDL/test_gen/backend-test-plan-mdl.md`
 (this is the module's flat test-gen plan file; there is no `backend-test/` fallback copy on
 disk for MDL — do not assume one). This command does not read `packages/backend-test/` —
 that split-folder shape depended on governance-tools splitter tooling this project no
@@ -37,7 +37,7 @@ Per TC extract: its `TC-MDL-<seq>` id, the `AC-*`/`REQ-*`/`XM-*` it traces (from
 **REQUIRED COVERAGE** for this run.
 
 ### 0.2 — Gate Check (MANDATORY)
-Read `governance/shared/backend/modules/MDL/execution-state.json` → for each entry in `test_phases[]`
+Read `governance/backend/modules/MDL/execution-state.json` → for each entry in `test_phases[]`
 (`TEST-PLAN-BE` and `INT-XM`), confirm every phase listed in its `gated_by_phases[]`
 (`CORE, DATA-DOM, SVC-API, DOC, INT-C, INT-R, SEC-BE, ALIGN-BE` — all 8, for both entries)
 has `status == COMPLETE`.
@@ -57,13 +57,13 @@ STOP. Do not regenerate api-docs and do not invoke `api-verify`.
 possibly-outdated copy. Regenerate MDL's api-docs from the real, current
 implementation first:
 ```bash
-cd governance/governance-tools/api-doc-generator
+cd erp-app-reference/governance/governance-tools/api-doc-generator
 python3 generate.py --module MDL --function generate
 ```
 (consult that tool's own `README.md` for `--function generate` vs `update` vs
 `review` semantics before assuming — use whichever actually (re)writes
 the `api_docs_path` this module's `execution-state.json` declares in full for this run). Confirm
-`governance/shared/backend/modules/MDL/api-docs/index.md` was written/updated before
+`governance/backend/modules/MDL/api-docs/index.md` was written/updated before
 proceeding to STEP 0.4 — do not invoke `api-verify` against missing or
 unrefreshed api-docs.
 
@@ -85,16 +85,16 @@ than assuming.)
 Invoke the `api-verify` skill (`.claude/skills/api-verify/SKILL.md`) for
 `<MOD>` = `MDL`. Per the skill's own procedure it reads:
 - the `api_docs_path` this module's `execution-state.json` declares — regenerated in STEP 0.3, mandatory;
-- `governance/shared/analysis/modules/MDL/test_gen/test-execution-manifest-mdl.md` when present
+- `governance/analysis/modules/MDL/test_gen/test-execution-manifest-mdl.md` when present
   (Full tier: happy-path CRUD + negative RULE checks, dependency order read
   verbatim from the manifest — note the module's two-entity FK order,
   LookupType before LookupValue) — otherwise Minimal tier (happy-path CRUD
   only, FK order inferred, negatives stated as skipped and why);
-- `governance/shared/platform/rules/api-verify-config.md` for every stack convention (base path
+- `governance/rules/api-verify-config.md` for every stack convention (base path
   `/api/v1/mdl`, envelope shapes, error-code format `MDL-{http}[-{SLUG}]`,
   permission pattern) — never re-derived here.
 
-It produces, under `governance/shared/backend/modules/MDL/test-api/`:
+It produces, under `governance/backend/modules/MDL/test-api/`:
 - `test_mdl_apis.py` — one runnable script, one `test_<entity>()` per entity
   in dependency order (LookupType, then LookupValue), each create/update/negative
   call tagged with a traceability comment (`Covers: API-… ; Negative: RULE-… /
@@ -102,7 +102,7 @@ It produces, under `governance/shared/backend/modules/MDL/test-api/`:
 - `mdl_problems_report.md` — failures bucketed likely-real-bug /
   test-assumption-mismatch / infrastructure.
 
-Run the generated script (`python3 governance/shared/backend/modules/MDL/test-api/test_mdl_apis.py`)
+Run the generated script (`python3 governance/backend/modules/MDL/test-api/test_mdl_apis.py`)
 against the app confirmed reachable in STEP 0.4, and record its pass/fail per
 `test_<entity>()` suite. This command never hand-writes verification code
 itself and never calls a TestSprite tool.
@@ -165,7 +165,7 @@ if nothing fits, use `ENVIRONMENT_FAILURE` and explain why in the detail.
 
 Write `reports/TEST-REPORT-MDL-backend-[YYYY-MM-DD].md` — a module-scoped
 digest, distinct from `api-verify`'s own raw output (`mdl_problems_report.md`,
-left under `governance/shared/backend/modules/MDL/test-api/`, untouched). It MUST include
+left under `governance/backend/modules/MDL/test-api/`, untouched). It MUST include
 the STEP 1.9 coverage table (governed plan ↔ api-verify) and the coverage
 ratio, ABOVE the failure taxonomy — a green taxonomy over an incomplete plan
 is not a pass. This report is complete once the test/coverage section above

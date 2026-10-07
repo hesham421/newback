@@ -1,0 +1,57 @@
+{
+  "module": "MDL",
+  "version": 1,
+  "profile": "erp",
+  "markers_schema_version": 2,
+  "paths_relative_to": "the directory holding this file",
+  "root": ".",
+  "stages": {
+    "P0": "P0",
+    "P0.5": "P0_5",
+    "P1": "P1",
+    "P2": "P2",
+    "P3.1": "P3_1",
+    "P3.2": "P3_2",
+    "test-gen": "test_gen",
+    "api-verify": "api_verify"
+  },
+  "plans": {
+    "backend/exec": "P3_1/backend-execution-plan-mdl.md",
+    "backend/test": "test_gen/backend-test-plan-mdl.md",
+    "frontend/exec": "P3_2/frontend-execution-plan-mdl.md",
+    "frontend/test": "test_gen/frontend-test-plan-mdl.md"
+  },
+  "packages": {
+    "backend/exec": "../../../backend/modules/MDL/packages/backend-execution",
+    "backend/test": "../../../backend/modules/MDL/packages/backend-test",
+    "frontend/exec": "../../../frontend/modules/MDL/packages/frontend-execution",
+    "frontend/test": "../../../frontend/modules/MDL/packages/frontend-test"
+  },
+  "state_dir": "_state",
+  "inputs_dir": "_inputs",
+  "decisions_dir": "../../decisions/MDL",
+  "status": {
+    "archived": false,
+    "split": {
+      "backend/exec": true,
+      "backend/test": true,
+      "frontend/exec": true,
+      "frontend/test": true
+    },
+    "inputs": {
+      "api-docs": {
+        "repo": "backend",
+        "commit": "a876df829aa16d7b08b3998beb55f5a5a283af80",
+        "digest": "d2b1266bf81aefa9f4c4f63f9ebf3ea787c31c7061798cb7b318a333315cf802",
+        "fetched_at": "2026-09-19T11:25:40+00:00"
+      }
+    },
+    "coverage": {
+      "us-req": 100.0,
+      "req-ac": 100.0,
+      "req-api": 100.0,
+      "req-ux": 84.6
+    }
+  },
+  "created_at": "2026-09-10T16:04:50+00:00"
+}

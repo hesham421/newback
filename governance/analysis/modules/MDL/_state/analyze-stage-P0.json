@@ -1,0 +1,12 @@
+{
+  "module": "MDL",
+  "version": 1,
+  "scope": "stage:P0",
+  "counts": {
+    "CRITICAL": 0,
+    "MAJOR": 0,
+    "MINOR": 0
+  },
+  "clean": true,
+  "findings": []
+}

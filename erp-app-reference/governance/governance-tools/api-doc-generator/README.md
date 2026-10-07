@@ -308,9 +308,9 @@ conventions every current module already does, with zero generator changes:
    (a module can depend on several; all are searched). Under the single
    consolidated POM this platform builds as today, shared code already lives
    in the same `src/main/java` tree, so that whole tree is the common root.
-5. **Where does output go?** `governance-repo/modules/<MODULE>/api-docs/` —
-   this tool's own repository, so no discovery is needed, just the
-   already-established convention.
+5. **Where does output go?** `governance/backend/modules/<MODULE>/api-docs/`
+   at the repository root (the project's governance tree, found by walking up
+   from this tool's location) — no other discovery is needed.
 
 Every step degrades to "not found" rather than guessing, exactly like the
 existing best-effort extractors already do — `generate.py` turns that into a

@@ -1,4 +1,0 @@
-[submodule "governance/shared"]
-	path = erp-app-reference/governance/shared
-	url = https://github.com/hesham421/governance-shared.git
-	branch = main

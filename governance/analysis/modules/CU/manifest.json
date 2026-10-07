@@ -1,0 +1,40 @@
+{
+  "module": "CU",
+  "version": 1,
+  "profile": "erp",
+  "markers_schema_version": 2,
+  "paths_relative_to": "the directory holding this file",
+  "root": ".",
+  "stages": {
+    "P0": "P0",
+    "P0.5": "P0_5",
+    "P1": "P1",
+    "P2": "P2",
+    "P3.1": "P3_1",
+    "P3.2": "P3_2",
+    "test-gen": "test_gen",
+    "api-verify": "api_verify"
+  },
+  "plans": {},
+  "packages": {
+    "backend/exec": "../../../backend/modules/CU/packages/backend-execution",
+    "backend/test": "../../../backend/modules/CU/packages/backend-test",
+    "frontend/exec": "../../../frontend/modules/CU/packages/frontend-execution",
+    "frontend/test": "../../../frontend/modules/CU/packages/frontend-test"
+  },
+  "state_dir": "_state",
+  "inputs_dir": "_inputs",
+  "decisions_dir": "../../decisions/CU",
+  "status": {
+    "archived": true,
+    "split": {
+      "backend/exec": false,
+      "backend/test": false,
+      "frontend/exec": false,
+      "frontend/test": false
+    },
+    "backend_module_complete": false,
+    "ui_shell_complete": false
+  },
+  "created_at": "2026-09-03T20:22:14.441598"
+}

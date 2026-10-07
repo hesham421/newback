@@ -72,8 +72,11 @@ python docs/api-docs/_tools/check_completeness.py                 # every operat
 4. It runs the generator pipeline (`generator.run` / `generator.check`) with a hand-built
    `RepositoryContext`. The inputs are the module source root, `erp-core/src/main/java` as the shared root,
    the core i18n bundles and both Flyway migration roots.
+5. With `generate` or `update` it mirrors every module folder except `app/` into
+   `governance/backend/modules/<MOD>/api-docs/`, the copy the frontend reads (`--no-governance` skips it).
+   Commit both trees together.
 
-The generator's `governance/shared` discovery is bypassed (see `docs/DEVIATIONS.md`, `[D9]`).
+The generator's own per-module discovery is bypassed (see `docs/DEVIATIONS.md`, `[D9]`).
 
 `_tools/check_completeness.py` lists every (method, path) in `/v3/api-docs` and checks that each one is
 documented under exactly one `<module>/endpoints/*.md`. It also checks that no documented endpoint is

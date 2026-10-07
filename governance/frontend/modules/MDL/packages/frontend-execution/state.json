@@ -1,0 +1,52 @@
+{
+  "module": "MDL",
+  "track": "frontend",
+  "plan": "exec",
+  "version": 1,
+  "profile": "erp",
+  "markers_schema_version": 2,
+  "source": "governance-shared/analysis/modules/MDL/P3_2/frontend-execution-plan-mdl.md",
+  "split_at": "2026-09-19T13:40:08+00:00",
+  "strict": false,
+  "files": [
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F1/F1-HEADER.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F1/F1-SCR-MDL-001.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F1/F1-SCR-MDL-002.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F2/F2-HEADER.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F2/F2-SCR-MDL-001.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F2/F2-SCR-MDL-002.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F3/F3-HEADER.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F3/F3-SCR-MDL-001.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F3/F3-SCR-MDL-002.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F4/F4-HEADER.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F4/F4-SCR-MDL-001.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F4/F4-SCR-MDL-002.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/SEC-FE/SEC-FE.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/ALIGN-FE/ALIGN-FE.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/_SECTIONS.md"
+  ],
+  "indexes": [
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/ALIGN-FE/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F1/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F2/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F3/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/F4/index.md",
+    "governance-shared/frontend/modules/MDL/packages/frontend-execution/SEC-FE/index.md"
+  ],
+  "units": [
+    "SUB:F1-SCR-MDL-001",
+    "SUB:F1-SCR-MDL-002",
+    "SUB:F2-SCR-MDL-001",
+    "SUB:F2-SCR-MDL-002",
+    "SUB:F3-SCR-MDL-001",
+    "SUB:F3-SCR-MDL-002",
+    "SUB:F4-SCR-MDL-001",
+    "SUB:F4-SCR-MDL-002",
+    "PHASE:SEC-FE",
+    "PHASE:ALIGN-FE"
+  ],
+  "atoms": [],
+  "verification": "governance-shared/frontend/modules/MDL/packages/frontend-execution/verification.json",
+  "verified": true
+}

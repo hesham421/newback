@@ -1,0 +1,56 @@
+{
+  "module": "SEC",
+  "version": 1,
+  "profile": "erp",
+  "markers_schema_version": 2,
+  "paths_relative_to": "the directory holding this file",
+  "root": ".",
+  "stages": {
+    "P0": "P0",
+    "P0.5": "P0_5",
+    "P1": "P1",
+    "P2": "P2",
+    "P3.1": "P3_1",
+    "P3.2": "P3_2",
+    "test-gen": "test_gen",
+    "api-verify": "api_verify"
+  },
+  "plans": {
+    "backend/exec": "P3_1/backend-execution-plan-sec.md",
+    "backend/test": "test_gen/backend-test-plan-sec.md",
+    "frontend/test": "test_gen/frontend-test-plan-sec.md"
+  },
+  "packages": {
+    "backend/exec": "../../../backend/modules/SEC/packages/backend-execution",
+    "backend/test": "../../../backend/modules/SEC/packages/backend-test",
+    "frontend/exec": "../../../frontend/modules/SEC/packages/frontend-execution",
+    "frontend/test": "../../../frontend/modules/SEC/packages/frontend-test"
+  },
+  "state_dir": "_state",
+  "inputs_dir": "_inputs",
+  "decisions_dir": "../../decisions/SEC",
+  "status": {
+    "archived": false,
+    "split": {
+      "backend/exec": true,
+      "backend/test": true,
+      "frontend/exec": true,
+      "frontend/test": true
+    },
+    "coverage": {
+      "us-req": 100.0,
+      "req-ac": 100.0,
+      "req-api": 91.4,
+      "req-ux": 0.0
+    },
+    "inputs": {
+      "api-docs": {
+        "repo": "backend",
+        "commit": "327f21ba1068dff7f9491da0beed695aa4aa2a4a",
+        "digest": "4de00ec2cc9f2570cc2618b7a618419cc84f4add894d7d9f6f66d70c09c947f9",
+        "fetched_at": "2026-09-19T08:26:46+00:00"
+      }
+    }
+  },
+  "created_at": "2026-09-10T15:25:46+00:00"
+}

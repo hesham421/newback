@@ -1,0 +1,13 @@
+{
+  "module": "MDL",
+  "track": "frontend",
+  "plan": "exec",
+  "version": 1,
+  "verify": "sha256",
+  "source": "governance-shared/analysis/modules/MDL/P3_2/frontend-execution-plan-mdl.md",
+  "checked": 10,
+  "missing": [],
+  "mismatched": [],
+  "ok": true,
+  "at": "2026-09-19T13:40:08+00:00"
+}

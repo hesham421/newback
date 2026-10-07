@@ -1,0 +1,15 @@
+# SEC E2E specs (erp-front step 12)
+
+Archived copies of the Playwright suite in `newfront/mxdashboard/e2e/` (erp-front re-baseline plan, step 12), run against the erp-core 1.2.0 reference app on 2026-10-05.
+
+- `specs/security/` — TC-FE-SEC-001..009 (SEC screens).
+- `specs/auth/` — TC-FE-AUTH-001..010 and `specs/cross-cutting/` — TC-FE-XCUT-001..013: the AUTH (login, logout, expiry, suspended tenant, wrong portal, reset link, sign-up) and cross-cutting (tenant header, realm guard, error policy, i18n, menu gating) cases have no registry module of their own, so they are archived here with SEC, which owns authentication and the effective menu.
+- `specs/customer/` — TC-FE-CUST-001..010 (erp-front plan v2, steps v2-04/v2-05; added 2026-10-06 by v2-06): the customer portal (`/customer/*`: register, verify, login, reset, session isolation, guarded profile/inbox, anonymous public-file viewer). The customer realm has no registry module of its own and its accounts live in SEC, so these specs are archived here too; `pom/CustomerPortalPage.ts` and `pom/FileBrowserPage.ts` (the viewer TC publishes a file through the staff file browser) come with them. Verified-customer flows are not in these specs: no customer token fixture exists (GAP-SEC-013).
+- v2-06 also added TC-FE-AUTH-011 (login 409) and TC-FE-XCUT-014 (405 toast) here; TC-FE-PLATFORM-006, TC-FE-SEQUENCE-007 and TC-FE-AUDIT-004 (the `Disclosure` sections) sit in the PLATFORM and SEQUENCE archives (`TC-FE-AUDIT-004` runs inside `number-series.spec.ts`, after the series CREATE event it opens).
+- `setup/global.setup.ts` — the Playwright `setup` project (E2E tenant, roles E2E_ALL / E2E_NONE, users e2e.all / e2e.none, stored auth states); every module's specs depend on it.
+- `pom/` — the page objects and helpers these files import, unchanged.
+- `REPORT-2026-10-05.md` — the verify report (coverage table, failure taxonomy, README §7 matrix).
+- `REPORT-2026-10-06.md` — the plan v2 re-run (85 TCs, two runs) with the customer-realm matrix rows.
+- `REPORT-2026-10-06-v1.2.0.md` — the plan v3 re-run for release 1.2.0 (89 TCs, two runs). v3-07 added TC-FE-SEC-010..012 here (users server header sort, users toolbar export, audit-log `DateField` range) and TC-FE-FILE-007 (FILE header sort) in the FILE archive; the MDL archive now drives the master-detail pages (`/new` → `/:typeId`) and the REPORT archive the `DateField` params.
+
+The source of truth stays in `newfront`; these copies are the frontend partition's record (`CLAUDE.md` §13).

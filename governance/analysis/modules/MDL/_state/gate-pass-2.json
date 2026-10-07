@@ -1,0 +1,90 @@
+{
+  "gate": "pass-2",
+  "pass": "2",
+  "verdict": "ESCALATE",
+  "scores": {
+    "unambiguous": 3,
+    "verifiable": 3,
+    "complete": 2,
+    "consistent": 2,
+    "singular": 3,
+    "feasible": 3,
+    "traceable": 3
+  },
+  "findings": [
+    {
+      "id": "G1",
+      "severity": "MAJOR",
+      "artifact": "frontend-execution-plan-mdl.md",
+      "line": null,
+      "clause": "C5.16 / complete (P1 invert-every-check, P4 error-vs-pattern)",
+      "problem": "Round 1 found this and I confirm it, at the level of the rule that allowed it rather than the one form that shows it. No artifact of this pass states what happens to a WRITE beneath an inactive lookup type. The orchestration of API-MDL-006 confirms only that the parent type exists (backend-execution-plan-mdl.md, the create-value block) and QR-MDL-006 carries no state predicate; API-MDL-007 and API-MDL-009 likewise write rows whose parent may be inactive. Only the consumer read consults the parent's flag (QR-MDL-015). On the client, the master list shows inactive types by requirement (AC-MDL-005), the values pane opens over one, and neither F2-QUERY VALUE CREATE nor F4 SCR-MDL-001 conditions any affordance on the parent's state. Because v1 publishes no activate endpoint (ADR-MDL-005) and RULE-MDL-004 excludes an inactive type's values from every consumer read, a value created this way is unreachable for the life of the platform and permanently reserves its code under that type (ui-ux-spec-mdl.md, the reserved-code statement). AC-MDL-004 does not cover it: it speaks only of the three values that already existed when the type was deactivated.",
+      "fix": "Best-practice choice, proposed rather than asked: forbid the CREATE and leave UPDATE and REORDER legal — a create adds a row that can never be reached, while the other two only maintain rows AC-MDL-004 already guarantees survive deactivation. Inside this pass's writable set: in frontend-execution-plan-mdl.md F2-QUERY VALUE CREATE and F4 SCR-MDL-001, disable the add-value affordance whenever the selected parent type is inactive and show the reason in RULE-MDL-004's own wording (ar «هذا النوع معطّل حاليًا» / en \"This lookup type is currently inactive\"), mirroring the G3 reorder-handle treatment; and mirror the line in ui-ux-spec-mdl.md under SCR-MDL-001. Outside it, file one platform-findings row (next free id, owner MDL backend track P3.1): the orchestration of API-MDL-006 must confirm the parent is active before QR-MDL-014 runs, refusing with a catalog row of its own — broadening MDL-404-TYPE is wrong, since the type exists — and the SRS owes RULE-MDL-004 the write-side half of its scope. A client-only guard is not the fix; a direct call still bypasses it.",
+      "adr": true
+    },
+    {
+      "id": "G2",
+      "severity": "MINOR",
+      "artifact": "frontend-execution-plan-mdl.md / registry-exec-fe-mdl.md",
+      "line": null,
+      "clause": "section 7 platform findings",
+      "problem": "Confirmed as round 1 states it. The finding row for the retargeted backend test is carried OPEN in the frontend plan's Platform findings table and in the registry's PLATFORM FINDINGS table, and its evidence column still quotes the Preconditions line of the test as it read before the change. The test-gen stage already performed exactly the change the row requested — the test keeps its id and now exercises the create-only limit of RULE-MDL-001 — and the decision recording that is on disk. A finding that is carried OPEN after it has been answered costs the next reader the work of re-deriving that it is closed.",
+      "fix": "Set the row's status to RESOLVED in both tables with a note naming the decision that answered it and the revised test, and update its evidence column so it no longer quotes text the artifact no longer carries. The other five rows are correctly OPEN and were re-checked: the two deactivate endpoints still require UPDATE in the api-docs, the precision divergence is unresolved, no by-id read is published, the reorder invariant is still unguarded server-side, and SEC's own artifacts still register one exposed surface.",
+      "adr": false
+    },
+    {
+      "id": "G3",
+      "severity": "MINOR",
+      "artifact": "analysis/decisions/MDL/",
+      "line": null,
+      "clause": "section 7 decisions to review",
+      "problem": "Thirteen files of this module's decision stream carry no decision. Each has a full paragraph of review prose as its title line, a status of RESOLVED-IN-DIALOGUE that is none of ACCEPTED, BLOCKED or SUPERSEDED, and a Decision body reading '(the dialogue recorded the title alone)'. A reader of the stream cannot tell what was decided without opening the brief response they were minted from, and two of them state substantive choices — the LIKE-not-EQUALS uniqueness check and the dropped free sort field — that the plans now depend on. None is BLOCKED, so no escalation follows, but the stream no longer answers the question section 7 asks of it.",
+      "fix": "The dialogue-to-ADR writer should take the first sentence as the title and the remainder as the Decision body, and should stamp a status from the accepted set. These files are generated and sit outside this pass's writable set, so file it as a platform-findings row owned by the factory's own dialogue recorder rather than editing them here; the two substantive ones should additionally be restated as ordinary ADRs so the plans cite a decision and not a transcript.",
+      "adr": false
+    }
+  ],
+  "coverage": [
+    {
+      "id": "us-req",
+      "from": "US",
+      "to": [
+        "REQ"
+      ],
+      "total": 5,
+      "covered": 5,
+      "pct": 100.0
+    },
+    {
+      "id": "req-ac",
+      "from": "REQ",
+      "to": [
+        "AC"
+      ],
+      "total": 13,
+      "covered": 13,
+      "pct": 100.0
+    },
+    {
+      "id": "req-api",
+      "from": "REQ",
+      "to": [
+        "API"
+      ],
+      "total": 13,
+      "covered": 13,
+      "pct": 100.0
+    },
+    {
+      "id": "req-ux",
+      "from": "REQ",
+      "to": [
+        "SCR",
+        "UXD"
+      ],
+      "total": 13,
+      "covered": 11,
+      "pct": 84.6
+    }
+  ],
+  "at": "2026-09-19T12:57:32+00:00"
+}

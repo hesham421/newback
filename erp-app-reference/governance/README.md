@@ -1,45 +1,33 @@
-# `governance/` — the mount, and the repo's own tools
+# `erp-app-reference/governance/` — the backend's tools and reports
 
-This repository holds **no governance artifacts**. They live in one place that
-all three repositories mount, and this directory is where that place is
-attached plus the backend's own tooling.
+This directory holds the backend's own tooling and reports. It holds **no
+governance artifacts**: those live in the project's governance tree,
+`governance/` at the repository root (see `governance/README.md`).
 
 ```
-governance/
-  shared/            ← the shared governance repository (git submodule)
+erp-app-reference/governance/
   governance-tools/  ← this repo's own tools (api-doc-generator)
   mcp-servers/       ← reference copies of MCP servers wired in .mcp.json
   project-artifacts/ ← this repo's reports and notes (not governance)
   testsprite/        ← TestSprite mechanism, prompts and dated run bundles
 ```
 
-**After a clone:** `git submodule update --init --recursive`. Without it,
-`governance/shared/` is empty and nothing that reads a plan, a package or an
-api-doc will find anything.
-
 ## Where to read, where to write
 
-`CLAUDE.md` §"Where governance lives" carries the full table. In short:
+- **read** `governance/rules/` and `governance/analysis/modules/<MOD>/` (the
+  analysis), `governance/backend/modules/<MOD>/packages/` (the backend packages)
+- **write** only `governance/backend/modules/<MOD>/` — `api-docs/` (generated
+  from the running app, never hand-edited), `execution-state.json`, `test-api/`
+  — never its `packages/`
 
-- **read** `governance/shared/platform/rules/` and
-  `governance/shared/analysis/modules/<MOD>/` (the analysis), `governance/shared/backend/modules/<MOD>/packages/` (the delivered packages)
-- **write** only `governance/shared/backend/modules/<MOD>/api-docs/` and
-  the rest of `governance/shared/backend/modules/<MOD>/` (execution-state.json, test-api/) — never its `packages/`
-
-Anything else under `governance/shared/` belongs to the factory or to the
-frontend, and a write there is refused at review by that repo's `CODEOWNERS`.
+`governance/frontend/modules/<MOD>/` is written by the frontend repo
+(`newfront`); `governance/analysis/` and `governance/rules/` belong to the
+project owner.
 
 ## What used to be here
 
-Until this migration the backend kept its own copy of every plan, package and
-registry the factory produced, delivered by `gov.py deliver`. Three copies of
-the same artifact drifted: the backend amended its copy during implementation
-— a whole requirement, `REQ-SEC-034`, was added there and the factory never
-saw it. The copies were reconciled into the shared repo before being removed;
-their history remains in this repository, readable with
-`git log -- governance/modules/<MOD>`.
-
-The frontend used to reach into this repo to read `GOVERNANCE-RULES.md`, under
-a heading that had to call it a "sanctioned cross-repo read". That file is now
-`governance/shared/platform/rules/GOVERNANCE-RULES.md` and there is no boundary
-to cross.
+Until plan v4 (2026-10-07) `shared/` here was a git submodule of the external
+shared-governance repository, driven by a separate governance factory. Both
+dependencies were removed: the tree was imported once, cleaned, into the
+repo-root `governance/` folder. Older reports under `project-artifacts/` still
+describe the submodule and the factory as they were.
