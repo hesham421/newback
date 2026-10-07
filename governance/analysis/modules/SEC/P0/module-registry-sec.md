@@ -142,3 +142,9 @@ Consumed modules
 
 Lookups owned: unchanged. `preferredLocale` (`ar`, `en`) is a CHECK-constrained value set on the column
 (`CHK_SEC_USER_LOCALE`), not a lookup type.
+
+Package B (tenant-maturity plan §4 B.4) — exposed surface deltas; full text in `P1/srs-sec.md` 1.3.0 §10.
+| Kind | Surface | Delta | Consumer |
+|---|---|---|---|
+| CHANGED | `com.erp.sec.crossmodule.SecUserDirectoryApi` | + `countStaff()`, `countCustomers()`, `countActiveSessions()` (current tenant) | TENANT usage (REQ-SEC-090) |
+| NEW | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (+ `RecoveryTarget`) | `findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)`; gate `PLATFORM_TENANT_MANAGE` | TENANT admin-reset (REQ-SEC-091) |

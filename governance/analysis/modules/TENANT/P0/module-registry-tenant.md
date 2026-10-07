@@ -80,3 +80,32 @@ POLICIES OWNED (full text in business-policies-tenant.md)
 POL-TENANT-001, POL-TENANT-002, POL-TENANT-003, POL-TENANT-004, POL-TENANT-005, POL-TENANT-006,
 POL-TENANT-007, POL-TENANT-008, POL-TENANT-009, POL-TENANT-010, POL-TENANT-011
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | المستأجر / Tenant (`CORE_TENANT`) | + profile columns (V18), suspension facts + `TOKENS_INVALID_BEFORE` (V19); still global, still SHARED (owner); names editable | `../P2/db-script-tenant.md` 1.3.0 addendum |
+
+LOOKUPS OWNED — delta
+| Kind | Lookup key | Values | Source |
+|---|---|---|---|
+| NEW | (value set of `CORE_TENANT.DEFAULT_LOCALE`) | `ar`, `en` — CHECK `CHK_CORE_TENANT_LOCALE` (NULL allowed), not an MDL lookup | V18__tenant_profile.sql |
+| unchanged | `STATUS_CODE` | `ACTIVE`, `SUSPENDED` (no `ARCHIVED`, plan §0 D2) | — |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | SEC | crossmodule (in-core API) | `SecUserDirectoryApi.countStaff()`, `countCustomers()`, `countActiveSessions()`; NEW `SecAdminRecoveryApi.findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)` — called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
+| NEW | FILE | crossmodule (in-core API) | `FileDocumentLookupApi.countDocuments()`, `sumBytes()` | same |
+| NEW | NOTIF | crossmodule (in-core API) | `NotificationLogQueryApi.countDispatchedSince(Instant)` | same |
+| CHANGED | audit | SOFT | + action `ADMIN_PASSWORD_RESET` (recorded by SEC's recovery in the target tenant) | same, B8 |
+
+EXPOSED SURFACE, PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, screen, permission
+or grant seed; every new endpoint sits behind `PLATFORM_TENANT_MANAGE` on `PLATFORM_TENANTS`).
+
+POLICIES OWNED — delta: + POL-TENANT-012, POL-TENANT-013 (`business-policies-tenant.md` 1.3.0 addendum).

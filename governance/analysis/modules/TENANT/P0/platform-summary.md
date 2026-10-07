@@ -77,3 +77,15 @@ never described as present.
 
 ## NEXT STEP
 Module registry and policies: `module-registry-tenant.md`, `business-policies-tenant.md`.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| CHANGED | Tenant record | `CORE_TENANT` gains a profile (contact e-mail and phone, country, default language, time zone, notes; V18) and suspension facts + a token cut-off (V19); names become editable (`PUT /{id}`); `code` stays immutable | `../P2/db-script-tenant.md` 1.3.0 addendum |
+| CHANGED | Tenant management | `/api/v1/platform/tenants` gains update, admin-reset (recover a tenant's super administrator) and usage figures; a suspension needs a reason; still `PLATFORM_TENANT_MANAGE` + PLATFORM-tenant caller; no new permission (D5) | `../P1/srs-tenant.md` 1.3.0 B1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecUserDirectoryApi counts, SecAdminRecoveryApi)`, `──▶ FILE (FileDocumentLookupApi counts)`, `──▶ NOTIF (NotificationLogQueryApi.countDispatchedSince)` — each called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
+| CHANGED | DEFERRED | "Editing a tenant's name, a usage endpoint" leaves DEFERRED; "tenant profile, suspension facts" leave DEFERRED (the token cut-off is stored, its enforcement is package C.2); lifecycle events, branding, idempotent provisioning and export stay with packages C and E; level 2 stays deferred | plan §0 D2, §4, §5, §7 |

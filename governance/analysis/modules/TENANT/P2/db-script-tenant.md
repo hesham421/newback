@@ -189,3 +189,82 @@ See `registry-db-tenant.md`.
 **DBF-TENANT-031** — CORE_NUMBER_SERIES.TENANT_ID [ENT-TENANT-001, REQ-TENANT-016, REQ-TENANT-020]
 **DBF-TENANT-032** — CORE_AUDIT_EVENT.TENANT_ID [ENT-TENANT-001, REQ-TENANT-016, REQ-TENANT-022]
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant profile and lifecycle facts on `CORE_TENANT` (plan §4 B.1)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migrations (written from this entry): `erp-core/src/main/resources/db/migration/core/V18__tenant_profile.sql`
+and `V19__tenant_lifecycle.sql`. The plan expected `V16__tenant_profile.sql` / `V17__tenant_lifecycle.sql`;
+package D, executed first, took V16 / V17, so the numbers follow the execution order (plan §1.3 / §11,
+`docs/DEVIATIONS.md` `[TM-B]`). Additive only (`MigrationNamingTest`): ten nullable columns without a default
+and one CHECK every existing row satisfies (NULL); `CODE`, `STATUS_CODE` and the 1.2.0 constraints are
+untouched. DBF ids continue from DBF-TENANT-032.
+
+### Table CORE_TENANT (ENT-TENANT-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default | Constraint | Migration |
+|---|---|---|---|---|---|---|---|---|
+| DBF-TENANT-033 | CONTACT_EMAIL | VARCHAR(255) | ENT-TENANT-001.contactEmail | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-034 | CONTACT_PHONE | VARCHAR(30) | ENT-TENANT-001.contactPhone | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-035 | COUNTRY_CODE | VARCHAR(2) | ENT-TENANT-001.countryCode | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-036 | DEFAULT_LOCALE | VARCHAR(5) | ENT-TENANT-001.defaultLocale | REQ-TENANT-025 | NULL | — | `CHK_CORE_TENANT_LOCALE` | V18 |
+| DBF-TENANT-037 | TIMEZONE | VARCHAR(64) | ENT-TENANT-001.timezone | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-038 | NOTES | VARCHAR(1000) | ENT-TENANT-001.notes | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-039 | SUSPENDED_AT | TIMESTAMPTZ | ENT-TENANT-001.suspendedAt | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-040 | SUSPENDED_BY | VARCHAR(100) | ENT-TENANT-001.suspendedBy | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-041 | SUSPENSION_REASON | VARCHAR(500) | ENT-TENANT-001.suspensionReason | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-042 | TOKENS_INVALID_BEFORE | TIMESTAMPTZ | ENT-TENANT-001.tokensInvalidBefore | REQ-TENANT-026 (written on activation; enforced by package C.2) | NULL | — | — | V19 |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_CORE_TENANT_LOCALE` | `CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'))` | the `SEC_USER.PREFERRED_LOCALE` pattern (`CHK_SEC_USER_LOCALE`, V16); every existing row has NULL |
+No index (the new search fields are filters over a table of a few hundred rows at most; `CORE_TENANT` has
+none besides the PK and `UQ_CORE_TENANT_CODE`), no sequence, no FK.
+
+### Script (`V18__tenant_profile.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN CONTACT_EMAIL  VARCHAR(255);
+ALTER TABLE CORE_TENANT ADD COLUMN CONTACT_PHONE  VARCHAR(30);
+ALTER TABLE CORE_TENANT ADD COLUMN COUNTRY_CODE   VARCHAR(2);
+ALTER TABLE CORE_TENANT ADD COLUMN DEFAULT_LOCALE VARCHAR(5);
+ALTER TABLE CORE_TENANT ADD COLUMN TIMEZONE       VARCHAR(64);
+ALTER TABLE CORE_TENANT ADD COLUMN NOTES          VARCHAR(1000);
+
+ALTER TABLE CORE_TENANT ADD CONSTRAINT CHK_CORE_TENANT_LOCALE
+    CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'));
+```
+
+### Script (`V19__tenant_lifecycle.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENDED_AT          TIMESTAMPTZ;
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENDED_BY          VARCHAR(100);
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENSION_REASON     VARCHAR(500);
+ALTER TABLE CORE_TENANT ADD COLUMN TOKENS_INVALID_BEFORE TIMESTAMPTZ;
+```
+plus one `COMMENT ON COLUMN` per new column in each script. Existing rows (PLATFORM and every provisioned
+tenant) get NULL everywhere: a tenant suspended before the upgrade keeps `SUSPENDED` without facts until it is
+re-activated or suspended again.
+
+### CHECK-constrained value sets — delta
+| Key | Values | Constraint | Owner |
+|---|---|---|---|
+| `CORE_TENANT.DEFAULT_LOCALE` | `ar`, `en` (NULL allowed) | `CHK_CORE_TENANT_LOCALE` | TENANT |
+| `CORE_TENANT.STATUS_CODE` | unchanged: `ACTIVE`, `SUSPENDED` | `CHK_CORE_TENANT_STATUS` | TENANT |
+
+### DBF id definitions — delta
+**DBF-TENANT-033** — CORE_TENANT.CONTACT_EMAIL [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-034** — CORE_TENANT.CONTACT_PHONE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-035** — CORE_TENANT.COUNTRY_CODE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-036** — CORE_TENANT.DEFAULT_LOCALE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-037** — CORE_TENANT.TIMEZONE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-038** — CORE_TENANT.NOTES [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-039** — CORE_TENANT.SUSPENDED_AT [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-040** — CORE_TENANT.SUSPENDED_BY [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-041** — CORE_TENANT.SUSPENSION_REASON [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-042** — CORE_TENANT.TOKENS_INVALID_BEFORE [ENT-TENANT-001, REQ-TENANT-026]
+
+### Deviations
+- Plan §4 B.1 / §11 `V16__tenant_profile.sql`, `V17__tenant_lifecycle.sql` → `V18__tenant_profile.sql`,
+  `V19__tenant_lifecycle.sql` (execution order D before B).

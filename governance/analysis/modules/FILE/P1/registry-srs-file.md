@@ -159,3 +159,10 @@ the as-built FILE ADRs of the analysis-coverage work; the next free FILE ADR is 
 | Kind | ADR | Subject |
 |---|---|---|
 | NEW | ADR-FILE-008 | Profile photos and logos are PUBLIC documents with non-guessable slugs (no category) |
+
+Package B (tenant-maturity plan §4 B.4) — registry delta; full text in `srs.md` 1.3.0 §7.
+| Kind | Id | Surface | Consumers |
+|---|---|---|---|
+| CHANGED | XM-FILE-001 | `FileDocumentLookupApi` + `countDocuments()`, `sumBytes()` (current tenant, documents not DELETED) | TENANT (usage) |
+No rule, entity, API, permission or error-code delta. Last sequence per atom unchanged (RULE: 010 · XM: 002 ·
+API: 008 · ADR: 008).

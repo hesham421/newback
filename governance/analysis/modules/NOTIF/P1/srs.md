@@ -342,3 +342,17 @@ internal event" is respected. The earlier SEC mails (password reset, customer ve
 | Code | Channel | Variables | Seeded by |
 |---|---|---|---|
 | `STAFF_PASSWORD_CHANGED` | EMAIL (any channel may use it) | `{changedAt}`, `{changedBy}` | `V17__notif_seed_password_changed.sql` for every tenant existing at migration time (skipped where the tenant already has a template of that code); later tenants copy it from PLATFORM through `NotifTenantProvisioningContributor` (unchanged, it copies every PLATFORM template) |
+
+### 4. Package B — a usage count for the platform (tenant-maturity plan §4 B.4)
+Change         : tenant-maturity plan package B — `NotificationLogQueryApi.countDispatchedSince(Instant)`, consumed by TENANT's `GET /api/v1/platform/tenants/{id}/usage` (`notificationsLast30Days`)
+Statement      : Sections 1–3 above (package D.3) are unchanged; §4 records package B's implemented delta.
+
+No NOTIF id is minted (the count decides nothing; NOTIF's exposed surfaces carry no XM id — XM-NOTIF ids are
+NOTIF's own consumptions). No endpoint, entity field, error code, permission or migration changes.
+
+| Kind | Interface | Method | Contract |
+|---|---|---|---|
+| CHANGED | `com.erp.notif.crossmodule.NotificationLogQueryApi` (the dispatch-history read surface) | + `long countDispatchedSince(Instant since)` | the current tenant's `NOTIF_LOG` rows (one per channel and dispatch, any status) whose `CREATED_AT` is at or after `since`; read-only, tenant-filtered by the `@TenantId` discriminator, no `@PreAuthorize` (like `findByRecipientModuleAndReference`) |
+Plan delta: the plan names "the existing dispatch API"; `NotificationDispatchApi` is NOTIF's write surface, so
+the read went to `NotificationLogQueryApi` (TENANT srs-tenant.md 1.3.0 B10). Consumer: TENANT
+(`TenantService.getUsage`, `since` = 30 days before `collectedAt`), inside `TenantContext.callAs(tenantId)`.

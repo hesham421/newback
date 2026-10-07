@@ -143,3 +143,61 @@ Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum 
 | CHANGED | REQ-TENANT-001 | + 400 `SEC-400-PASSWORD-POLICY` (field `adminPassword`) from the SEC provisioning contributor |
 
 No new TENANT id, endpoint, entity field or error code from package D.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package B
+block, B1–B11). Ids continue from the highest ever issued (REQ / AC 024, RULE 011; RULE-TENANT-012 … 015
+reserved for the analysis-coverage work's as-built rules).
+
+Entities — delta
+| Kind | ENT id | Delta | Code location |
+|---|---|---|---|
+| CHANGED | ENT-TENANT-001 Tenant | names editable; + `contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`, `timezone`, `notes` (V18); + `suspendedAt`, `suspendedBy`, `suspensionReason`, `tokensInvalidBefore` (V19) — DBF-TENANT-033 … 042 | tenant/entity/Tenant.java; V18__tenant_profile.sql; V19__tenant_lifecycle.sql |
+
+Consumed — delta (TENANT reads no other module's table; these are in-core APIs)
+| Kind | Owner | Surface | Used by |
+|---|---|---|---|
+| NEW | SEC | `SecUserDirectoryApi.countStaff / countCustomers / countActiveSessions` (REQ-SEC-090) | usage |
+| NEW | SEC | `SecAdminRecoveryApi.findRecoveryTarget / resetSuperUserPassword` (REQ-SEC-091) | admin-reset |
+| NEW | FILE | `FileDocumentLookupApi.countDocuments / sumBytes` (XM-FILE-001 CHANGED) | usage |
+| NEW | NOTIF | `NotificationLogQueryApi.countDispatchedSince(Instant)` | usage |
+
+Lookups owned — delta
+| Kind | Key | Values | Code location |
+|---|---|---|---|
+| NEW | `CORE_TENANT.DEFAULT_LOCALE` value set (`CHK_CORE_TENANT_LOCALE`, NULL allowed) | 2 (`ar`, `en`) | V18__tenant_profile.sql |
+
+Screens — delta
+| Kind | SCR-REQ id | Delta |
+|---|---|---|
+| CHANGED | SCR-REQ-TENANT-001 PLATFORM_TENANTS | B2 + 3 filter / sort fields; B3 edit form, suspend reason, admin-reset form, usage panel; B5 + `PUT /{id}`, `POST /{id}/admin-reset`, `GET /{id}/usage`; B4 unchanged (D5) |
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-025 / AC-TENANT-025 | Update a tenant's names and profile (`PUT /{id}`) | US-TENANT-009; POL-TENANT-001, -006; RULE-TENANT-003 | tenant/service/TenantService.java (`update`); tenant/mapper/TenantMapper.java (`updateEntityFromRequest`) | `TenantProfileIntegrationTest`; TC-CORE-TENANT-028, -029 |
+| NEW | REQ-TENANT-026 / AC-TENANT-026 | Suspend with a reason; suspension facts; activation clears them and sets the cut-off | US-TENANT-003; POL-TENANT-012; RULE-TENANT-016 | tenant/domain/TenantDomain.java; tenant/service/TenantService.java (`updateStatus`) | `TenantProfileIntegrationTest`, `TenantDomainTest`; TC-CORE-TENANT-030 … 032 |
+| NEW | REQ-TENANT-027 / AC-TENANT-027 | Reset a tenant administrator's password (`/{id}/admin-reset`) | US-TENANT-010; POL-TENANT-013; RULE-TENANT-017 | tenant/service/TenantService.java (`resetAdministratorPassword`); sec/crossmodule/SecAdminRecoveryApi.java | `TenantAdminResetIntegrationTest`; TC-CORE-TENANT-033 … 035 |
+| NEW | REQ-TENANT-028 / AC-TENANT-028 | Tenant usage figures (`/{id}/usage`) | US-TENANT-011; POL-TENANT-006, -007 | tenant/service/TenantService.java (`getUsage`) | `TenantUsageIntegrationTest`; TC-CORE-TENANT-027, -036 |
+| NEW | RULE-TENANT-016 | Suspension requires a reason (3..500); activation clears the facts and sets `TOKENS_INVALID_BEFORE` | REQ-TENANT-026 | tenant/domain/TenantDomain.java | `TenantDomainTest` |
+| NEW | RULE-TENANT-017 | Admin-reset target: a STAFF user of that tenant holding an active super role | REQ-TENANT-027 | tenant/domain/TenantDomain.java | `TenantDomainTest`, `TenantAdminResetIntegrationTest` |
+| CHANGED | RULE-TENANT-003, RULE-TENANT-004 | names editable (code still immutable); re-applying a status leaves the facts and the cut-off | REQ-TENANT-025, -026 | — | — |
+| CHANGED | REQ-TENANT-007 | search / sort allow-list + `contactEmail`, `countryCode`, `suspendedAt` | — | tenant/service/TenantService.java (`ALLOWED_SORT_FIELDS`) | `TenantProfileIntegrationTest` |
+
+Error codes — delta
+| Code | HTTP | Code location |
+|---|---|---|
+| `TENANT_SUSPENSION_REASON_REQUIRED` | 400 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_ADMIN_NOT_FOUND` | 404 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_ADMIN_NOT_SUPER` | 422 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+Referenced: SEC `SEC-400-PASSWORD-POLICY` (400, admin-reset). i18n: one `tenant-maturity B` block in both bundles.
+
+Permissions — delta: none (plan §0 D5). Audit action — delta: `ADMIN_PASSWORD_RESET` (written by SEC inside
+the target tenant). Decisions — delta: none (no alternative was weighed that needs an ADR; the choices are in
+`srs-tenant.md` B10).
+
+Counts after this addendum: REQ 28 · AC 28 · RULE 13 · ENT 1 · SCR-REQ 1 · XM 2.
+Last sequence per atom: REQ: 028 · AC: 028 · ENT: 001 · RULE: 017 (012 … 015 reserved) · SCR-REQ: 001 · XM: 002 · US: 011 · POL: 013 · DBF: 042

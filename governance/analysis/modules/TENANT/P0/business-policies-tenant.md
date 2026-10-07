@@ -129,3 +129,48 @@ RESOLVED DECISIONS
 |---|---|---|---|---|
 | 1 | Row-level (discriminator) or schema-per-tenant? | row-level, shared schema | erp-core plan step 05 (fixed decision), as built | ADR-TENANT-001 |
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-011 (this module mints its policy ids, as the baseline did). Full
+behaviour in `../P1/srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0", package B block.
+
+POL-TENANT-012 — التعليق بسبب مسجَّل / Suspension carries a recorded reason
+  Statement (ar) : يجب على النظام ألا يعلّق مستأجرًا دون سبب (من 3 إلى 500 حرف)، وأن يسجّل من علّقه ومتى ولماذا، وأن يمحو هذه الحقائق عند إعادة التفعيل.
+  Statement (en) : The system shall not suspend a tenant without a reason (3 to 500 characters), shall record who suspended it, when and why, and shall clear those facts when the tenant is re-activated.
+  Pattern   : event
+  Trigger   : Status change of a tenant
+  Rationale : an operator's decision that locks an organisation out must be accountable and visible on the tenant record
+  Source    : docs/plans/tenant-maturity-plan.md §4 B.1, B.2; RULE-TENANT-016; REQ-TENANT-026
+  Status    : CONFIRMED (erp-core 1.3.0, package B)
+
+POL-TENANT-013 — استعادة مدير المستأجر من المنصة / Platform-side recovery of a tenant administrator
+  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تعيين كلمة مرور جديدة لمستخدم موظف يحمل دورًا فائقًا في مستأجر معيّن، مع إنهاء جلساته وإلزامه افتراضيًا بتغييرها عند الدخول التالي وتسجيل العملية في سجل تدقيق ذلك المستأجر دون كلمة المرور.
+  Statement (en) : The system shall let a platform operator set a new password for a staff user holding a super role in a given tenant, terminating that user's sessions, requiring by default a change at the next sign-in, and recording the operation in that tenant's audit log without the secret.
+  Pattern   : event
+  Trigger   : `POST /api/v1/platform/tenants/{id}/admin-reset`
+  Rationale : a tenant whose only administrator is locked out cannot repair itself from inside (POL-TENANT-004's rationale); the recovery must not become a way to take over ordinary users (super role only)
+  Source    : docs/plans/tenant-maturity-plan.md §4 B.2, B.4; RULE-TENANT-017; REQ-TENANT-027; SEC ADR-SEC-063
+  Status    : CONFIRMED (erp-core 1.3.0, package B)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-001 | unchanged for the code (immutable, `^[A-Z0-9_]{3,32}$`); the names and the new profile fields (contact e-mail and phone, country, default language, time zone, notes) become editable by the platform operator (`PUT /{id}`) | REQ-TENANT-025 |
+| POL-TENANT-002 | unchanged: two statuses; a suspension now carries a reason and its facts (POL-TENANT-012), an activation records a token cut-off that package C.2 enforces | REQ-TENANT-026 |
+| POL-TENANT-006 | unchanged: the new operations (edit, admin-reset, usage) are platform-only like the others (`PLATFORM_TENANT_MANAGE`, plan §0 D5) | srs-tenant.md 1.3.0 B1 |
+| POL-TENANT-007 | applies to the usage figures: each is counted inside the tenant asked for, never including another tenant's rows | REQ-TENANT-028 |
+
+CUSTOM LOOKUP VALUES — delta
+| Lookup key | Added values | Source |
+|---|---|---|
+| (value set of `CORE_TENANT.DEFAULT_LOCALE`, CHECK `CHK_CORE_TENANT_LOCALE`, not an MDL lookup) | `ar`, `en` (NULL allowed) | V18__tenant_profile.sql |
+
+SCOPE EXCEPTIONS — delta
+| Kind | Excluded / Deferred | Delta |
+|---|---|---|
+| CHANGED | Rename / delete a tenant | renaming the names leaves the exceptions (POL-TENANT-001 CHANGED); delete stays excluded (POL-TENANT-005) |
+| unchanged | Quotas, `ARCHIVED` status, per-tenant self-signup switch, per-tenant rate limits | level 2, later version (plan §0 D2) |

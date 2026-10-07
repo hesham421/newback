@@ -156,3 +156,10 @@ Registry deltas only; full text in `srs.md` → "Implementation Addendum — erp
 None. Template rows: + `STAFF_PASSWORD_CHANGED` (seed, V17).
 
 Last sequence per atom (highest ever issued): RULE: 023 · XM: 003 · API: 012 · US: 008.
+
+Package B (tenant-maturity plan §4 B.4) — registry delta; full text in `srs.md` 1.3.0 §4.
+| Kind | Surface | Delta | Consumer |
+|---|---|---|---|
+| CHANGED | `NotificationLogQueryApi` (exposed) | + `countDispatchedSince(Instant)` (current tenant's `NOTIF_LOG` rows created since) | TENANT (usage) |
+No rule, XM, entity, API, permission or error-code delta. Last sequence per atom unchanged (RULE: 023 · XM: 003 ·
+API: 012 · US: 008).
