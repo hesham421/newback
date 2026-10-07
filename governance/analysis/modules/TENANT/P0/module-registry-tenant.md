@@ -1,0 +1,82 @@
+## MODULE REGISTRY — المستأجرون / Tenant (TENANT)
+══════════════════════════════════════════════════════════════════
+Module Code    : TENANT   (package `com.erp.tenant`; permission-registry module `PLATFORM`; api-docs folder `tenant`)
+Bounded context: platform
+Layer / Type   : L1 / platform infrastructure (multi-tenancy)     Execution tier : foundation (V10, erp-core plan step 05)
+Source         : AS-BUILT (erp-core 1.2.0; code at main @ 2274f86)
+Knowledge      : erp-core-plan/05-STEP-multi-tenancy.md; docs/steps/05-report.md; docs/DEVIATIONS.md [05], [07], [09], [15]; docs/CONSUMING.md §3
+Readiness      : READY (built)
+══════════════════════════════════════════════════════════════════
+
+Java paths are relative to `erp-core/src/main/java/com/erp/`, migrations to
+`erp-core/src/main/resources/db/migration/core/`.
+
+ENTITIES OWNED   (entity ids are assigned in P1: ENT-TENANT-001)
+| Entity (ar/en) | Kind | PRIVATE / SHARED | Source |
+|---|---|---|---|
+| المستأجر / Tenant (`CORE_TENANT`) | platform registry (global, no `TENANT_ID`) | SHARED (owner) — every tenant-scoped table of every module carries a HARD FK `TENANT_ID` → `CORE_TENANT(ID)` (22 tables, `../P2/db-script-tenant.md`) | tenant/entity/Tenant.java:32-40; V10__tenant_schema.sql:31-51 |
+
+Not entities, but owned runtime surface (no table): `TenantContext` (the request tenant, ThreadLocal),
+`TenantConstants`, the provisioning SPI `TenantProvisioningContributor` / `TenantProvisioning`, the
+cross-module read `TenantLookupApi`, the Hibernate resolver `TenantIdentifierResolver`, and the request
+filter `TenantResolutionFilter` (tenant/TenantContext.java:25; tenant/TenantConstants.java:4;
+tenant/TenantProvisioningContributor.java:22; tenant/TenantProvisioning.java:14; tenant/crossmodule/TenantLookupApi.java:10;
+tenant/config/TenantIdentifierResolver.java:28; tenant/security/TenantResolutionFilter.java:53).
+
+LOOKUPS OWNED
+| Lookup key | Description | Initial values | Source |
+|---|---|---|---|
+| (value set of `CORE_TENANT.STATUS_CODE`) | حالة المستأجر / tenant status | `ACTIVE`, `SUSPENDED` — a CHECK constraint (`CHK_CORE_TENANT_STATUS`), not an MDL lookup type (same pattern as ADR-SEC-001) | V10__tenant_schema.sql:50; tenant/TenantConstants.java:23, :26 |
+
+LOOKUPS CONSUMED
+None.
+
+SHARED ENTITIES CONSUMED
+None — the tenant module reads no other module's table. (Its permission rows live in SEC's global
+registry, written by SEC's catalog synchronizer from `TenantPermissions`; see DEPENDENCIES.)
+
+DEPENDENCIES
+| Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|
+| SEC | SPI (implements) | `com.erp.sec.permission.PermissionContributor` — `TenantPermissions` declares module `PLATFORM`, screen `PLATFORM_TENANTS` and its two actions | tenant/permission/TenantPermissions.java:17-46 |
+| SEC | wiring (SEC calls tenant) | `JwtAuthenticationFilter` sets `TenantContext` from the token claim `tid` and clears a leaked tenant at request start; `JwtTokenIssuer` writes `tid` | sec/security/JwtAuthenticationFilter.java:85-91, :129-136, :173-176; sec/security/JwtTokenIssuer.java:46 |
+| events | publishes | `TenantCreatedEvent` (tenant id = the NEW tenant, actor = the platform operator) | tenant/service/TenantService.java:99-100; events/TenantCreatedEvent.java:11-18 |
+| audit | SOFT (entity listener) | `@Audited(entityType = "CORE_TENANT")` — every insert/update of a tenant is recorded field by field in `CORE_AUDIT_EVENT` (under the acting PLATFORM tenant) | tenant/entity/Tenant.java:33; docs/DEVIATIONS.md [10] "Tenant of a row" |
+| common | foundation | `GlobalAuditableEntity`, `ServiceResult`/`Status`, `LocalizedException`, `DomainRules`, search builders, `FilterErrorResponseWriter`, `SecurityContextHelper` | tenant/service/TenantService.java:3-11; tenant/security/TenantResolutionFilter.java:3 |
+ROOT: YES for data (CORE_TENANT references nothing); the module is wired by `com.erp.autoconfigure`
+(`ErpCoreSecurityAutoConfiguration` builds `TenantResolutionFilter` into both security chains).
+
+EXPOSED SURFACE (consumed by other modules)
+| Surface | Kind | Consumers | XM id (P1) | Source |
+|---|---|---|---|---|
+| `com.erp.tenant.crossmodule.TenantLookupApi.codeOf(Long)` | crossmodule read | FILE (`PublicFileUrls`, public file URLs), SEQUENCE (`NumberAllocationService`, `{TENANT}` token) | XM-TENANT-001 | tenant/crossmodule/TenantLookupApi.java:10-14; file/service/PublicFileUrls.java:34; sequence/service/NumberAllocationService.java:52 |
+| `com.erp.tenant.TenantProvisioningContributor` (+ `TenantProvisioning`) | SPI | SEC (order 0), MDL (10), NOTIF (20), SEQUENCE (40); applications may add their own | XM-TENANT-002 | tenant/TenantProvisioningContributor.java:22-31; sec/tenant/SecTenantProvisioningContributor.java:62-64; mdl/tenant/MdlTenantProvisioningContributor.java:27-29; notif/tenant/NotifTenantProvisioningContributor.java:27-29; sequence/tenant/SequenceTenantProvisioningContributor.java:28-30 |
+| `com.erp.tenant.TenantContext`, `TenantConstants` | root-package API | every module, the event executor, jobs, applications | — (public API, docs/RELEASE.md) | tenant/TenantContext.java:25-93; tenant/TenantConstants.java:4-27 |
+| `CORE_TENANT(ID)` | HARD FK target | 22 tenant-scoped tables | DBF-TENANT-011…032 (P2) | V10__tenant_schema.sql:102-119; V11__sec_realms.sql:84; V13__notif_async_inbox.sql:61; V14__sequence_and_settings.sql:58; V15__audit_schema.sql:40 |
+
+PERMISSION MODULE → SCREEN → ACTIONS (registry rows; code-defined since step 06, seeded by V10 §6)
+| Registry module | Screen (page code) | Action code | Authority | Meaning | Source |
+|---|---|---|---|---|---|
+| `PLATFORM` — إدارة المنصة / Platform Administration | `PLATFORM_TENANTS` — المستأجرون / Tenants | `VIEW` | `PERM_PLATFORM_TENANTS_VIEW` | gateway action of the screen (RULE-SEC-007); grants no endpoint by itself | tenant/permission/TenantPermissions.java:20-28, :43; V10__tenant_schema.sql:213-228 |
+| `PLATFORM` | `PLATFORM_TENANTS` | `MANAGE` | `PLATFORM_TENANT_MANAGE` | every `/api/v1/platform/tenants` operation, reads included (step-05 literal, not `PERM_<PAGE>_<ACTION>`) | tenant/permission/TenantPermissions.java:26, :44; V10__tenant_schema.sql:225 |
+Both are granted only to the PLATFORM tenant's `SYS_ADMIN` (V10__tenant_schema.sql:230-244) and are never
+copied to a new tenant (sec/tenant/SecTenantProvisioningContributor.java:84-121). The registry module
+`PLATFORM` also carries CU's screen `PLATFORM_SETTINGS` (owned by `CuPermissions`, not by this module).
+
+AUTO-DECISIONS
+AUTO: module code TENANT for the analysis folder although the permission-registry module is `PLATFORM`
+  FROM: governance/analysis/platform/project-registry.md (row "TENANT — platform tenant provisioning"); docs/api-docs/tenant/
+  IF WRONG: rename the folder; no id changes (the ids carry TENANT, the registry rows keep PLATFORM).
+AUTO: Tenant classified SHARED
+  FROM: the 22 HARD FKs to CORE_TENANT(ID)
+  IF WRONG: none — the FKs exist.
+
+RESOLVED DECISIONS
+| # | Point | Decision | Sources |
+|---|---|---|---|
+| 1 | Multi-tenancy model | row-level discriminator in one shared schema | ADR-TENANT-001 |
+
+POLICIES OWNED (full text in business-policies-tenant.md)
+POL-TENANT-001, POL-TENANT-002, POL-TENANT-003, POL-TENANT-004, POL-TENANT-005, POL-TENANT-006,
+POL-TENANT-007, POL-TENANT-008, POL-TENANT-009, POL-TENANT-010, POL-TENANT-011
+══════════════════════════════════════════════════════════════════

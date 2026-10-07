@@ -215,3 +215,8 @@ bind later steps.
 - [15] Huge `page` → rejected, not clamped: `PageableBuilder` answers 400 `VALIDATION_ERROR` with `fieldErrors[0].field = page` when `page × size + size > Integer.MAX_VALUE` (JPA's first-result is an `int`). Clamping would silently return a different page. No new code. Pages below that bound are unchanged (an empty page beyond the data).
 - [15] Tenant resolver flag → `TenantHibernateConfiguration` is now also a `SmartLifecycle` with phase `DEFAULT_PHASE - 2049`, one below Boot's `WebServerStartStopLifecycle` (`DEFAULT_PHASE - 2048`), and turns the resolver strict in `start()`. Singletons, Spring Data repository bootstrap included, are created before any lifecycle starts, so they keep the `-1` sentinel. The `ContextRefreshedEvent` switch is kept as a fallback. `stop()` never relaxes the resolver.
 - [15] Leaked tenant on a worker thread → `JwtAuthenticationFilter` (first tenant-aware filter of both core chains) logs a WARN and clears a tenant already present when a request arrives. A rejected token now clears the tenant instead of restoring the previous value. The `finally` still restores the previous value, so a caller that runs the filter on its own thread (tests) keeps its context. The request itself never sees it.
+
+## [TM-A] tenant-maturity A
+
+- [TM-A] Plan §3 screen id `SCR-TENANT-001` → written `SCR-REQ-TENANT-001` (`PLATFORM_TENANTS`): every analysed module numbers its screen requirements `SCR-REQ-<MOD>-NNN` (e.g. `SCR-REQ-SEC-005`), and package A mirrors SEC's id style.
+- [TM-A] plan §3 "the 18 TENANT_ID columns" → 22 documented (V10's 18 + SEC_CUSTOMER_VERIFY_TOKEN V11:68, NOTIF_INBOX V13:40, CORE_NUMBER_SERIES V14:33, CORE_AUDIT_EVENT V15:18) (the plan counted V10 only; TenantSchemaIntegrationTest:51 asserts 22)

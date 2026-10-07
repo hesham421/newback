@@ -72,6 +72,7 @@ governance/                the project's own governance, self-contained (governa
   rules/                   GOVERNANCE-RULES.md (skill routing, execution order, convention precedence) · api-verify-config.md
   analysis/                platform/ (overview, registry), domain/, decisions/<MOD>/ (ADRs),
                            modules/<MOD>/{P0,P0_5,P1,P2,P2_5} for SEC, MDL, CU, FILE, NOTIF (+ erp-core 1.2.0 addenda)
+                           and TENANT (P0–P2, as-built baseline of erp-core 1.2.0)
   backend/modules/<MOD>/test-api/      adapted legacy API suites
   frontend/modules/<MOD>/tests/        the frontend's E2E spec archives
   tools/api-doc-generator/ the generator behind docs/api-docs

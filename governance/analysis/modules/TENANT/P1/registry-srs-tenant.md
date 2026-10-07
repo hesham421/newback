@@ -1,0 +1,111 @@
+## REGISTRY — P1 — TENANT v1 (as-built baseline, erp-core 1.2.0)
+══════════════════════════════════════════════════════════════════
+
+Every id below is traced to the code it was read from (main @ 2274f86). Java paths are relative to
+`erp-core/src/main/java/com/erp/`, migrations to `erp-core/src/main/resources/db/migration/core/`.
+
+Entities
+| ENT id | Name (ar/en) | Kind | PRIVATE/SHARED | Status | Code location |
+|---|---|---|---|---|---|
+| ENT-TENANT-001 | المستأجر / Tenant | platform registry (global) | SHARED (owner) | REGISTERED (built) | tenant/entity/Tenant.java:32-95; V10__tenant_schema.sql:31-51 |
+
+Consumed
+none — TENANT reads no other module's table (SPI / event / listener use only: srs-tenant.md A8).
+
+Cross-module surfaces (exposed direction)
+| XM id | Surface | Kind | Consumers / implementers | Status | Code location |
+|---|---|---|---|---|---|
+| XM-TENANT-001 | `com.erp.tenant.crossmodule.TenantLookupApi.codeOf(Long)` | crossmodule read | FILE (`PublicFileUrls`), SEQUENCE (`NumberAllocationService`) | ACTIVE (built) | tenant/crossmodule/TenantLookupApi.java:10-14; tenant/crossmodule/TenantLookupApiImpl.java:15-26 |
+| XM-TENANT-002 | `com.erp.tenant.TenantProvisioningContributor` + `TenantProvisioning` | SPI | SEC (0), MDL (10), NOTIF (20), SEQUENCE (40) | ACTIVE (built) | tenant/TenantProvisioningContributor.java:22-31; tenant/TenantProvisioning.java:14-28 |
+Note: in SEC's analysis XM ids are minted by the consuming module (SEC `P2/db-script-sec.md` §2 AMENDMENT).
+The tenant module has no consumer analysis that would mint them, so the tenant-maturity plan (§3) assigns
+these two exposed surfaces TENANT ids here.
+
+Lookups owned
+| Key | ENT | Values count | Code location |
+|---|---|---|---|
+| STATUS_CODE value set (`CHK_CORE_TENANT_STATUS`) | ENT-TENANT-001 | 2 (ACTIVE, SUSPENDED) | V10__tenant_schema.sql:50; tenant/TenantConstants.java:23, :26 |
+
+Lookups consumed
+none.
+
+Screens
+| SCR-REQ id | Name (ar/en) | Page code | Code location |
+|---|---|---|---|
+| SCR-REQ-TENANT-001 | المستأجرون / Tenants | PLATFORM_TENANTS | tenant/permission/TenantPermissions.java:28; V10__tenant_schema.sql:216-218 |
+
+Requirements
+REQ count: 23 · AC count: 23 · RULE count: 9 · ENT count: 1 · SCR-REQ count: 1 · XM count: 2
+Last sequence per atom: REQ: 023 · AC: 023 · ENT: 001 · RULE: 009 · SCR-REQ: 001 · XM: 002 · US: 008 · POL: 011
+
+## Id → code location
+| Id | Title | Code location (primary) | Verified by |
+|---|---|---|---|
+| REQ-TENANT-001 / AC-TENANT-001 | Provision a tenant | tenant/controller/PlatformTenantController.java:41-46; tenant/service/TenantService.java:68-103 | TC-CORE-TENANT-005, -006, -012 |
+| REQ-TENANT-002 / AC-TENANT-002 | Reject an invalid code | tenant/domain/TenantDomain.java:34-36 | TC-CORE-TENANT-009 |
+| REQ-TENANT-003 / AC-TENANT-003 | Reject a duplicate code | tenant/service/TenantService.java:73-83; tenant/domain/TenantDomain.java:38 | TC-CORE-TENANT-008 |
+| REQ-TENANT-004 / AC-TENANT-004 | Reject an incomplete create request | tenant/dto/TenantCreateRequest.java:25-63 | TC-CORE-TENANT-010 |
+| REQ-TENANT-005 / AC-TENANT-005 | List tenants | tenant/service/TenantService.java:133-139 | TC-CORE-TENANT-011 |
+| REQ-TENANT-006 / AC-TENANT-006 | Read a tenant | tenant/service/TenantService.java:105-114 | TC-CORE-TENANT-011 |
+| REQ-TENANT-007 / AC-TENANT-007 | Search tenants | tenant/service/TenantService.java:59-61, :116-131 | TC-CORE-TENANT-011 |
+| REQ-TENANT-008 / AC-TENANT-008 | Change a tenant's status | tenant/service/TenantService.java:141-160; tenant/dto/TenantStatusUpdateRequest.java:19-22 | TC-CORE-TENANT-019, -020, -024 |
+| REQ-TENANT-009 / AC-TENANT-009 | Protect the PLATFORM tenant | tenant/domain/TenantDomain.java:53-59 | TC-CORE-TENANT-019 |
+| REQ-TENANT-010 / AC-TENANT-010 | Refuse a suspended tenant's requests | tenant/security/TenantResolutionFilter.java:89-99, :109-112, :139-142 | TC-CORE-TENANT-021, -022, -023, -026 |
+| REQ-TENANT-011 / AC-TENANT-011 | Tenant from the path | tenant/security/TenantResolutionFilter.java:83-87, :131-171; autoconfigure/ErpCoreProperties.java:252-261 | TC-CORE-TENANT-023 (suspended on the path) |
+| REQ-TENANT-012 / AC-TENANT-012 | Tenant from the token | sec/security/JwtAuthenticationFilter.java:129-136; tenant/security/TenantResolutionFilter.java:89-99 | TC-CORE-TENANT-016 |
+| REQ-TENANT-013 / AC-TENANT-013 | Tenant from the header | tenant/security/TenantResolutionFilter.java:101-120 | TC-CORE-TENANT-002, -003, -018 |
+| REQ-TENANT-014 / AC-TENANT-014 | Request without a tenant | tenant/security/TenantResolutionFilter.java:122-127; autoconfigure/ErpCoreProperties.java:233-246 | TC-CORE-TENANT-001, -004 |
+| REQ-TENANT-015 / AC-TENANT-015 | Platform API for operators only | autoconfigure/ErpCoreSecurityAutoConfiguration.java:85-88, :130-131, :199-205 | TC-CORE-PLATFORM-001…004 |
+| REQ-TENANT-016 / AC-TENANT-016 | Row-level isolation | common/domain/AuditableEntity.java:35-37; tenant/config/TenantIdentifierResolver.java:36-47 | TC-CORE-TENANT-014, -015, -025 |
+| REQ-TENANT-017 / AC-TENANT-017 | Fail fast without a tenant | tenant/TenantContext.java:47-53; tenant/config/TenantHibernateConfiguration.java:34, :50-52 | `TenantContextIntegrationTest`, `TenantBootstrapWindowIntegrationTest` |
+| REQ-TENANT-018 / AC-TENANT-018 | Run as a tenant outside a request | tenant/TenantContext.java:71-92 | `TenantContextTest` |
+| REQ-TENANT-019 / AC-TENANT-019 | Cross-module read of a tenant code | tenant/crossmodule/TenantLookupApiImpl.java:21-25 | FILE public-URL tests |
+| REQ-TENANT-020 / AC-TENANT-020 | Provisioning SPI contract | tenant/service/TenantService.java:85-95; tenant/TenantProvisioningContributor.java:22-31 | TC-CORE-TENANT-012, -025 |
+| REQ-TENANT-021 / AC-TENANT-021 | Tenant-created event | tenant/service/TenantService.java:98-100; events/TenantCreatedEvent.java:11-18 | — |
+| REQ-TENANT-022 / AC-TENANT-022 | Audit tenant changes | tenant/entity/Tenant.java:33 | — |
+| REQ-TENANT-023 / AC-TENANT-023 | Clear a leaked tenant | sec/security/JwtAuthenticationFilter.java:85-91 | DEVIATIONS [15] tests |
+| RULE-TENANT-001 | Code format | tenant/domain/TenantDomain.java:18, :34-36; V10__tenant_schema.sql:51 | `TenantDomainTest` |
+| RULE-TENANT-002 | Code uniqueness | tenant/domain/TenantDomain.java:38; V10__tenant_schema.sql:49 | `TenantDomainTest` |
+| RULE-TENANT-003 | Code immutability | tenant/entity/Tenant.java:50 | — |
+| RULE-TENANT-004 | Status values | tenant/dto/TenantStatusUpdateRequest.java:20; V10__tenant_schema.sql:50 | TC-CORE-TENANT-019 |
+| RULE-TENANT-005 | PLATFORM not suspendable | tenant/domain/TenantDomain.java:53-59 | `TenantDomainTest` |
+| RULE-TENANT-006 | Suspended tenant not served | tenant/security/TenantResolutionFilter.java:89-99, :109-112, :139-142 | TC-CORE-TENANT-021…023 |
+| RULE-TENANT-007 | PLATFORM-module permissions never leave PLATFORM | sec/tenant/SecTenantProvisioningContributor.java:84-121; sec/service/MenuService.java:142-143 | `TenantSchemaIntegrationTest.thePlatformTenantIsSeeded_andOnlyItsSysAdminHoldsPlatformTenantManage` |
+| RULE-TENANT-008 | Provisioning writes name TENANT_ID | tenant/TenantProvisioningContributor.java:14-17 | ArchUnit `CoreLibraryRulesArchTest` (raw JDBC allow-list) |
+| RULE-TENANT-009 | Header / path never switch a token's tenant | tenant/security/TenantResolutionFilter.java:89-99, :143-147 | TC-CORE-TENANT-016 |
+| ENT-TENANT-001 | Tenant | tenant/entity/Tenant.java:32-95 | `TenantSchemaIntegrationTest` |
+| XM-TENANT-001 | TenantLookupApi | tenant/crossmodule/TenantLookupApi.java:10-14 | — |
+| XM-TENANT-002 | TenantProvisioningContributor | tenant/TenantProvisioningContributor.java:22-31 | TC-CORE-TENANT-012 |
+| SCR-REQ-TENANT-001 | PLATFORM_TENANTS | tenant/permission/TenantPermissions.java:28, :43-44 | `governance/frontend/modules/PLATFORM/tests/` |
+| US-TENANT-001…008 | stories | `../P0_5/prd-tenant.md` | — |
+| POL-TENANT-001…011 | policies | `../P0/business-policies-tenant.md` | — |
+
+REQ ids (full text in srs-tenant.md → A4): REQ-TENANT-001, REQ-TENANT-002, REQ-TENANT-003,
+REQ-TENANT-004, REQ-TENANT-005, REQ-TENANT-006, REQ-TENANT-007, REQ-TENANT-008, REQ-TENANT-009,
+REQ-TENANT-010, REQ-TENANT-011, REQ-TENANT-012, REQ-TENANT-013, REQ-TENANT-014, REQ-TENANT-015,
+REQ-TENANT-016, REQ-TENANT-017, REQ-TENANT-018, REQ-TENANT-019, REQ-TENANT-020, REQ-TENANT-021,
+REQ-TENANT-022, REQ-TENANT-023
+
+AC ids (full text in srs-tenant.md → A4, one per REQ above): AC-TENANT-001 … AC-TENANT-023
+
+RULE ids (full text in srs-tenant.md → A5): RULE-TENANT-001, RULE-TENANT-002, RULE-TENANT-003,
+RULE-TENANT-004, RULE-TENANT-005, RULE-TENANT-006, RULE-TENANT-007, RULE-TENANT-008, RULE-TENANT-009
+
+Error codes (full table in srs-tenant.md → STANDALONE)
+| Code | HTTP | Code location |
+|---|---|---|
+| `TENANT_REQUIRED` | 400 | tenant/security/TenantResolutionFilter.java:124 |
+| `TENANT_NOT_FOUND` | 404 | tenant/security/TenantResolutionFilter.java:106, :136; tenant/service/TenantService.java:111, :147 |
+| `TENANT_SUSPENDED` | 403 | tenant/security/TenantResolutionFilter.java:94, :110, :140 |
+| `TENANT_CONTEXT_MISSING` | 500 | tenant/TenantContext.java:50 |
+| `TENANT_CODE_INVALID` | 400 | tenant/domain/TenantDomain.java:36 |
+| `TENANT_CODE_DUPLICATE` | 409 | tenant/domain/TenantDomain.java:38; tenant/service/TenantService.java:81-82 |
+| `TENANT_PLATFORM_PROTECTED` | 422 | tenant/domain/TenantDomain.java:56-57 |
+All seven: tenant/exception/TenantErrorCodes.java:14-32; i18n `messages.properties` 143–149, `messages_ar.properties` 140–146.
+
+Decisions
+ADR ids: ADR-TENANT-001 (ACCEPTED, as built) — `governance/analysis/decisions/TENANT/ADR-TENANT-001.md`.
+
+Event
+"P1 completed: TENANT v1 (as built) — 1 entity, 23 requirements, 23 acceptance criteria, 9 rules, 1 screen requirement, 2 XM, 1 ADR"
+══════════════════════════════════════════════════════════════════
