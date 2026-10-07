@@ -324,3 +324,9 @@ stated otherwise. No DBF ids are minted here.
 - Analysis: `UNIQUE (key)` and `UNIQUE (lookup_type_id, code)` platform-wide. Implemented: both lead with
   `TENANT_ID` under the same constraint names (step 05; plan-sanctioned V10 exception).
 - Kept as recorded (renames are not additive): `*_pk` primary-key names on MDL tables (DEVIATIONS [05]).
+- Physical widths (ADR-MDL-010 planned `key VARCHAR(50)`, `name_ar`/`name_en VARCHAR(200)`, `sort_order INTEGER`).
+  Implemented in `V3__mdl_schema.sql:26-29,43-46`: `MDL_LOOKUP_TYPE.key VARCHAR(80)`, `name_ar`/`name_en VARCHAR(150)`
+  on both tables, `MDL_LOOKUP_VALUE.sort_order NUMERIC`. `owner_module_code VARCHAR(10)`, `code VARCHAR(50)` and
+  `created_by`/`updated_by VARCHAR(100)` are as planned. The DBF tables above keep the planned widths; the migration
+  is the current truth, and ADR-MDL-010 was dropped from `decisions/MDL/` for that reason.
+

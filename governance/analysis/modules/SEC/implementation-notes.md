@@ -1,4 +1,4 @@
-> Vendored verbatim on 2026-10-07 from `erp-app-reference/governance/project-artifacts/sec-implementation-notes.md` (newback `b8ce7fa`), because ten erp-core classes cite it.
+> Vendored verbatim on 2026-10-07 from `erp-app-reference/governance/project-artifacts/sec-implementation-notes.md` (newback `b8ce7fa`), because eight erp-core classes cite it.
 > Paths inside are historical (`governance/shared/…`, `governance/modules/SEC/…`, a root `src/`); the decisions recorded are still current as of erp-core 1.2.0.
 > The current references are `governance/analysis/modules/SEC/` (P1 SRS, P2 DB script) and `docs/api-docs/sec/`.
 
