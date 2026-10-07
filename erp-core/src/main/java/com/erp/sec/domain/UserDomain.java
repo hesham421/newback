@@ -197,6 +197,18 @@ public final class UserDomain {
     }
 
     /**
+     * REQ-SEC-091 (tenant-maturity B) — the platform's recovery resets only a STAFF user holding an active super
+     * role; anything else is "no such super user" (TENANT refuses first with its own codes, RULE-TENANT-017).
+     *
+     * @throws LocalizedException {@code SEC-404-USER} (Status.NOT_FOUND → 404)
+     */
+    public static void assertRecoverableSuperUser(boolean staffSuperUser, String username) {
+        if (!staffSuperUser) {
+            throw new LocalizedException(Status.NOT_FOUND, SecErrorCodes.SEC_404_USER, username);
+        }
+    }
+
+    /**
      * RULE-SEC-060 — a self-change needs the current password ({@code PasswordEncoder.matches}, checked by
      * the service as at login, ADR-SEC-002).
      *

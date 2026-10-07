@@ -58,4 +58,16 @@ public class FileDocumentLookupApiImpl implements FileDocumentLookupApi {
             .forEach(view -> publicFileUrls.of(view).ifPresent(url -> urls.put(view.getId(), url)));
         return urls;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countDocuments() {
+        return repository.countByFileStatusIdNot(FileDocumentDomain.STATUS_DELETED);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long sumBytes() {
+        return repository.sumFileSizeByFileStatusIdNot(FileDocumentDomain.STATUS_DELETED);
+    }
 }

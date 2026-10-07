@@ -37,4 +37,7 @@ public interface NotificationLogRepository
         + " AND ((l.nextAttemptAt IS NULL AND l.createdAt < :cutoff) OR l.nextAttemptAt < :cutoff)"
         + " ORDER BY l.id")
     List<NotificationLog> findStale(@Param("status") String status, @Param("cutoff") Instant cutoff);
+
+    /** tenant-maturity B — the current tenant's rows created at or after {@code since} ({@code NotificationLogQueryApi}). */
+    long countByCreatedAtGreaterThanEqual(Instant since);
 }

@@ -27,4 +27,10 @@ public interface FileDocumentLookupApi {
      * with photos); ids without a servable public document are absent from the map.
      */
     Map<Long, String> publicUrls(Collection<Long> documentIds);
+
+    /** tenant-maturity B — the current tenant's documents that are not deleted (ACTIVE, ARCHIVED). */
+    long countDocuments();
+
+    /** tenant-maturity B — the bytes ({@code FILE_SIZE}) of those documents. */
+    long sumBytes();
 }

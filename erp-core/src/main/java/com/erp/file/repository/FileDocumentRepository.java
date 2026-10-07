@@ -70,6 +70,13 @@ public interface FileDocumentRepository
     /** Existence check for {@code FileDocumentLookupApi} — no content or metadata loaded. */
     boolean existsByIdAndFileStatusIdNot(Long id, String fileStatusId);
 
+    /** tenant-maturity B — the current tenant's documents whose status is not {@code fileStatusId} (tenant usage). */
+    long countByFileStatusIdNot(String fileStatusId);
+
+    /** tenant-maturity B — the bytes of those documents (a NULL size counts 0; 0 when there are none). */
+    @Query("SELECT COALESCE(SUM(f.fileSize), 0L) FROM FileDocument f WHERE f.fileStatusId <> :fileStatusId")
+    long sumFileSizeByFileStatusIdNot(@Param("fileStatusId") String fileStatusId);
+
     /**
      * erp-core step 07 — the bytes of a DB-stored document (DbStorageProvider only). A {@link Tuple}
      * rather than {@code Optional<byte[]>}, which Spring Data would treat as a collection result.

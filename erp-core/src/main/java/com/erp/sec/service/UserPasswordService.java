@@ -8,6 +8,7 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.events.DomainEventPublisher;
 import com.erp.events.UserPasswordChangedEvent;
+import com.erp.sec.crossmodule.RecoveryTarget;
 import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.dto.AdminPasswordSetRequest;
@@ -16,6 +17,7 @@ import com.erp.sec.dto.PasswordChangeResponse;
 import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
 import com.erp.sec.mapper.UserMapper;
+import com.erp.sec.repository.RoleRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtTokenValidator;
 import io.jsonwebtoken.Claims;
@@ -30,9 +32,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * tenant-maturity D — the two STAFF password changes: an administrator sets another user's password
- * (REQ-SEC-083) and a user changes their own (REQ-SEC-085). Both apply the password policy (RULE-SEC-056),
- * end sessions, record a generic-audit row and publish {@link UserPasswordChangedEvent}. Raw passwords are
- * hashed here and never logged, stored, returned, audited or put on the event. No caching.
+ * (REQ-SEC-083) and a user changes their own (REQ-SEC-085); tenant-maturity B adds the platform's recovery of a
+ * tenant's super user (REQ-SEC-091). Each applies the password policy (RULE-SEC-056), ends sessions, records a
+ * generic-audit row and publishes {@link UserPasswordChangedEvent}. Raw passwords are never logged, stored,
+ * returned, audited or put on the event. No caching.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,11 +44,13 @@ public class UserPasswordService {
 
     static final String ACTION_PASSWORD_SET_BY_ADMIN = "PASSWORD_SET_BY_ADMIN";
     static final String ACTION_PASSWORD_CHANGED = "PASSWORD_CHANGED";
+    static final String ACTION_ADMIN_PASSWORD_RESET = "ADMIN_PASSWORD_RESET";
 
     private static final String FIELD_NEW_PASSWORD = "newPassword";
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final UserRepository repository;
+    private final RoleRepository roleRepository;
     private final UserMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicyProvider passwordPolicyProvider;
@@ -120,6 +125,60 @@ public class UserPasswordService {
         log.info("User ID: {} changed their own password; other sessions terminated: {}", saved.getUserPk(), terminated);
 
         return ServiceResult.success(mapper.toPasswordChangeResponse(saved, terminated), Status.UPDATED);
+    }
+
+    /**
+     * REQ-SEC-091 (tenant-maturity B), reached only through {@code SecAdminRecoveryApi.findRecoveryTarget}: the
+     * STAFF user {@code username} of the current tenant and whether it holds an active super role. The gate is
+     * the platform authority ({@code SecPermissions.PLATFORM_TENANT_MANAGE}, mirrored from the tenant module).
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<Optional<RecoveryTarget>> findRecoveryTarget(String username) {
+        log.debug("Resolving the recovery target {} in the current tenant", username);
+
+        return ServiceResult.success(repository.findByUsername(username)
+            .map(user -> new RecoveryTarget(user.getUserPk(), user.getUsername(),
+                roleRepository.holdsActiveSuperRole(user.getUserPk()))));
+    }
+
+    /**
+     * REQ-SEC-091 — {@code SecAdminRecoveryApi.resetSuperUserPassword}: the platform operator sets the password
+     * of a super user of the current tenant (RULE-SEC-056 policy, RULE-SEC-058 flag: null = TRUE), every session
+     * of the user ends, {@code ADMIN_PASSWORD_RESET} is recorded in this tenant with the operator as actor.
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<Integer> resetSuperUserPassword(String username, String rawPassword,
+                                                         Boolean requireChangeAtNextLogin) {
+        User user = repository.findByUsername(username).orElse(null);
+        UserDomain.assertRecoverableSuperUser(
+            user != null && roleRepository.holdsActiveSuperRole(user.getUserPk()), username);
+        log.info("Resetting the password of super user ID: {} for the platform", user.getUserPk());
+
+        PasswordPolicy policy = passwordPolicyProvider.current();
+        policy.assertAcceptable(FIELD_NEW_PASSWORD, rawPassword);
+
+        user.changePassword(passwordEncoder.encode(rawPassword),
+            UserDomain.passwordChangeRequiredFor(requireChangeAtNextLogin), Instant.now());
+        User saved = repository.save(user);
+        // the operator is not a user of this tenant: no acting user on the SEC audit rows
+        int terminated = sessionTerminator.terminateOpenSessions(saved, null, null,
+            "إنهاء الجلسة لأن مشغّل المنصة أعاد تعيين كلمة المرور",
+            "Session terminated because the platform operator reset the password");
+
+        auditApi.record(AuditEntry.builder()
+            .action(ACTION_ADMIN_PASSWORD_RESET)
+            .entityType(SecAuditEntries.ENTITY_TYPE_USER)
+            .entityId(String.valueOf(saved.getUserPk()))
+            .summaryAr("إعادة تعيين كلمة مرور المستخدم " + saved.getUsername() + " من مشغّل المنصة")
+            .summaryEn("Password of user " + saved.getUsername() + " reset by the platform operator")
+            .build());
+        eventPublisher.publish(new UserPasswordChangedEvent(saved.getUserPk(), true));
+        log.info("Password of super user ID: {} reset for the platform; change required: {}; sessions terminated: {}",
+            saved.getUserPk(), saved.getPasswordChangeRequiredFl(), terminated);
+
+        return ServiceResult.success(terminated, Status.UPDATED);
     }
 
     /** The caller's session is the token's {@code jti} ({@code tokenRef}, DBF-SEC-077); null when unreadable. */
