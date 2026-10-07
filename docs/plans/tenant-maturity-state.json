@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "C3,D",
+  "current_step": "B",
   "steps": [
     {
       "id": "A",
@@ -61,19 +61,19 @@
         "V16__sec_user_profile.sql",
         "V17__notif_seed_password_changed.sql"
       ],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/d-sec-user-profile-passwords",
-      "worktree": ".worktrees/tm-d",
+      "worktree": null,
       "attempts": 3,
       "deviations": 12,
       "implementer_agent": "a13c59d7399aab600",
       "reviewer_agent": "a229488dd88b15f25",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 3
       },
       "report": "docs/steps/tm-d-report.md",
-      "merged_commit": null
+      "merged_commit": "38f6d91"
     },
     {
       "id": "C3",
@@ -111,9 +111,9 @@
         "V18__tenant_profile.sql",
         "V19__tenant_lifecycle.sql"
       ],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/b-tenant-level-1",
-      "worktree": null,
+      "worktree": ".worktrees/tm-b",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -389,6 +389,18 @@
       "step": "D",
       "event": "REVIEW",
       "note": "fix round 2 done 81224b1 (document-level PI refusal, style concat check, grammar-based CSS allow-list, <use> limits, data-*; mvn 543/10, P-LIVE 171/171); round-3 review dispatched"
+    },
+    {
+      "at": "2026-10-07T23:07:10Z",
+      "step": "D",
+      "event": "COMPLETE",
+      "note": "merged 38f6d91; verify 552/10; 3 review rounds (SVG allow-list, BCrypt 72-byte cap, multipart 400); LOW duplicate-id <use> guard carried to E"
+    },
+    {
+      "at": "2026-10-07T23:07:10Z",
+      "step": "B",
+      "event": "START",
+      "note": "wave 3 (B) dispatched"
     }
   ]
 }
