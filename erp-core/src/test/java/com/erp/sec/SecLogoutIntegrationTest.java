@@ -16,6 +16,7 @@ import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtAuthenticationFilter;
 import com.erp.sec.security.JwtTokenValidator;
 import com.erp.sec.service.AuthService;
+import com.erp.tenant.TenantContext;
 import com.erp.testsupport.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -212,9 +213,12 @@ class SecLogoutIntegrationTest extends AbstractIntegrationTest {
     /**
      * Runs the real CORE filter over a bearer token and reports whether it installed an
      * authentication. The context is cleared first because the filter only acts on an anonymous
-     * one, and again afterwards so a passing control cannot leak into the next assertion.
+     * one, and again afterwards so a passing control cannot leak into the next assertion. The test
+     * thread's tenant is put back afterwards: the filter treats any tenant it finds on the thread as
+     * a leak and leaves the thread with none (erp-core 1.2.0).
      */
     private boolean authenticatesThroughFilter(String token) {
+        Long testTenant = TenantContext.current();
         SecurityContextHolder.clearContext();
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
@@ -225,6 +229,9 @@ class SecLogoutIntegrationTest extends AbstractIntegrationTest {
             throw new IllegalStateException("Filter invocation failed", e);
         } finally {
             SecurityContextHolder.clearContext();
+            if (testTenant != null) {
+                TenantContext.set(testTenant);
+            }
         }
     }
 

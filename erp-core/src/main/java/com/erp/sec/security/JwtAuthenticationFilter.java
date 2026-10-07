@@ -34,14 +34,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>Tenant (erp-core step 05): a valid token's {@code tid} claim becomes the request's
  * {@link TenantContext} <em>before</em> the user is looked up — the lookup is itself tenant-filtered
- * and usernames are unique per tenant only — and stays set for the rest of the request; the
- * previous value (none, on a real request) is restored in a {@code finally} after the chain. A token without {@code tid}, or one whose user or
+ * and usernames are unique per tenant only — and stays set for the rest of the request; it is
+ * cleared in a {@code finally} after the chain. A token without {@code tid}, or one whose user or
  * session is rejected, leaves no tenant behind, so the tenant module's {@code TenantResolutionFilter}
  * (next in the chain) can fall back to the {@code X-Tenant-Code} header.
  *
  * <p>erp-core 1.2.0: the filter starts every request with no tenant. A value already present on the
  * thread (a leak from earlier work on a reused worker thread) is logged and cleared before anything
- * else runs, so it can never be used by the request; it is put back in the {@code finally}.
+ * else runs, so it can never be used by the request, and it is not put back: the thread leaves the
+ * filter with no tenant, so nothing that runs on it later outside this filter (e.g. a container error
+ * dispatch after {@code sendError}) can pick the leak up.
  *
  * <p>Not a {@code @Component}: exposed as a bean by
  * {@code com.erp.autoconfigure.ErpCoreSecurityAutoConfiguration}, which also places it in the core
@@ -82,8 +84,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         Long previousTenant = TenantContext.current();
         if (previousTenant != null) {
-            // erp-core 1.2.0: a tenant left on a reused worker thread is never used by this request;
-            // whatever was there is restored after the chain (the finally below).
+            // erp-core 1.2.0: a tenant left on a reused worker thread is never used by this request,
+            // and is not restored afterwards either (the finally below clears it for good).
             log.warn("Tenant {} was already set on thread {} when request {} {} arrived; cleared for the request",
                 previousTenant, Thread.currentThread().getName(), request.getMethod(), request.getRequestURI());
             TenantContext.clear();
@@ -102,15 +104,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
             chain.doFilter(request, response);
         } finally {
-            restoreTenant(previousTenant);
-        }
-    }
-
-    private static void restoreTenant(Long tenantId) {
-        if (tenantId == null) {
             TenantContext.clear();
-        } else {
-            TenantContext.set(tenantId);
         }
     }
 

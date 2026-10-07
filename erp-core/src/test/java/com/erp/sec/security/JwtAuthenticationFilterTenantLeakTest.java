@@ -21,7 +21,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 /**
  * erp-core 1.2.0 — a tenant left on a reused worker thread is never seen by the request: the JWT
  * filter (the outermost tenant-aware filter of both core chains) clears it before anything else and
- * puts it back only after the chain.
+ * does not put it back, so the thread leaves the filter clean (nothing that runs on it later outside
+ * the filter, such as a container error dispatch, can pick the leak up).
  */
 class JwtAuthenticationFilterTenantLeakTest {
 
@@ -44,14 +45,14 @@ class JwtAuthenticationFilterTenantLeakTest {
     }
 
     @Test
-    void aLeakedTenant_isNotVisibleToAnAnonymousRequest_andIsRestoredAfterTheChain() throws Exception {
+    void aLeakedTenant_isNotVisibleToAnAnonymousRequest_andIsGoneAfterTheChain() throws Exception {
         AtomicReference<Long> seen = new AtomicReference<>(-1L);
 
         filter.doFilter(new MockHttpServletRequest("GET", "/api/v1/anything"), new MockHttpServletResponse(),
             (request, response) -> seen.set(TenantContext.current()));
 
         assertThat(seen.get()).as("tenant inside the chain").isNull();
-        assertThat(TenantContext.current()).as("restored after the chain").isEqualTo(LEAKED);
+        assertThat(TenantContext.current()).as("not restored after the chain").isNull();
     }
 
     @Test
@@ -64,7 +65,7 @@ class JwtAuthenticationFilterTenantLeakTest {
         filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> seen.set(TenantContext.current()));
 
         assertThat(seen.get()).isNull();
-        assertThat(TenantContext.current()).isEqualTo(LEAKED);
+        assertThat(TenantContext.current()).isNull();
     }
 
     @Test
