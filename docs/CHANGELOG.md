@@ -27,6 +27,11 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `PERM_SEC_ROLES_UPDATE`, answer 404 `SEC-404-ROLE` / `SEC-404-GRANT`, and write `SCREEN_REVOKED` /
   `ACTION_REVOKED` SEC audit entries. No migration; the module revoke is unchanged. Sessions are not ended (the
   next request sees the change); a super role keeps every authority, only its menu changes.
+- [TM-C3] Tenant-isolation tests (no library change): ArchUnit `TenantScopedEntityTest` fails the build
+  when an entity is neither tenant-scoped nor on the explicit global list, and
+  `TenantIsolationIntegrationTest` checks over HTTP that SEC, MDL, FILE, NOTIF, CU, SEQUENCE and AUDIT
+  never show one tenant's rows to another (a foreign id answers 404). New governance rule: every raw
+  SQL statement on a tenant-scoped table names `TENANT_ID`.
 
 ### Changed
 - Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
