@@ -27,8 +27,33 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `PERM_SEC_ROLES_UPDATE`, answer 404 `SEC-404-ROLE` / `SEC-404-GRANT`, and write `SCREEN_REVOKED` /
   `ACTION_REVOKED` SEC audit entries. No migration; the module revoke is unchanged. Sessions are not ended (the
   next request sees the change); a super role keeps every authority, only its menu changes.
+- [TM-D] SEC: an administrator sets a staff user's password (`PUT /api/v1/sec/users/{id}/password`,
+  `PERM_SEC_USERS_UPDATE`, never one's own: 422 `SEC-422-PASSWORD-SELF`); every session of the user ends and, by
+  default, the user must change it at the next sign-in. While that change is pending every STAFF call except
+  `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password` and logout answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`
+  (ADR-SEC-063). New `GET/PATCH /api/v1/sec/me` (own profile, no roles: ADR-SEC-064), `PUT /api/v1/sec/me/password`
+  (current password required: 403 `SEC-403-PASSWORD-CURRENT-INVALID`; the user's other sessions end), and photos
+  `PUT/DELETE /api/v1/sec/me/photo`, `PUT/DELETE /api/v1/sec/users/{id}/photo` (PNG/JPEG/WebP ≤ 1 MB, public URL;
+  400 `SEC-400-PHOTO-INVALID`). Migration `V16__sec_user_profile.sql` (phone, job titles, preferred locale, photo
+  reference, password-change flag and time). Audit actions `PASSWORD_SET_BY_ADMIN`, `PASSWORD_CHANGED`,
+  `PROFILE_PHOTO_CHANGED`; new core event `UserPasswordChangedEvent`.
+- [TM-D] SEC: one STAFF password policy, `erp.core.security.password-policy.*` (8..200 characters, a letter and a
+  digit by default), on user create, reset completion, admin-set, own change and a new tenant's first
+  administrator: 400 `SEC-400-PASSWORD-POLICY` naming the field.
+- [TM-D] FILE: `FileImageStoreApi` (cross-module) stores a small public image for another module: type from the
+  bytes, SVG only when allowed and free of active content, uncategorised, published under a random slug
+  (ADR-FILE-001); `FileDocumentLookupApi.publicUrls(Collection)`.
+- [TM-D] NOTIF: template `STAFF_PASSWORD_CHANGED` (`V17__notif_seed_password_changed.sql`, every tenant) e-mailed to
+  a staff user whose password was set or changed.
+- [TM-D] TENANT: `TenantLookupApi.summaryOf(tenantId)` (code and names).
 
 ### Changed
+- [TM-D] SEC: users created by an administrator (`POST /api/v1/sec/users`) must change their password at the first
+  sign-in unless the request says `requireChangeAtNextLogin: false`; the login response carries
+  `passwordChangeRequired`; user requests and responses gain `phone`, `jobTitleAr`, `jobTitleEn`,
+  `preferredLocale` (`ar` / `en`), responses also `photoUrl`, `passwordChangeRequired`, `passwordChangedAt`. On
+  `PUT /api/v1/sec/users/{id}` an absent new field keeps its value. Completing a password reset clears a pending
+  forced change. A new tenant's first administrator password must meet the policy.
 - Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
   published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.
   CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.

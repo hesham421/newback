@@ -1533,7 +1533,7 @@ Data source: ENT-SEC-001.passwordHash; ENT-SEC-010 (open sessions of the user, m
 Message    : ar: "كلمة المرور الحالية غير صحيحة" · en: "The current password is incorrect"
 Traces     : REQ-SEC-085
 Source     : docs/plans/tenant-maturity-plan.md §6 D.2
-Decided by : the service's credential check (`PasswordEncoder.matches`, as at login — PLATFORM-STD ADR-SEC-002), error `SEC-403-PASSWORD-CURRENT-INVALID` (403)
+Decided by : `UserDomain.assertCurrentPasswordMatches(...)` on the service's credential check (`PasswordEncoder.matches`, as at login — PLATFORM-STD ADR-SEC-002), error `SEC-403-PASSWORD-CURRENT-INVALID` (403)
 
 ### RULE-SEC-061 — صورة المستخدم / Profile photo
 Scope      : ENT-SEC-001
@@ -1543,7 +1543,7 @@ Data source: FILE's image-store validation result (RULE-FILE-008)
 Message    : ar: "يجب أن تكون الصورة بصيغة PNG أو JPEG أو WebP وبحجم لا يتجاوز 1 ميغابايت" · en: "The photo must be a PNG, JPEG or WebP image of at most 1 MB"
 Traces     : REQ-SEC-087
 Source     : docs/plans/tenant-maturity-plan.md §6 D.4
-Decided by : `UserPhotoDomain` (allowed types, size limit, rejection → `SEC-400-PHOTO-INVALID` 400)
+Decided by : `UserDomain` — `PHOTO_TYPES`, `PHOTO_MAX_BYTES` (handed to FILE's image store) and `assertPhotoAccepted(...)` (a rejection → `SEC-400-PHOTO-INVALID` 400, `fieldErrors[0].field = file`); one Domain object per entity (A.0.7)
 
 ### RULE-SEC-062 — اللغة المفضلة / Preferred locale
 Scope      : ENT-SEC-001
