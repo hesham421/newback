@@ -109,3 +109,24 @@ ADR ids: ADR-TENANT-001 (ACCEPTED, as built) — `governance/analysis/decisions/
 Event
 "P1 completed: TENANT v1 (as built) — 1 entity, 23 requirements, 23 acceptance criteria, 9 rules, 1 screen requirement, 2 XM, 1 ADR"
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C3 — automated tenant-isolation tests
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0". Ids
+continue from the highest number ever issued for TENANT (REQ / AC 023, RULE 009).
+
+Entities, lookups, screens, cross-module surfaces, error codes: unchanged (no ENT, DBF, XM, page code,
+permission or error code added; no migration).
+
+Requirements — new items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-024 / AC-TENANT-024 | Tenant isolation guarantee (entity set, HTTP behaviour of every core module, raw SQL) | US-TENANT-004; POL-TENANT-007; RULE-TENANT-010, -011 | common/domain/AuditableEntity.java:35-37; tenant/config/TenantIdentifierResolver.java:36-47 | `TenantIsolationIntegrationTest` (SEC, MDL, FILE, NOTIF, CU, SEQUENCE, AUDIT); `TenantScopedEntityTest` |
+| NEW | RULE-TENANT-010 | The global entity set: `Tenant`, `ModuleRegistry`, `ScreenRegistry`, `ActionRegistry`, `AppConfiguration` | REQ-TENANT-024 | tenant/entity/Tenant.java:40; sec/entity/ModuleRegistry.java:36; sec/entity/ScreenRegistry.java:45; sec/entity/ActionRegistry.java:45; cu/entity/AppConfiguration.java:41 | `TenantScopedEntityTest` |
+| NEW | RULE-TENANT-011 | Every raw SQL statement on a tenant-scoped table names `TENANT_ID` | REQ-TENANT-024 | `governance/rules/GOVERNANCE-RULES.md` (Governance Rules); tenant/TenantProvisioningContributor.java:14-17 | review checklist of `gov-validate-backend-feature`; `CoreLibraryRulesArchTest.rule7_*` (where raw SQL may live) |
+
+Counts after this addendum: REQ 24 · AC 24 · RULE 11 · ENT 1 · SCR-REQ 1 · XM 2.
+Last sequence per atom: REQ: 024 · AC: 024 · ENT: 001 · RULE: 011 · SCR-REQ: 001 · XM: 002 · US: 008 · POL: 011

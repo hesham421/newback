@@ -63,15 +63,12 @@ class CoreLibraryRulesArchTest {
             // the AOP Alliance API that Spring AOP's MethodInterceptor is defined on (SecForbiddenAdvisor).
             "org.aopalliance..");
 
-    /** Rule 2: the only entities that may be global (no TENANT_ID), named in the step files. */
-    static final Set<String> GLOBAL_ENTITIES = Set.of(
-            // [12] the step file calls the three registries SecModuleReg/SecScreenReg/SecActionReg (their
-            // tables SEC_MODULE_REG/SEC_SCREEN_REG/SEC_ACTION_REG); the classes are named *Registry.
-            "com.erp.sec.entity.ModuleRegistry",
-            "com.erp.sec.entity.ScreenRegistry",
-            "com.erp.sec.entity.ActionRegistry",
-            "com.erp.tenant.entity.Tenant",
-            "com.erp.cu.entity.AppConfiguration");
+    /**
+     * Rule 2: the only entities that may be global (no TENANT_ID), named in the step files. [12] the step file
+     * calls the three registries SecModuleReg/SecScreenReg/SecActionReg; the classes are named *Registry.
+     * One list since tenant-maturity C3: {@link TenantScopedEntityTest#GLOBAL_ENTITIES}.
+     */
+    static final Set<String> GLOBAL_ENTITIES = TenantScopedEntityTest.GLOBAL_ENTITIES;
 
     /** Rule 7: modules whose native SQL is a documented exception (explicit TENANT_ID in every predicate). */
     static final List<String> NATIVE_SQL_PACKAGES = List.of("com.erp.tenant..", "com.erp.sequence..", "com.erp.audit..");
