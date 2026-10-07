@@ -1,0 +1,163 @@
+{
+  "module": "MDL",
+  "version": 1,
+  "scope": "pass:1",
+  "counts": {
+    "CRITICAL": 0,
+    "MAJOR": 0,
+    "MINOR": 1
+  },
+  "clean": true,
+  "blocking": [
+    "CRITICAL",
+    "MAJOR"
+  ],
+  "contracts": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C12"
+  ],
+  "skipped": [],
+  "coverage": {
+    "C2.2": 10,
+    "C3.7": 6,
+    "C4.4": 5,
+    "C4.7": 1,
+    "C5.2": 13,
+    "C5.3": 13,
+    "C5.4": 13,
+    "C5.5": 13,
+    "C5.6": 4,
+    "C5.8": 32,
+    "C5.13": 30,
+    "C5.14": 13,
+    "C5.15": 2,
+    "C5.16": 5,
+    "C5.17": 1,
+    "C6.2": 21,
+    "C6.3": 1,
+    "C6.5": 22,
+    "C6.6": 2,
+    "C7.2": 23,
+    "C7.3": 11,
+    "C7.4": 28,
+    "C7.5": 1,
+    "C7.5b": 1,
+    "C7.6": 13,
+    "C7.22": 17,
+    "C7.21": 5,
+    "C7.23": 8,
+    "C7.20": 13,
+    "C7.19": 11,
+    "C7.18": 4
+  },
+  "vacuous": [],
+  "metrics": [
+    {
+      "id": "us-req",
+      "from": "US",
+      "to": [
+        "REQ"
+      ],
+      "total": 5,
+      "covered": 5,
+      "pct": 100.0
+    },
+    {
+      "id": "req-ac",
+      "from": "REQ",
+      "to": [
+        "AC"
+      ],
+      "total": 13,
+      "covered": 13,
+      "pct": 100.0
+    },
+    {
+      "id": "req-api",
+      "from": "REQ",
+      "to": [
+        "API"
+      ],
+      "total": 13,
+      "covered": 13,
+      "pct": 100.0
+    },
+    {
+      "id": "req-ux",
+      "from": "REQ",
+      "to": [
+        "SCR",
+        "UXD"
+      ],
+      "total": 13,
+      "covered": 13,
+      "pct": 100.0
+    }
+  ],
+  "findings": [
+    {
+      "severity": "MINOR",
+      "clause": "C5.16",
+      "check": "feature-unwanted",
+      "message": "`US-MDL-005` is covered by 1 requirement(s) and none states an `unwanted` path \u2014 what the system does when the input, state or sequence is wrong is unspecified for this feature",
+      "artifact": "srs",
+      "line": 47
+    }
+  ],
+  "provenance": {
+    "rules": {
+      "contracts": "f3f23a53197903561c25c0f1c838be0d2baec3a641cb9090e0a5009c7949b8b6",
+      "checker": "d8a9760390a41c64e3ca94d44c8a1b464567e2a7703e85fa43c5bb9360394378",
+      "policy": "16b2c628c459e7ac2ab25d8c92a193bd8e9e51acf301e0b9bedb49f7b87c9c85"
+    },
+    "resolvable": [
+      "api-docs",
+      "backend-execution-plan",
+      "backend-test-plan",
+      "business-policies",
+      "db-script",
+      "domain-profile",
+      "flow-diagram",
+      "frontend-execution-plan",
+      "module-registry",
+      "platform-summary",
+      "prd",
+      "project-registry",
+      "registry-db",
+      "registry-exec-be",
+      "registry-exec-fe",
+      "registry-srs",
+      "srs",
+      "system-test-index",
+      "ui-ux-spec"
+    ],
+    "inputs": {
+      "api-docs": "d2b1266bf81aefa9f4c4f63f9ebf3ea787c31c7061798cb7b318a333315cf802",
+      "backend-execution-plan": "9655ec8fc523170e576ef4fe42375c56ae2fb628f37362a5f416d2ff6f055c06",
+      "backend-test-plan": "3be5c3fb603c9cab7b16d1623282e0789109d30dc10f98d949bce43c456b6f14",
+      "business-policies": "a24f602bf4a6d363ef4ae9707c7ad02d2613f675262ec0643d52b6e19ae07610",
+      "db-script": "48282888a62dcd262d37897c40a2efd090f34ab7b13b393d4acbfe0c7eb4bf15",
+      "domain-profile": "a34a15da38fa0ea53becec281b6072c51844ff4b9a96581af3a85a7d9b1e6822",
+      "flow-diagram": "00b9cc0bfba7f8d7071ae5585b681760a6f0bf072f758adbfb420a4c94a2df26",
+      "frontend-execution-plan": "d14bd76d08c2c0f1e5e8747bb2ae8fa5a99526e0e485abe9a990e08c0fd55dd9",
+      "module-registry": "00c50cdcb36d25d8d01b1ffe59601983321f5185c2cfbe8e273b393ad29462fd",
+      "platform-summary": "f34badb101d03d55af07076d04fee4c2647627707292b246f7bc78c449dfc649",
+      "prd": "1d14a3ab6d7e190f06748a56be0cd23d633f82ef3b2f802f31badbc54be24d58",
+      "project-registry": "ec44d4ec4c0be792eb2f477865e2a6df963f279dca2bee9752896f03bcc8a4ec",
+      "registry-db": "996c980be5b2cdd2208a18644eebd0ccd860a35d2840afa81c84102f476af807",
+      "registry-exec-be": "f8686a688a2012ddfa4c9d68736b9b26850cfc66c25f2cecec55e81834443329",
+      "registry-exec-fe": "bb3f81bb0712f1ab6b6999c0d6dd22c27579b4b917a8d3d7216641b408c501c5",
+      "registry-srs": "933699b39a44ee63666445a77b1335379203a066fef7ac00dab8493c90a8b702",
+      "srs": "c793e9173b82193d278cb74cd68a46102892e5adb7d9da764b875eca80d21ace",
+      "system-test-index": "67d6136b3df1bf00744f47bfd9cc34af944ee01ea67fd14d1999655c0af389b9",
+      "ui-ux-spec": "2617c0e9e142761b4b5350be1330446c9c856807113a8091b6c3451bc4bc5279"
+    },
+    "at": "2026-09-19T11:55:01+00:00"
+  }
+}

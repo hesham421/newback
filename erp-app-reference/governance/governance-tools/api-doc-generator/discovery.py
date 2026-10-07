@@ -13,9 +13,8 @@ Everything here is derived from real, versioned repository artifacts that
 this platform already depends on for other reasons, not from guessing a
 module's name:
 
-  - governance's location inside this backend/ checkout (governance/ is a
-    subfolder of backend/ as of the backend/frontend governance split;
-    see backend/governance/governance-tools/README.md)
+  - the project's governance tree, governance/ at the repository root
+    (see governance/README.md)
   - the Maven descriptors (root pom.xml; its <modules> reactor list when one
     exists, each module's own <dependencies> otherwise) for module source +
     shared/common source roots. This platform currently builds as a single
@@ -31,7 +30,6 @@ exception_extractor.py) already do. Callers (generate.py) turn a "not found"
 into a clear message naming the explicit override flag to pass instead.
 """
 
-import json
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -92,114 +90,27 @@ def default_backend_root() -> Path:
 
 
 @lru_cache(maxsize=1)
-def _shared_modules_root() -> Path:
-    """Resolves the shared submodule's modules directory the same way every
-    other consumer does: via governance/shared/platform/profile-summary.json's
-    paths.modules, never a hard-coded profile name. That file is what lets a
-    second profile need no edit anywhere -- including here.
-
-    Modules do NOT live at a fixed "governance/shared/backend/modules" path;
-    they live at "governance/shared/<profile>/modules" (today's profile is
-    "erp", giving governance/shared/erp/modules), and the profile folder is
-    the factory's to name, not this tool's to guess."""
-    shared = GOVERNANCE_ROOT / "shared"
-    summary_path = shared / "platform" / "profile-summary.json"
-    if not summary_path.is_file():
-        raise SystemExit(
-            f"governance/shared is not initialised at {shared}\n"
-            f"  run: git submodule update --init governance/shared")
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    modules_rel = summary["paths"]["modules"]
-    return shared / modules_rel
-
-
-def _backend_partition_root(module: str) -> Path:
-    """This track's own writable partition inside the shared repo, as the factory
-    publishes it (profile-summary.json -> tracks.backend.partition, e.g.
-    "backend/modules/{MOD}"). Never spelled literally here: a second profile, or
-    a renamed track folder, is then the factory's edit and not this tool's."""
-    shared = GOVERNANCE_ROOT / "shared"
-    summary_path = shared / "platform" / "profile-summary.json"
-    if not summary_path.is_file():
-        raise SystemExit(
-            f"governance/shared is not initialised at {shared}\n"
-            f"  run: git submodule update --init governance/shared")
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    try:
-        partition = summary["tracks"]["backend"]["partition"]
-    except KeyError as exc:
-        raise SystemExit(
-            f"profile-summary.json declares no tracks.backend.partition ({exc}) -- "
-            f"cannot resolve where this repo may write api-docs") from exc
-    return shared / partition.replace("{MOD}", module)
+def _project_governance_root() -> Path:
+    """The project's governance tree: the nearest ancestor's governance/ that
+    holds analysis/modules/ (the repo-root governance/ folder, see its README)."""
+    for parent in GENERATOR_ROOT.parents:
+        candidate = parent / "governance"
+        if (candidate / "analysis" / "modules").is_dir():
+            return candidate
+    raise SystemExit(
+        f"project governance tree not found above {GENERATOR_ROOT}\n"
+        f"  expected <repo>/governance/analysis/modules/ (pass --output to override)")
 
 
 def default_output_dir(module: str) -> Path:
-    """Where generated api-docs land.
-
-    They live in the shared repo, not in this one: the factory and the frontend
-    read the SAME copy, so there is no second copy to drift from. This repo still
-    authors them — the generator reads the running app — and the shared repo's
-    CODEOWNERS grants this repo write access to exactly this path and no other.
-
-    WHICH path that is depends on the profile's layout, and the two layouts in
-    use disagree, so neither is hard-coded:
-
-      * module-root layout   -> <paths.modules>/<MOD>/api-docs
-        (profile "erp": erp/modules/FIN/api-docs — what CLAUDE.md's ownership
-        table documents)
-      * track-partition layout -> <tracks.backend.partition>/api-docs
-        (the v7 project-repo layout: backend/modules/FIN/api-docs)
-
-    Resolving against the wrong one does not fail loudly — it reports every
-    endpoint as "added" and writes a second, empty-history copy of the docs
-    beside the real ones. That happened on 2026-09-19 in both directions: first
-    because this function assumed the module root while the checkout was v7,
-    then, after the naive repair, because it assumed the partition while the
-    checkout was "erp". So it asks the checkout instead of assuming, and where
-    the checkout cannot answer it refuses to guess.
-
-    **This is a workaround, not the fix.** The profile publishes paths.modules,
-    tracks.backend.partition and module_dirs, but NOTHING that declares where a
-    module's api-docs belong — so the one consumer that writes them has to infer
-    it. The three places that do state the path disagree, and one of them names
-    a directory that does not exist on this profile at all:
-
-      * platform/rules/api-verify-config.md:14 -> governance/shared/backend/modules/<MOD>/api-docs/
-      * the backend repo's CLAUDE.md ownership table -> $GOV/modules/<MOD>/api-docs/
-      * the tree as delivered -> erp/modules/<MOD>/api-docs/
-
-    The real repair is a declared key in profile-summary.json that this function
-    reads and fails on when absent, the way it already fails on a missing
-    tracks.backend.partition. That is the factory's to publish, and is recorded
-    for it in the backend's execution-state.json rather than guessed at here.
-    """
-    candidates = [
-        _shared_modules_root() / module / "api-docs",
-        _backend_partition_root(module) / "api-docs",
-    ]
-    existing = [c for c in candidates if c.is_dir()]
-    if len(existing) == 1:
-        return existing[0]
-    if len(existing) > 1:
-        raise SystemExit(
-            "two api-docs directories exist for {} and only one can be authoritative:\n"
-            "  {}\n  {}\n"
-            "delete the stale one before regenerating -- writing to either would "
-            "leave the other silently out of date".format(module, *existing))
-    raise SystemExit(
-        "cannot tell where {mod}'s api-docs belong: neither candidate exists yet, and the\n"
-        "profile declares no api-docs path to settle it.\n"
-        "  module root      : {a}\n"
-        "  track partition  : {b}\n"
-        "Pass --output with the correct one (and ask the factory to publish the path in\n"
-        "profile-summary.json, so the next module does not hit this). Guessing here is what\n"
-        "produced two empty-history copies of FIN's docs on 2026-09-19.".format(
-            mod=module, a=candidates[0], b=candidates[1]))
+    """Where generated api-docs land: this track's partition of the in-repo
+    governance tree, governance/backend/modules/<MOD>/api-docs/ — the single
+    copy the frontend reads."""
+    return _project_governance_root() / "backend" / "modules" / module / "api-docs"
 
 
 def default_module_dir(module: str) -> Path:
-    return _shared_modules_root() / module
+    return _project_governance_root() / "analysis" / "modules" / module
 
 
 _VERSION_DIR_RE = re.compile(r"^v(\d+)$")

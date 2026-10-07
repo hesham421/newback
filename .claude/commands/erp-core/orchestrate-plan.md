@@ -209,11 +209,10 @@ Trigger: implementer BLOCKED; 3 failed review rounds; merge/verify failure on
   in the report; the reviewer treats that as PASS with a named gap; the
   orchestrator records a `halts[]` entry `needs_human: true, reason: "push +
   tag to run publish/consume jobs"` **without** stopping the run.
-- Step 13 touches the factory and `governance-shared` repos. The orchestrator
-  requires their local paths from env `ERP_FACTORY_DIR` and `ERP_GOV_SHARED_DIR`
-  (checked at STEP 1 when 13 becomes ready). Missing → in `--auto`: 13 is set
-  `BLOCKED, needs_human: true` and the run finishes cleanly after 12; without
-  `--auto`: ask the user for the two paths once.
+- Step 13 (COMPLETE) registered erp-core with the external governance repos
+  that existed then. Those dependencies were removed afterwards (plan v4:
+  governance is the in-repo `governance/` folder), so step 13 is not re-runnable:
+  if it is ever reset, set it `BLOCKED, needs_human: true` and finish after 12.
 
 ## STEP 6 — Plan closure
 When 01–12 are `COMPLETE` (13 `COMPLETE` or `BLOCKED` for human reasons only):

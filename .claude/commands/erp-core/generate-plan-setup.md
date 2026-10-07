@@ -4,9 +4,8 @@ Generates (or refreshes) the execution state for the **erp-core technical plan**
 from the step files in `erp-core-plan/` at the repo root, and (re)generates the
 per-step executor command `.claude/commands/erp-core/execute-step.md` from the
 template in Step 3. Mirrors `generate-module-setup.md`, but this plan is
-**self-contained in the repo**: there is no `governance/shared/` submodule, no
-`profile-summary.json`, no module registry. Everything it needs is under
-`erp-core-plan/`.
+**self-contained in the repo**: it reads nothing from `governance/` and no
+module registry. Everything it needs is under `erp-core-plan/`.
 
 ```
 Lives at : .claude/commands/erp-core/generate-plan-setup.md

@@ -1,0 +1,13 @@
+{
+  "module": "SEC",
+  "track": "frontend",
+  "plan": "test",
+  "version": 1,
+  "verify": "sha256",
+  "source": "erp/modules/SEC/test_gen/frontend-test-plan-sec.md",
+  "checked": 1,
+  "missing": [],
+  "mismatched": [],
+  "ok": true,
+  "at": "2026-09-11T20:36:44+00:00"
+}

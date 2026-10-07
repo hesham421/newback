@@ -1,0 +1,162 @@
+{
+  "module": "FILE",
+  "generated_at": "2026-09-04",
+  "current_phase": "ALIGN-BE",
+  "current_sub": "ALIGN-BE",
+  "api_docs_path": "governance/shared/backend/modules/FILE/api-docs/",
+  "phases": [
+    {
+      "id": "CORE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "CORE",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "DATA-DOM",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "DATA-DOM",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "SVC-API",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "SVC-API-CATEGORIES",
+          "status": "COMPLETE"
+        },
+        {
+          "id": "SVC-API-FILES",
+          "status": "COMPLETE"
+        },
+        {
+          "id": "SVC-API-LOOKUP",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "DOC",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "DOC",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "INT-C",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "INT-C",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "INT-R",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "INT-R",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "SEC-BE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "SEC-BE",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "ALIGN-BE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "ALIGN-BE",
+          "status": "COMPLETE"
+        }
+      ]
+    }
+  ],
+  "test_phase": {
+    "id": "backend-test",
+    "status": "PENDING",
+    "gated_by_phases": [
+      "CORE",
+      "DATA-DOM",
+      "SVC-API",
+      "DOC",
+      "INT-C",
+      "INT-R",
+      "SEC-BE",
+      "ALIGN-BE"
+    ],
+    "header_file": null,
+    "subs": [
+      {
+        "id": "RULE-SCENARIOS",
+        "status": "PENDING"
+      },
+      {
+        "id": "API-SCENARIOS",
+        "status": "PENDING"
+      }
+    ]
+  },
+  "blocked": [],
+  "deferred_xm": [],
+  "api_doc_gaps": [
+    {
+      "type": "MISSING_IN_DOCS",
+      "phase": "DATA-DOM",
+      "sub": "DATA-DOM",
+      "endpoint": "RULE-FILE-003 AES/GCM access token encoding",
+      "detail": "srs.md A4 RULE-FILE-003 and the SVC-API Error Catalog specify AES/GCM, ~100m TTL, and single-use, but no key length, key-derivation, or token wire-encoding; db-script.md has no crypto detail and DATA-DOM.md only restates the rule. Implemented a minimal defensible choice (SHA-256-derived 256-bit AES key, 12-byte GCM IV, 128-bit tag, Base64URL(IV||ciphertext) payload of fileId+expiry+16-byte nonce).",
+      "resolution": "RESOLVED (STEP 2, existing-source + intent): the access token is opaque to clients (issued by API-FILE-002, returned verbatim on API-FILE-003) — its byte layout is a purely internal implementation detail, not an external API contract, so no SRS/db-script value governs it and there is nothing to agree cross-repo. Confirmed no pre-existing AES/GCM utility elsewhere in the codebase to mirror. The agent's choice (SHA-256-derived 256-bit AES key from file.access-token.secret, 12-byte GCM IV, 128-bit tag, Base64URL(IV||ciphertext) over fileId+expiry+nonce) is cryptographically sound and self-consistent; kept as-is. Entry retained as historical record.",
+      "recorded_at": "2026-09-05"
+    },
+    {
+      "type": "UNREACHABLE_ERROR_CODE",
+      "phase": "SVC-API",
+      "sub": "SVC-API",
+      "endpoint": "POST /api/v1/files (API-FILE-002) — ERR-0004 FILE_DOCUMENT_OWNERSHIP_REQUIRED (RULE-FILE-005 / TC-BE-FILE-009)",
+      "detail": "The module's artifacts publish ERR-0004 FILE_DOCUMENT_OWNERSHIP_REQUIRED, but the code is structurally unreachable over HTTP. UploadRequest carries @NotBlank on the ownership fields (ownerType, moduleCode), so Spring bean validation refuses the multipart bind at the controller boundary and GlobalExceptionHandler.handleValidation answers 400 / VALIDATION_ERROR with fieldErrors[{field: moduleCode}] before the domain ownership guard — the throw site of ERR-0004 — is entered. UploadRequest's own javadoc already calls the ownership triple 'mandatory structural validation for RULE-FILE-005 (ERR-0004)'. Verified against the running app 2026-09-12: an upload omitting moduleCode returns 400 VALIDATION_ERROR naming moduleCode. The rule IS enforced; only the published code is unobservable. TC-BE-FILE-009 was corrected to assert the real contract (400, VALIDATION_ERROR, fieldErrors naming moduleCode).",
+      "resolution": "OPEN — human decision required: either (a) relax the @NotBlank bean validation on UploadRequest's ownership fields so the domain rule owns the refusal and ERR-0004 becomes reachable (losing handleValidation's per-field detail and its report-all-failures-at-once behaviour), or (b) strike ERR-0004 from FILE's error catalog and state in the artifacts that RULE-FILE-005 is enforced structurally at the DTO layer. No error-catalog file was edited by this entry.",
+      "recorded_at": "2026-09-12"
+    },
+    {
+      "type": "NAMING_MISMATCH",
+      "phase": "DOC",
+      "sub": "DOC",
+      "endpoint": "API REGISTRY in P3_1/backend-execution-plan.md — written as prose, so no served FILE endpoint can be stamped with its API-FILE id",
+      "detail": "Found 2026-09-23 by the api-doc generator's new `check` mode (contract-ids: 0/12 endpoints stamped; the plan has an API REGISTRY heading but no row the extractor can read). Same shape as NOTIF's registry: several entries per line, `CRUD` in place of a verb, no unambiguous verb+path pair. FILE's published api-docs therefore carry no Contract ID line and no drift table. The generator will not guess an id from prose. Remedy is the factory's: rewrite the registry as a table with one row per endpoint (id | operation | verb | path). Nothing in this repo was changed for this entry.",
+      "resolution": "OPEN — factory owns the plan; `check` fails contract-ids for FILE until the table exists",
+      "recorded_at": "2026-09-23"
+    },
+    {
+      "type": "ABSENT",
+      "phase": "SEC-BE",
+      "sub": "SEC-BE",
+      "endpoint": "DELETE /api/v1/files/{id} (API-FILE-006) — FileService.softDelete carried no @PreAuthorize (SEC-PENDING TODO) although V9/V31 register and grant PERM_FILE_BROWSER_UPDATE / _DELETE",
+      "detail": "Surfaced 2026-09-23 as the one FILE endpoint whose generated page read `Authorization: no @PreAuthorize/@Secured declared — checked FileController.archiveOrDelete and FileService.softDelete`. V31's header and PermissionConstants' FILE comment both recorded the gap as 'one annotation cannot express two permissions chosen by argument'. It can: SpEL reads the method argument. Fixed in this repo: PERM_FILE_BROWSER_UPDATE and PERM_FILE_BROWSER_DELETE are now declared in PermissionConstants (values identical to the V9/V31 rows), and FileService.softDelete carries @PreAuthorize requiring UPDATE when #action is ARCHIVE and DELETE when it is DELETE; any other action value passes the gate unchanged so the service's existing FILE_DOCUMENT_INVALID_TRANSITION 400 still answers it (the gate never turns a malformed action into a 403). SEC-BE.md's matrix already names both cells, so no artifact change is needed there; V31's comment is an applied migration and stays as history.",
+      "resolution": "IMPLEMENTED — gate and constants added 2026-09-23; the SEC-BE matrix row was already correct",
+      "recorded_at": "2026-09-23"
+    }
+  ]
+}

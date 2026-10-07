@@ -1,0 +1,14 @@
+# macOS Finder metadata — never content
+.DS_Store
+
+# Derived caches. `build_state()` rewrites every one of these from the v{N}/
+# sources on EVERY run, so tracking them makes each diff carry that noise.
+# Verified regenerable byte-for-byte. Everything else under `_state/` IS tracked
+# — `approvals/`, `gate-pass-*`, `analyze-*`, `briefs/` — because nothing can
+# rebuild those.
+**/_state/current-*.md
+**/_state/traceability.md
+**/_state/state.json
+
+# Implementer receipts — per-run, not governance
+**/modules/*/**/receipts/

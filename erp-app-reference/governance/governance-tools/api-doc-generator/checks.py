@@ -123,7 +123,7 @@ def run_checks(context, document: ApiDocument, files: dict[str, str], files_agai
         elif heading:
             results.append(CheckResult("contract-ids", FAIL,
                 f"{_ratio(0, n, 'endpoints stamped')}: {plan.name} has an API REGISTRY heading but no parseable "
-                f"row (a verb+path table is needed; prose registries carry no contract) → factory item"))
+                f"row (a verb+path table is needed; prose registries carry no contract) → analysis owner item"))
         else:
             results.append(CheckResult("contract-ids", INFO, f"{plan.name} has no API REGISTRY heading"))
 

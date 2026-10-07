@@ -12,7 +12,7 @@ Copy into the root of your fresh backend copy:
 ```
 
 Prerequisites on the machine that runs it: git, JDK 25+, Maven, Docker (Testcontainers).
-Optional for step 12: a GitHub remote + `GITHUB_TOKEN`. For step 13: `ERP_FACTORY_DIR`, `ERP_GOV_SHARED_DIR`.
+Optional for step 12: a GitHub remote + `GITHUB_TOKEN`. Step 13 (registration with the former external governance repos) is complete and no longer re-runnable: governance now lives in this repo's `governance/` folder (see `governance/README.md`).
 
 Run:
 ```

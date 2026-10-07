@@ -1,27 +1,27 @@
 {
   "_comment": [
     "The postgres entry is the SAME server the repository root declares — the",
-    "bespoke node server under governance/mcp-servers/postgres. It replaced an",
+    "bespoke node server under erp-app-reference/governance/mcp-servers/postgres. It replaced an",
     "`uvx postgres-mcp` line that could not start here: uvx is not installed,",
     "and a second server sharing the name `postgres` meant the tools a session",
     "got depended on the directory it was launched from.",
-    "Run `npm install` once in governance/mcp-servers/postgres — without it the",
+    "Run `npm install` once in erp-app-reference/governance/mcp-servers/postgres — without it the",
     "server exits on a missing @modelcontextprotocol/sdk and the client only",
     "reports a closed connection.",
     "The oracle entry is the same shape: a bespoke node server under",
-    "governance/mcp-servers/oracle, talking to LOAN_SYS@localhost:1521/FREEPDB1",
+    "erp-app-reference/governance/mcp-servers/oracle, talking to LOAN_SYS@localhost:1521/FREEPDB1",
     "through node-oracledb's thin mode (no Oracle Instant Client needed).",
     "unless ORACLE_ALLOW_WRITE=true.",
     "The oracle entry's values are literal on purpose: this is a local throwaway",
     "test database (LOAN_SYS@localhost:1521/FREEPDB1), not a real environment.",
-    "Run `npm install` once in governance/mcp-servers/oracle. Read-only unless",
+    "Run `npm install` once in erp-app-reference/governance/mcp-servers/oracle. Read-only unless",
     "ORACLE_ALLOW_WRITE is set to true."
   ],
   "mcpServers": {
     "postgres": {
       "command": "node",
       "args": [
-        "governance/mcp-servers/postgres/index.js"
+        "erp-app-reference/governance/mcp-servers/postgres/index.js"
       ],
       "env": {
         "DB_HOST": "${DB_HOST:-localhost}",
@@ -34,7 +34,7 @@
     "oracle": {
       "command": "node",
       "args": [
-        "governance/mcp-servers/oracle/index.js"
+        "erp-app-reference/governance/mcp-servers/oracle/index.js"
       ],
       "env": {
         "ORACLE_HOST": "localhost",

@@ -1,0 +1,184 @@
+{
+  "module": "MDL",
+  "generated_at": "2026-09-11",
+  "current_phase": "ALIGN-BE",
+  "current_sub": "ALIGN-BE",
+  "api_docs_path": "governance/shared/backend/modules/MDL/api-docs/",
+  "phases": [
+    {
+      "id": "CORE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "CORE",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "DATA-DOM",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "DATA-DOM",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "SVC-API",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "SVC-API-CRUD",
+          "status": "COMPLETE"
+        },
+        {
+          "id": "SVC-API-SEARCH",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "DOC",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "DOC",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "INT-C",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "INT-C",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "INT-R",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "INT-R",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "SEC-BE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "SEC-BE",
+          "status": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "ALIGN-BE",
+      "status": "COMPLETE",
+      "subs": [
+        {
+          "id": "ALIGN-BE",
+          "status": "COMPLETE"
+        }
+      ]
+    }
+  ],
+  "test_phases": [
+    {
+      "id": "TEST-PLAN-BE",
+      "status": "COMPLETE",
+      "gated_by_phases": [
+        "CORE",
+        "DATA-DOM",
+        "SVC-API",
+        "DOC",
+        "INT-C",
+        "INT-R",
+        "SEC-BE",
+        "ALIGN-BE"
+      ],
+      "header_file": "governance/modules/MDL/test_gen/backend-test-plan-mdl.md",
+      "subs": [
+        {
+          "id": "RULE-SCENARIOS",
+          "status": "COMPLETE",
+          "gap_or_fail_tcs": []
+        },
+        {
+          "id": "API-SCENARIOS",
+          "status": "COMPLETE",
+          "gap_or_fail_tcs": []
+        }
+      ],
+      "gap_or_fail_tcs": [],
+      "note": "2026-09-11 5th rerun: root cause of the 4th rerun's 11/13 failures was fixture-level, not application-level -- backend-test-plan-mdl.md's TC-MDL-001/TC-MDL-013 test data used ownerModuleCode='FIN', an illustrative/aspirational value (also baked into MDL's DTO @Schema examples) that was never actually registered in this environment's sec_module_reg (confirmed by direct query -- only MDL, SEC, and 4 TST* rows exist). Corrected backend-test-plan-mdl.md (scope line + TC-MDL-001 + TC-MDL-013, 3 edits only: FIN -> MDL/SEC; test-execution-manifest-mdl.md had zero FIN mentions, left untouched) and regenerated test_mdl_apis.py from the corrected plan (never hand-edited) -- TC-MDL-001 and its sibling LookupType fixtures now self-register under ownerModuleCode='MDL'; a dedicated new fixture for TC-MDL-013 registers under ownerModuleCode='SEC' so the by-owner browse test still exercises real multi-owner grouping across two distinct, real, registered modules. Also hit and fixed one unrelated infrastructure issue along the way: target/classes was found wiped to 0 class files (a concurrent session on this shared checkout), causing a transient NoClassDefFoundError on LookupTypeResponse$LookupTypeResponseBuilder -- fixed with `mvn compile` (419 classes restored) + a clean app restart (env vars exported via `set -a && source .env && set +a`), not a source change. Re-ran python3 governance/modules/MDL/test-api/test_mdl_apis.py for real (RUN_ID=148395): 30 PASS / 0 FAIL / 6 observations, exit code 0. All 13 module-scope TC-MDL-<seq> now pass cleanly. See reports/TEST-REPORT-MDL-backend-2026-09-11.md (fully replaced) STEP 1/1.9/2 for full detail."
+    },
+    {
+      "id": "INT-XM",
+      "status": "PARTIAL",
+      "gated_by_phases": [
+        "CORE",
+        "DATA-DOM",
+        "SVC-API",
+        "DOC",
+        "INT-C",
+        "INT-R",
+        "SEC-BE",
+        "ALIGN-BE"
+      ],
+      "header_file": "governance/modules/MDL/test_gen/backend-test-plan-mdl.md",
+      "subs": [],
+      "gap_or_fail_tcs": [
+        "TC-MDL-014"
+      ],
+      "note": "TC-MDL-014 remains a GAP: XM-MDL-001 (MDL->SEC) is an in-process Spring bean injection (SecModuleRegistryApi), confirmed again in LookupTypeService, not a network call, so there is no HTTP-level way to simulate 'SEC unreachable'. Independent of TEST-PLAN-BE's result (now COMPLETE). Reconfirmed unchanged on the 2026-09-11 5th rerun (real clean 30 PASS / 0 FAIL execution, RUN_ID=148395, after correcting the FIN test-data fixture to MDL/SEC). Judged a permanent, correctly-understood architectural limitation under api-verify's real-HTTP-only scope, not a fixable gap -- status intentionally left as-is rather than forced to a fake PASS. See reports/TEST-REPORT-MDL-backend-2026-09-11.md."
+    }
+  ],
+  "blocked": [],
+  "deferred_xm": [],
+  "api_doc_gaps": [
+    {
+      "type": "DOC_STALE_VS_CODE",
+      "phase": "INT-C",
+      "sub": "INT-C",
+      "endpoint": "XM-MDL-001",
+      "detail": "INT-C.md's Interface line reads literally 'REST call — GET /api/v1/sec/registry?moduleCode={code}'. The actual implementation (src/main/java/com/erp/sec/crossmodule/SecModuleRegistryApi.java + Impl) is a direct in-process Spring interface injection, no HTTP — the same doctrine SecUserDirectoryApi already established (single-artifact monolith, pom.xml has no <modules>). The class's own javadoc names this explicitly as a documented deviation superseding INT-C.md's literal wording.",
+      "resolution": "Resolved as NAMING_MISMATCH — INT-C.md's literal REST-call wording is superseded by this project's established direct-Spring-interface-injection cross-module doctrine (SecUserDirectoryApi precedent + build-create-service skill); the real implementation (SecModuleRegistryApi, direct injection) is correct and was confirmed by the INT-C phase sub.",
+      "recorded_at": "2026-09-11"
+    },
+    {
+      "type": "MISSING_IN_DOCS",
+      "phase": "SVC-API",
+      "sub": "SVC-API-CRUD",
+      "endpoint": "API-MDL-002 (MDL-503 error catalog row)",
+      "detail": "_SECTIONS.md's Error Catalog lists MDL-503 ('Could not verify the owning module right now') for 'SEC unreachable during XM-MDL-001's validation call'. Because XM-MDL-001 is a direct Spring-bean call (see above), not a network call, there is no 'SEC unreachable' failure mode to surface — MdlErrorCodes has no MDL_503 constant and messages.properties/messages_ar.properties have no MDL-503 key.",
+      "resolution": "Resolved as a documentation note, not a defect — MDL-503 describes a transient-network-outage scenario that cannot occur under this module's direct in-process Spring interface injection (no real network hop to SEC); a genuine DB-layer failure instead surfaces as the generic MDL-500/platform 500 path via GlobalExceptionHandler. No code change needed.",
+      "recorded_at": "2026-09-11"
+    },
+    {
+      "type": "MISSING_OPENAPI_GROUP_BEAN",
+      "phase": "DOC",
+      "sub": "DOC",
+      "endpoint": "ALL (MDL has no GroupedOpenApi bean at all)",
+      "detail": "com.erp.main.config.OpenApiConfig.java declares GroupedOpenApi beans for sec, cu, notif, file only -- no mdl bean exists, despite com.erp.mdl.controller (LookupTypeController, LookupValueController, LookupConsumerController) being fully implemented. Confirmed live during the 2026-09-11 execute-backend-test run: GET /v3/api-docs/swagger-config lists only cu/file/notif/sec; GET /v3/api-docs/mdl returns 500. This blocks governance/governance-tools/api-doc-generator's discovery.match_openapi_group for --module MDL (ERROR: could not identify a unique springdoc GroupedOpenApi group), which blocks execute-backend-test.md's mandatory STEP 0.3 api-doc regeneration, which in turn blocked STEP 1 (api-verify) entirely for that run -- 0/14 REQUIRED-COVERAGE TCs could be exercised.",
+      "resolution": "RESOLVED -- mdlApi() GroupedOpenApi bean (group \"mdl\", packagesToScan \"com.erp.mdl.controller\") exists in com.erp.main.config.OpenApiConfig.java, following the secApi()/cuApi()/notifApi()/fileApi() pattern. Verified 2026-09-19: api-docs for MDL regenerated from the running app (11 endpoints, all carrying a Contract ID). The 2026-09-11 blocker no longer applies.",
+      "recorded_at": "2026-09-11"
+    },
+    {
+      "type": "REST_CONTRACT_REVERSAL",
+      "phase": "SVC-API",
+      "sub": "SVC-API-SEARCH",
+      "endpoint": "API-MDL-001, API-MDL-005, API-MDL-010",
+      "detail": "The module's earlier GET + query-param deviation for these three criteria-driven reads (each using SpecBuilder-based dynamic JPA Specification filtering) was reversed to POST + body, mirroring SEC's own GET-to-POST-/search reversal (governance/project-artifacts/sec-implementation-notes.md §8). New endpoints: POST /api/v1/mdl/lookup-types/search (LookupTypeSearchRequest), POST /api/v1/mdl/lookup-types/values/search (LookupValueSearchRequest, child pattern — parent lookupTypeId travels in filters[], never a path variable), POST /api/v1/mdl/lookup-types/by-owner/search (LookupTypeByOwnerSearchRequest — isActiveFl stays server-forced, not a client filter). API-MDL-011 (consumer read-by-key, no SpecBuilder) is unchanged, same reasoning as SEC's dashboard/menu staying GET. api-docs/endpoints/lookup-type-management.md, lookup-value-management.md and index.md were hand-updated to match rather than regenerated, because the still-unresolved MISSING_OPENAPI_GROUP_BEAN gap above blocks api-doc-generator for MDL entirely — re-run the generator once that gap is fixed to confirm these hand edits converge with real generated output.",
+      "resolution": "RESOLVED 2026-09-12. Code (controllers/services/new SearchRequest DTOs), P3_1/backend-execution-plan-mdl.md, packages/backend-execution/SVC-API/SVC-API-SEARCH.md, packages/backend-execution/_SECTIONS.md, packages/backend-execution/DOC/DOC.md, P1/srs-mdl.md B5 tables, test_gen/backend-test-plan-mdl.md and packages/backend-test/API-SCENARIOS.md (TC-MDL-005, TC-MDL-013 verb/endpoint only), the hand-written governance/modules/MDL/test-api/test_mdl_apis.py pytest suite, and the three api-docs files above were all realigned to POST in the same pass.",
+      "recorded_at": "2026-09-12"
+    }
+  ]
+}

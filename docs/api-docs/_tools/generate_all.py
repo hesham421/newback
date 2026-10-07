@@ -6,10 +6,8 @@ api-doc-generator pipeline (erp-app-reference/governance/governance-tools/
 api-doc-generator) with its repository discovery bypassed.
 
 Why a wrapper instead of `generate.py --module X`:
-  * discovery.py resolves output dirs / execution plans through
-    governance/shared (a submodule this repo no longer uses) and finds the
-    springdoc group per module -- but the springdoc groups do not map 1:1 to
-    modules (a `customers` group, no group for tenant/sequence/audit/report/app).
+  * discovery.py finds the springdoc group per module -- but the springdoc
+    groups do not map 1:1 to modules (a `customers` group, no group for tenant/sequence/audit/report/app).
   * generate.py's override path (--openapi + --source) drops the message
     bundles and Flyway roots, so the docs would lose the i18n message columns
     and the unique-constraint section.
@@ -26,6 +24,9 @@ What it does instead (nothing invented, everything from the live app + source):
      source root, erp-core/src/main/java as the shared root, the core i18n
      bundles, both Flyway roots, no execution plan -> no contract ids) and call
      generator.run(context, mode) -- the same pipeline generate.py runs.
+  5. For generate/update, mirror each erp-core module folder into this repo's
+     governance tree, governance/backend/modules/<MOD>/api-docs/ (the copy the
+     frontend reads); `app` is the reference app, not a governed module.
 
 Usage (from anywhere; Python 3.10+):
     python docs/api-docs/_tools/generate_all.py [--base http://localhost:7272] [--function generate|update|review|check]
@@ -34,6 +35,7 @@ Usage (from anywhere; Python 3.10+):
 import argparse
 import json
 import re
+import shutil
 import sys
 import tempfile
 import urllib.request
@@ -50,6 +52,8 @@ from extractors import security_extractor  # noqa: E402
 CORE_JAVA = REPO / "erp-core" / "src" / "main" / "java"
 APP_JAVA = REPO / "erp-app-reference" / "src" / "main" / "java"
 OUT = REPO / "docs" / "api-docs"
+GOVERNANCE_MODULES = REPO / "governance" / "backend" / "modules"
+NOT_GOVERNED = {"app"}
 FALLBACK: list[str] = []
 HTTP_METHODS = ("get", "post", "put", "delete", "patch", "head", "options", "trace")
 
@@ -121,6 +125,18 @@ def filtered(spec: dict, owner: dict, module: str) -> dict:
     return out
 
 
+def publish_to_governance() -> None:
+    """Replace governance/backend/modules/<MOD>/api-docs/ with docs/api-docs/<mod>/."""
+    for module in MODULES:
+        if module in NOT_GOVERNED:
+            continue
+        target = GOVERNANCE_MODULES / module.upper() / "api-docs"
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(OUT / module, target)
+        print(f"mirrored docs/api-docs/{module}/ -> {target.relative_to(REPO).as_posix()}/")
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # docs carry Arabic and em dashes; a cp1256 console would crash
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -129,6 +145,8 @@ def main() -> int:
     ap.add_argument("--server-url", help="Publish this URL as the document's server instead of the one springdoc "
                     "derived from the request (use http://localhost:7272, the reference app's default port, "
                     "when generating from an instance on another port)")
+    ap.add_argument("--no-governance", action="store_true",
+                    help="Do not mirror the generated folders into governance/backend/modules/<MOD>/api-docs/")
     args = ap.parse_args()
 
     with urllib.request.urlopen(f"{args.base}/v3/api-docs", timeout=60) as r:
@@ -165,6 +183,8 @@ def main() -> int:
             else:
                 report = generator.run(context, mode=args.function)
             print(report)
+    if args.function in ("generate", "update") and not args.no_governance:
+        publish_to_governance()
     for line in FALLBACK:
         print(f"assigned by tag fallback: {line}")
     print(f"TOTAL operations in {args.base}/v3/api-docs: {len(owner)}")

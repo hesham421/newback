@@ -1,0 +1,564 @@
+{
+  "module": "SEC",
+  "version": 2,
+  "scope": "pass:1",
+  "counts": {
+    "CRITICAL": 0,
+    "MAJOR": 0,
+    "MINOR": 51
+  },
+  "clean": true,
+  "blocking": [
+    "CRITICAL",
+    "MAJOR"
+  ],
+  "contracts": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C12"
+  ],
+  "skipped": [],
+  "coverage": {
+    "C1.4": 3,
+    "C2.2": 10,
+    "C3.7": 24,
+    "C4.4": 19,
+    "C4.7": 1,
+    "C5.2": 79,
+    "C5.3": 79,
+    "C5.4": 79,
+    "C5.5": 85,
+    "C5.6": 13,
+    "C5.8": 191,
+    "C5.13": 177,
+    "C5.14": 85,
+    "C5.15": 14,
+    "C5.16": 19,
+    "C5.17": 1,
+    "C6.2": 116,
+    "C6.3": 0,
+    "C6.5": 116,
+    "C6.6": 14,
+    "C7.2": 53,
+    "C7.3": 39,
+    "C7.4": 93,
+    "C7.5": 0,
+    "C7.5b": 0,
+    "C7.6": 79,
+    "C7.22": 54,
+    "C7.21": 19,
+    "C7.23": 28,
+    "C7.20": 42,
+    "C7.19": 60,
+    "C7.18": 4
+  },
+  "vacuous": [
+    "C6.3",
+    "C7.5",
+    "C7.5b"
+  ],
+  "metrics": [
+    {
+      "id": "us-req",
+      "from": "US",
+      "to": [
+        "REQ"
+      ],
+      "total": 19,
+      "covered": 19,
+      "pct": 100.0
+    },
+    {
+      "id": "req-ac",
+      "from": "REQ",
+      "to": [
+        "AC"
+      ],
+      "total": 79,
+      "covered": 79,
+      "pct": 100.0
+    },
+    {
+      "id": "req-api",
+      "from": "REQ",
+      "to": [
+        "API"
+      ],
+      "total": 79,
+      "covered": 78,
+      "pct": 98.7
+    },
+    {
+      "id": "req-ux",
+      "from": "REQ",
+      "to": [
+        "SCR",
+        "UXD"
+      ],
+      "total": 79,
+      "covered": 0,
+      "pct": 0.0
+    }
+  ],
+  "findings": [
+    {
+      "severity": "MINOR",
+      "clause": "C5.13",
+      "check": "ambiguity",
+      "message": "`REQ-SEC-020` uses 'several' \u2014 a word two implementers read two ways; state the measure, the set or the rule instead",
+      "artifact": "srs",
+      "line": 1532
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.13",
+      "check": "ambiguity",
+      "message": "`REQ-SEC-024` uses 'relevant' \u2014 a word two implementers read two ways; state the measure, the set or the rule instead",
+      "artifact": "srs",
+      "line": 1624
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-001` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1240
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-002` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1255
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-003` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1270
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-004` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1286
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-005` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1301
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-006` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1316
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-007` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1331
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-008` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1346
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-009` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1361
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-010` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1376
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-011` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1391
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-031` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1406
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-012` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1421
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-013` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1436
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-014` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1451
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-015` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1466
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-016` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1481
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-017` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1496
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-018` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1511
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-019` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1526
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-020` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1542
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-021` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1557
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-032` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1572
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-033` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1587
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-022` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1603
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-023` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1618
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-024` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1633
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-025` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1648
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-026` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1663
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-027` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1678
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-028` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1693
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-029` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1708
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-030` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1723
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-034` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1739
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.14",
+      "check": "ac-measurable",
+      "message": "`AC-SEC-035` has no `Then` line \u2014 a criterion with no stated outcome is not a criterion",
+      "artifact": "srs",
+      "line": 1755
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-002` has 10 requirement(s) and none of them states how it is readd \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1056
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-003` has 8 requirement(s) and none of them states how it is readd \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1071
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-004` has 8 requirement(s) and none of them states how it is update, deleted \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1084
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-005` has 5 requirement(s) and none of them states how it is update, deleted \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1098
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-006` has 5 requirement(s) and none of them states how it is deleted \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1113
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-007` has 10 requirement(s) and none of them states how it is updated \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1129
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-008` has 8 requirement(s) and none of them states how it is updated \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1142
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-010` has 9 requirement(s) and none of them states how it is updated \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1168
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-012` has 6 requirement(s) and none of them states how it is readd \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1202
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.15",
+      "check": "crud-covered",
+      "message": "`ENT-SEC-013` has 5 requirement(s) and none of them states how it is deleted \u2014 the plan will decide that lifecycle on its own",
+      "artifact": "srs",
+      "line": 1216
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.16",
+      "check": "feature-unwanted",
+      "message": "`US-SEC-011` is covered by 2 requirement(s) and none states an `unwanted` path \u2014 what the system does when the input, state or sequence is wrong is unspecified for this feature",
+      "artifact": "srs",
+      "line": 87
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.16",
+      "check": "feature-unwanted",
+      "message": "`US-SEC-004` is covered by 5 requirement(s) and none states an `unwanted` path \u2014 what the system does when the input, state or sequence is wrong is unspecified for this feature",
+      "artifact": "srs",
+      "line": 178
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.16",
+      "check": "feature-unwanted",
+      "message": "`US-SEC-007` is covered by 2 requirement(s) and none states an `unwanted` path \u2014 what the system does when the input, state or sequence is wrong is unspecified for this feature",
+      "artifact": "srs",
+      "line": 198
+    },
+    {
+      "severity": "MINOR",
+      "clause": "C5.16",
+      "check": "feature-unwanted",
+      "message": "`US-SEC-010` is covered by 3 requirement(s) and none states an `unwanted` path \u2014 what the system does when the input, state or sequence is wrong is unspecified for this feature",
+      "artifact": "srs",
+      "line": 228
+    }
+  ],
+  "provenance": {
+    "rules": {
+      "contracts": "305e1507cabe7d964971543105fae9f0b64fa47142680c54eeca2cfe709150af",
+      "checker": "48ed8aa0c57a0322493619a1ea886eaa92090ac9b6a6cd1f6a9a3436667060e3",
+      "policy": "16b2c628c459e7ac2ab25d8c92a193bd8e9e51acf301e0b9bedb49f7b87c9c85"
+    },
+    "resolvable": [
+      "backend-execution-plan",
+      "backend-test-plan",
+      "business-policies",
+      "change-manifest",
+      "db-script",
+      "domain-profile",
+      "frontend-test-plan",
+      "module-registry",
+      "platform-summary",
+      "prd",
+      "project-registry",
+      "registry-db",
+      "registry-exec-be",
+      "registry-srs",
+      "srs",
+      "system-test-index",
+      "test-execution-manifest"
+    ],
+    "inputs": {
+      "backend-execution-plan": "7201602a162d3b39c2337416e86653dc4839a5a59382424352bd9c81254e34c4",
+      "backend-test-plan": "7565dc421900e9ada23800dd4132d790f8f9ca6cfe3489daab1ac8d9430a57cb",
+      "business-policies": "86050f0e257fbabdf60d2e8b2d756cfaaf041212693bcf32cd791d952e498910",
+      "change-manifest": "51da193215ef18c8d1ef4797093c00b53de05a7c3b149871d4ddb4c1bd29ef70",
+      "db-script": "1a33a01efb8e3825c4123986e80019ce11984b7cbddec169b3fe207c52ccada6",
+      "domain-profile": "a34a15da38fa0ea53becec281b6072c51844ff4b9a96581af3a85a7d9b1e6822",
+      "frontend-test-plan": "93ecef54de7d43a164251aca6976f918a48905eb0a037cfac62b7c04afb9a82c",
+      "module-registry": "6d9d5eb92ef1087bf37449245f0bb27ce77be3b509e6c939dab1903fa3ba1b9a",
+      "platform-summary": "93768db21648fc55f6020502257eaf13892b9a48e74aef0160dc0cb794efb8e3",
+      "prd": "bf519c5db53b488da0586502ab3b00f899d1b4233e7fac740698890d367bb318",
+      "project-registry": "b65708c8122e848c0306f70ee079aea77d00f88560d6c4d4fd95011b869171b8",
+      "registry-db": "83bb9d937accb03ffedbda893ac024ed862c7819eea5d6d46ee2af417126f424",
+      "registry-exec-be": "b1dd5f7082be4f5541ebc7162f117e02ea780d00818091cd247813a654dc8af8",
+      "registry-srs": "3989a73baa547ac50a25fa0ca5d372aab269d0433c5bb1229ebda39392f5aa97",
+      "srs": "3fd700d0dc8984c804040fd0240a0205fd4dd7631b9396131914451797576a30",
+      "system-test-index": "67d6136b3df1bf00744f47bfd9cc34af944ee01ea67fd14d1999655c0af389b9",
+      "test-execution-manifest": "fe360a9c38baf2785c213cffdd24b06f9e68738419dd21fa96c66b588070f78c"
+    },
+    "at": "2026-09-23T17:41:19+00:00"
+  }
+}

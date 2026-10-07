@@ -1,0 +1,70 @@
+DECISION: G1 (US-SEC-016 matrix row) confirmed, downgraded to MINOR, fix corrected
+The row really does omit REQ-SEC-078 / AC-SEC-084. It is MINOR, not MAJOR: REQ-SEC-078's own `Traces:` line names US-SEC-016, and RULE-SEC-013 traces back to it, so no id is actually orphaned. What's wrong is the STANDALONE matrix, a derived view that didn't get the update. Round 1's fix also had an error: the row's RULE column isn't blank, it already holds RULE-SEC-008. RULE-SEC-013 has to be added next to it.
+
+DECISION: New MAJOR G2. Reactivating and deactivating an account have no concurrency guard, and the revise pass introduced the gap
+API-SEC-010's Concurrency line says "two simultaneous activations both reach ACTIVE — no invariant at risk". That stopped being true when revise G6 (ADR-SEC-047) added the SERVICE_ACCOUNT_REACTIVATED append. Both requests read DISABLED (QR-SEC-040, no lock). Both write ACTIVE with QR-SEC-010, a plain UPDATE. Both then append a reactivation entry, so one transition gets two audit records. API-SEC-009 has the same shape: its only check is "the user exists", so deactivating twice (or deactivating an already-DISABLED account) appends a second SERVICE_ACCOUNT_DEACTIVATED. The brief puts this kind of check-then-write on the reviewer. It is the same pattern the pass already fixed with a conditional update in QR-SEC-026, QR-SEC-045 and QR-SEC-004.
+
+DECISION: Three stale "six SERVICE_*" counts, filed as one MINOR (P4 pattern)
+Revise G6 raised the count to seven, but "six" survives in three places: API-SEC-023's Request line, the db-script BLOCK 8 comment ("the six new AUDIT_EVENT_TYPE codes") and the module-registry AUTO-DECISION, which lists six. The plan's QR id index also still says QR-SEC-039 has "no API", though ADR-SEC-040 gave it API-SEC-038. The root cause is that the revise lane didn't sweep derived counts and cross-reference lines.
+
+DECISION: Analyze report confirmations kept, with one refinement
+The 35 C5.14 findings are false positives (ADR-SEC-046). Of the C5.15 findings, ENT-SEC-002 "readd" is partly a false positive: REQ-SEC-073 now states the read. The checker apparently doesn't match "return … fields", and "readd" is a typo in the checker's own output. That belongs to the factory, not SEC. The remaining C5.15 and C5.16 findings are confirmed as v1-carried MINORs. The rejections behind them sit under the PLATFORM-STD umbrella (ADR-SEC-002).
+
+DECISION: Verdict is ESCALATE, not REVISE
+The brief allows REVISE only while the merge-review-notes lane still has its budget of at most 1 application. The artifacts show that pass-1 has already used it: "revise pass (G1–G7) applied" (registry-exec-be), and "pass-1 REVISE review (RG4, RG6)" (SRS A1, registry-srs, ADR-SEC-046/047). A MAJOR remains, and it was introduced by that revise, so it can't go through REVISE again. If the orchestrator's revise counter shows budget left, every finding below is mechanical and REVISE would apply instead.
+
+```json
+{
+  "gate": "pass-1",
+  "module": "SEC",
+  "version": 2,
+  "scores": { "unambiguous": 3, "verifiable": 3, "complete": 2, "consistent": 2, "singular": 3, "feasible": 3, "traceable": 2 },
+  "extra_checks": [ {"id": "ERP-1", "result": "PASS"}, {"id": "ERP-2", "result": "PASS"}, {"id": "ERP-3", "result": "PASS"}, {"id": "ERP-4", "result": "PASS"}, {"id": "ERP-6", "result": "PASS"} ],
+  "analyze_confirmed": [
+    {"finding": "C5.13 srs:1532 REQ-SEC-020 'several'", "confirmed": true, "note": "genuinely vague; v1-carried, non-blocking"},
+    {"finding": "C5.13 srs:1624 REQ-SEC-024 'relevant'", "confirmed": true, "note": "genuinely vague; v1-carried, non-blocking"},
+    {"finding": "C5.14 ac-measurable (AC-SEC-001..035, 35 rows)", "confirmed": false, "note": "false positive per ADR-SEC-046: the checker only recognizes the labelled Given:/When:/Then: form, and every flagged v1 block does state a Then in unlabelled prose"},
+    {"finding": "C5.15 crud-covered ENT-SEC-002 (read)", "confirmed": false, "note": "REQ-SEC-073 now states the read ('shall return that role's fields'); the checker doesn't match that verb, and 'readd' is a typo in the checker — a factory issue, not SEC's"},
+    {"finding": "C5.15 crud-covered ENT-SEC-003..013 (11 rows)", "confirmed": true, "note": "real v1-design silences: registry/role deactivation DEFERRED (ADR-SEC-038), grants revoked only by cascade, terminal-status entities have no delete; informational"},
+    {"finding": "C5.16 feature-unwanted US-SEC-004/007/010/011", "confirmed": true, "note": "v1 rejections (SEC-409-INVALID-TRANSITION, SEC-409-ALREADY-TERMINATED, SEC-409-USER-DUP) have catalog rows under PLATFORM-STD (ADR-SEC-002) but no unwanted-pattern REQ; carried from v1, not introduced here"}
+  ],
+  "findings": [
+    {"id": "G1", "severity": "MINOR", "artifact": "srs", "line": null, "clause": "traceable",
+     "problem": "The US-SEC-016 row of the STANDALONE traceability matrix omits REQ-SEC-078, AC-SEC-084 and RULE-SEC-013. All three were added by this pass (G3, ADR-SEC-042), and REQ-SEC-078's own Traces line names US-SEC-016. Every other requirement added in this pass (REQ-SEC-072..077, REQ-SEC-079) was back-filled into its row.",
+     "fix": "In the US-SEC-016 row, add REQ-SEC-078 to the REQ column, AC-SEC-084 to the AC column and RULE-SEC-013 next to the existing RULE-SEC-008.",
+     "adr": false},
+    {"id": "G2", "severity": "MAJOR", "artifact": "backend-execution-plan", "line": null, "clause": "concurrency (engine endpoint block / query catalog)",
+     "problem": "API-SEC-010 and API-SEC-009 decide on the user's current status and then write it back with no guard. QR-SEC-040 takes no lock for either endpoint, and QR-SEC-009/QR-SEC-010 are plain UPDATEs. Two simultaneous reactivations of a service account both pass 'verify DISABLED', and both append SERVICE_ACCOUNT_REACTIVATED (REQ-SEC-079, added by revise G6). API-SEC-010's Concurrency line still claims 'no invariant at risk'. API-SEC-009 checks only that the user exists, so repeating a deactivation, or deactivating an already-DISABLED account, appends another SERVICE_ACCOUNT_DEACTIVATED (REQ-SEC-071). Either way the audit trail records transitions that never happened (POL-SEC-009, POL-SEC-019).",
+     "fix": "Make QR-SEC-010 a conditional update: `UPDATE SEC_USER SET status_code='ACTIVE', is_active_fl=TRUE, updated_by, updated_at WHERE user_pk=:id AND status_code='DISABLED'`. On 0 rows, answer SEC-409-INVALID-TRANSITION; append the audit entry only when exactly 1 row changed. Make QR-SEC-009 conditional as well (`… WHERE user_pk=:id AND status_code<>'DISABLED'`). On 0 rows, answer 200 with the existing DISABLED state, write no session terminations and append no audit entry. Rewrite both Concurrency lines to name the conditional update as the guard, matching QR-SEC-026 and QR-SEC-045.",
+     "adr": false},
+    {"id": "G3", "severity": "MINOR", "artifact": "backend-execution-plan", "line": null, "clause": "consistent",
+     "problem": "The revise pass didn't sweep derived counts and cross-references. API-SEC-023's Request line says 'the six SERVICE_* event codes', and the db-script BLOCK 8 comment says 'the six new AUDIT_EVENT_TYPE codes'; both should say seven. The module-registry AUTO-DECISION lists six SERVICE_* codes and doesn't mention SERVICE_ACCOUNT_REACTIVATED. The plan's QR id definition for QR-SEC-039 still says 'no API', though ADR-SEC-040 gave it API-SEC-038.",
+     "fix": "Change 'six' to 'seven' in API-SEC-023's Request line and in the db-script BLOCK 8 comment. Change the QR-SEC-039 index line to cite API-SEC-038. In module-registry-sec.md, add a one-line note that ADR-SEC-047 adds SERVICE_ACCOUNT_REACTIVATED, leaving the committed AUTO-DECISION text unchanged. The rule for the revise lane: when a value set's count changes, grep every artifact for the old count.",
+     "adr": false}
+  ],
+  "adrs_reviewed": [
+    {"id": "ADR-SEC-001", "status_ok": true, "note": "carried; PRINCIPAL_TYPE and the 21-code AUDIT_EVENT_TYPE follow it"},
+    {"id": "ADR-SEC-012..030", "status_ok": true, "note": "RESOLVED-IN-DIALOGUE upstream; the 'no VIEW' clause of ADR-SEC-018/030 is overridden by ADR-SEC-034, not edited"},
+    {"id": "ADR-SEC-031", "status_ok": true, "note": "SUPERSEDED by ADR-SEC-034; no open BLOCKED ADR remains"},
+    {"id": "ADR-SEC-032", "status_ok": true, "note": "service-account email/passwordHash semantics; reflected in DBF comments and API-SEC-006"},
+    {"id": "ADR-SEC-033", "status_ok": true, "note": "lastUsedAt; QR-SEC-047, and no rule reads it"},
+    {"id": "ADR-SEC-034", "status_ok": true, "note": "AC-SEC-077 asserts both halves; BOOTSTRAP lists the FIN VIEW and CREATE grants"},
+    {"id": "ADR-SEC-035", "status_ok": true, "note": "sequence migration, with ACCESS EXCLUSIVE lock before setval (G3)"},
+    {"id": "ADR-SEC-036", "status_ok": true, "note": "full restatement; the v1 domain-placement deviation is recorded"},
+    {"id": "ADR-SEC-037", "status_ok": true, "note": "§4 narrowed to API-SEC-001 by ADR-SEC-045; secret hashing replaced by ADR-SEC-043 §1"},
+    {"id": "ADR-SEC-038", "status_ok": true, "note": "five endpoints declared; role and registry deactivation DEFERRED and stated in SEC-BE"},
+    {"id": "ADR-SEC-039", "status_ok": true, "note": "SUPERSEDED by ADR-SEC-040"},
+    {"id": "ADR-SEC-040", "status_ok": true, "note": "API-SEC-037/038/039 minted; the QR-SEC-039 index line is stale (G3)"},
+    {"id": "ADR-SEC-041", "status_ok": true, "note": "guarded partial unique index created in BLOCK 5 and cited by API-SEC-002"},
+    {"id": "ADR-SEC-042", "status_ok": true, "note": "REQ-SEC-078/AC-SEC-084/RULE-SEC-013 exist; the count is taken under QR-SEC-041's lock; the matrix row is missing (G1)"},
+    {"id": "ADR-SEC-043", "status_ok": true, "note": "§1 HMAC plus pepper ACCEPTED, with a pepper row in BOOTSTRAP; §2 SUPERSEDED"},
+    {"id": "ADR-SEC-044", "status_ok": true, "note": "ingress throttle and input bounds on API-SEC-001/031; CAT-10 platform finding correctly left outside the module"},
+    {"id": "ADR-SEC-045", "status_ok": true, "note": "no 429 code, consistent with stack.backend.api.http_statuses"},
+    {"id": "ADR-SEC-046", "status_ok": true, "note": "explains the 35 C5.14 false positives; the checker fix is the factory's"},
+    {"id": "ADR-SEC-047", "status_ok": true, "note": "SERVICE_ACCOUNT_REACTIVATED added correctly, but the append it introduced is unguarded under concurrency (G2)"}
+  ],
+  "verdict": "ESCALATE"
+}
+```
+
+<!-- CONVERGED -->

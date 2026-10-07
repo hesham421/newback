@@ -1,0 +1,9 @@
+{
+  "input": "api-docs",
+  "repo": "backend",
+  "commit": "327f21ba1068dff7f9491da0beed695aa4aa2a4a",
+  "source": "backend/modules/SEC/api-docs",
+  "file": "api-docs-sec.md",
+  "digest": "4de00ec2cc9f2570cc2618b7a618419cc84f4add894d7d9f6f66d70c09c947f9",
+  "fetched_at": "2026-09-19T08:26:46+00:00"
+}

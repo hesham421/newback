@@ -102,7 +102,7 @@ private Long id;
 > block. Ignore that: the entity still uses `GenerationType.SEQUENCE` with
 > `@SequenceGenerator(..., sequenceName = "SEQ_<ENTITY_TABLE>", allocationSize = 1)`, and the
 > module's own Flyway migration creates those sequences instead of identity columns. This is
-> settled — see `governance/shared/platform/rules/GOVERNANCE-RULES.md` → "Convention Precedence — db-script vs
+> settled — see `governance/rules/GOVERNANCE-RULES.md` → "Convention Precedence — db-script vs
 > skills". Do not re-derive or re-argue it per module.
 
 ### 3. Business fields
@@ -131,7 +131,7 @@ private Boolean isActive = Boolean.TRUE;
 > | `CHAR(1)` | `@Convert(converter = BooleanCharYNConverter.class)` |
 >
 > A converter on an already-boolean column is a defect, not compliance. See
-> `governance/shared/platform/rules/GOVERNANCE-RULES.md` → "Convention Precedence — db-script vs skills".
+> `governance/rules/GOVERNANCE-RULES.md` → "Convention Precedence — db-script vs skills".
 
 ### 5. FK relationship (child entity only)
 ```java

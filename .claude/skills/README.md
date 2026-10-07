@@ -2,7 +2,7 @@
 
 Skill pack for the backend (Spring Boot / JPA). Read this file first when working under
 `.claude/skills/`. These skills live here — rather than under `governance/` — so they auto-load
-via the Skill tool in every session; `governance/shared/platform/rules/GOVERNANCE-RULES.md` remains the authoritative
+via the Skill tool in every session; `governance/rules/GOVERNANCE-RULES.md` remains the authoritative
 routing table for which skill to use and when.
 
 Skills are split into two lanes by prefix. Both lanes sit directly under `.claude/skills/`, since

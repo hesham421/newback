@@ -1,0 +1,24 @@
+{
+  "module": "SEC",
+  "track": "frontend",
+  "plan": "test",
+  "version": 1,
+  "profile": "erp",
+  "markers_schema_version": 2,
+  "source": "erp/modules/SEC/test_gen/frontend-test-plan-sec.md",
+  "split_at": "2026-09-11T20:36:44+00:00",
+  "strict": false,
+  "files": [
+    "erp/modules/SEC/packages/frontend-test/TEST-PLAN-FE.md",
+    "erp/modules/SEC/packages/frontend-test/_SECTIONS.md"
+  ],
+  "indexes": [
+    "erp/modules/SEC/packages/frontend-test/index.md"
+  ],
+  "units": [
+    "PHASE:TEST-PLAN-FE"
+  ],
+  "atoms": [],
+  "verification": "erp/modules/SEC/packages/frontend-test/verification.json",
+  "verified": true
+}

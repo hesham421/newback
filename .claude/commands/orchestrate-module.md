@@ -9,18 +9,17 @@ cross-repo reach into `frontend/`. (The frontend repo has its own separate
 orchestrator; this one never touches it.) Every path below is relative to the
 backend repo root unless said otherwise.
 
-## Step 0 — resolve where governance lives (never type it)
+## Step 0 — where governance lives
 
 ```bash
-SUMMARY=governance/shared/platform/profile-summary.json
-test -f "$SUMMARY" || { echo "MISSING — git submodule update --init governance/shared"; exit 1; }
-MODULES=governance/shared/$(jq -r .paths.modules "$SUMMARY")            # every module's analysis — read-only here
-GOVROOT=governance/shared/$(jq -r .paths.platform "$SUMMARY")           # project-registry.md and the platform artifacts
-PART=governance/shared/$(jq -r .tracks.backend.partition "$SUMMARY")    # this track's own partition ({MOD} unexpanded): execution-state.json, api-docs/, test-api/
-PKGS=governance/shared/$(jq -r .tracks.backend.delivery "$SUMMARY")     # the delivered packages ({MOD} unexpanded) — written by the factory, read here
+GOV=governance                                # the project's governance tree — a plain folder in this repo
+MODULES=$GOV/analysis/modules                 # every module's analysis — read-only here
+GOVROOT=$GOV/analysis/platform                # project-registry.md and the platform artifacts
+PART=$GOV/backend/modules/{MOD}               # this track's own partition ({MOD} unexpanded): execution-state.json, api-docs/, test-api/
+PKGS=$GOV/backend/modules/{MOD}/packages      # the backend packages ({MOD} unexpanded) — read here, never rewritten
 ```
 
-**Every governance path lives inside the `governance/shared/` submodule.** The
+**Every governance path lives inside the `governance/` folder at the repo root** (see `governance/README.md`). The
 analysis this command reads (PRD, SRS, db-script, the execution plan), the
 delivered packages, and this repo's own partition are all in there; the backend
 repo's own tree holds only source, tools, skills and commands. So: bare
@@ -30,11 +29,10 @@ bare stage folders — `P0`…`P3_2`, `P1` (SRS/PRD), `P2` (db-script), `test_ge
 `manifest.json` — under `$MODULES/{MODULE}/`. A version-suffixed base (`vN/`)
 applies to each of the three the same way. Nothing is read from a
 `governance/modules/…` path (no such tree), from the backend repo root, or from
-`frontend/`. If a path you are about to read does not begin `governance/shared/`
+`frontend/`. If a path you are about to read does not begin `governance/`
 and is not source/skill/command, you have the wrong path — resolve it again.
 
-`$MODULES` and `$GOVROOT` below are those values. The profile folder is the
-factory's to name; spelling it here makes a second profile an edit to this file.
+`$MODULES` and `$GOVROOT` below are those values.
 
 ## Usage
 
@@ -43,7 +41,7 @@ factory's to name; spelling it here makes a second profile an edit to this file.
 ```
 
 - `MODULE` (required): a live module code. **The live set is read, never
-  typed** — `jq -r '.modules[].code' governance/shared/platform/modules-registry.json`
+  typed** — `jq -r '.modules[].code' governance/modules-registry.json`
   (that file also carries each module's `current_version` — the IFA check below).
   A module list written into a command is wrong the day a module is added,
   split or retired, and the symptom is a run that refuses a real module or
@@ -97,18 +95,15 @@ factory's to name; spelling it here makes a second profile an edit to this file.
   per-phase gate applies (recommended for a module's first run or after any spec
   or skill change).
 
-Backend execution phases and their order are **read, never typed** — from
-`.tracks.backend.plans.exec.phases[].key` in `profile-summary.json` (Step 0),
-intersected with what `$PKGS/backend-execution/` actually holds:
+Backend execution phases and their order — `$EXEC_PHASES` — are the project's
+fixed phase list, intersected with what `$PKGS/backend-execution/` actually holds:
 
 ```bash
-EXEC_PHASES=$(jq -r '.tracks.backend.plans.exec.phases[].key' "$SUMMARY")
+EXEC_PHASES="CORE DATA-DOM SVC-API DOC INT-C INT-R SEC-BE ALIGN-BE"
 ```
 
-(As published today that yields `CORE → DATA-DOM → SVC-API → DOC → INT-C →
-INT-R → SEC-BE → ALIGN-BE` — shown to orient you, not to be relied on. A phase
-list typed into a command goes stale the moment the profile gains one.) There
-is no P4/audit phase. Wherever this file says `ALIGN-BE` as the last execution
+The module's own `execution-state.json` (`phases[]`) is the per-module authority
+when it lists fewer. There is no P4/audit phase. Wherever this file says `ALIGN-BE` as the last execution
 phase, read "the LAST key in `$EXEC_PHASES`".
 
 ## Portability — never hardcode an absolute path
@@ -173,7 +168,7 @@ and never touches the module's source files directly.** Its only jobs are:
 ## STEP 0 — Locate module & resume point
 
 1. Read `$PART/execution-state.json` ({MOD} expanded — this repo's own
-   writable partition, e.g. `governance/shared/backend/modules/<MODULE>/`). It is
+   writable partition, e.g. `governance/backend/modules/<MODULE>/`). It is
    NOT under `$MODULES/` and there is no `backend/` segment inside `$PART`.
    Note `current_phase`, `current_sub`, and every phase's/sub's `status`.
 2. If a `PHASE` argument was given, use it (but still resume from whatever subs
@@ -282,8 +277,8 @@ of this conversation. It MUST include:
 - **The exact files to read first, in full** (the ones identified in 1.1:
   HEADER, sub spec, the db-script, SRS slice, the named skills, the precedent)
   — **each as a fully expanded path**, e.g.
-  `governance/shared/backend/modules/<MODULE>/packages/backend-execution/SVC-API/SVC-API-CRUD.md`
-  and `governance/shared/analysis/modules/<MODULE>/P2/db-script-<module>.md`. The
+  `governance/backend/modules/<MODULE>/packages/backend-execution/SVC-API/SVC-API-CRUD.md`
+  and `governance/analysis/modules/<MODULE>/P2/db-script-<module>.md`. The
   dispatched agent has none of this session's variable bindings and no
   bare-path convention, so `$PKGS/…` or a bare `packages/…` in its prompt is a
   path it has to guess at — and the tree it would guess (the repo root) has no
@@ -476,7 +471,7 @@ When the last sub in a phase completes and every gap is resolved:
 
 ## STEP 4 — Test phase (a real gated phase, entered in the same run)
 
-Trigger: STEP 3 just closed the LAST key in `$EXEC_PHASES` (`ALIGN-BE` as published today) — and
+Trigger: STEP 3 just closed the LAST key in `$EXEC_PHASES` (`ALIGN-BE`) — and
 every gap opened during it is resolved (never escalated-and-still-open).
 
 > **The test phase is a gated phase.** It is entered behind the explicit human
@@ -515,7 +510,7 @@ Treat the test phase exactly like `CORE … ALIGN-BE`:
    delivered `TC-[MODULE]-<seq>` plan from whichever location its own STEP 0.1
    records for this module, then —
    BEFORE any verification runs — regenerates this module's api-docs via
-   `governance/governance-tools/api-doc-generator` (never verify against a
+   `erp-app-reference/governance/governance-tools/api-doc-generator` (never verify against a
    possibly-stale copy), then invokes the `api-verify` skill
    (`.claude/skills/api-verify/SKILL.md`, this repo's sole adopted backend API
    verification mechanism — TestSprite is retired, never dispatch it) scoped to

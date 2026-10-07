@@ -5,7 +5,7 @@ actually complete.
 
 > **Self-contained.** This command needs only the `TestSprite` MCP server
 > (wired in `.mcp.json`) and this module's own artifacts under
-> `governance/shared/analysis/modules/SEC/`. Every rule it relies on is written below —
+> `governance/analysis/modules/SEC/`. Every rule it relies on is written below —
 > it reads no external mechanism/governance doc, and never stops waiting on one.
 
 ## Usage
@@ -18,8 +18,8 @@ actually complete.
 ### 0.1 — Load the delivered test-gen plan (the REQUIRED COVERAGE)
 Before any TestSprite call, read every `TC-SEC-<seq>` block out of this
 module's flat test-gen plan file:
-`governance/shared/analysis/modules/SEC/test_gen/backend-test-plan-sec.md` (current
-location; fall back to `governance/shared/analysis/modules/SEC/test_gen/backend-test-plan-sec.md`
+`governance/analysis/modules/SEC/test_gen/backend-test-plan-sec.md` (current
+location; fall back to `governance/analysis/modules/SEC/test_gen/backend-test-plan-sec.md`
 if that path doesn't exist). This command does not read `packages/backend-test/`
 — that split-folder shape depended on governance-tools splitter tooling this
 project no longer relies on; the flat file is the sole source of truth.
@@ -78,7 +78,7 @@ Pick the branch by whether this module already has archived tests:
 
 ### Branch A — RERUN
 This module already has `.py` files under
-`governance/shared/backend/modules/SEC/testsprite/tests/` and the API surface hasn't
+`governance/backend/modules/SEC/testsprite/tests/` and the API surface hasn't
 changed since. No TestSprite MCP tool call at all: run each archived file
 directly (`python3 <path>`, never pytest — each file already calls its own
 `test_*()` at the bottom) and record pass/fail per file.
@@ -114,10 +114,10 @@ assume the names below never drift across a TestSprite MCP version bump):
    `projectPath` as usual, `serverMode` matching how the app was actually
    started (`production` only if it was built+started that way).
 8. **Close out (self-contained archive).** `git mv` this module's `TCnnn_*.py`
-   files into `governance/shared/backend/modules/SEC/testsprite/tests/`, and the run's
-   PRD/plan/report trio into `governance/testsprite/runs/<YYYY-MM-DD>-backend/`
+   files into `governance/backend/modules/SEC/testsprite/tests/`, and the run's
+   PRD/plan/report trio into `erp-app-reference/governance/testsprite/runs/<YYYY-MM-DD>-backend/`
    (create the folders if absent — everything for a module lives under its own
-   `governance/shared/backend/modules/SEC/testsprite/`). Leave the repo-root
+   `governance/backend/modules/SEC/testsprite/`). Leave the repo-root
    `testsprite_tests/` working directory clean afterward.
 
 ---
@@ -182,7 +182,7 @@ if nothing fits, use `ENVIRONMENT_FAILURE` and explain why in the detail.
 
 Write `reports/TEST-REPORT-SEC-backend-[YYYY-MM-DD].md` — a
 module-scoped digest, distinct from TestSprite's own raw report (which is
-archived under `governance/testsprite/runs/<YYYY-MM-DD>-backend/`,
+archived under `erp-app-reference/governance/testsprite/runs/<YYYY-MM-DD>-backend/`,
 untouched). It MUST include the STEP 1.9 coverage table (governed plan ↔
 TestSprite) and the coverage ratio, ABOVE the failure taxonomy — a green
 taxonomy over an incomplete plan is not a pass. This report is complete once
