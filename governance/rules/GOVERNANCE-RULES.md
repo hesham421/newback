@@ -27,6 +27,7 @@ historical copy this file was rewritten from is `governance-shared` @ `1087165`
 | Platform overview and registry of the live modules; the original domain analysis | `governance/analysis/platform/`, `governance/analysis/domain/` |
 | Legacy adapted API suites per module (reference) | `governance/backend/modules/<MOD>/test-api/` |
 | Frontend E2E spec archives per module (reference for the frontend repo) | `governance/frontend/modules/<MOD>/tests/` |
+| Frontend analysis addenda (`## Implementation Addendum — frontend <version>`, append-only, written by the frontend repo before it builds a screen or flow) | `governance/analysis/modules/<MOD>/P2_5/{ui-ux-spec*,flow-diagram*}.md` |
 | api-doc-generator | `governance/tools/api-doc-generator/` |
 | Frontend skills | the frontend repository's own `.claude/skills/` — not here |
 
@@ -105,6 +106,10 @@ code, `gov-*` validates it. Frontend skills live in the frontend repository.
 
 The frontend reads the API contract from this repository's `docs/api-docs/<module>/` and may
 use the archived E2E specs under `governance/frontend/modules/<MOD>/tests/` as its baseline.
+It applies the same analysis-first rule on its side: a new screen or flow is appended as an
+`## Implementation Addendum — frontend <version>` to the module's `P2_5/` documents before it is
+built and checked against that entry after; a change that needs the backend reaches this
+repository as a prompt plus a gap row and goes through "Analysis first" (root `CLAUDE.md`) first.
 
 ---
 

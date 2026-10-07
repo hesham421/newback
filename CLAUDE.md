@@ -124,8 +124,13 @@ A new report or note that does not drive code goes under `docs/`; keep `governan
 documents that describe the current logic.
 
 The frontend is a separate repository. It reads this repository's `docs/api-docs/<module>/` as
-the API contract and may use `governance/frontend/modules/<MOD>/tests/` as its E2E baseline;
-nothing here is copied into it.
+the API contract and `governance/analysis/` as its analysis; nothing here is copied into it. Its
+write set here is exactly two things, always through its own worktree branch merged to `main`:
+`governance/frontend/modules/<MOD>/tests/` (its E2E archive) and the append-only
+`## Implementation Addendum — frontend <version>` sections of
+`governance/analysis/modules/<MOD>/P2_5/` (its own analysis-first rule, mirroring the one below).
+A frontend change that needs the backend comes to this repository as a prompt and a gap row, and
+goes through "Analysis first" below before any endpoint is added.
 
 ## Analysis first — every new requirement or feature (NON-NEGOTIABLE)
 

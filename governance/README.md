@@ -34,6 +34,10 @@ governance/
   frontend/modules/<MOD>/tests/     the frontend's E2E spec archives (specs, page objects, run
                                     reports) for AUDIT, CU, FILE, MDL, NOTIF, PLATFORM, REPORT,
                                     SEC, SEQUENCE
+                                    (the frontend repo's write set here is this folder plus the
+                                    append-only "Implementation Addendum — frontend <version>"
+                                    sections of analysis/modules/<MOD>/P2_5/ — see the root
+                                    CLAUDE.md "Analysis first")
   tools/api-doc-generator/  the generator behind docs/api-docs (driven by docs/api-docs/_tools/)
 ```
 
