@@ -1,0 +1,243 @@
+{
+  "plan": "docs/plans/tenant-maturity-plan.md",
+  "main_branch": "main",
+  "target_version": "1.3.0",
+  "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
+  "max_parallel": 3,
+  "current_step": null,
+  "steps": [
+    {
+      "id": "A",
+      "slug": "tenant-analysis",
+      "title": "Package A — TENANT module analysis, as-built from erp-core 1.2.0 (docs only)",
+      "depends_on": [],
+      "wave": "1",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/a-tenant-analysis",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-a-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "G",
+      "slug": "sec-grant-revoke",
+      "title": "Package G — revoke a single screen / action grant (closes D7)",
+      "depends_on": [],
+      "wave": "1",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/g-sec-grant-revoke",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-g-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "D",
+      "slug": "sec-user-profile-passwords",
+      "title": "Package D — admin-set password, own password, photo, profile fields, staff /me, PasswordPolicy, FILE image store API",
+      "depends_on": [
+        "A",
+        "G"
+      ],
+      "wave": "2",
+      "migrations": [
+        "V16__sec_user_profile.sql",
+        "V17__notif_seed_password_changed.sql"
+      ],
+      "status": "PENDING",
+      "branch": "tm/d-sec-user-profile-passwords",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-d-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "C3",
+      "slug": "tenant-isolation-tests",
+      "title": "Package C.3 — ArchUnit TenantScopedEntityTest, TenantIsolationIT, JdbcTemplate TENANT_ID review rule",
+      "depends_on": [
+        "A"
+      ],
+      "wave": "2",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/c3-tenant-isolation-tests",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-c3-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "B",
+      "slug": "tenant-level-1",
+      "title": "Package B — tenant edit, suspension facts, platform admin-reset, usage",
+      "depends_on": [
+        "A",
+        "D"
+      ],
+      "wave": "3",
+      "migrations": [
+        "V18__tenant_profile.sql",
+        "V19__tenant_lifecycle.sql"
+      ],
+      "status": "PENDING",
+      "branch": "tm/b-tenant-level-1",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-b-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "E",
+      "slug": "tenant-branding",
+      "title": "Package E — tenant logo + brand colour from PLATFORM_TENANTS, /tenant/me, public branding",
+      "depends_on": [
+        "B",
+        "D"
+      ],
+      "wave": "4",
+      "migrations": [
+        "V20__tenant_branding.sql"
+      ],
+      "status": "PENDING",
+      "branch": "tm/e-tenant-branding",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-e-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "C12",
+      "slug": "tenant-events-token-cutoff",
+      "title": "Package C.1 + C.2 — tenant lifecycle events, NOTIF/SEC reactions, per-tenant token cut-off, revoke-tokens",
+      "depends_on": [
+        "B",
+        "E"
+      ],
+      "wave": "5",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/c12-tenant-events-token-cutoff",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-c12-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "C4",
+      "slug": "idempotent-provisioning",
+      "title": "Package C.4 — Idempotency-Key on POST /platform/tenants (common.idempotency)",
+      "depends_on": [
+        "C12"
+      ],
+      "wave": "6",
+      "migrations": [
+        "V21__core_idempotency_key.sql"
+      ],
+      "status": "PENDING",
+      "branch": "tm/c4-idempotent-provisioning",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-c4-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "C6",
+      "slug": "scoped-value-spike",
+      "title": "Package C.6 — ScopedValue spike for TenantContext, go/no-go ADR",
+      "depends_on": [
+        "C12"
+      ],
+      "wave": "6",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/c6-scoped-value-spike",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-c6-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "C5",
+      "slug": "tenant-export",
+      "title": "Package C.5 — tenant data export SPI + endpoint",
+      "depends_on": [
+        "C4",
+        "C6"
+      ],
+      "wave": "7",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/c5-tenant-export",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-c5-report.md",
+      "merged_commit": null
+    },
+    {
+      "id": "Z",
+      "slug": "closure",
+      "title": "Closure — full api-docs check, full api-verify run, overview/README/CHANGELOG consistency, plan report",
+      "depends_on": [
+        "C5"
+      ],
+      "wave": "8",
+      "migrations": [],
+      "status": "PENDING",
+      "branch": "tm/z-closure",
+      "worktree": null,
+      "attempts": 0,
+      "deviations": 0,
+      "implementer_agent": null,
+      "reviewer_agent": null,
+      "review": null,
+      "report": "docs/steps/tm-z-report.md",
+      "merged_commit": null
+    }
+  ],
+  "halts": [],
+  "log": []
+}
