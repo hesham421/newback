@@ -1,6 +1,6 @@
 # Consuming erp-core
 
-`com.erp:erp-core` is an auto-configured Spring Boot 4 library (Java 21, PostgreSQL 16). An application
+`com.erp:erp-core` is an auto-configured Spring Boot 4 library (Java 25, PostgreSQL 16). An application
 adds it as an ordinary Maven dependency; everything else arrives through
 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. The application never
 scans `com.erp.*` itself and never copies a core class. `erp-app-reference/` in this repository is the
@@ -64,7 +64,7 @@ Application `pom.xml` (Spring Boot parent 4.0.1, the version erp-core is built a
 </parent>
 
 <properties>
-  <java.version>21</java.version>
+  <java.version>25</java.version>
   <erp.core.version>1.2.0</erp.core.version>
 </properties>
 

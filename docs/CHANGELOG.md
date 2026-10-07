@@ -3,6 +3,18 @@
 All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer). Versioning policy:
 `docs/RELEASE.md`. Per-step details: `docs/steps/NN-report.md`; deviations: `docs/DEVIATIONS.md`.
 
+## [Unreleased]
+
+### Changed
+- Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
+  published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.
+  CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
+
+### Fixed
+- `JwtAuthenticationFilter` no longer puts a tenant left on a reused worker thread back after the
+  request: the thread leaves the filter with no tenant, so a container error dispatch after
+  `sendError` (which skips the filter) can no longer run under the stale tenant.
+
 ## [1.2.0] — 2026-10-05
 
 MINOR release. It is a MINOR, not a PATCH, because `com.erp.common` gained public members (see Added),

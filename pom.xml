@@ -28,10 +28,10 @@
     </modules>
 
     <properties>
-        <!-- Step 03: Java 21 (README §4). The enforcer rule below fails the build at `validate`
-             under any JDK older than 21, before compilation, so a stale target/ cannot mask it. -->
-        <java.version>21</java.version>
-        <maven.compiler.release>21</maven.compiler.release>
+        <!-- Java 25 (was 21 since step 03). The enforcer rule below fails the build at `validate`
+             under any JDK older than 25, before compilation, so a stale target/ cannot mask it. -->
+        <java.version>25</java.version>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Same as the parent's version; used for the configuration-processor annotation path -->
@@ -233,7 +233,7 @@
         </pluginManagement>
 
         <plugins>
-            <!-- Fails the build immediately, with an explicit message, under a JDK older than 21.
+            <!-- Fails the build immediately, with an explicit message, under a JDK older than 25.
                  Runs in `validate`, before compilation. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -241,18 +241,18 @@
                 <version>3.5.0</version>
                 <executions>
                     <execution>
-                        <id>enforce-java-21</id>
+                        <id>enforce-java-25</id>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
                         <configuration>
                             <rules>
                                 <requireJavaVersion>
-                                    <version>[21,)</version>
+                                    <version>[25,)</version>
                                     <message>
-                                        This project requires JDK 21 or newer (maven.compiler.release=21).
+                                        This project requires JDK 25 or newer (maven.compiler.release=25).
                                         You are running ${java.runtime.version} from ${java.home}.
-                                        Point JAVA_HOME at a JDK 21+ install and retry.
+                                        Point JAVA_HOME at a JDK 25+ install and retry.
                                     </message>
                                 </requireJavaVersion>
                             </rules>

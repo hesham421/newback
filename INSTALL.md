@@ -11,7 +11,7 @@ Copy into the root of your fresh backend copy:
     └── orchestrate-plan.md                ← /erp-core/orchestrate-plan     (multi-agent, --auto)
 ```
 
-Prerequisites on the machine that runs it: git, JDK 21+, Maven, Docker (Testcontainers).
+Prerequisites on the machine that runs it: git, JDK 25+, Maven, Docker (Testcontainers).
 Optional for step 12: a GitHub remote + `GITHUB_TOKEN`. For step 13: `ERP_FACTORY_DIR`, `ERP_GOV_SHARED_DIR`.
 
 Run:

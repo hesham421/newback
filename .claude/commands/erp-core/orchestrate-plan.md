@@ -36,7 +36,7 @@ test -f "$STATE" || { echo "run /erp-core/generate-plan-setup first"; exit 1; }
 MAIN=$(jq -r .main_branch "$STATE")
 ```
 Preconditions checked once per run: clean working tree on `$MAIN`
-(`git status --porcelain` empty), Docker reachable (`docker info`), JDK 21+
+(`git status --porcelain` empty), Docker reachable (`docker info`), JDK 25+
 (`java -version`), Maven present. Any failure → STOP with the exact missing
 item (this is environment, not a plan impasse — no debate).
 

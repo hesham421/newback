@@ -1,7 +1,7 @@
 name: ci
 
 # erp-core step 12 — build, test and publish.
-#   build-test        every push to main, every pull request, every v* tag: `mvn verify` on JDK 21 with
+#   build-test        every push to main, every pull request, every v* tag: `mvn verify` on JDK 25 with
 #                     the tests forced onto Testcontainers (Docker is available on GitHub-hosted runners),
 #                     the ArchUnit rules, the enforcer rules and the erp-core JaCoCo gate (>= 60 % lines).
 #   docker-image      builds the reference application's image (erp-app-reference/Dockerfile).
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: maven
 
       - name: Docker is available for Testcontainers
@@ -103,7 +103,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: maven
           # settings.xml <server id="github"> = <distributionManagement> id in the root pom
           server-id: github
@@ -154,7 +154,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           # no Maven cache: nothing from an earlier job may stand in for the published artifact
 
       - name: settings.xml for GitHub Packages (read)
