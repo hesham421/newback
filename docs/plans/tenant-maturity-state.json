@@ -18,7 +18,7 @@
       "worktree": ".worktrees/tm-a",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "a3e7f307b14549283",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-a-report.md",
@@ -36,7 +36,7 @@
       "worktree": ".worktrees/tm-g",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "a4bca255ce095a936",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-g-report.md",
@@ -251,6 +251,18 @@
       "step": "G",
       "event": "START",
       "note": "wave 1 dispatched (parallel with A)"
+    },
+    {
+      "at": "2026-10-07T19:16:42Z",
+      "step": "A",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-07T19:16:43Z",
+      "step": "G",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
     }
   ]
 }
