@@ -37,7 +37,6 @@ public final class FileDocumentDomain {
         this.currentStatus = currentStatus;
     }
 
-    /** Reconstructs a Domain view over a persisted entity — no validation. */
     /**
      * RULE-FILE-012 (tenant-maturity C5) — a restricted document ({@code requiredAuthority} set) exists only for a caller
      * holding that authority; anyone else gets 404 {@code FILE_DOCUMENT_NOT_FOUND}, so its existence is not revealed.
@@ -53,6 +52,7 @@ public final class FileDocumentDomain {
         return requiredAuthority != null && STATUS_DELETED.equals(targetStatus);
     }
 
+    /** Reconstructs a Domain view over a persisted entity — no validation. */
     public static FileDocumentDomain from(FileDocument entity) {
         return new FileDocumentDomain(entity.getFileStatusId());
     }
