@@ -162,11 +162,11 @@ SCR-SEC-011 (own photo).
 | | NEW | `users.columnsAction` | Columns | الأعمدة |
 | | NEW | `users.columnsMenuLabel` | Show or hide columns | إظهار الأعمدة أو إخفاؤها |
 | | NEW | `users.photoAlt` | Photo of {name} | صورة {name} |
-| | NEW | `users.fieldPhone` | Phone | الهاتف |
+| | unchanged (reused) | `users.fieldPhone` | Phone Number | رقم الهاتف |
 | | NEW | `users.fieldPhoneHint` | Optional. Digits, spaces and hyphens, with an optional leading +. | اختياري. أرقام ومسافات وشرطات، مع علامة + اختيارية في البداية. |
 | | NEW | `users.fieldJobTitleAr` | Job title (Arabic) | المسمى الوظيفي (عربي) |
 | | NEW | `users.fieldJobTitleEn` | Job title (English) | المسمى الوظيفي (إنجليزي) |
-| | NEW | `users.fieldPreferredLocale` | Preferred language | اللغة المفضلة |
+| | unchanged (reused) | `users.fieldPreferredLang` | Preferred Language | اللغة المفضلة |
 | | NEW | `users.localeNone` | Not set | غير محددة |
 | | NEW | `users.localeAr` | العربية | العربية |
 | | NEW | `users.localeEn` | English | English |
@@ -229,7 +229,7 @@ SCR-SEC-011 (own photo).
 | | NEW | `roles.revokeSavedHint` | Saved — uncheck to revoke | محفوظ — أزل التحديد للسحب |
 | | NEW | `roles.superRoleHint` | This role holds every authority regardless of grants; grants only shape its menu. | يملك هذا الدور كل الصلاحيات بغض النظر عن المنح؛ المنح تحدد قائمته فقط. |
 | | REMOVED | `roles.individualRevokeUnavailable` | — | — |
-Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldUsername`, `users.fieldEmail`,
+Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldPhone` and `users.fieldPreferredLang` (in both dictionaries since 1.0, unused until now), `users.fieldUsername`, `users.fieldEmail`,
 `users.fieldFullNameAr`, `users.fieldFullNameEn`, `users.colLastLogin`, `errors.passwordMismatch`, `topbar.signOut`,
 `common.*`.
 
