@@ -1,5 +1,6 @@
 package com.erp.autoconfigure;
 
+import com.erp.common.idempotency.IdempotencySettings;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -127,6 +128,14 @@ public class ErpCoreAutoConfiguration {
         messageSource.setAlwaysUseMessageFormat(
             environment.getProperty("spring.messages.always-use-message-format", Boolean.class, false));
         return messageSource;
+    }
+
+    /** tenant-maturity C4 — {@code erp.core.idempotency.*} for {@code com.erp.common.idempotency} (key from the JWT secret). */
+    @Bean
+    public IdempotencySettings idempotencySettings(ErpCoreProperties properties) {
+        ErpCoreProperties.Idempotency idempotency = properties.getIdempotency();
+        return IdempotencySettings.of(idempotency.isEnabled(), idempotency.getRetention(),
+            properties.getSecurity().getJwt().getSecret());
     }
 
     /**

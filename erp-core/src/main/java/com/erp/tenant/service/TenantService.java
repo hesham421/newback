@@ -316,6 +316,23 @@ public class TenantService {
             terminated = TenantContext.callAs(id, () -> writeInTenant().execute(status -> endSessions(tenant)));
         } catch (RuntimeException e) {
             log.error("Tokens of tenant ID: {} revoked, but its sessions could not be terminated", id, e);
+            recordSessionsNotTerminated(tenant, e);
+            LocalizedException failure = new LocalizedException(Status.INTERNAL_ERROR,
+                TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED, tenant.getCode());
+            failure.initCause(e);
+            throw failure;
+        }
+        log.info("Tokens of tenant ID: {} revoked; sessions terminated: {}", id, terminated);
+
+        return ServiceResult.success(mapper.toTokenRevocationResponse(tenant, terminated), Status.UPDATED);
+    }
+
+    /**
+     * The PLATFORM trace of a revoke-tokens whose session step failed (its own commit). A failure here too is logged and
+     * attached to {@code cause}, so the caller still answers {@code TENANT_REVOKE_SESSIONS_FAILED} (C4, C12 follow-up).
+     */
+    private void recordSessionsNotTerminated(Tenant tenant, RuntimeException cause) {
+        try {
             auditApi.record(AuditEntry.builder()
                 .action(ACTION_TOKENS_REVOKED)
                 .tenantId(TenantConstants.PLATFORM_TENANT_ID)
@@ -324,12 +341,11 @@ public class TenantService {
                 .summaryAr("إبطال رموز الدخول للمستأجر " + tenant.getCode() + "؛ لم تُنهَ الجلسات: أعد الطلب")
                 .summaryEn("Tokens of tenant " + tenant.getCode() + " revoked; the sessions were NOT terminated: call again")
                 .build());
-            throw new LocalizedException(Status.INTERNAL_ERROR, TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED,
-                tenant.getCode());
+        } catch (RuntimeException auditFailure) {
+            log.error("The PLATFORM audit row of the failed revoke-tokens of tenant ID: {} could not be written",
+                tenant.getId(), auditFailure);
+            cause.addSuppressed(auditFailure);
         }
-        log.info("Tokens of tenant ID: {} revoked; sessions terminated: {}", id, terminated);
-
-        return ServiceResult.success(mapper.toTokenRevocationResponse(tenant, terminated), Status.UPDATED);
     }
 
     /** Runs in a PLATFORM transaction: the global {@code CORE_TENANT} row gets its new cut-off (RULE-TENANT-023). */

@@ -82,12 +82,15 @@ class CoreLibraryRulesArchTest {
      *   <li>{@code com.erp.<module>.tenant..} — the {@code TenantProvisioningContributor}s (step 05: JDBC, explicit
      *       TENANT_ID, copying from the source tenant inside the provisioning transaction);</li>
      *   <li>{@code com.erp.autoconfigure..} — wiring only (passes a {@code JdbcTemplate} into a bean);</li>
-     *   <li>{@code NotificationRequeueJob} — step 08's cross-tenant stale-QUEUED scan, tenant by tenant.</li>
+     *   <li>{@code NotificationRequeueJob} — step 08's cross-tenant stale-QUEUED scan, tenant by tenant;</li>
+     *   <li>{@code IdempotencyKeyRetentionJob} — tenant-maturity C4's cross-tenant purge of expired idempotency keys,
+     *       tenant by tenant (RULE-TENANT-011; DEVIATIONS [TM-C4]).</li>
      * </ul>
      */
     static final List<String> RAW_JDBC_PACKAGES = List.of(
             "com.erp.tenant..", "com.erp.sequence..", "com.erp.audit..", "com.erp.*.tenant..", "com.erp.autoconfigure..");
-    static final Set<String> RAW_JDBC_CLASSES = Set.of("com.erp.notif.service.NotificationRequeueJob");
+    static final Set<String> RAW_JDBC_CLASSES = Set.of("com.erp.notif.service.NotificationRequeueJob",
+            "com.erp.common.idempotency.IdempotencyKeyRetentionJob");
 
     // ── Rule 1 ────────────────────────────────────────────────────────────────────────────────────────────
 
