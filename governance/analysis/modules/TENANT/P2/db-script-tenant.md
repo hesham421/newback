@@ -354,3 +354,108 @@ written by B). DBF ids are unchanged (last DBF-TENANT-044).
 | Kind | Decision | Source |
 |---|---|---|
 | ADR | `TOKENS_INVALID_BEFORE` on `CORE_TENANT` instead of a token denylist table | ADR-TENANT-002 (ACCEPTED) |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — the idempotency table `CORE_IDEMPOTENCY_KEY` (owned by `com.erp.common.idempotency`; first consumer tenant create) (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V21__core_idempotency_key.sql`.
+The plan expected `V20__core_idempotency_key.sql`; packages D, B and E, executed first, took V16 … V20, so the
+number follows the execution order (plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-C4]`). Additive only
+(`MigrationNamingTest`): one new table, its sequence, constraints and indexes; no seed. The table is common's, not
+TENANT's (no ENT-TENANT id); it is registered here because tenant create is its first consumer and this repository
+has no COMMON analysis folder. DBF ids continue from DBF-TENANT-044; only its `TENANT_ID` carries one (the
+discriminator register).
+
+**AuditableEntity convention (the reference analysis' open point, decided here).** The plan lists nine columns. The
+entity is tenant-scoped, so it extends `AuditableEntity` (`TenantScopedEntityTest`, RULE-TENANT-010 — no new global
+entity) and the table carries the convention's audit columns (`db/migration/core/README.md` "Tenant columns"):
+`CREATED_BY`, `UPDATED_BY`, `UPDATED_AT` are added to the plan's list; `CREATED_AT` and `VERSION` were already in it.
+`CREATED_BY` is NOT NULL because it identifies the owner of the key (RULE-TENANT-026); the entity listener always
+fills it. **Final column list (12):** `ID`, `TENANT_ID`, `IDEMPOTENCY_KEY`, `ENDPOINT`, `REQUEST_HASH`,
+`RESPONSE_STATUS`, `RESPONSE_BODY`, `CREATED_BY`, `CREATED_AT`, `UPDATED_BY`, `UPDATED_AT`, `VERSION`.
+
+### Table CORE_IDEMPOTENCY_KEY — NEW (entity `com.erp.common.idempotency.IdempotencyKey`, extends `AuditableEntity`)
+| DBF id | Column | Type (postgresql16) | Entity field | Nullable | Default | Constraint / index | Migration |
+|---|---|---|---|---|---|---|---|
+| — (common) | ID | BIGINT | id | NOT NULL | `SEQ_CORE_IDEMPOTENCY_KEY` (`@SequenceGenerator`, allocationSize 1) | `PK_CORE_IDEMPOTENCY_KEY` | V21 |
+| DBF-TENANT-045 | TENANT_ID | BIGINT | tenantId (`AuditableEntity`, `@TenantId`) | NOT NULL | — (no default) | `FK_CORE_IDEMPOTENCY_KEY_TENANT` → `CORE_TENANT (ID)`; `IDX_CORE_IDEMPOTENCY_KEY_TENANT`; leads `UQ_CORE_IDEMPOTENCY_KEY` | V21 |
+| — (common) | IDEMPOTENCY_KEY | VARCHAR(64) | idempotencyKey | NOT NULL | — | part of `UQ_CORE_IDEMPOTENCY_KEY`; value `^[A-Za-z0-9._:-]{1,64}$` (RULE-TENANT-025, checked in code, no CHECK) | V21 |
+| — (common) | ENDPOINT | VARCHAR(200) | endpoint | NOT NULL | — | part of `UQ_CORE_IDEMPOTENCY_KEY`; the consumer's constant id, e.g. `POST /api/v1/platform/tenants` | V21 |
+| — (common) | REQUEST_HASH | VARCHAR(64) | requestHash | NOT NULL | — | lower-case hex HMAC-SHA256 of the canonical request body (RULE-TENANT-026) | V21 |
+| — (common) | RESPONSE_STATUS | INT | responseStatus | NOT NULL | — | the stored HTTP status (2xx once committed; `0` only while the claim's transaction is open, never committed) | V21 |
+| — (common) | RESPONSE_BODY | TEXT | responseBody | NULL | — | the JSON envelope as answered | V21 |
+| — (common) | CREATED_BY | VARCHAR(100) | createdBy (`GlobalAuditableEntity`) | NOT NULL | — | the key's owner (RULE-TENANT-026) | V21 |
+| — (common) | CREATED_AT | TIMESTAMPTZ | createdAt | NOT NULL | `now()` | `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` (retention scan) | V21 |
+| — (common) | UPDATED_BY | VARCHAR(100) | updatedBy | NULL | — | — | V21 |
+| — (common) | UPDATED_AT | TIMESTAMPTZ | updatedAt | NULL | — | — | V21 |
+| — (common) | VERSION | BIGINT | version (`@Version`) | NOT NULL | 0 | — | V21 |
+
+### Constraints, indexes, sequence
+| Name | Definition | Note |
+|---|---|---|
+| `PK_CORE_IDEMPOTENCY_KEY` | `PRIMARY KEY (ID)` | |
+| `FK_CORE_IDEMPOTENCY_KEY_TENANT` | `FOREIGN KEY (TENANT_ID) REFERENCES CORE_TENANT (ID)` | `FK_<TABLE>_TENANT` convention |
+| `UQ_CORE_IDEMPOTENCY_KEY` | `UNIQUE (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` | the plan's name; tenant-leading; serialises same-key requests (RULE-TENANT-026) |
+| `IDX_CORE_IDEMPOTENCY_KEY_TENANT` | `(TENANT_ID)` | `IDX_<TABLE>_TENANT` convention |
+| `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` | `(CREATED_AT)` | the plan's "index on `CREATED_AT`"; `IDX_<TABLE>_<COLUMN>` |
+| `SEQ_CORE_IDEMPOTENCY_KEY` | `START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE` | |
+No CHECK constraint (the key format and the 2xx status are decided in code; a CHECK on the status would refuse the
+claim's in-transaction placeholder). No seed row.
+
+### Script (`V21__core_idempotency_key.sql`)
+```sql
+CREATE SEQUENCE SEQ_CORE_IDEMPOTENCY_KEY START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+
+CREATE TABLE CORE_IDEMPOTENCY_KEY (
+  ID               BIGINT         NOT NULL,
+  TENANT_ID        BIGINT         NOT NULL,
+  IDEMPOTENCY_KEY  VARCHAR(64)    NOT NULL,
+  ENDPOINT         VARCHAR(200)   NOT NULL,
+  REQUEST_HASH     VARCHAR(64)    NOT NULL,
+  RESPONSE_STATUS  INT            NOT NULL,
+  RESPONSE_BODY    TEXT,
+  CREATED_BY       VARCHAR(100)   NOT NULL,
+  CREATED_AT       TIMESTAMPTZ    NOT NULL DEFAULT now(),
+  UPDATED_BY       VARCHAR(100),
+  UPDATED_AT       TIMESTAMPTZ,
+  VERSION          BIGINT         NOT NULL DEFAULT 0
+);
+
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT PK_CORE_IDEMPOTENCY_KEY PRIMARY KEY (ID);
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT FK_CORE_IDEMPOTENCY_KEY_TENANT FOREIGN KEY (TENANT_ID) REFERENCES CORE_TENANT (ID);
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY UNIQUE (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT);
+
+CREATE INDEX IDX_CORE_IDEMPOTENCY_KEY_TENANT     ON CORE_IDEMPOTENCY_KEY (TENANT_ID);
+CREATE INDEX IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT ON CORE_IDEMPOTENCY_KEY (CREATED_AT);
+```
+plus `COMMENT ON TABLE` and one `COMMENT ON COLUMN` for `IDEMPOTENCY_KEY`, `ENDPOINT`, `REQUEST_HASH`,
+`RESPONSE_STATUS`, `RESPONSE_BODY`.
+
+### TENANT_ID discriminator register — delta
+| DBF id | Table (owner module, entity) | Nullable | Column added | FK | Index | Tenant-leading uniques | Traces (REQ) |
+|---|---|---|---|---|---|---|---|
+| DBF-TENANT-045 | `CORE_IDEMPOTENCY_KEY` (common, `IdempotencyKey`) | NOT NULL | created with the table V21 | `FK_CORE_IDEMPOTENCY_KEY_TENANT` V21 | `IDX_CORE_IDEMPOTENCY_KEY_TENANT` V21 | `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` V21 | REQ-TENANT-016, -036 |
+Totals after V21: **23** `TENANT_ID` columns / FKs / `IDX_<TABLE>_TENANT` indexes (22 NOT NULL without default + 1
+nullable), **15** unique constraints containing `TENANT_ID` (+ `UQ_CORE_IDEMPOTENCY_KEY`) plus the 2 tenant-leading
+unique indexes, **22** tenant-aware entities (+ `IdempotencyKey`). `TenantSchemaIntegrationTest` asserts these
+numbers (22 → 23, 14 → 15, 21 → 22).
+
+### Retention (no schema object)
+Rows older than `erp.core.idempotency.retention` (24 h) are ignored at lookup and deleted by
+`IdempotencyKeyRetentionJob.run()`, tenant by tenant (`SELECT DISTINCT TENANT_ID FROM CORE_IDEMPOTENCY_KEY WHERE
+CREATED_AT < ?`, then `DELETE FROM CORE_IDEMPOTENCY_KEY WHERE TENANT_ID = ? AND CREATED_AT < ?` — RULE-TENANT-011);
+its trigger `erp.core.idempotency.retention-cron` (default `-`) fires only when the application enables scheduling.
+
+### DBF id definitions — delta
+**DBF-TENANT-045** — CORE_IDEMPOTENCY_KEY.TENANT_ID [ENT-TENANT-001 (FK target), REQ-TENANT-016, REQ-TENANT-036]
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | Idempotency keys in a core table behind the common mechanism, 24 h retention, first consumer tenant create | ADR-TENANT-003 |
+| DEFAULT | Audit columns per the tenant-scoped convention (entity extends `AuditableEntity`) | `db/migration/core/README.md`; RULE-TENANT-010 |
+
+### Deviations
+- Plan §5 C.4 / §11 `V20__core_idempotency_key.sql` → `V21__core_idempotency_key.sql` (execution order D, B, E before C4).
+- Plan §5 C.4's nine columns → twelve (+ `CREATED_BY` NOT NULL, `UPDATED_BY`, `UPDATED_AT`; `AuditableEntity`).

@@ -1302,3 +1302,154 @@ a repeated call writes a new cut-off and ends the sessions.
 | NEW | `POST /{id}/revoke-tokens` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); not offered for PLATFORM (422 `TENANT_REVOKE_TOKENS_PLATFORM`); show `sessionsTerminated` after success. |
 | NEW | Error codes `TENANT_TOKEN_REVOKED` (401, any request of a signed-in user), `TENANT_REVOKE_TOKENS_PLATFORM` and `TENANT_REVOKE_SESSIONS_FAILED` (500 on revoke-tokens: show the message and offer to repeat the action) (both languages). On 401 `TENANT_TOKEN_REVOKED` the shell clears the session and returns to the login page (as for any 401), optionally saying "your organisation's sessions were ended". |
 | CHANGED | After a tenant is re-activated, its users sign in again (their earlier tokens answer 401 `TENANT_TOKEN_REVOKED`); a suspension ends their sessions at once. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning: the optional `Idempotency-Key` header on `POST /api/v1/platform/tenants`, the common mechanism `com.erp.common.idempotency` and its table `CORE_IDEMPOTENCY_KEY` (plan §5 C.4, item 13)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+035, RULE 024 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 015, US 015,
+XM 003, DBF 044. This block mints **REQ/AC-TENANT-036, RULE-TENANT-025 … 026** (POL-TENANT-016 in P0,
+DBF-TENANT-045 in P2) and decision **ADR-TENANT-003** (the plan's own number, reserved for C.4). No ENT, XM, SCR-REQ,
+permission or page code is added. Migration `V21__core_idempotency_key.sql` (the plan expected V20; numbers
+re-derived at creation time, plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-C4]`). The mechanism belongs to
+`com.erp.common` (no module of its own and no COMMON analysis folder in this repository): its code-level rules are
+written **here**, in its first consumer's block (I6), and its consumer-facing contract in `docs/CONSUMING.md`.
+Rows marked **FE** are read by the frontend (plan §8 F3).
+
+### I1. Endpoints
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| CHANGED — **FE** | POST | `/api/v1/platform/tenants` | as before (`PLATFORM_TENANT_MANAGE`, caller's tenant = PLATFORM) | as before + optional request header `Idempotency-Key` (1 … 64 characters of `A-Z a-z 0-9 . _ : -`) | as before (201 `TenantResponse`); a **replay** answers the stored status (201) and the stored envelope (`data` and `timestamp` of the first answer) with the response header `Idempotent-Replayed: true`; a first answer carries no such header | as before + 400 · `IDEMPOTENCY_KEY_INVALID` (header present but not 1 … 64 allowed characters, an empty value included); 409 · `IDEMPOTENCY_KEY_CONFLICT` (the key is stored for this endpoint with another request body, or by another user) | REQ-TENANT-036; RULE-TENANT-025, -026 |
+
+Order of checks: security chain (401 / 403) → body validation (400 `VALIDATION_ERROR`, unchanged: the body is bound
+before the controller runs) → header format (400 `IDEMPOTENCY_KEY_INVALID`) → stored key (replay, or 409
+`IDEMPOTENCY_KEY_CONFLICT`) → the 1.2.0 create (authority, `TENANT_CODE_*`, SEC's password policy, provisioning).
+Without the header — or with `erp.core.idempotency.enabled=false`, which ignores it — the endpoint behaves exactly as
+in 1.2.0. The new codes are answered through the common mechanism, which the api-doc generator does not walk: the
+`@Operation` description of the create names them and the header (the header itself is a documented parameter).
+
+### I2. Requirements (§A4) — NEW
+
+### REQ-TENANT-036 — تجهيز متكرر بلا أثر / Idempotent provisioning
+Pattern    : optional feature
+Statement  : Where a `POST /api/v1/platform/tenants` request carries the header `Idempotency-Key`, the system shall run the create at most once per key: it shall store the successful (2xx) answer under (the caller's tenant, the key, the endpoint) together with a keyed hash of the request body, in the same transaction as the provisioning; a later request with the same key, the same body and the same user shall be answered with the stored status and body and the header `Idempotent-Replayed: true`, creating nothing; a request with the same key and another body, or from another user, shall be refused with 409 `IDEMPOTENCY_KEY_CONFLICT`; a refused or failed create stores nothing (the same key may be retried); a key is kept for `erp.core.idempotency.retention` (24 h), after which it is treated as unused and purged (RULE-TENANT-026).
+Traces     : US-TENANT-001 (CHANGED)
+Entities   : ENT-TENANT-001; `CORE_IDEMPOTENCY_KEY` (owned by `com.erp.common.idempotency`, no ENT id — I5)
+Rationale  : POL-TENANT-016, POL-TENANT-004; ADR-TENANT-003 — a client that timed out cannot tell whether the tenant was created; a retry must neither create a second tenant nor fail with `TENANT_CODE_DUPLICATE`
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4
+Priority   : MEDIUM
+#### AC-TENANT-036 — [REQ-TENANT-036]
+Given a platform operator and a fresh tenant code E
+When the operator posts the create of E with `Idempotency-Key: K`, then the same request again, then the same body with its fields in another order
+Then the first answer is 201 without `Idempotent-Replayed`, the next two are 201 with `Idempotent-Replayed: true` and the same `data` (same `id`), exactly one tenant E exists (one `CORE_TENANT` row, one administrator), and no answer and no stored row contains the administrator's password;
+the same key with another body (code F) answers 409 `IDEMPOTENCY_KEY_CONFLICT` and F does not exist; another platform operator using K answers 409 `IDEMPOTENCY_KEY_CONFLICT`;
+a key of 65 characters, a key with a space and an empty key answer 400 `IDEMPOTENCY_KEY_INVALID` and create nothing;
+a create refused with a key (400 `TENANT_CODE_INVALID`) stores nothing: the same key with a corrected body answers 201 without `Idempotent-Replayed`;
+two simultaneous first requests with the same key and body create exactly one tenant and both answer 201 with the same `id`, one of them replayed;
+a key whose row is older than the retention is treated as unused (the same key with another body creates that tenant), and `IdempotencyKeyRetentionJob.run()` deletes every row older than the retention, tenant by tenant;
+a key row of another tenant with the same key and endpoint is never seen by PLATFORM (the request provisions);
+without the header the 1.2.0 behaviour is unchanged (a second create of E answers 409 `TENANT_CODE_DUPLICATE`)
+
+### I3. Business rules (§A5) — NEW
+
+### RULE-TENANT-025 — صيغة مفتاح عدم التكرار / Idempotency-Key format
+Scope      : `POST /api/v1/platform/tenants` (every consumer of the mechanism)
+Trigger    : a request carrying the header `Idempotency-Key`, the mechanism enabled
+Statement  : The key shall match `^[A-Za-z0-9._:-]{1,64}$` (a UUID, a ULID or any client-chosen token fits; `VARCHAR(64)` stores it verbatim, case-sensitive); otherwise — an empty value, a 65th character, a space or any other character — the system shall refuse the request with 400 `IDEMPOTENCY_KEY_INVALID` before anything is read or written. An absent header is not an error (1.2.0 behaviour).
+Data source: the request header
+Message    : ar: "ترويسة Idempotency-Key غير صالحة: استخدم من 1 إلى 64 حرفًا من الحروف اللاتينية والأرقام والرموز . _ : -" · en: "The Idempotency-Key header is invalid: use 1 to 64 characters among letters, digits and . _ : -"
+Traces     : REQ-TENANT-036
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4 ("≤ 64 chars"; the character set is decided here, ADR-TENANT-003)
+Decided by : `com.erp.common.idempotency.IdempotencyKeyDomain.assertKeyValid`
+
+### RULE-TENANT-026 — الإعادة والتعارض والاحتفاظ / Replay, conflict and retention
+Scope      : `CORE_IDEMPOTENCY_KEY` rows of the caller's tenant
+Trigger    : a valid `Idempotency-Key` on a consumer endpoint
+Statement  : A stored key is looked up by (current tenant, `IDEMPOTENCY_KEY`, `ENDPOINT`) — Hibernate's `@TenantId` restricts the lookup to the caller's tenant (PLATFORM for tenant create). A row whose `CREATED_AT` + retention is not after now is **expired**: it is deleted and the request is treated as new. A live row whose `REQUEST_HASH` equals the request's hash and whose `CREATED_BY` is the caller is **replayed** (stored `RESPONSE_STATUS`, stored envelope, `Idempotent-Replayed: true`; the operation does not run); any other live row answers 409 `IDEMPOTENCY_KEY_CONFLICT` (another body, or another user: a stored answer is never handed to a different user). Without a live row the operation runs in **one transaction** with the key's row: the row is inserted (claimed) first, so a concurrent request with the same key waits on `UQ_CORE_IDEMPOTENCY_KEY` until this transaction ends and then replays it (or, if it rolled back, runs itself); only a 2xx answer is stored (`RESPONSE_STATUS`, `RESPONSE_BODY` = the JSON envelope as answered) and commits with the provisioning; a non-2xx answer or an exception rolls the row back with the operation. The request hash is the hex HMAC-SHA256 of the canonical JSON of the bound request body (properties and map keys sorted, nulls written; headers are not part of it), keyed by a key derived from `erp.core.security.jwt.secret`.
+Data source: `CORE_IDEMPOTENCY_KEY` (I5); the authenticated username; `erp.core.idempotency.retention`
+Message    : (409) ar: "مفتاح Idempotency-Key مستخدم من قبل لطلب مختلف: أرسل مفتاحًا جديدًا لكل طلب جديد" · en: "This Idempotency-Key was already used for a different request: send a new key for a new request"
+Traces     : REQ-TENANT-036
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4; ADR-TENANT-003
+Decided by : `IdempotencyKeyDomain` (`isExpired`, `assertReplayableFor`, `isStorable`); applied by `com.erp.common.idempotency.IdempotentResponses`; purge by `IdempotencyKeyRetentionJob`
+
+### I4. Error codes — NEW (common mechanism; first consumer tenant create)
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `IDEMPOTENCY_KEY_INVALID` | 400 | `VALIDATION_ERROR` | `IdempotencyKeyDomain.assertKeyValid` (RULE-TENANT-025) | — (the key is never echoed) |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | `CONFLICT` | `IdempotencyKeyDomain.assertReplayableFor` (RULE-TENANT-026); also after two lost claim races in a row (a purge between them) | — |
+Constants in `com.erp.common.idempotency.IdempotencyErrorCodes` (the mechanism's own class, not `CommonErrorCodes`,
+which lists framework codes every endpoint can answer). Messages in `messages.properties` and
+`messages_ar.properties` (one `tenant-maturity C4` block each). No "in progress" code: a concurrent request with the
+same key waits for the first one's transaction (RULE-TENANT-026), so it is answered with the replay, never with a
+"try later".
+
+### I5. `CORE_IDEMPOTENCY_KEY` — NEW table (owned by `com.erp.common.idempotency`; first consumer tenant create)
+Entity `com.erp.common.idempotency.IdempotencyKey` **extends `AuditableEntity`** (tenant-scoped, `@TenantId` on
+`TENANT_ID`): the rows are tenant data (PLATFORM's, for tenant create), so `TenantScopedEntityTest` (RULE-TENANT-010)
+holds without a new global entity, and the table carries the convention's audit columns (`db/migration/core/README.md`
+"Tenant columns"). `CREATED_BY` doubles as the owner of the key (RULE-TENANT-026). No ENT-TENANT id (the table is not
+TENANT's); its `TENANT_ID` is DBF-TENANT-045 (the discriminator register, 22 → 23 columns). Fields: `id`, `tenantId`
+(inherited), `idempotencyKey` (≤ 64), `endpoint` (≤ 200, e.g. `POST /api/v1/platform/tenants`), `requestHash` (64 hex),
+`responseStatus`, `responseBody`, the inherited audit fields and `version`. Never exposed over HTTP, never audited (no
+`@Audited`: the response body stays out of `CORE_AUDIT_EVENT`), no permission. Physical names, widths and the DDL:
+`../P2/db-script-tenant.md` 1.3.0 package C4.
+
+### I6. The common mechanism `com.erp.common.idempotency` (where its code-level rules live)
+| Class | Role |
+|---|---|
+| `IdempotentResponses` (`@Component`) | the consumer's response helper: `craftResponse(idempotencyKey, endpoint, request, dataType, action)` — without a key (or disabled) it is `OperationCode.craftResponse(action.get())`; with one it validates, hashes, replays / refuses, or runs `action` inside the claim's transaction and stores a 2xx answer (RULE-TENANT-025, -026). Header constants `IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"`, `REPLAYED_HEADER = "Idempotent-Replayed"`. |
+| `IdempotencyKeyDomain` | the rules (plain class, no Spring/JPA): key format, expiry, replay-or-conflict, what is storable |
+| `IdempotencyKey`, `IdempotencyKeyRepository` | the entity and its repository (`findByIdempotencyKeyAndEndpoint`, `deleteExpired` by id) — private to the mechanism |
+| `IdempotencySettings` | `enabled`, `retention` and the HMAC key, built by `ErpCoreAutoConfiguration` from `ErpCoreProperties` (common stays free of any `com.erp` import outside `com.erp.common`) |
+| `IdempotencyKeyRetentionJob` (`@Component`) | `run()` deletes rows older than the retention, tenant by tenant, with plain JDBC naming `TENANT_ID` (RULE-TENANT-011; a documented `RAW_JDBC_CLASSES` entry of `CoreLibraryRulesArchTest`, the `NotificationRequeueJob` precedent): `SELECT DISTINCT TENANT_ID … WHERE CREATED_AT < ?`, then `DELETE … WHERE TENANT_ID = ? AND CREATED_AT < ?`; `@Scheduled(cron = "${erp.core.idempotency.retention-cron:-}")` (the `AuditRetentionJob` pattern: the bean is always present, the trigger fires only when the application enables scheduling) |
+| `IdempotencyErrorCodes` | `IDEMPOTENCY_KEY_INVALID`, `IDEMPOTENCY_KEY_CONFLICT` |
+The mechanism imports nothing from `com.erp.tenant` (or any module): the tenant comes from Hibernate's `@TenantId`
+(the request's `TenantContext`), the user from `SecurityContextHelper`. A consumer passes a constant endpoint id and
+its bound request; the operation must run in the caller's transaction (a `@Transactional` service method joins the
+claim's transaction; work committed in its own `REQUIRES_NEW` transactions would not be covered atomically — a later
+consumer is checked for that, ADR-TENANT-003).
+
+### I7. Configuration — NEW (`erp.core.idempotency.*`, `ErpCoreProperties.Idempotency`)
+| Property | Default | What |
+|---|---|---|
+| `erp.core.idempotency.enabled` | `true` | `false` ignores the header everywhere (1.2.0 behaviour; no row is read or written) |
+| `erp.core.idempotency.retention` | `24h` | how long a stored answer is replayed; must be positive (startup fails otherwise) |
+| `erp.core.idempotency.retention-cron` | `-` (off) | cron of the purge job's own trigger; fires only in an application that enables scheduling |
+
+### I8. Dependencies (§A8) — NEW / CHANGED
+| Kind | Surface | Owner | Used by |
+|---|---|---|---|
+| NEW (consumed) | `com.erp.common.idempotency.IdempotentResponses` (common mechanism; not a module, so no XM id) | common | `PlatformTenantController.create` |
+| CHANGED | XM-TENANT-002 provisioning SPI | TENANT | unchanged contract; the contributors now run inside the idempotency claim's transaction when a key is sent (same connection, same commit) |
+`CORE_IDEMPOTENCY_KEY.TENANT_ID` → `CORE_TENANT(ID)` is an inbound HARD FK like the other discriminator columns
+(DBF-TENANT-045), not an XM.
+
+### I9. Secrets and audit
+| Item | Decision |
+|---|---|
+| `RESPONSE_BODY` of tenant create | the `TenantResponse` envelope: no administrator password, no administrator username, no token cut-off (checked by AC-TENANT-036) |
+| `REQUEST_HASH` | covers `adminPassword` (a different password is a different request), as a **keyed** HMAC: not reversible, and not checkable offline without the server secret (a plain SHA-256 of a body whose other fields are known would be a fast password verifier) |
+| Logs | the mechanism logs the endpoint and the outcome (stored / replayed / conflict), never the body, the hash or the key |
+| Audit | a replay records nothing (nothing happened); the create's own audit rows are written once, by the first request |
+
+### I10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-003 — idempotency keys in `CORE_IDEMPOTENCY_KEY` (common), 24 h retention, first consumer tenant create. |
+| CHANGED (plan) | Plan §5 C.4 lists nine columns; the table also carries `CREATED_BY` (NOT NULL), `UPDATED_BY`, `UPDATED_AT` because its entity extends `AuditableEntity` (the tenant-scoped convention; `TenantScopedEntityTest`). 12 columns (I5, P2). |
+| CHANGED (plan) | Migration `V20__core_idempotency_key.sql` → `V21__core_idempotency_key.sql` (execution order). |
+| NEW (decision) | Only 2xx answers are stored, in the operation's own transaction; failures leave no row (a retry re-executes, which is safe because the failed create left nothing behind). |
+| NEW (decision) | Concurrency: no "in progress" state and no `IDEMPOTENCY_KEY_IN_PROGRESS` code — the claim row's unique index serialises same-key requests; the second one replays the first. |
+| NEW (decision) | The hash is a keyed HMAC-SHA256 over the canonical JSON of the bound body (not the raw bytes: whitespace and property order do not make a new request; unknown properties are dropped by binding). |
+| NEW (decision) | A stored key is replayed only to the user who stored it; another user → 409 (the same namespace per tenant and endpoint, as the plan's unique constraint has it). |
+| NEW (decision) | Expired rows are ignored at lookup as well as purged, so the 24 h window holds even when the application never schedules the job. |
+| NEW (decision) | The controller passes the header to the common helper (`IdempotentResponses`, a response helper beside `OperationCode`); the service and its `@PreAuthorize` are unchanged. A replay runs before the service's authority check: the stored answer goes only to its own user (RULE-TENANT-026), who held the authority when it was stored. |
+| CHANGED (C12 follow-up) | REQ-TENANT-035 failure path: if recording the PLATFORM `TOKENS_REVOKED` row ("sessions NOT terminated") fails too, the failure is logged and attached as suppressed, and the call still answers 500 `TENANT_REVOKE_SESSIONS_FAILED` (its cause is the session failure) — before, an audit failure replaced the answer. |
+
+### I11. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW — optional | The "create tenant" form may send `Idempotency-Key` (a UUID generated when the form opens, reused for every retry of that submission): a retry after a timeout then answers the first result (`Idempotent-Replayed: true`) instead of 409 `TENANT_CODE_DUPLICATE`. A new submission (changed form) needs a new key, or it answers 409 `IDEMPOTENCY_KEY_CONFLICT`. |
+| NEW | Error codes `IDEMPOTENCY_KEY_INVALID` (400) and `IDEMPOTENCY_KEY_CONFLICT` (409), both languages. |
+| NOTE | Core configures no CORS: an application serving the frontend from another origin must allow the request header `Idempotency-Key` and expose `Idempotent-Replayed`. |

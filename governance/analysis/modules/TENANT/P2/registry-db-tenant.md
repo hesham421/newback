@@ -163,3 +163,31 @@ XM index — delta
 | CHANGED | XM-TENANT-001 | crossmodule read (exposed) | + `TenantLookupApi.isActive(Long)` → `CORE_TENANT.STATUS_CODE` (consumer NOTIF) | IMPLEMENTED (1.3.0) |
 
 Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003 (unchanged)
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — the idempotency table `CORE_IDEMPOTENCY_KEY` (common; first consumer tenant create)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C4).
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| NEW (owned by common, registered here) | CORE_IDEMPOTENCY_KEY | — (`com.erp.common.idempotency.IdempotencyKey`) | tenant-scoped (`TENANT_ID` FK) | DBF-TENANT-045 (its `TENANT_ID` only) | V21__core_idempotency_key.sql |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-045 | CORE_IDEMPOTENCY_KEY.TENANT_ID | BIGINT | NOT NULL | `FK_CORE_IDEMPOTENCY_KEY_TENANT`; leads `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` | `IDX_CORE_IDEMPOTENCY_KEY_TENANT` | V21; common/domain/AuditableEntity.java (`@TenantId`) |
+
+Constraints — delta: `PK_CORE_IDEMPOTENCY_KEY`, `FK_CORE_IDEMPOTENCY_KEY_TENANT`, `UQ_CORE_IDEMPOTENCY_KEY` (V21).
+Indexes — delta: `IDX_CORE_IDEMPOTENCY_KEY_TENANT`, `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` (V21).
+Sequences — delta: `SEQ_CORE_IDEMPOTENCY_KEY` (V21; owned by common).
+Counts after V21: 23 discriminator columns / FKs / indexes; 15 tenant-leading unique constraints + 2 tenant-leading
+unique indexes (`TenantSchemaIntegrationTest`).
+
+XM index — delta: none (the FK is an inbound discriminator, DBF-TENANT-045).
+Last DBF: DBF-TENANT-045 · Last XM: XM-TENANT-003
+
+Event
+"P2 1.3.0 (package C4): TENANT — 1 own table + 1 registered common table, 2 sequences, 45 DBF (22 own + 23 discriminator), 3 XM"

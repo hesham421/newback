@@ -168,3 +168,32 @@ PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5).
 
 RESOLVED DECISIONS — delta: 2 · token cut-off vs `jti` denylist → per-tenant cut-off (ADR-TENANT-002). POLICIES
 OWNED — delta: + POL-TENANT-015.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Table | Note | Source |
+|---|---|---|---|
+| NEW (owned by common, registered here) | `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`) | mechanism of `com.erp.common.idempotency`; tenant create is its first consumer; tenant-scoped (`TENANT_ID` FK, DBF-TENANT-045; entity extends `AuditableEntity`) | `../P1/srs-tenant.md` 1.3.0 I5; ADR-TENANT-003 |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | common | mechanism | `com.erp.common.idempotency.IdempotentResponses` (`Idempotency-Key`, `Idempotent-Replayed`, `IDEMPOTENCY_KEY_INVALID`, `IDEMPOTENCY_KEY_CONFLICT`) | I6, I8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| CHANGED | `POST /api/v1/platform/tenants` + optional `Idempotency-Key` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | I1 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged.
+
+AUTO-DECISIONS — delta: `AUTO: CORE_IDEMPOTENCY_KEY is registered in TENANT's P2 although common owns it — FROM:
+plan §5 C.4 ("lives in com.erp.common.idempotency (mechanism) + tenant (first consumer)") and the absence of a
+COMMON analysis folder in this repository — IF WRONG: move the rows to a COMMON folder when one is created; the
+physical names do not change.`
+
+RESOLVED DECISIONS — delta: 3 · where idempotency keys live → `CORE_IDEMPOTENCY_KEY` (common), 24 h (ADR-TENANT-003).
+POLICIES OWNED — delta: + POL-TENANT-016.

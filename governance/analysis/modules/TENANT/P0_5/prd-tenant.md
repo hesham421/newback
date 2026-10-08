@@ -283,3 +283,24 @@ Every policy POL-TENANT-001 … 015 appears in at least one row (015 → US-003,
 
 APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the story is IMPLEMENTED with
 package C12 and checked against the code in its check commit.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No new story. CHANGED behaviour of an existing story
+| Story | Delta | Source |
+|---|---|---|
+| US-TENANT-001 provision a tenant | the create request may carry `Idempotency-Key`: a retry with the same key and body replays the first answer (`Idempotent-Replayed: true`) and creates nothing; another body under the same key → 409 `IDEMPOTENCY_KEY_CONFLICT`; keys expire after 24 h | REQ-TENANT-036; POL-TENANT-016 |
+
+TRACEABILITY — delta
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-001 (CHANGED) | + POL-TENANT-016 | REQ-TENANT-036 |
+Every policy POL-TENANT-001 … 016 appears in at least one row (016 → US-001).
+
+THE PROVISIONING STORY — delta: step 1 (the operator posts the tenant) may carry `Idempotency-Key`; when it does, the
+stored answer commits with the tenant in step 4's transaction; nothing else changes.
+
+APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the story change is IMPLEMENTED
+with package C4 and checked against the code in its check commit.
