@@ -76,14 +76,19 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `GET /api/v1/tenant/me` (any authenticated caller, staff or customer, the token's tenant) and the anonymous
   `GET /api/v1/public/tenants/{tenantCode}/branding` (tenant from the path; 404 `TENANT_NOT_FOUND`, 403
   `TENANT_SUSPENDED`; rate-limited per client address, `erp.core.tenant.public-branding-rate-limit.capacity` /
-  `period`, default 60 per minute, 429 `TENANT_BRANDING_RATE_LIMITED`). Migration `V20__tenant_branding.sql`
+  `period`, default 60 per minute, IPv6 counted by /64, 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After`).
+  Migration `V20__tenant_branding.sql`
   (`LOGO_FILE_ID`, `BRAND_COLOR`, `CHK_CORE_TENANT_BRAND_COLOR`; no registry rows).
 
 ### Changed
 - [TM-E] TENANT: `TenantResponse` carries `logoUrl` and `brandColor`; the `erp.core.tenant.path-tenant-paths` default
   adds `/api/v1/public/tenants/{tenantCode}/branding` (an application that replaces the list keeps the public branding
-  only if it lists the path). SEC: `GET /api/v1/tenant/me` is served to a CUSTOMER token on the core chain and stays
-  reachable during a pending forced password change (RULE-SEC-059).
+  only if it lists the path). SEC: `GET /api/v1/tenant/me` (GET only) is served to a CUSTOMER token on the core chain
+  and stays reachable during a pending forced password change (RULE-SEC-059).
+- [TM-E] Tests only: every cached Spring test context now uses a Hikari pool of 4 (`application-test.properties`),
+  so the contexts fit the test database's 100 connections with headroom (with the default 10 each, one more context
+  failed with "too many clients"). The api-doc generator no longer reads string literals as code when it looks for a
+  mapping's Java method.
 - [TM-B] TENANT: suspending a tenant (`PATCH /api/v1/platform/tenants/{id}/status`, `SUSPENDED`) now needs a
   `reason` of 3 to 500 characters (400 `TENANT_SUSPENSION_REASON_REQUIRED` otherwise; PLATFORM still answers 422
   first); the response records `suspendedAt`, `suspendedBy`, `suspensionReason`, cleared again on activation.

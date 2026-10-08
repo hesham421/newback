@@ -8,9 +8,9 @@
 
 ## GET /api/v1/public/tenants/{tenantCode}/branding
 
-**Get a tenant's branding by its code, before sign-in**
+**Get a tenant's public branding by its code**
 
-No token, no header: the tenant comes from the path; unknown: 404 TENANT_NOT_FOUND, suspended: 403 TENANT_SUSPENDED. Rate-limited per client address (capacity per period, default 60 per minute), else 429 TENANT_BRANDING_RATE_LIMITED - العلامة العامة للمستأجر برمزه
+No token, no header: the tenant comes from the path (unknown 404 TENANT_NOT_FOUND, suspended 403 TENANT_SUSPENDED); at most erp.core.tenant.public-branding-rate-limit.capacity calls per period and client address (IPv6 by /64), else 429 TENANT_BRANDING_RATE_LIMITED with Retry-After - العلامة العامة للمستأجر برمزه
 
 Operation ID: `getPublicTenantBranding`
 

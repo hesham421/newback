@@ -193,3 +193,31 @@ in `TenantErrorCodes`, both bundles, `LocalizedException` only), `gov-enforce-ca
   ENT-002, SCR-REQ-002, XM-004, DBF-045, ADR-TENANT-002 (C.2), 003 (C.4), 004 (C.6) — 005 used; SEC unchanged
   (REQ-092, AC-098, RULE-063, ENT-015, DBF-124, XM-007, ADR-069); FILE RULE-011, XM-003, ADR-009; NOTIF RULE-024,
   XM-004. HTTP: TC-CORE-TENANT-047, TC-CORE-PLATFORM-006, TC-CORE-SEC-056.
+
+## Review round 1
+
+Verdict PASS (106/106 probes, P-LIVE 192/192, clean trial merge; evidence `rev-e/`) with one MEDIUM and four LOW
+items plus two notes; fixed on the same branch, analysis first (`e7a226a` amends the package-E block), no rebase.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1 | MEDIUM — test contexts' pools: ~10 cached contexts × Hikari's default 10 = the 100 `max_connections` of the embedded / CI database (pre-existing; E's first extra context failed with "too many clients") | `application-test.properties`: `spring.datasource.hikari.maximum-pool-size=4`, `minimum-idle=1` (`11fc2c6`); no test needed more. `TestPostgres.java:86` keeps `max_connections=100` (mirrors CI's `postgres:16`) | Scratch run (not committed) of the whole erp-core suite in alphabetical order with one deliberately added context last: `HEADROOM contexts=11 connectionsThisDb=27 clientBackends=27 max_connections=100` — the 11th context started; worst case 11 × 4 = 44. CHANGELOG (tests only), DEVIATIONS |
+| 2 | LOW — the realm skip of `/api/v1/tenant/me` ignored the method | `RealmEnforcementFilter` gains `realmNeutralGetPaths` (GET only, like `PasswordChangeRequiredFilter.EXEMPTIONS`); the core chain passes `List.of(TENANT_ME_PATH)` (`615612f`); SEC / TENANT analysis say "GET only" | `TenantBrandingIntegrationTest.tenantMe_…`: POST / PUT / PATCH with a customer token → 403 `REALM_MISMATCH` |
+| 3 | LOW — proxy guidance, 429 behaviour | CONSUMING: `server.forward-headers-strategy=native` + `server.tomcat.remoteip.internal-proxies`; `framework` trusts any client's `X-Forwarded-For` unless the proxy overwrites it; frontend shows the platform mark on 429 and honours `Retry-After`. **`Retry-After` added** (whole seconds until one request refills, bucket4j `ConsumptionProbe`) | `PublicBrandingRateLimitFilterTest` (1 190..1 200 s for 3/h), MockMvc test (`> 0`), TC-CORE-TENANT-046 (`>= 1`) |
+| 4 | LOW — bucket keys and eviction | IPv6 keyed by /64 (`InetAddress.ofLiteral`, no DNS; IPv4-mapped → IPv4); access-ordered map: idle buckets expire after `period`, at most 10 000 keys (LRU) instead of clear-all (`db0738d`). No new dependency (Caffeine is not on the classpath). `LoginRateLimiter` unchanged — recorded as a SEC follow-up in DEVIATIONS | `PublicBrandingRateLimitFilterTest` (5 tests: keys, same/other /64, expiry with a test clock, the 10 000 bound, defaults) |
+| 5 | LOW — api-doc generator read string literals as code | `security_extractor.blank_string_literals` (string, text-block and char literals blanked, offsets kept), used by `find_controller_for_endpoint` (`607e6f2`); two unit tests, the first fails on the old code. The natural `@Operation` wording is back | generator suite 67 OK; regeneration: only the public-branding endpoint's summary / description changed (diff against the previous regeneration), every other module unchanged |
+| 6 | optional — host-independent rate-limit wiring test | MockMvc over the context's `springSecurityFilterChain` with explicit `remoteAddr` (shared context, never skipped) replaces the IPv6-loopback test (`d084294`) | `TenantBrandingIntegrationTest.publicBranding_isRateLimitedPerClientAddress_unknownCodesIncluded` |
+| 7 | note — F2 caching | Confirmed: every upload is a new `FILE_DOCUMENT` with a new random slug, so a new logo never hides behind a cached URL; but public files carry `max-age=86400, public`, so an **old** URL (replaced or removed logo) may be served from a browser / CDN cache for up to 24 h — the shell must take `logoUrl` from `/tenant/me` / the public branding each time, never from a remembered URL. Written into srs-tenant.md E11 and CONSUMING | — |
+
+Verification after the fixes:
+- `mvn -q verify` (clean `target/`, code `d084294`): BUILD SUCCESS, JaCoCo met (erp-core lines 81.68 %). erp-core **607** /
+  0 / 0 / 0 (88 suites); erp-app-reference **10** / 0 / 0 / 0.
+- P-LIVE run **`261008055707`**, port 18106, fresh `erp_tm_e` (dropped afterwards): **192 PASS, 0 FAIL, 0 BLOCKED** —
+  `docs/test-api/results/20261008T055705-P-LIVE.json` / `-report.md`, replacing run `26100805267B`.
+- api-docs: regenerated (only `tenant/endpoints/tenant-branding.md` and the tenant catalog line changed);
+  `check_completeness`: 123/123, 0 missing / duplicated / stale; `check` verdicts unchanged (SEC, TENANT, MDL,
+  SEQUENCE, REPORT pass; the five known limitations).
+
+Notes for later (round 1): every cached test context now has a pool of 4 — a new `@TestPropertySource` variant is
+affordable again (about 14 more contexts fit); `RealmEnforcementFilter` has a method-specific skip list C or others can
+reuse; SEC's `LoginRateLimiter` still clears all buckets above 10 000 keys (follow-up).

@@ -150,7 +150,7 @@ should be `false`.
 | `erp.core.notif.requeue.enabled` / `stale-after-minutes` / `interval-ms` | `false` / `10` / `60000` | Requeue job for stale `QUEUED` notifications. It runs only if the application enables scheduling. **Enable it in production** (see §7). |
 | `erp.core.events.executor.*` | 4 / 16 / 500 / `erp-event-` | Event worker pool. |
 | `erp.core.security.customer-login-rate-limit.capacity` / `period` | `10` / `1m` | Customer login limit per `tenant:realm:username`. |
-| `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | `60` / `1m` | (1.3.0) Requests to the anonymous `GET /api/v1/public/tenants/{tenantCode}/branding` per client address (`getRemoteAddr()`: behind a proxy set `server.forward-headers-strategy`), counted before the tenant is looked up (unknown codes included); over it 429 `TENANT_BRANDING_RATE_LIMITED`. Per JVM. |
+| `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | `60` / `1m` | (1.3.0) Requests to the anonymous `GET /api/v1/public/tenants/{tenantCode}/branding` per client address (`getRemoteAddr()`; an IPv6 address counts by its /64), counted before the tenant is looked up (unknown codes included); over it 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` (seconds). Idle buckets expire after `period`, at most 10 000 addresses are tracked. Per JVM. Behind a reverse proxy see "Client address behind a proxy" below. |
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
 | `erp.core.report.max-export-rows` | `100000` | Export cap. Above it the export answers 422 `REPORT_EXPORT_TOO_LARGE`. |
 
@@ -324,7 +324,19 @@ Tenant branding (1.3.0): the platform operator sets a tenant's logo (`PUT` / `DE
 /api/v1/platform/tenants/{id}/logo`, ≤ 1 MB PNG / JPEG / WebP / plain SVG) and brand colour (`PATCH …/{id}/branding`);
 the UI reads them through `GET /api/v1/tenant/me` (any signed-in user, staff or customer) and, before login,
 `GET /api/v1/public/tenants/{tenantCode}/branding` (anonymous, rate-limited per address). `logoUrl` is a public file
-URL: show it with `<img>` only — an SVG logo is served as an attachment with `nosniff` and a sandbox CSP.
+URL: show it with `<img>` only — an SVG logo is served as an attachment with `nosniff` and a sandbox CSP. On 429
+from the public branding show the platform mark alone (no error toast) and do not ask again before `Retry-After`.
+Public files are cached for a day (`Cache-Control: max-age=86400, public`): every upload gets a new URL (new random
+slug), but a removed or replaced logo's old URL can still be served from a browser or CDN cache for up to 24 h — always
+take `logoUrl` from the branding answer, never from a remembered URL.
+
+**Client address behind a proxy.** The branding rate limit (and the audit log's IP) use
+`HttpServletRequest.getRemoteAddr()`. Behind a reverse proxy or load balancer that is the proxy's address, so every
+visitor would share one budget. Set `server.forward-headers-strategy=native` together with
+`server.tomcat.remoteip.internal-proxies` (a regular expression matching only your proxies' addresses): Tomcat then takes
+the client from `X-Forwarded-For` only when the request comes from a listed proxy. Do not use
+`server.forward-headers-strategy=framework` unless the proxy always overwrites `X-Forwarded-For`: Spring's
+`ForwardedHeaderFilter` trusts the header from any client, so a caller could pick its own address and escape the limit.
 
 ## 9. Audit
 

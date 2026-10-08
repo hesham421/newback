@@ -3067,6 +3067,8 @@ def test_tenant_046_public_branding_rate_limit(ctx):
           f"{calls} calls, last {r.status} E({r.code})")
     if limited is not None:
         st(limited, 429, "TENANT_BRANDING_RATE_LIMITED", what=f"call {calls}")
+        ra = limited.headers.get("retry-after") or ""
+        check(ra.isdigit() and int(ra) >= 1, "Retry-After header (whole seconds, >= 1)", ">= 1", ra)
         observe("calls before 429 (this run's earlier public-branding calls share the budget)", calls - 1)
     st(e_public(f"NOSUCH{ctx.RUN}"), 429, "TENANT_BRANDING_RATE_LIMITED", what="an unknown code is counted too (no 404)")
     st(api("GET", "/api/v1/tenant/me", t=ctx.T_D), 200, what="/tenant/me is not rate-limited")

@@ -151,5 +151,5 @@ Shared, module-independent mapping every business error code's `Status` resolves
 
 | Method | Path | Summary | Doc |
 |---|---|---|---|
-| GET | `/api/v1/public/tenants/{tenantCode}/branding` | Get a tenant's branding by its code, before sign-in | [getPublicTenantBranding](endpoints/tenant-branding.md#get-apiv1publictenantstenantcodebranding) |
+| GET | `/api/v1/public/tenants/{tenantCode}/branding` | Get a tenant's public branding by its code | [getPublicTenantBranding](endpoints/tenant-branding.md#get-apiv1publictenantstenantcodebranding) |
 | GET | `/api/v1/tenant/me` | Get the branding of my tenant | [getMyTenantBranding](endpoints/tenant-branding.md#get-apiv1tenantme) |
