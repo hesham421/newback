@@ -92,7 +92,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationTemplateController.create`, `NotificationTemplateService.create`, `NotificationTemplateService.normalize`, `NotificationTemplateDomain.create`, `NotificationTemplateService.assertAttachmentAvailable`, `NotificationTemplateMapper.toEntity`, `NotificationTemplateMapper.toResponse`, `NotificationTemplateDomain.isBlank`, `new NotificationTemplateDomain()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationTemplateController.create`, `NotificationTemplateService.create`, `NotificationTemplateService.normalize`, `NotificationTemplateDomain.create`, `NotificationTemplateService.assertAttachmentAvailable`, `NotificationTemplateMapper.toEntity`, `NotificationTemplateMapper.toResponse`, `new NotificationTemplateDomain()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -349,7 +349,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationTemplateController.update`, `NotificationTemplateService.update`, `NotificationTemplateDomain.from`, `NotificationTemplateService.assertAttachmentAvailable`, `NotificationTemplateMapper.updateEntityFromRequest`, `NotificationTemplateMapper.toResponse`, `NotificationTemplateDomain.assertBilingualBody`, `new NotificationTemplateDomain()`, `NotificationTemplateDomain.isBlank`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `NotificationTemplateController.update`, `NotificationTemplateService.update`, `NotificationTemplateDomain.from`, `NotificationTemplateService.assertAttachmentAvailable`, `NotificationTemplateMapper.updateEntityFromRequest`, `NotificationTemplateMapper.toResponse`, `NotificationTemplateDomain.assertBilingualBody`, `new NotificationTemplateDomain()`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

@@ -13,6 +13,7 @@ import com.erp.events.DomainEventPublisher;
 import com.erp.notif.crossmodule.DispatchCommand;
 import com.erp.notif.crossmodule.NotificationDispatchApi;
 import com.erp.sec.domain.CustomerVerifyTokenDomain;
+import com.erp.sec.domain.PasswordPolicy;
 import com.erp.sec.domain.PasswordResetTokenDomain;
 import com.erp.sec.domain.UserDomain;
 import com.erp.sec.dto.ConfirmationResponse;
@@ -105,6 +106,10 @@ public class CustomerAccountService {
     private static final String RESET_COMPLETE_AR = "تم تحديث كلمة المرور";
     private static final String RESET_COMPLETE_EN = "Your password has been updated";
 
+    /** Request fields named by SEC-400-PASSWORD-POLICY (review round 1, BCrypt byte limit). */
+    private static final String FIELD_PASSWORD = "password";
+    private static final String FIELD_NEW_PASSWORD = "newPassword";
+
     private final UserRepository userRepository;
     private final CustomerVerifyTokenRepository verifyTokenRepository;
     private final PasswordResetTokenRepository resetTokenRepository;
@@ -127,6 +132,9 @@ public class CustomerAccountService {
         boolean emailTaken = userRepository.existsByEmailAndRealm(request.getEmail(), User.REALM_CUSTOMER);
         UserDomain.createCustomer(request.getEmail(), emailTaken);
 
+        // review round 1 — BCrypt hashes at most 72 bytes: refuse a longer password with 400, not a 500
+        PasswordPolicy customerPolicy = PasswordPolicy.CUSTOMER;
+        customerPolicy.assertAcceptable(FIELD_PASSWORD, request.getPassword());
         User saved = userRepository.save(mapper.toEntity(request, passwordEncoder.encode(request.getPassword())));
 
         String rawToken = UUID.randomUUID().toString();
@@ -211,6 +219,7 @@ public class CustomerAccountService {
             .accessToken(jwtTokenIssuer.issue(user, tokenRef, now))
             .tokenType(TOKEN_TYPE_BEARER)
             .expiresIn(jwtTokenIssuer.getExpiresInSeconds())
+            .passwordChangeRequired(Boolean.FALSE) // tenant-maturity D: customers are never flagged
             .build());
     }
 
@@ -251,6 +260,8 @@ public class CustomerAccountService {
         PasswordResetTokenDomain.from(token).assertUsable(now, User.REALM_CUSTOMER, token.getUser().getRealm());
 
         User user = token.getUser();
+        PasswordPolicy customerPolicy = PasswordPolicy.CUSTOMER;
+        customerPolicy.assertAcceptable(FIELD_NEW_PASSWORD, request.getNewPassword());
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         if (UserDomain.from(user).awaitsVerification()) {
             user.markVerified();

@@ -1,0 +1,40 @@
+{
+ "meta": {
+  "profile": "P-CAP",
+  "base": "http://localhost:18111",
+  "run": "2610081136C5",
+  "started": "2026-10-08T11:36:08",
+  "cap": 3,
+  "local_root": null,
+  "instance": "erp-app-reference jar, profile dev, port 18111, DB erp_tm_z, erp.core.report.max-export-rows=3",
+  "code_under_test": "tm/z-closure @ 454be7a",
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-08T11:36:08",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-REPORT-013": {
+   "tc": "TC-CORE-REPORT-013",
+   "test": "test_report_013_export_cap",
+   "profile": "P-CAP",
+   "checks": [
+    {
+     "ok": true,
+     "what": "export with the cap at 3",
+     "expected": "200",
+     "observed": "200 · ﻿Id,Label\r\n1,alpha\r\n2,بيتا\r\n3,\"gamma, delta\"\r\n",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}"
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.27
+  }
+ }
+}

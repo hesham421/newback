@@ -44,6 +44,7 @@ import time
 import traceback
 import urllib.parse
 import uuid
+import zipfile
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -144,6 +145,7 @@ class Resp:
             t = repr(self.body[:n])
         t = re.sub(r'"accessToken"\s*:\s*"[^"]+"', '"accessToken":"<redacted>"', t)
         t = re.sub(r'"token"\s*:\s*"[^"]+"', '"token":"<redacted>"', t)
+        t = re.sub(r'"downloadToken"\s*:\s*"[^"]+"', '"downloadToken":"<redacted>"', t)
         return t[:n]
 
 
@@ -279,6 +281,19 @@ PW = "Passw0rd!Tc1"
 
 def login_staff(tenant, username, password):
     return api("POST", "/api/v1/sec/auth/login", tc=tenant, body={"username": username, "password": password})
+
+
+def first_login(tenant, username, password):
+    """TM-D: an account an administrator created must change its password before anything else (RULE-SEC-058/059,
+    ADR-SEC-063). The fixture users' first sign-in does that change (to the same password, no reuse rule) with
+    the login's own token, which keeps working afterwards; the login response is returned as before."""
+    r = login_staff(tenant, username, password)
+    tok = (r.data or {}).get("accessToken")
+    if tok and (r.data or {}).get("passwordChangeRequired"):
+        c = api("PUT", "/api/v1/sec/me/password", t=tok, body={"currentPassword": password, "newPassword": password})
+        if c.status != 200:
+            raise Blocked(f"first-login password change of {username} failed: {c.status} {c.excerpt(200)}")
+    return r
 
 
 def tenant_body(ctx, code, admin, name_en):
@@ -670,7 +685,7 @@ def test_tenant_013_staff_user_fixtures(ctx):
     st(r, 201)
     ctx.BOB_ID = (r.data or {}).get("userPk")
     eq((r.data or {}).get("realm"), "STAFF", "bob data.realm")
-    r = login_staff(ctx.TA, f"alice-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"alice-{ctx.run}", PW)
     st(r, 200)
     if (r.data or {}).get("accessToken"):
         ctx.T_ALICE = r.data["accessToken"]
@@ -729,7 +744,7 @@ def test_sec_006_no_permission_user_refused(ctx):
     r = api("POST", "/api/v1/sec/users", t=ctx.T_PLAT,
             body=user_body(f"p-noperm-{ctx.run}", f"p-noperm-{ctx.run}@t.test", "ب", "No Perm"))
     st(r, 201)
-    r = login_staff("PLATFORM", f"p-noperm-{ctx.run}", PW)
+    r = first_login("PLATFORM", f"p-noperm-{ctx.run}", PW)
     st(r, 200)
     if (r.data or {}).get("accessToken"):
         ctx.T_NOPERM = r.data["accessToken"]
@@ -802,7 +817,7 @@ def limited_user(ctx):
     st(r, 201)
     uid = (r.data or {}).get("userPk")
     st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_A, body={"roleIds": [role]}), 200)
-    r = login_staff(ctx.TA, f"lim-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"lim-{ctx.run}", PW)
     st(r, 200, what="login lim-{run}")
     t = (r.data or {}).get("accessToken")
     if not t:
@@ -1224,6 +1239,443 @@ def test_notif_001_register_queues_verify_mail(ctx):
         eq(x.get("attempts"), 1, "attempts")
         eq(x.get("lastError"), "NOTIF_CHANNEL_UNAVAILABLE", "lastError")
         eq(x.get("sentAt"), None, "sentAt")
+
+
+# =============================================================================================
+# Phase 6b — role grant revoke (TM-G, erp-core 1.3.0): all in tenant B, so A's user/role
+# listings asserted by later phases are untouched
+# =============================================================================================
+RV_PERMS = {"SEC_ROLES": ["PERM_SEC_ROLES_VIEW", "PERM_SEC_ROLES_CREATE", "PERM_SEC_ROLES_UPDATE"],
+            "SEC_USERS": ["PERM_SEC_USERS_VIEW"]}
+
+
+def rv_registry(ctx):
+    """{pageCode: (module id, screen id, {permissionCode: action id})} of SEC_ROLES and SEC_USERS."""
+    if not ctx.has("RV_REG"):
+        ctx.RV_REG = {page: registry_ids(ctx, ctx.T_B, page, perms) for page, perms in RV_PERMS.items()}
+    return ctx.RV_REG
+
+
+def rv_role(ctx, tag, grants):
+    """A role of tenant B holding exactly `grants` = {pageCode: [permissionCode, VIEW first]}."""
+    reg = rv_registry(ctx)
+    r = api("POST", "/api/v1/sec/roles", t=ctx.T_B,
+            body={"code": f"TC_RV{tag}_{ctx.RUN}", "nameAr": "سحب", "nameEn": f"Revoke {tag}"})
+    st(r, 201, what=f"create role TC_RV{tag}_{{RUN}}")
+    role = (r.data or {}).get("rolePk")
+    if not role:
+        raise Blocked(f"role TC_RV{tag} not created")
+    modules = set()
+    for page, perms in grants.items():
+        mod_id, scr_id, actions = reg[page]
+        if mod_id not in modules:
+            st(api("POST", f"/api/v1/sec/roles/{role}/modules", t=ctx.T_B, body={"moduleId": mod_id}), 201)
+            modules.add(mod_id)
+        st(api("POST", f"/api/v1/sec/roles/{role}/screens", t=ctx.T_B, body={"screenId": scr_id}), 201)
+        for p in perms:
+            st(api("POST", f"/api/v1/sec/roles/{role}/actions", t=ctx.T_B, body={"actionId": actions.get(p)}), 201)
+    return role
+
+
+def rv_tree(ctx, role, token=None):
+    """{pageCode: (granted, sorted permission codes)} of the role's grant tree, plus its module codes."""
+    r = api("GET", f"/api/v1/sec/roles/{role}/grants", t=token or ctx.T_B)
+    st(r, 200, what=f"GET /roles/{role}/grants")
+    screens, modules = {}, {}
+    for m in (r.data or {}).get("modules") or []:
+        modules[m.get("code")] = m.get("granted")
+        for s in m.get("screens") or []:
+            screens[s.get("pageCode")] = (s.get("granted"), sorted(a.get("permissionCode") for a in s.get("actions") or []))
+    return screens, modules
+
+
+def rv_audit(ctx, event, role):
+    """The SEC audit-log rows of `event` whose targetRef is `<role>/…` (tenant B)."""
+    r = api("POST", "/api/v1/sec/audit-log/search", t=ctx.T_B,
+            body={"filters": [{"field": "eventTypeCode", "operator": "EQUALS", "value": event}], "size": 200})
+    st(r, 200, what=f"SEC audit-log search {event}")
+    return sorted(str(x.get("targetRef")) for x in r.content if str(x.get("targetRef") or "").startswith(f"{role}/"))
+
+
+@tc("TC-CORE-SEC-035")
+def test_sec_035_revoke_screen_cascades(ctx):
+    role = rv_role(ctx, "S", RV_PERMS)
+    mod_id, scr_id, actions = rv_registry(ctx)["SEC_ROLES"]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/screens/{scr_id}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 3, "data.revokedActionGrants")
+    screens, modules = rv_tree(ctx, role)
+    check("SEC_ROLES" not in screens, "SEC_ROLES is gone from the grant tree (screen and its actions)", "absent", screens)
+    eq(screens.get("SEC_USERS"), (True, ["PERM_SEC_USERS_VIEW"]), "SEC_USERS untouched")
+    eq(modules.get("SEC"), True, "the SEC module grant stays")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), sorted(f"{role}/{a}" for a in actions.values()),
+       "one ACTION_REVOKED row per cascaded action (N = 3)")
+    eq(rv_audit(ctx, "SCREEN_REVOKED", role), [f"{role}/{scr_id}"], "one SCREEN_REVOKED row (N + 1 = 4 rows)")
+
+
+@tc("TC-CORE-SEC-036")
+def test_sec_036_revoke_non_view_action(ctx):
+    role = rv_role(ctx, "A", {"SEC_ROLES": RV_PERMS["SEC_ROLES"]})
+    ctx.RV_ROLE_A = role
+    actions = rv_registry(ctx)["SEC_ROLES"][2]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_CREATE']}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 1, "data.revokedActionGrants")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, ["PERM_SEC_ROLES_UPDATE", "PERM_SEC_ROLES_VIEW"]), "SEC_ROLES keeps VIEW and UPDATE")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), [f"{role}/{actions['PERM_SEC_ROLES_CREATE']}"], "exactly one ACTION_REVOKED row")
+
+
+@tc("TC-CORE-SEC-037")
+def test_sec_037_revoke_view_cascades(ctx):
+    role = rv_role(ctx, "V", {"SEC_ROLES": RV_PERMS["SEC_ROLES"]})
+    ctx.RV_ROLE_V = role
+    actions = rv_registry(ctx)["SEC_ROLES"][2]
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"rv-{ctx.run}", f"rv-{ctx.run}@t.test", "سحب", "Revoke"))
+    st(r, 201, what="create rv-{run} in B")
+    uid = (r.data or {}).get("userPk")
+    st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_B, body={"roleIds": [role]}), 200)
+    r = first_login(ctx.TB, f"rv-{ctx.run}", PW)
+    st(r, 200, what="login rv-{run}")
+    t_rv = (r.data or {}).get("accessToken")
+    if not t_rv:
+        raise Blocked("no T_RV")
+    st(api("POST", "/api/v1/sec/roles/search", t=t_rv, body={"size": 10}), 200, what="T_RV holds PERM_SEC_ROLES_VIEW before")
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_VIEW']}", t=ctx.T_B)
+    st(r, 200)
+    eq((r.data or {}).get("revokedActionGrants"), 3, "data.revokedActionGrants (VIEW + CREATE + UPDATE)")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, []), "the screen grant stays, with no action left")
+    eq(rv_audit(ctx, "ACTION_REVOKED", role), sorted(f"{role}/{a}" for a in actions.values()), "three ACTION_REVOKED rows")
+    st(api("POST", "/api/v1/sec/roles/search", t=t_rv, body={"size": 10}), 403, "SEC-403-FORBIDDEN",
+       what="the same token on its next request: VIEW is gone")
+    m = api("GET", "/api/v1/sec/menu", t=t_rv)
+    st(m, 200, what="the session was not terminated")
+    pages = [s.get("pageCode") for mod in (m.data or []) for s in mod.get("screens") or []]
+    check("SEC_ROLES" in pages, "the menu still lists SEC_ROLES (the screen grant stays; revoke the screen to remove it)",
+          "SEC_ROLES listed", pages)
+
+
+@tc("TC-CORE-SEC-038")
+def test_sec_038_unknown_grant_404(ctx):
+    role = ctx.RV_ROLE_V
+    reg = rv_registry(ctx)
+    actions = reg["SEC_ROLES"][2]
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_CREATE']}", t=ctx.T_B), 404, "SEC-404-GRANT",
+       what="action grant already cascaded away")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/{reg['SEC_USERS'][1]}", t=ctx.T_B), 404, "SEC-404-GRANT",
+       what="screen never granted to the role")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/999999999", t=ctx.T_B), 404, "SEC-404-GRANT")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/999999999", t=ctx.T_B), 404, "SEC-404-GRANT")
+    st(api("DELETE", f"/api/v1/sec/roles/999999999/screens/{reg['SEC_ROLES'][1]}", t=ctx.T_B), 404, "SEC-404-ROLE")
+
+
+@tc("TC-CORE-SEC-039")
+def test_sec_039_other_tenants_role_404(ctx):
+    role = ctx.RV_ROLE_A
+    mod_id, scr_id, actions = rv_registry(ctx)["SEC_ROLES"]
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/screens/{scr_id}", t=ctx.T_A), 404, "SEC-404-ROLE")
+    st(api("DELETE", f"/api/v1/sec/roles/{role}/actions/{actions['PERM_SEC_ROLES_VIEW']}", t=ctx.T_A), 404, "SEC-404-ROLE")
+    screens, _ = rv_tree(ctx, role)
+    eq(screens.get("SEC_ROLES"), (True, ["PERM_SEC_ROLES_UPDATE", "PERM_SEC_ROLES_VIEW"]), "B's role is unchanged")
+
+
+@tc("TC-CORE-SEC-040")
+def test_sec_040_module_revoke_unchanged(ctx):
+    role = rv_role(ctx, "M", {"SEC_ROLES": RV_PERMS["SEC_ROLES"][:2], "SEC_USERS": RV_PERMS["SEC_USERS"]})
+    mod_id = rv_registry(ctx)["SEC_ROLES"][0]
+    r = api("DELETE", f"/api/v1/sec/roles/{role}/modules/{mod_id}", t=ctx.T_B)
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("revokedScreenGrants"), d.get("revokedActionGrants")), (2, 3), "data.revokedScreenGrants / revokedActionGrants")
+    screens, modules = rv_tree(ctx, role)
+    eq((screens, modules), ({}, {}), "the grant tree is empty")
+    eq(len(rv_audit(ctx, "MODULE_REVOKED", role)), 1, "one MODULE_REVOKED row")
+    eq(len(rv_audit(ctx, "SCREEN_REVOKED", role)), 2, "two SCREEN_REVOKED rows")
+    eq(len(rv_audit(ctx, "ACTION_REVOKED", role)), 3, "three ACTION_REVOKED rows")
+
+
+# ---------------------------------------------------------------------------------------------
+# TM-D (erp-core 1.3.0): passwords, forced change, staff /me, profile fields, photos — all in tenant B
+# (A's staff listing is asserted by TENANT-014 / REPORT-003). srs-sec.md 1.3.0 addendum §9.
+# ---------------------------------------------------------------------------------------------
+PWD_ADMIN_SET = "Admin-Set-Passw0rd1"
+PWD_OWN = "My-Own-Passw0rd2"
+
+
+def d_user(ctx, name, require=None, extra=None):
+    """A STAFF user `{name}-{run}` in B; `require` None leaves requireChangeAtNextLogin out (default TRUE)."""
+    body = user_body(f"{name}-{ctx.run}", f"{name}-{ctx.run}@t.test", "موظف", f"Staff {name}")
+    if require is not None:
+        body["requireChangeAtNextLogin"] = require
+    body.update(extra or {})
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=body)
+    st(r, 201, what=f"create {name}-{{run}} in B")
+    uid = (r.data or {}).get("userPk")
+    if not uid:
+        raise Blocked(f"no user {name}")
+    return uid, r
+
+
+def d_token(ctx, name, password):
+    r = login_staff(ctx.TB, f"{name}-{ctx.run}", password)
+    st(r, 200, what=f"login {name}-{{run}}")
+    tok = (r.data or {}).get("accessToken")
+    if not tok:
+        raise Blocked(f"no token for {name}")
+    return tok, r
+
+
+def d_photo(token, path, fname, content, ctype="image/png"):
+    return api("PUT", path, t=token, multipart=[("file", (fname, ctype, content))])
+
+
+@tc("TC-CORE-SEC-041")
+def test_sec_041_admin_set_password_forces_a_change(ctx):
+    uid, _ = d_user(ctx, "pwd", require=False)
+    ctx.PWD_ID = uid
+    t_old, _ = d_token(ctx, "pwd", PW)
+    r = api("PUT", f"/api/v1/sec/users/{uid}/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("userPk"), d.get("passwordChangeRequired"), d.get("sessionsTerminated")), (uid, True, 1),
+       "data.userPk / passwordChangeRequired / sessionsTerminated")
+    check(bool(d.get("passwordChangedAt")), "data.passwordChangedAt set", "present", d.get("passwordChangedAt"))
+    check(PWD_ADMIN_SET not in r.excerpt(2000) and "$2a$" not in r.excerpt(2000), "no secret in the response", "absent", "checked")
+    st(api("GET", "/api/v1/sec/me", t=t_old), 401, "SEC-401-INVALID-CREDENTIALS", what="the user's old session ended")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PW), 401, "SEC-401-INVALID-CREDENTIALS", what="old password refused")
+    t_new, r = d_token(ctx, "pwd", PWD_ADMIN_SET)
+    eq((r.data or {}).get("passwordChangeRequired"), True, "login data.passwordChangeRequired")
+    ctx.T_PWD = t_new
+    st(api("GET", "/api/v1/sec/menu", t=t_new), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    st(api("POST", "/api/v1/sec/users/search", t=t_new, body={"size": 5}), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    st(api("PATCH", "/api/v1/sec/me", t=t_new, body={"phone": "+966501234567"}), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED")
+    r = api("GET", "/api/v1/sec/me", t=t_new)
+    st(r, 200, what="GET /sec/me stays reachable")
+    eq((r.data or {}).get("passwordChangeRequired"), True, "/me data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-042")
+def test_sec_042_self_change_wrong_current_403(ctx):
+    r = api("PUT", "/api/v1/sec/me/password", t=ctx.T_PWD,
+            body={"currentPassword": "Not-The-Passw0rd", "newPassword": PWD_OWN})
+    st(r, 403, "SEC-403-PASSWORD-CURRENT-INVALID")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_PWD), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED", what="still flagged")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_ADMIN_SET), 200, what="password unchanged")
+
+
+@tc("TC-CORE-SEC-043")
+def test_sec_043_self_change_clears_the_flag_and_ends_other_sessions(ctx):
+    t_other, _ = d_token(ctx, "pwd", PWD_ADMIN_SET)
+    r = api("PUT", "/api/v1/sec/me/password", t=ctx.T_PWD,
+            body={"currentPassword": PWD_ADMIN_SET, "newPassword": PWD_OWN})
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("passwordChangeRequired"), False, "data.passwordChangeRequired")
+    check((d.get("sessionsTerminated") or 0) >= 2, "data.sessionsTerminated ≥ 2 (SEC-042's and this case's extra logins)",
+          ">=2", d.get("sessionsTerminated"))
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_PWD), 200, what="the same token now passes the gate")
+    st(api("GET", "/api/v1/sec/me", t=t_other), 401, "SEC-401-INVALID-CREDENTIALS", what="the other session ended")
+    r = login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_OWN)
+    st(r, 200)
+    eq((r.data or {}).get("passwordChangeRequired"), False, "login data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-044")
+def test_sec_044_admin_set_refusals(ctx):
+    me = api("GET", "/api/v1/sec/me", t=ctx.T_B)
+    st(me, 200, what="tb-admin's own id")
+    own = (me.data or {}).get("userPk")
+    st(api("PUT", f"/api/v1/sec/users/{own}/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET}),
+       422, "SEC-422-PASSWORD-SELF")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_B, body={"newPassword": "abcdefgh"})
+    st(r, 400, "SEC-400-PASSWORD-POLICY")
+    eq([f.get("field") for f in r.field_errors], ["newPassword"], "fieldErrors[*].field")
+    st(api("PUT", "/api/v1/sec/users/999999999/password", t=ctx.T_B, body={"newPassword": PWD_ADMIN_SET}),
+       404, "SEC-404-USER")
+    st(api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_A, body={"newPassword": PWD_ADMIN_SET}),
+       404, "SEC-404-USER", what="A's administrator on B's user")
+    st(login_staff(ctx.TB, f"pwd-{ctx.run}", PWD_OWN), 200, what="nothing changed")
+
+
+@tc("TC-CORE-SEC-045")
+def test_sec_045_my_photo_png_is_public(ctx):
+    content = png_bytes(45)
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "me.png", content)
+    st(r, 200)
+    url = (r.data or {}).get("photoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TB}/"), "data.photoUrl on the public file path of B", "prefix", url)
+    ctx.PHOTO_URL = url
+    g = api("GET", url)
+    eq((g.status, g.body), (200, content), "anonymous GET serves the bytes")
+    eq(g.headers.get("content-type"), "image/png", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("inline"), "Content-Disposition inline", "inline",
+          g.headers.get("content-disposition"))
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), url, "/me data.photoUrl")
+
+
+@tc("TC-CORE-SEC-046")
+def test_sec_046_photo_rejects_exe_and_svg(ctx):
+    exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff" + b"\x00" * 64
+    for fname, ctype, content in (("tool.exe", "application/octet-stream", exe),
+                                  ("logo.svg", "image/svg+xml", b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>'),
+                                  ("fake.png", "image/png", exe)):
+        r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", fname, content, ctype)
+        st(r, 400, "SEC-400-PHOTO-INVALID", what=f"PUT /me/photo {fname}")
+        eq([f.get("field") for f in r.field_errors], ["file"], f"{fname} fieldErrors[*].field")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), ctx.PHOTO_URL, "previous photo kept")
+
+
+@tc("TC-CORE-SEC-047")
+def test_sec_047_me_has_no_roles(ctx):
+    r = api("GET", "/api/v1/sec/me", t=ctx.T_PWD)
+    st(r, 200)
+    d = r.data or {}
+    check(not ({"roles", "permissions", "authorities", "passwordHash", "photoFileId"} & set(d)),
+          "no roles / permissions / authorities / hash / file id keys", "absent", sorted(d))
+    need = {"userPk", "username", "email", "fullNameAr", "fullNameEn", "phone", "jobTitleAr", "jobTitleEn",
+            "preferredLocale", "photoUrl", "passwordChangeRequired", "lastLoginAt", "tenant"}
+    check(need <= set(d), "profile keys present", sorted(need), sorted(d))
+    eq((d.get("tenant") or {}).get("code"), ctx.TB, "data.tenant.code")
+    eq((d.get("tenant") or {}).get("nameEn"), "Tenant B", "data.tenant.nameEn")
+    st(api("GET", "/api/v1/sec/me"), 401, "SEC-401-INVALID-CREDENTIALS", what="no token")
+
+
+@tc("TC-CORE-SEC-048")
+def test_sec_048_photo_over_one_megabyte_rejected(ctx):
+    big = png_bytes(48) + b"\x00" * (1024 * 1024)
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "big.png", big)
+    st(r, 400, "SEC-400-PHOTO-INVALID")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), ctx.PHOTO_URL, "previous photo kept")
+
+
+@tc("TC-CORE-SEC-049")
+def test_sec_049_put_user_profile_fields(ctx):
+    base = {"email": f"pwd-{ctx.run}@t.test", "fullNameAr": "موظف", "fullNameEn": "Staff pwd"}
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B,
+            body={**base, "phone": "+966 50 123 4567", "jobTitleEn": "Clerk", "preferredLocale": "ar"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("phone"), d.get("jobTitleEn"), d.get("preferredLocale")), ("+966 50 123 4567", "Clerk", "ar"),
+       "data.phone / jobTitleEn / preferredLocale")
+    eq(d.get("photoUrl"), ctx.PHOTO_URL, "data.photoUrl")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B, body={**base, "preferredLocale": "fr"})
+    st(r, 400, "VALIDATION_ERROR")
+    eq([f.get("field") for f in r.field_errors], ["preferredLocale"], "fieldErrors[*].field")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B, body=base)
+    st(r, 200, what="PUT without the new fields")
+    eq(((r.data or {}).get("phone"), (r.data or {}).get("preferredLocale")), ("+966 50 123 4567", "ar"),
+       "absent fields keep their values")
+    r = api("GET", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B)
+    eq(((r.data or {}).get("preferredLocale"), (r.data or {}).get("passwordChangeRequired")), ("ar", False),
+       "GET data.preferredLocale / passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-050")
+def test_sec_050_created_user_must_change_and_policy_applies(ctx):
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B,
+            body=user_body(f"weak-{ctx.run}", f"weak-{ctx.run}@t.test", "ض", "Weak", "abcdefgh"))
+    st(r, 400, "SEC-400-PASSWORD-POLICY")
+    eq([f.get("field") for f in r.field_errors], ["password"], "fieldErrors[*].field")
+    uid, r = d_user(ctx, "fresh", extra={"phone": "+966501234567", "preferredLocale": "en"})
+    d = r.data or {}
+    eq((d.get("passwordChangeRequired"), d.get("phone"), d.get("preferredLocale"), d.get("photoUrl")),
+       (True, "+966501234567", "en", None), "data.passwordChangeRequired / phone / preferredLocale / photoUrl")
+    check(bool(d.get("passwordChangedAt")), "data.passwordChangedAt set", "present", d.get("passwordChangedAt"))
+    r = login_staff(ctx.TB, f"fresh-{ctx.run}", PW)
+    st(r, 200)
+    eq((r.data or {}).get("passwordChangeRequired"), True, "login data.passwordChangeRequired")
+
+
+@tc("TC-CORE-SEC-051")
+def test_sec_051_photo_replace_remove_and_admin_photo(ctx):
+    r = d_photo(ctx.T_PWD, "/api/v1/sec/me/photo", "me2.png", png_bytes(51))
+    st(r, 200)
+    new_url = (r.data or {}).get("photoUrl")
+    check(new_url and new_url != ctx.PHOTO_URL, "a new URL", "differs", new_url)
+    st(api("GET", ctx.PHOTO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the replaced photo is withdrawn")
+    eq(api("GET", new_url).status, 200, "new URL served")
+    r = api("DELETE", "/api/v1/sec/me/photo", t=ctx.T_PWD)
+    eq(r.status, 204, "DELETE /me/photo status")
+    eq((api("GET", "/api/v1/sec/me", t=ctx.T_PWD).data or {}).get("photoUrl"), None, "/me data.photoUrl")
+    st(api("GET", new_url), 404, "FILE_DOCUMENT_NOT_FOUND", what="the removed photo is withdrawn")
+    r = d_photo(ctx.T_B, f"/api/v1/sec/users/{ctx.PWD_ID}/photo", "by-admin.jpg",
+                b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + bytes(range(64)), "image/jpeg")
+    st(r, 200, what="administrator sets B user's photo")
+    admin_url = (r.data or {}).get("photoUrl")
+    eq((api("GET", f"/api/v1/sec/users/{ctx.PWD_ID}", t=ctx.T_B).data or {}).get("photoUrl"), admin_url, "GET user data.photoUrl")
+    eq(api("GET", admin_url).headers.get("content-type"), "image/jpeg", "served as image/jpeg")
+    eq(api("DELETE", f"/api/v1/sec/users/{ctx.PWD_ID}/photo", t=ctx.T_B).status, 204, "DELETE /users/{id}/photo status")
+    st(d_photo(ctx.T_A, f"/api/v1/sec/users/{ctx.PWD_ID}/photo", "x.png", png_bytes(1)), 404, "SEC-404-USER",
+       what="A's administrator on B's user")
+
+
+@tc("TC-CORE-SEC-052")
+def test_sec_052_patch_me(ctx):
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD,
+            body={"phone": "+966 55 000 1111", "jobTitleAr": "محاسب", "jobTitleEn": "Accountant", "preferredLocale": "en"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("phone"), d.get("jobTitleEn"), d.get("preferredLocale"), d.get("fullNameEn")),
+       ("+966 55 000 1111", "Accountant", "en", "Staff pwd"), "data.phone / jobTitleEn / preferredLocale / fullNameEn")
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"preferredLocale": "fr"})
+    st(r, 400, "VALIDATION_ERROR")
+    eq([f.get("field") for f in r.field_errors], ["preferredLocale"], "fieldErrors[*].field")
+    r = api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"phone": ""})
+    st(r, 200)
+    eq(((r.data or {}).get("phone"), (r.data or {}).get("preferredLocale")), (None, "en"), "empty clears, absent keeps")
+    st(api("PATCH", "/api/v1/sec/me", t=ctx.T_PWD, body={"fullNameEn": "   "}), 400, "VALIDATION_ERROR")
+
+
+@tc("TC-CORE-SEC-053")
+def test_sec_053_password_change_mail_queued(ctx):
+    t = api("POST", "/api/v1/notifications/templates/search", t=ctx.T_B,
+            body={"filters": [{"field": "templateCode", "operator": "EQUALS", "value": "STAFF_PASSWORD_CHANGED"}]})
+    st(t, 200, what="B holds the STAFF_PASSWORD_CHANGED template (V17 / provisioning copy)")
+    tid = [x.get("id") for x in t.content]
+    eq(len(tid), 1, "one STAFF_PASSWORD_CHANGED template in B")
+    body = {"filters": [{"field": "recipientId", "operator": "EQUALS", "value": ctx.PWD_ID},
+                        {"field": "referenceType", "operator": "EQUALS", "value": "SEC_USER"}]}
+    r = poll(lambda: api("POST", "/api/v1/notifications/logs/search", t=ctx.T_B, body=body),
+             lambda r: r.status == 200 and len(r.content) >= 2
+             and all(x.get("notificationStatusId") not in ("PENDING", "QUEUED") for x in r.content), timeout=20)
+    st(r, 200)
+    rows = r.content
+    eq(len(rows), 2, "two rows: SEC-041's admin-set and SEC-043's self-change")
+    eq(sorted({(x.get("channelTypeId"), x.get("moduleCode"), x.get("templateId")) for x in rows}),
+       [("EMAIL", "SEC", tid[0] if tid else None)], "channel / module / template")
+    observe("STAFF_PASSWORD_CHANGED statuses", [x.get("notificationStatusId") for x in rows])
+
+
+@tc("TC-CORE-SEC-054")
+def test_sec_054_audit_rows(ctx):
+    def rows(action):
+        r = audit(ctx.T_B, entityType="SEC_USER", entityId=ctx.PWD_ID, action=action, size=50)
+        st(r, 200, what=f"audit {action}")
+        return r.content
+    set_rows = rows("PASSWORD_SET_BY_ADMIN")
+    eq([x.get("actor") for x in set_rows], ["tb-admin"], "PASSWORD_SET_BY_ADMIN actor")
+    eq([x.get("actor") for x in rows("PASSWORD_CHANGED")], [f"pwd-{ctx.run}"], "PASSWORD_CHANGED actor")
+    photo = rows("PROFILE_PHOTO_CHANGED")
+    eq(len(photo), 5, "PROFILE_PHOTO_CHANGED rows (SEC-045 set, SEC-051 replace, remove, admin set, admin remove)")
+    blob = json.dumps(set_rows + photo, ensure_ascii=False)
+    check(PWD_ADMIN_SET not in blob and PWD_OWN not in blob and "$2a$" not in blob, "no secret in the audit rows",
+          "absent", "checked")
+
+
+@tc("TC-CORE-SEC-055")
+def test_sec_055_passwords_over_72_bytes_refused(ctx):
+    ascii73 = "Aa1" + "x" * 70
+    arabic122 = "س" * 60 + "12"
+    exactly72 = "Aa1" + "x" * 69
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"long-{ctx.run}", f"long-{ctx.run}@t.test", "ط", "Long", ascii73))
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="create with 73 ASCII bytes")
+    eq([f.get("field") for f in r.field_errors], ["password"], "fieldErrors[*].field")
+    r = api("PUT", f"/api/v1/sec/users/{ctx.PWD_ID}/password", t=ctx.T_B, body={"newPassword": arabic122})
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="admin-set with 62 Arabic letters (122 bytes)")
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_B, body=user_body(f"b72-{ctx.run}", f"b72-{ctx.run}@t.test", "ط", "B72", exactly72))
+    st(r, 201, what="create with exactly 72 bytes")
+    st(login_staff(ctx.TB, f"b72-{ctx.run}", exactly72), 200, what="login with the 72-byte password")
 
 
 # =============================================================================================
@@ -2014,7 +2466,7 @@ def test_report_011_per_report_grant(ctx):
     st(r, 201)
     uid = (r.data or {}).get("userPk")
     st(api("PUT", f"/api/v1/sec/users/{uid}/roles", t=ctx.T_A, body={"roleIds": [role]}), 200)
-    r = login_staff(ctx.TA, f"rpt-{ctx.run}", PW)
+    r = first_login(ctx.TA, f"rpt-{ctx.run}", PW)
     st(r, 200)
     t = (r.data or {}).get("accessToken")
     ctx.T_RPT = t
@@ -2172,7 +2624,9 @@ def test_tenant_019_platform_protected(ctx):
 
 @tc("TC-CORE-TENANT-020")
 def test_tenant_020_suspend_c(ctx):
-    r = tstatus(ctx, ctx.C_ID, "SUSPENDED")
+    # TM-B: a suspension carries a reason (RULE-TENANT-016)
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.C_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": f"TC-CORE-TENANT-020 {ctx.RUN}"})
     st(r, 200)
     eq((r.data or {}).get("statusCode"), "SUSPENDED", "data.statusCode")
 
@@ -2199,6 +2653,765 @@ def test_tenant_024_reactivate(ctx):
     st(r, 200)
     eq((r.data or {}).get("statusCode"), "ACTIVE", "data.statusCode")
     st(login_staff(ctx.TC, "tc-admin", PW), 200)
+
+
+# =============================================================================================
+# Phase 11b — tenant level 1 (TM-B): profile, suspension facts, admin-reset, usage, on a fresh tenant D
+# =============================================================================================
+PW_RECOVERED = "Rec0vered-Tc9"
+USAGE_FIELDS = ("staffUsers", "customerUsers", "activeSessions", "fileDocuments", "fileBytes", "notificationsLast30Days")
+
+
+def usage_of(ctx, tid, token=None):
+    return api("GET", f"/api/v1/platform/tenants/{tid}/usage", t=token or ctx.T_PLAT)
+
+
+def admin_reset(ctx, tid, username, password, **extra):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/admin-reset", t=ctx.T_PLAT,
+               body={"username": username, "newPassword": password, **extra})
+
+
+@tc("TC-CORE-TENANT-027")
+def test_tenant_027_fresh_tenant_usage(ctx):
+    ctx.TD = f"TCD{ctx.RUN}"
+    r = api("POST", "/api/v1/platform/tenants", t=ctx.T_PLAT, body=tenant_body(ctx, ctx.TD, "td-admin", "Tenant D"))
+    st(r, 201, what="provision tenant D")
+    ctx.D_ID = (r.data or {}).get("id")
+    r = usage_of(ctx, ctx.D_ID)
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("id"), ctx.D_ID, "data.id")
+    eq({k: d.get(k) for k in USAGE_FIELDS},
+       {"staffUsers": 1, "customerUsers": 0, "activeSessions": 0, "fileDocuments": 0, "fileBytes": 0,
+        "notificationsLast30Days": 0}, "figures of a fresh tenant")
+    check(bool(d.get("collectedAt")), "collectedAt set", "set", d.get("collectedAt"))
+    st(usage_of(ctx, 999999999), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+
+
+@tc("TC-CORE-TENANT-028")
+def test_tenant_028_update_profile(ctx):
+    ctx.D_EMAIL = f"ops-{ctx.run}@t.test"
+    profile = {"nameAr": "مستأجر د", "nameEn": f"Tenant D {ctx.RUN}", "contactEmail": ctx.D_EMAIL,
+               "contactPhone": "+966 11 555 0100", "countryCode": "SA", "defaultLocale": "ar",
+               "timezone": "Asia/Riyadh", "notes": "TM-B"}
+    r = api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT,
+            body={**profile, "code": f"OTHER{ctx.RUN}", "statusCode": "SUSPENDED"})
+    st(r, 200)
+    d = r.data or {}
+    eq({k: d.get(k) for k in profile}, profile, "names and profile echoed")
+    eq((d.get("code"), d.get("statusCode")), (ctx.TD, "ACTIVE"), "code and statusCode unchanged")
+    check("tokensInvalidBefore" not in d, "no tokensInvalidBefore in the response", "absent", sorted(d))
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq({k: (g.data or {}).get(k) for k in profile}, profile, "GET shows the same")
+    s1 = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "countryCode", "operator": "EQUALS", "value": "SA"},
+        {"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("code") for x in s1.content], [ctx.TD], "search countryCode + code")
+    s2 = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "contactEmail", "operator": "EQUALS", "value": ctx.D_EMAIL}], "sortField": "countryCode"})
+    eq([x.get("code") for x in s2.content], [ctx.TD], "search contactEmail, sorted by countryCode")
+
+
+@tc("TC-CORE-TENANT-029")
+def test_tenant_029_update_refusals(ctx):
+    names = {"nameAr": "د", "nameEn": "D"}
+    st(api("PUT", "/api/v1/platform/tenants/999999999", t=ctx.T_PLAT, body=names), 404, "TENANT_NOT_FOUND",
+       what="unknown tenant")
+    for field, value in (("defaultLocale", "fr"), ("countryCode", "sau"), ("nameEn", "  ")):
+        r = api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT, body={**names, field: value})
+        st(r, 400, "VALIDATION_ERROR", what=f"{field}={value!r}")
+        check(field in [f.get("field") for f in r.field_errors], f"fieldErrors names {field}", field,
+              [f.get("field") for f in r.field_errors])
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq(((g.data or {}).get("countryCode"), (g.data or {}).get("defaultLocale")), ("SA", "ar"), "nothing changed")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_A, body=names), 403, "SEC-403-FORBIDDEN",
+       what="a tenant administrator is refused")
+
+
+@tc("TC-CORE-TENANT-030")
+def test_tenant_030_suspend_without_reason(ctx):
+    for body in ({"statusCode": "SUSPENDED"}, {"statusCode": "SUSPENDED", "reason": "ab"}):
+        r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body=body)
+        st(r, 400, "TENANT_SUSPENSION_REASON_REQUIRED", what=f"suspend with {body}")
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq(((g.data or {}).get("statusCode"), (g.data or {}).get("suspendedAt")), ("ACTIVE", None), "still ACTIVE, no facts")
+
+
+@tc("TC-CORE-TENANT-031")
+def test_tenant_031_suspend_records_facts(ctx):
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="td-admin signs in before the suspension")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    before = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
+    ctx.D_REASON = f"TM-B suspension {ctx.RUN}"
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": ctx.D_REASON})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("statusCode"), d.get("suspendedBy"), d.get("suspensionReason")), ("SUSPENDED", "admin", ctx.D_REASON),
+       "status and facts")
+    check(bool(d.get("suspendedAt")), "suspendedAt set", "set", d.get("suspendedAt"))
+    st(login_staff(ctx.TD, "td-admin", PW), 403, "TENANT_SUSPENDED", what="login refused")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 403, "TENANT_SUSPENDED", what="issued token refused")
+    since = before.strftime("%Y-%m-%dT%H:%M:%SZ")
+    s = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "suspendedAt", "operator": "GREATER_THAN_OR_EQUAL", "value": since},
+        {"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("code") for x in s.content], [ctx.TD], "search suspendedAt >= before")
+
+
+@tc("TC-CORE-TENANT-032")
+def test_tenant_032_activate_clears_facts(ctx):
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("statusCode"), d.get("suspendedAt"), d.get("suspendedBy"), d.get("suspensionReason")),
+       ("ACTIVE", None, None, None), "facts cleared")
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="login restored")
+    ctx.T_D = (r.data or {}).get("accessToken")
+
+
+@tc("TC-CORE-TENANT-033")
+def test_tenant_033_admin_reset_refusals(ctx):
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_D,
+            body=user_body(f"dclerk-{ctx.run}", f"dclerk-{ctx.run}@t.test", "كاتب", "Clerk D"))
+    st(r, 201, what="a role-less staff user in D")
+    st(admin_reset(ctx, ctx.D_ID, f"ghost-{ctx.run}", PW_RECOVERED), 404, "TENANT_ADMIN_NOT_FOUND", what="unknown user")
+    st(admin_reset(ctx, ctx.D_ID, f"dclerk-{ctx.run}", PW_RECOVERED), 422, "TENANT_ADMIN_NOT_SUPER", what="not super")
+    r = admin_reset(ctx, ctx.D_ID, "td-admin", "abcdefgh")
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="weak password")
+    eq([f.get("field") for f in r.field_errors], ["newPassword"], "fieldErrors[*].field")
+    st(admin_reset(ctx, 999999999, "td-admin", PW_RECOVERED), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    st(login_staff(ctx.TD, "td-admin", PW), 200, what="nothing changed: the old password still signs in")
+
+
+@tc("TC-CORE-TENANT-034")
+def test_tenant_034_admin_reset(ctx):
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="one more session of td-admin")
+    t_old = (r.data or {}).get("accessToken")
+    ctx.TD_ADMIN_ID = (api("GET", "/api/v1/sec/me", t=t_old).data or {}).get("userPk")
+    r = admin_reset(ctx, ctx.D_ID, "td-admin", PW_RECOVERED)
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("username"), "td-admin", "data.username")
+    check(isinstance(d.get("sessionsTerminated"), int) and d.get("sessionsTerminated") >= 2,
+          "data.sessionsTerminated >= 2 (TENANT-032's, TENANT-033's and this case's logins)", ">= 2", d.get("sessionsTerminated"))
+    check(PW_RECOVERED not in (r.body or b"").decode("utf-8", "replace"), "no password in the body", "absent", "checked")
+    st(api("GET", "/api/v1/sec/me", t=t_old), 401, what="the old token is refused")
+    st(login_staff(ctx.TD, "td-admin", PW), 401, what="the old password is refused")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="the new password signs in")
+    eq((r.data or {}).get("passwordChangeRequired"), True, "passwordChangeRequired")
+
+
+@tc("TC-CORE-TENANT-035")
+def test_tenant_035_admin_reset_audited(ctx):
+    r = first_login(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="first login after the reset (forced change done)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    a = audit(ctx.T_D, action="ADMIN_PASSWORD_RESET", size=50)
+    st(a, 200, what="D's audit log")
+    rows = a.content
+    eq([(x.get("actor"), x.get("actorRealm"), x.get("actorUserId"), x.get("entityType"), x.get("entityId"))
+        for x in rows], [("admin", "STAFF", None, "SEC_USER", str(ctx.TD_ADMIN_ID))], "one ADMIN_PASSWORD_RESET row")
+    blob = json.dumps(rows, ensure_ascii=False)
+    check(PW_RECOVERED not in blob and "$2a$" not in blob, "no secret in the audit row", "absent", "checked")
+    p = audit(ctx.T_PLAT, action="ADMIN_PASSWORD_RESET", entityId=ctx.TD_ADMIN_ID, size=50)
+    st(p, 200, what="PLATFORM's audit log")
+    eq(p.content, [], "the row is not written in PLATFORM")
+
+
+@tc("TC-CORE-TENANT-036")
+def test_tenant_036_usage_counts_only_that_tenant(ctx):
+    r = poll(lambda: usage_of(ctx, ctx.D_ID), lambda x: ((x.data or {}).get("notificationsLast30Days") or 0) >= 1, timeout=15)
+    st(r, 200)
+    d = r.data or {}
+    eq({k: d.get(k) for k in ("staffUsers", "customerUsers", "fileDocuments", "fileBytes")},
+       {"staffUsers": 2, "customerUsers": 0, "fileDocuments": 0, "fileBytes": 0}, "D's figures")
+    check((d.get("activeSessions") or 0) >= 1, "D activeSessions >= 1 (TENANT-035's session)", ">= 1", d.get("activeSessions"))
+    check((d.get("notificationsLast30Days") or 0) >= 1, "D notificationsLast30Days >= 1 (STAFF_PASSWORD_CHANGED)", ">= 1",
+          d.get("notificationsLast30Days"))
+    ra = usage_of(ctx, ctx.A_ID)
+    st(ra, 200, what="A's usage")
+    a = ra.data or {}
+    users = api("POST", "/api/v1/sec/users/search", t=ctx.T_A, body={"size": 1})
+    eq(a.get("staffUsers"), (users.data or {}).get("totalElements"), "A's staffUsers = A's staff user search total")
+    check((a.get("customerUsers") or 0) >= 1 and (a.get("fileDocuments") or 0) >= 1,
+          "A counts its own customers and documents", ">= 1 each", (a.get("customerUsers"), a.get("fileDocuments")))
+    st(usage_of(ctx, ctx.D_ID, token=ctx.T_A), 403, "SEC-403-FORBIDDEN", what="a tenant administrator is refused")
+
+
+@tc("TC-CORE-TENANT-037")
+def test_tenant_037_admin_reset_platform_refused_and_traced(ctx):
+    # review round 1: never on PLATFORM — not even the operator's own account (SEC RULE-SEC-057 stays whole)
+    st(admin_reset(ctx, 1, "admin", PW_RECOVERED), 422, "TENANT_ADMIN_RESET_PLATFORM", what="PLATFORM, own account")
+    st(login_staff("PLATFORM", "admin", ctx.ADMIN_PW), 200, what="the operator's password is unchanged")
+    a = audit(ctx.T_PLAT, action="TENANT_ADMIN_RESET", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+    st(a, 200, what="PLATFORM's audit log")
+    rows = a.content
+    eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+       [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))], "one TENANT_ADMIN_RESET row for tenant D")
+    summary = (rows[0].get("summaryEn") or "") if rows else ""
+    check("td-admin" in summary and ctx.TD in summary and "sessions terminated:" in summary,
+          "summary names the user, the tenant and the session count", "td-admin, $TD, sessions terminated", summary)
+    blob = json.dumps(rows, ensure_ascii=False)
+    check(PW_RECOVERED not in blob and "$2a$" not in blob, "no secret in the PLATFORM row", "absent", "checked")
+
+
+# =============================================================================================
+# Phase 11c — TM-E tenant branding (logo, brand colour, /tenant/me, public branding) on tenant D
+# =============================================================================================
+BRANDING_KEYS = ["brandColor", "code", "defaultLocale", "logoUrl", "nameAr", "nameEn"]
+PLAIN_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#1A2B3C"/></svg>'
+
+
+def e_logo(ctx, tid, fname, content, ctype="application/octet-stream", token=None):
+    return api("PUT", f"/api/v1/platform/tenants/{tid}/logo", t=token if token is not None else ctx.T_PLAT,
+               multipart=[("file", (fname, ctype, content))])
+
+
+def e_branding(ctx, tid, body, token=None):
+    return api("PATCH", f"/api/v1/platform/tenants/{tid}/branding", t=token if token is not None else ctx.T_PLAT,
+               body=body)
+
+
+def e_public(code):
+    return api("GET", f"/api/v1/public/tenants/{code}/branding")
+
+
+@tc("TC-CORE-TENANT-038")
+def test_tenant_038_logo_upload_shown_and_served(ctx):
+    content = png_bytes(38)
+    r = e_logo(ctx, ctx.D_ID, "brand.png", content, "image/png")
+    st(r, 200)
+    d = r.data or {}
+    url = d.get("logoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TD}/"), "data.logoUrl on the public file path of D", "prefix", url)
+    eq((d.get("code"), d.get("brandColor")), (ctx.TD, None), "data.code / brandColor")
+    ctx.D_LOGO_URL = url
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), url, "GET /{id} logoUrl")
+    s = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT,
+            body={"filters": [{"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("logoUrl") for x in s.content], [url], "search content[*].logoUrl")
+    g = api("GET", url)
+    eq((g.status, g.body), (200, content), "anonymous GET serves the bytes under D's code")
+    eq(g.headers.get("content-type"), "image/png", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("inline"), "Content-Disposition inline", "inline",
+          g.headers.get("content-disposition"))
+    owner = f"/api/v1/files?ownerType=CORE_TENANT&moduleCode=TENANT&ownerId={ctx.D_ID}"
+    own = api("GET", owner, t=ctx.T_D)
+    st(own, 200, what="D lists its logo document")
+    eq([(x.get("fileName"), x.get("publicUrl")) for x in own.content], [("logo.png", url)], "one document logo.png in D")
+    eq(api("GET", owner, t=ctx.T_A).content, [], "tenant A sees no document of that owner")
+
+
+@tc("TC-CORE-TENANT-039")
+def test_tenant_039_tenant_me_any_realm_and_forced_change(ctx):
+    r = api("GET", "/api/v1/tenant/me", t=ctx.T_D)
+    st(r, 200)
+    d = r.data or {}
+    eq(sorted(d), BRANDING_KEYS, "exactly the six branding keys (no contact, profile, status or audit field)")
+    eq((d.get("code"), d.get("nameEn"), d.get("logoUrl"), d.get("defaultLocale")),
+       (ctx.TD, f"Tenant D {ctx.RUN}", ctx.D_LOGO_URL, "ar"), "D's code, name, logo and language")
+    fresh = login_staff(ctx.TB, f"fresh-{ctx.run}", PW)
+    st(fresh, 200, what="SEC-050's user, forced change still pending")
+    t_fresh = (fresh.data or {}).get("accessToken")
+    eq((fresh.data or {}).get("passwordChangeRequired"), True, "passwordChangeRequired")
+    st(api("GET", "/api/v1/sec/menu", t=t_fresh), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED", what="the gate still holds")
+    m = api("GET", "/api/v1/tenant/me", t=t_fresh)
+    st(m, 200, what="/tenant/me is allowed during a pending change")
+    eq((m.data or {}).get("code"), ctx.TB, "the token's tenant (B)")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_PLAT).data or {}).get("code"), "PLATFORM", "a PLATFORM token → PLATFORM")
+    st(api("GET", "/api/v1/tenant/me"), 401, "SEC-401-INVALID-CREDENTIALS", what="no token")
+
+
+@tc("TC-CORE-TENANT-040")
+def test_tenant_040_logo_refusals_keep_the_current_one(ctx):
+    exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff" + b"\x00" * 64
+    script = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="1" height="1"/></svg>'
+    dup = b'<svg xmlns="http://www.w3.org/2000/svg"><rect id="a"/><circle id="a" r="1"/></svg>'
+    big = png_bytes(40) + b"\x00" * 1_048_576
+    for fname, ctype, content in (("x.svg", "image/svg+xml", script), ("tool.exe", "application/octet-stream", exe),
+                                  ("big.png", "image/png", big), ("dup.svg", "image/svg+xml", dup)):
+        r = e_logo(ctx, ctx.D_ID, fname, content, ctype)
+        st(r, 400, "TENANT_LOGO_INVALID", what=f"PUT logo {fname}")
+        eq([f.get("field") for f in r.field_errors], ["file"], f"{fname}: fieldErrors[*].field")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT, body={}), 400, "VALIDATION_ERROR",
+       what="no file part")
+    st(e_logo(ctx, 999999999, "a.png", png_bytes(1), "image/png"), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), ctx.D_LOGO_URL,
+       "the current logo is kept")
+    eq(api("GET", ctx.D_LOGO_URL).status, 200, "and still served")
+
+
+@tc("TC-CORE-TENANT-041")
+def test_tenant_041_logo_replace_discards_and_svg_attachment(ctx):
+    r = e_logo(ctx, ctx.D_ID, "brand.svg", PLAIN_SVG, "image/svg+xml")
+    st(r, 200)
+    url = (r.data or {}).get("logoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TD}/") and url != ctx.D_LOGO_URL, "a new URL under D's code",
+          "new", url)
+    st(api("GET", ctx.D_LOGO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the replaced logo is withdrawn")
+    g = api("GET", url)
+    eq((g.status, g.body), (200, PLAIN_SVG), "the SVG is served")
+    eq(g.headers.get("content-type"), "image/svg+xml", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("attachment"), "Content-Disposition attachment",
+          "attachment", g.headers.get("content-disposition"))
+    eq(g.headers.get("x-content-type-options"), "nosniff", "X-Content-Type-Options")
+    check("sandbox" in (g.headers.get("content-security-policy") or ""), "CSP sandbox", "sandbox",
+          g.headers.get("content-security-policy"))
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("logoUrl"), url, "/tenant/me follows")
+    ctx.D_LOGO_URL = url
+
+
+@tc("TC-CORE-TENANT-042")
+def test_tenant_042_brand_colour(ctx):
+    r = e_branding(ctx, ctx.D_ID, {"brandColor": "#1a2b3c"})
+    st(r, 200)
+    eq((r.data or {}).get("brandColor"), "#1A2B3C", "stored upper case")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("brandColor"), "#1A2B3C", "/tenant/me brandColor")
+    for wrong in ("red", "#12345", "#1234567", "1A2B3C"):
+        w = e_branding(ctx, ctx.D_ID, {"brandColor": wrong})
+        st(w, 400, "TENANT_BRAND_COLOR_INVALID", what=f"brandColor={wrong!r}")
+        eq([f.get("field") for f in w.field_errors], ["brandColor"], f"{wrong!r}: fieldErrors[*].field")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("brandColor"), "#1A2B3C",
+       "unchanged by the refusals")
+    c = e_branding(ctx, ctx.D_ID, {"brandColor": None})
+    st(c, 200, what="null clears")
+    eq((c.data or {}).get("brandColor"), None, "cleared")
+    st(e_branding(ctx, 999999999, {"brandColor": "#000000"}), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    eq((e_branding(ctx, ctx.D_ID, {"brandColor": "#0A0B0C"}).data or {}).get("brandColor"), "#0A0B0C",
+       "set again for the public branding")
+
+
+@tc("TC-CORE-TENANT-043")
+def test_tenant_043_public_branding_path_tenant(ctx):
+    r = e_public(ctx.TD.lower())
+    st(r, 200, what="the code in lower case, no token, no header")
+    d = r.data or {}
+    eq(sorted(d), BRANDING_KEYS, "exactly the six branding keys")
+    me = api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}
+    eq(d, me, "the same branding as D's /tenant/me")
+    eq((d.get("logoUrl"), d.get("brandColor")), (ctx.D_LOGO_URL, "#0A0B0C"), "logo and colour")
+    st(e_public(f"NOSUCH{ctx.RUN}"), 404, "TENANT_NOT_FOUND", what="unknown code")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+           body={"statusCode": "SUSPENDED", "reason": f"TM-E branding {ctx.RUN}"}), 200, what="suspend D")
+    st(e_public(ctx.TD), 403, "TENANT_SUSPENDED", what="a suspended tenant's branding")
+    st(api("GET", ctx.D_LOGO_URL), 403, "TENANT_SUSPENDED", what="and its logo URL")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"}), 200,
+       what="re-activate D")
+    st(e_public(ctx.TD), 200, what="served again")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="td-admin signs in again (tokens of a re-activated tenant may be cut off, package C.2)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+
+
+@tc("TC-CORE-TENANT-044")
+def test_tenant_044_logo_remove_and_platform_logo(ctx):
+    st(api("DELETE", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT), 204, what="DELETE logo")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), None, "GET logoUrl null")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("logoUrl"), None, "/tenant/me logoUrl null")
+    st(api("GET", ctx.D_LOGO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the removed logo is withdrawn")
+    st(api("DELETE", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT), 204, what="DELETE again (no logo)")
+    st(api("DELETE", "/api/v1/platform/tenants/999999999/logo", t=ctx.T_PLAT), 404, "TENANT_NOT_FOUND",
+       what="unknown tenant")
+    p = e_logo(ctx, 1, "platform.png", png_bytes(44), "image/png")
+    st(p, 200, what="PLATFORM may carry a logo")
+    purl = (p.data or {}).get("logoUrl") or ""
+    check(purl.startswith("/api/v1/public/files/PLATFORM/"), "on PLATFORM's public path", "prefix", purl)
+    eq(api("GET", purl).status, 200, "served")
+    st(api("DELETE", "/api/v1/platform/tenants/1/logo", t=ctx.T_PLAT), 204, what="and removed")
+
+
+@tc("TC-CORE-TENANT-045")
+def test_tenant_045_logo_changes_audited(ctx):
+    expected = [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))] * 3
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("D", ctx.T_D)):
+        a = audit(token, action="TENANT_LOGO_CHANGED", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows], expected,
+           f"{who}: three TENANT_LOGO_CHANGED rows (TENANT-038 set, TENANT-041 replace, TENANT-044 remove)")
+        check(all(ctx.TD in (x.get("summaryEn") or "") for x in rows), f"{who}: summaries name {ctx.TD}", ctx.TD,
+              [x.get("summaryEn") for x in rows])
+    pa = audit(ctx.T_PLAT, action="TENANT_LOGO_CHANGED", entityType="CORE_TENANT", entityId=1, size=50)
+    eq(len(pa.content), 2, "PLATFORM's own logo: one row per change (set, remove)")
+
+
+@tc("TC-CORE-PLATFORM-005")
+def test_platform_005_branding_writes_platform_only(ctx):
+    for who, token, tid in (("tenant A's administrator", ctx.T_A, ctx.A_ID), ("tenant D's administrator", ctx.T_D, ctx.D_ID)):
+        st(e_logo(ctx, tid, "a.png", png_bytes(5), "image/png", token=token), 403, "SEC-403-FORBIDDEN", what=f"{who}: PUT logo")
+        st(api("DELETE", f"/api/v1/platform/tenants/{tid}/logo", t=token), 403, "SEC-403-FORBIDDEN",
+           what=f"{who}: DELETE logo")
+        st(e_branding(ctx, tid, {"brandColor": "#000000"}, token=token), 403, "SEC-403-FORBIDDEN",
+           what=f"{who}: PATCH branding")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.A_ID}/logo", multipart=[("file", ("a.png", "image/png", png_bytes(5)))]),
+       401, "SEC-401-INVALID-CREDENTIALS", what="anonymous PUT logo")
+    a = api("GET", f"/api/v1/platform/tenants/{ctx.A_ID}", t=ctx.T_PLAT).data or {}
+    eq((a.get("logoUrl"), a.get("brandColor")), (None, None), "tenant A unchanged")
+
+
+# =============================================================================================
+# Phase 11d — tenant lifecycle events and token cut-off (TM-C12), on tenant D, before TENANT-046
+# =============================================================================================
+def await_second_after(token):
+    """TM-C12: RULE-TENANT-023 compares whole seconds, so a cut-off must lie in a later second than the token's iat."""
+    iat = jwt_claims(token).get("iat") or 0
+    while int(time.time()) <= iat:
+        time.sleep(0.05)
+
+
+def revoke_tokens(tid, token):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/revoke-tokens", t=token)
+
+
+@tc("TC-CORE-TENANT-047")
+def test_tenant_047_suspension_ends_sessions_reactivation_cuts_off(ctx):
+    u = usage_of(ctx, ctx.D_ID).data or {}
+    check((u.get("activeSessions") or 0) >= 1, "D has an open session before", ">= 1", u.get("activeSessions"))
+    old = ctx.T_D
+    await_second_after(old)
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+           body={"statusCode": "SUSPENDED", "reason": f"TM-C12 lifecycle {ctx.RUN}"}), 200, what="suspend D")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 0, "the suspension ended every session of D")
+    st(api("GET", "/api/v1/sec/menu", t=old), 403, "TENANT_SUSPENDED", what="old token while suspended")
+    st(api("GET", "/api/v1/tenant/me", t=old), 403, "TENANT_SUSPENDED", what="old token on /tenant/me while suspended")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"}), 200,
+       what="re-activate D")
+    st(api("GET", "/api/v1/sec/menu", t=old), 401, "TENANT_TOKEN_REVOKED", what="the token from before the re-activation")
+    st(api("GET", "/api/v1/tenant/me", t=old), 401, "TENANT_TOKEN_REVOKED", what="… on /tenant/me too")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="td-admin signs in right after the re-activation")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="the new token is served")
+
+
+@tc("TC-CORE-TENANT-048")
+def test_tenant_048_revoke_tokens(ctx):
+    old = ctx.T_D
+    await_second_after(old)
+    r = revoke_tokens(ctx.D_ID, ctx.T_PLAT)
+    revoked_at = int(time.time())
+    st(r, 200)
+    d = r.data or {}
+    eq(sorted(d), ["code", "id", "sessionsTerminated"], "exactly id, code, sessionsTerminated (no cut-off field)")
+    eq((d.get("id"), d.get("code")), (ctx.D_ID, ctx.TD), "data.id / data.code")
+    check((d.get("sessionsTerminated") or 0) >= 1, "sessionsTerminated >= 1 (TENANT-047's login)", ">= 1",
+          d.get("sessionsTerminated"))
+    st(api("GET", "/api/v1/sec/menu", t=old), 401, "TENANT_TOKEN_REVOKED", what="the revoked token")
+    st(api("GET", "/api/v1/tenant/me", t=old), 401, "TENANT_TOKEN_REVOKED", what="… on /tenant/me too")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 0, "every session of D ended")
+    st(api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT), 200, what="the operator is not affected")
+    # review round 1: the revoke's cut-off is the next whole second, so a token of the revoke's own second is refused too
+    while int(time.time()) <= revoked_at:
+        time.sleep(0.05)
+    r = api("POST", "/api/v1/sec/auth/login", t=old, tc=ctx.TD, body={"username": "td-admin", "password": PW_RECOVERED})
+    st(r, 200, what="login sent with the revoked token in Authorization (a public path ignores it)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="the new token is served")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 1, "one session: the new login")
+
+
+@tc("TC-CORE-TENANT-049")
+def test_tenant_049_revoke_tokens_audited(ctx):
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("D", ctx.T_D)):
+        a = audit(token, action="TOKENS_REVOKED", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+           [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))], f"{who}: one TOKENS_REVOKED row (TENANT-048)")
+        summary = (rows[0].get("summaryEn") or "") if rows else ""
+        check(ctx.TD in summary and "sessions terminated:" in summary, f"{who}: the summary names the tenant and the count",
+              f"{ctx.TD}, sessions terminated", summary)
+        check(not re.search(r"\d{4}-\d{2}-\d{2}T", summary), f"{who}: no instant in the summary", "none", summary)
+
+
+@tc("TC-CORE-TENANT-050")
+def test_tenant_050_revoke_tokens_refusals(ctx):
+    st(revoke_tokens(1, ctx.T_PLAT), 422, "TENANT_REVOKE_TOKENS_PLATFORM", what="PLATFORM is never revoked")
+    st(api("GET", "/api/v1/platform/tenants/1", t=ctx.T_PLAT), 200, what="the operator is still signed in")
+    st(revoke_tokens(999999999, ctx.T_PLAT), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    st(revoke_tokens(ctx.D_ID, ctx.T_D), 403, "SEC-403-FORBIDDEN", what="D's own administrator")
+    st(revoke_tokens(ctx.D_ID, None), 401, "SEC-401-INVALID-CREDENTIALS", what="anonymous")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="nothing was revoked by the refusals")
+
+
+# =============================================================================================
+# Phase 11e — idempotent provisioning (TM-C4), fresh tenants E, F, G, before TENANT-046 (no public-branding call)
+# =============================================================================================
+IDEM = "Idempotency-Key"
+
+
+def idem_create(ctx, key, body=None, raw=None, token=None):
+    return api("POST", "/api/v1/platform/tenants", t=token or ctx.T_PLAT, body=body, raw=raw,
+               content_type="application/json" if raw is not None else None,
+               headers=None if key is None else {IDEM: key})
+
+
+def replayed(r):
+    return r.headers.get("idempotent-replayed")
+
+
+@tc("TC-CORE-TENANT-051")
+def test_tenant_051_idempotent_replay(ctx):
+    ctx.TE = f"TCE{ctx.RUN}"
+    ctx.IDEM_KEY = f"c4-{ctx.run}-a"
+    body = tenant_body(ctx, ctx.TE, "te-admin", "Tenant E")
+    first = idem_create(ctx, ctx.IDEM_KEY, body)
+    st(first, 201, what="first create with the key")
+    eq(replayed(first), None, "no Idempotent-Replayed on the first answer")
+    ctx.E_ID = (first.data or {}).get("id")
+    second = idem_create(ctx, ctx.IDEM_KEY, body)
+    st(second, 201, what="the same request again")
+    eq(replayed(second), "true", "Idempotent-Replayed")
+    eq(second.data, first.data, "the same data (same id)")
+    eq((second.json or {}).get("timestamp"), (first.json or {}).get("timestamp"), "the first answer's timestamp")
+    reordered = "{ " + ",  ".join(f"{json.dumps(k)} : {json.dumps(v, ensure_ascii=False)}"
+                                    for k, v in reversed(list(body.items()))) + " }"
+    third = idem_create(ctx, ctx.IDEM_KEY, raw=reordered.encode("utf-8"))
+    st(third, 201, what="the same body, fields reversed and spaced differently")
+    eq(replayed(third), "true", "replayed (canonical body)")
+    eq((third.data or {}).get("id"), ctx.E_ID, "same id")
+    _, codes = tenant_codes(ctx)
+    eq(codes.count(ctx.TE), 1, "exactly one tenant E")
+    check(PW not in (first.body + second.body + third.body).decode("utf-8"), "no answer carries the password",
+          "absent", "present")
+
+
+@tc("TC-CORE-TENANT-052")
+def test_tenant_052_idempotent_conflict(ctx):
+    tf = f"TCF{ctx.RUN}"
+    r = idem_create(ctx, ctx.IDEM_KEY, tenant_body(ctx, tf, "tf-admin", "Tenant F"))
+    st(r, 409, "IDEMPOTENCY_KEY_CONFLICT", what="the same key with another body")
+    _, codes = tenant_codes(ctx)
+    eq(tf in codes, False, "tenant F was not created")
+    again = idem_create(ctx, ctx.IDEM_KEY, tenant_body(ctx, ctx.TE, "te-admin", "Tenant E"))
+    st(again, 201, what="the original body still replays")
+    eq(replayed(again), "true", "Idempotent-Replayed")
+    eq((again.data or {}).get("id"), ctx.E_ID, "tenant E's id")
+
+
+@tc("TC-CORE-TENANT-053")
+def test_tenant_053_idempotency_key_invalid_failure_not_stored_header_absent(ctx):
+    tg = f"TCG{ctx.RUN}"
+    body = tenant_body(ctx, tg, "tg-admin", "Tenant G")
+    for bad in ("k" * 65, "bad key", "a/b", ""):
+        st(idem_create(ctx, bad, body), 400, "IDEMPOTENCY_KEY_INVALID", what=f"key {bad[:12]!r} ({len(bad)} chars)")
+    _, codes = tenant_codes(ctx)
+    eq(tg in codes, False, "nothing created by the refused keys")
+    key = f"c4-{ctx.run}-b"
+    st(idem_create(ctx, key, tenant_body(ctx, "bad", "tg-admin", "Tenant G")), 400, "TENANT_CODE_INVALID",
+       what="a create refused with a key")
+    ok = idem_create(ctx, key, body)
+    st(ok, 201, what="the same key with the corrected body (the refusal was not stored)")
+    eq(replayed(ok), None, "not a replay")
+    st(idem_create(ctx, None, body), 409, "TENANT_CODE_DUPLICATE", what="without the header: the 1.2.0 behaviour")
+
+
+# =============================================================================================
+# Phase 11f — tenant data export (TM-C5), tenant A and PLATFORM, before TENANT-046 (no public-branding call)
+# =============================================================================================
+C5_FILES = {"AUDIT/CORE_AUDIT_EVENT.csv", "CU/CU_APP_CONFIGURATION.csv", "FILE/FILE_CATEGORY.csv",
+            "FILE/FILE_DOCUMENT.csv", "MDL/MDL_LOOKUP_TYPE.csv", "MDL/MDL_LOOKUP_VALUE.csv",
+            "NOTIF/NOTIF_TEMPLATE.csv", "NOTIF/NOTIF_CHANNEL_CONFIG.csv", "NOTIF/NOTIF_LOG.csv", "NOTIF/NOTIF_INBOX.csv",
+            "SEC/SEC_USER.csv", "SEC/SEC_ROLE.csv", "SEC/SEC_USER_ROLE.csv", "SEC/SEC_ROLE_MODULE_GRANT.csv",
+            "SEC/SEC_ROLE_SCREEN_GRANT.csv", "SEC/SEC_ROLE_ACTION_GRANT.csv", "SEC/SEC_ACTIVE_SESSION.csv",
+            "SEC/SEC_AUDIT_LOG.csv", "SEC/SEC_SIGNUP_REQUEST.csv", "SEQUENCE/CORE_NUMBER_SERIES.csv",
+            "TENANT/CORE_TENANT.csv"}
+
+
+def export_tenant(tid, token):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/export", t=token)
+
+
+def csv_records(raw):
+    """RFC 4180 records of one exported CSV (after its byte-order mark)."""
+    return list(csv.reader(io.StringIO(raw.decode("utf-8-sig"), newline="")))
+
+
+@tc("TC-CORE-TENANT-054")
+def test_tenant_054_export_tenant_a(ctx):
+    r = export_tenant(ctx.A_ID, ctx.T_PLAT)
+    st(r, 200, what="export tenant A")
+    d = r.data or {}
+    eq(sorted(d), ["downloadToken", "downloadTokenExpiresAt", "fileId", "fileName", "rowCount", "sizeBytes",
+                   "tenantCode", "tenantId"], "response fields")
+    eq((d.get("tenantId"), d.get("tenantCode")), (ctx.A_ID, ctx.TA), "the exported tenant")
+    check(re.fullmatch(rf"tenant-export-{ctx.TA}-\d{{8}}T\d{{6}}Z\.zip", d.get("fileName") or "") is not None,
+          "file name", f"tenant-export-{ctx.TA}-<yyyyMMddTHHmmssZ>.zip", d.get("fileName"))
+    ctx.EXPORT_FILE_ID = d.get("fileId")
+    meta = api("GET", f"/api/v1/files/{d.get('fileId')}", t=ctx.T_PLAT)
+    st(meta, 200, what="the archive is a document of PLATFORM")
+    m = meta.data or {}
+    eq((m.get("ownerType"), m.get("ownerId"), m.get("moduleCode"), m.get("visibility"), m.get("contentType")),
+       ("CORE_TENANT", ctx.A_ID, "TENANT", "PRIVATE", "application/zip"), "owner, visibility, type")
+    eq(m.get("publicUrl"), None, "no public URL")
+    st(api("GET", f"/api/v1/files/{d.get('fileId')}", t=ctx.T_A), 404, "FILE_DOCUMENT_NOT_FOUND",
+       what="not a document of tenant A")
+    path = "/api/v1/files/download?token=" + urllib.parse.quote(d.get("downloadToken") or "", safe="")
+    z = api("GET", path, t=ctx.T_PLAT)
+    check(z.status == 200 and z.headers.get("content-type", "").startswith("application/zip"), "download once",
+          "200 application/zip", f"{z.status} {z.headers.get('content-type')}")
+    eq(len(z.body or b""), d.get("sizeBytes"), "size")
+    st(api("GET", path, t=ctx.T_PLAT), 401, "FILE_ACCESS_TOKEN_INVALID", what="the token is single-use")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(z.body))
+    except zipfile.BadZipFile as e:
+        check(False, "a ZIP archive", "zip", repr(e))
+        return
+    names = set(archive.namelist())
+    eq(names, C5_FILES | {"manifest.json"}, "21 CSV files and manifest.json")
+    manifest = json.loads(archive.read("manifest.json"))
+    eq((manifest.get("format"), manifest.get("tenantCode"), manifest.get("rowCount")),
+       ("erp-tenant-export", ctx.TA, d.get("rowCount")), "manifest")
+    counted, bom = 0, True
+    for f in manifest.get("files", []):
+        raw = archive.read(f["path"])
+        bom = bom and raw.startswith(b"\xef\xbb\xbf")
+        records = csv_records(raw)
+        check(len(records) - 1 == f["rows"], f"{f['path']}: records = manifest rows", f["rows"], len(records) - 1)
+        counted += f["rows"]
+    check(bom, "every CSV starts with a UTF-8 byte-order mark", "BOM", bom)
+    eq(counted, d.get("rowCount"), "rowCount = sum of the files")
+    header = {p: csv_records(archive.read(p))[0] for p in C5_FILES}
+    check("PASSWORD_HASH" not in header["SEC/SEC_USER.csv"] and "TOKEN_REF" not in header["SEC/SEC_ACTIVE_SESSION.csv"]
+          and not {"FILE_CONTENT", "STORAGE_REF", "PUBLIC_SLUG"} & set(header["FILE/FILE_DOCUMENT.csv"])
+          and "CONFIG_JSON" not in header["NOTIF/NOTIF_CHANNEL_CONFIG.csv"]
+          and "VARIABLES_JSON" not in header["NOTIF/NOTIF_LOG.csv"]
+          and "TOKENS_INVALID_BEFORE" not in header["TENANT/CORE_TENANT.csv"]
+          and not any(c in ("TENANT_ID", "VERSION") for h in header.values() for c in h), "no secret column",
+          "excluded", header["SEC/SEC_USER.csv"])
+    text = b"".join(archive.read(n) for n in names).decode("utf-8", errors="replace")
+    for needle in ("$2a$", "$2b$", "$2y$", ctx.TB, ctx.TC):
+        check(needle not in text, f"the archive holds no {needle!r}", "absent", "present" if needle in text else "absent")
+    users = [rec[1] for rec in csv_records(archive.read("SEC/SEC_USER.csv"))[1:]]
+    check("ta-admin" in users, "tenant A's administrator is exported", "ta-admin", users[:5])
+    eq([rec[1] for rec in csv_records(archive.read("TENANT/CORE_TENANT.csv"))[1:]], [ctx.TA], "one CORE_TENANT row")
+
+
+@tc("TC-CORE-TENANT-055")
+def test_tenant_055_export_audited(ctx):
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("A", ctx.T_A)):
+        a = audit(token, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=ctx.A_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+           [("admin", "STAFF", "CORE_TENANT", str(ctx.A_ID))], f"{who}: one TENANT_EXPORTED row")
+        summary = (rows[0].get("summaryEn") or "") if rows else ""
+        check(ctx.TA in summary and f"document {ctx.EXPORT_FILE_ID}" in summary,
+              f"{who}: the summary names the tenant and the document", f"{ctx.TA}, document {ctx.EXPORT_FILE_ID}",
+              summary)
+
+
+@tc("TC-CORE-TENANT-056")
+def test_tenant_056_export_refusals_and_platform(ctx):
+    st(export_tenant(ctx.A_ID, ctx.T_A), 403, "SEC-403-FORBIDDEN", what="A's own administrator")
+    st(export_tenant(ctx.A_ID, None), 401, "SEC-401-INVALID-CREDENTIALS", what="anonymous")
+    st(export_tenant(999999999, ctx.T_PLAT), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    before = audit(ctx.T_PLAT, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=1, size=200)
+    st(before, 200, what="PLATFORM's audit log before")
+    p = export_tenant(1, ctx.T_PLAT)
+    st(p, 200, what="the PLATFORM tenant is exportable")
+    eq(((p.data or {}).get("tenantId"), (p.data or {}).get("tenantCode")), (1, "PLATFORM"), "PLATFORM's export")
+    check(((p.data or {}).get("rowCount") or 0) > 0, "PLATFORM has rows", "> 0", (p.data or {}).get("rowCount"))
+    a = audit(ctx.T_PLAT, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=1, size=50)
+    st(a, 200, what="PLATFORM's audit log")
+    eq(len(a.content) - len(before.content), 1, "one more TENANT_EXPORTED row when the tenant is PLATFORM")
+
+
+def file_viewer(ctx):
+    """`fv-{run}` in PLATFORM: a role with FILE_BROWSER VIEW + DELETE only — no PLATFORM_TENANT_MANAGE (TM-C5 round 1)."""
+    if ctx.has("T_FV"):
+        return ctx.T_FV
+    r = api("POST", "/api/v1/sec/roles", t=ctx.T_PLAT, body={"code": f"TC_FV_{ctx.RUN}", "nameAr": "عارض", "nameEn": "File viewer"})
+    st(r, 201, what="create PLATFORM role TC_FV_{RUN}")
+    role = (r.data or {}).get("rolePk")
+    perms = ["PERM_FILE_BROWSER_VIEW", "PERM_FILE_BROWSER_DELETE"]
+    mod_id, scr_id, actions = registry_ids(ctx, ctx.T_PLAT, "FILE_BROWSER", perms)
+    st(api("POST", f"/api/v1/sec/roles/{role}/modules", t=ctx.T_PLAT, body={"moduleId": mod_id}), 201)
+    st(api("POST", f"/api/v1/sec/roles/{role}/screens", t=ctx.T_PLAT, body={"screenId": scr_id}), 201)
+    for perm in perms:
+        st(api("POST", f"/api/v1/sec/roles/{role}/actions", t=ctx.T_PLAT, body={"actionId": actions.get(perm)}), 201)
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_PLAT, body=user_body(f"fv-{ctx.run}", f"fv-{ctx.run}@p.test", "عارض", "File viewer"))
+    st(r, 201, what="create PLATFORM user fv-{run}")
+    st(api("PUT", f"/api/v1/sec/users/{(r.data or {}).get('userPk')}/roles", t=ctx.T_PLAT, body={"roleIds": [role]}), 200)
+    r = first_login("PLATFORM", f"fv-{ctx.run}", PW)
+    st(r, 200, what="login fv-{run}")
+    t = (r.data or {}).get("accessToken")
+    if not t:
+        raise Blocked("no T_FV")
+    ctx.T_FV = t
+    return t
+
+
+@tc("TC-CORE-TENANT-057")
+def test_tenant_057_archive_restricted_to_platform_tenant_manage(ctx):
+    fv = file_viewer(ctx)
+    archive = ctx.EXPORT_FILE_ID
+    owner_list = f"/api/v1/files?ownerId={ctx.A_ID}&ownerType=CORE_TENANT&moduleCode=TENANT"
+    lst = api("GET", owner_list, t=fv)
+    st(lst, 200, what="the viewer lists A's archives")
+    eq([x.get("id") for x in lst.content], [], "the archive is filtered out of the owner list")
+    st(api("GET", f"/api/v1/files/{archive}", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="metadata")
+    st(api("POST", f"/api/v1/files/{archive}/access-token", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="access token")
+    st(api("DELETE", f"/api/v1/files/{archive}?action=DELETE", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="delete")
+    st(api("PATCH", f"/api/v1/files/{archive}/visibility", t=ctx.T_PLAT, body={"visibility": "PUBLIC"}), 409,
+       "FILE_PUBLIC_NOT_ALLOWED", what="the operator cannot publish it either (uncategorised)")
+    up = upload(ctx, ctx.T_PLAT, f"ordinary-{ctx.run}.png", "image/png", png_bytes(57))
+    st(up, 201, what="an ordinary PLATFORM document")
+    ordinary = (up.data or {}).get("id")
+    st(api("GET", f"/api/v1/files/{ordinary}", t=fv), 200, what="ordinary documents stay visible to the viewer")
+    ordinary_list = api("GET", "/api/v1/files?ownerId=4711&ownerType=PRODUCT&moduleCode=SHOP&size=200", t=fv)
+    check(ordinary in [x.get("id") for x in ordinary_list.content], "the viewer lists the ordinary document", ordinary,
+          [x.get("id") for x in ordinary_list.content][:10])
+    st(api("GET", f"/api/v1/files/{archive}", t=ctx.T_PLAT), 200, what="the operator still reads the archive")
+
+
+@tc("TC-CORE-TENANT-058")
+def test_tenant_058_operator_redownloads_and_deletes_archive(ctx):
+    archive = ctx.EXPORT_FILE_ID
+    lst = api("GET", f"/api/v1/files?ownerId={ctx.A_ID}&ownerType=CORE_TENANT&moduleCode=TENANT", t=ctx.T_PLAT)
+    st(lst, 200, what="the operator lists A's archives")
+    check(archive in [x.get("id") for x in lst.content], "the archive is listed", archive, [x.get("id") for x in lst.content])
+    tok = api("POST", f"/api/v1/files/{archive}/access-token", t=ctx.T_PLAT)
+    st(tok, 200, what="a fresh token for the stored archive")
+    path = "/api/v1/files/download?token=" + urllib.parse.quote((tok.data or {}).get("accessToken") or "", safe="")
+    z = api("GET", path, t=ctx.T_PLAT)
+    check(z.status == 200 and (z.body or b"")[:2] == b"PK", "re-download", "200 ZIP", f"{z.status} {(z.body or b'')[:2]!r}")
+    d = api("DELETE", f"/api/v1/files/{archive}?action=DELETE", t=ctx.T_PLAT)
+    st(d, 200, what="the operator deletes the archive")
+    eq((d.data or {}).get("fileStatusId"), "DELETED", "a DELETED tombstone")
+    st(api("POST", f"/api/v1/files/{archive}/access-token", t=ctx.T_PLAT), 404, "FILE_DOCUMENT_NOT_FOUND",
+       what="no token for a deleted archive")
+    meta = api("GET", f"/api/v1/files/{archive}", t=ctx.T_PLAT)
+    st(meta, 200, what="the tombstone's metadata")
+    check((meta.data or {}).get("fileName", "").startswith(f"tenant-export-{ctx.TA}-"), "the tombstone keeps the name",
+          f"tenant-export-{ctx.TA}-…", (meta.data or {}).get("fileName"))
+
+
+@tc("TC-CORE-TENANT-046")
+def test_tenant_046_public_branding_rate_limit(ctx):
+    # last case of the run that calls the public branding: its bucket (per client address) is spent here
+    limited, calls = None, 0
+    for calls in range(1, 301):
+        r = e_public(ctx.TD if calls % 2 else f"NOSUCH{ctx.RUN}")
+        if r.status == 429:
+            limited = r
+            break
+        if r.status not in (200, 404):
+            break
+    check(limited is not None, "429 reached within the budget", "429 after <= capacity (default 60) calls",
+          f"{calls} calls, last {r.status} E({r.code})")
+    if limited is not None:
+        st(limited, 429, "TENANT_BRANDING_RATE_LIMITED", what=f"call {calls}")
+        ra = limited.headers.get("retry-after") or ""
+        check(ra.isdigit() and int(ra) >= 1, "Retry-After header (whole seconds, >= 1)", ">= 1", ra)
+        observe("calls before 429 (this run's earlier public-branding calls share the budget)", calls - 1)
+    st(e_public(f"NOSUCH{ctx.RUN}"), 429, "TENANT_BRANDING_RATE_LIMITED", what="an unknown code is counted too (no 404)")
+    st(api("GET", "/api/v1/tenant/me", t=ctx.T_D), 200, what="/tenant/me is not rate-limited")
 
 
 # =============================================================================================
@@ -2364,7 +3577,7 @@ def test_notif_014_customer_on_staff_inbox(ctx):
 def test_notif_015_staff_with_customer_name(ctx):
     e = f"c2-{ctx.run}@shop.test"
     st(api("POST", "/api/v1/sec/users", t=ctx.T_A, body=user_body(e, e, "موظف", "Staff", "StaffPass!9")), 201)
-    r = login_staff(ctx.TA, e, "StaffPass!9")
+    r = first_login(ctx.TA, e, "StaffPass!9")
     st(r, 200)
     t = (r.data or {}).get("accessToken")
     r = api("GET", "/api/v1/notif/inbox", t=t)
@@ -2431,7 +3644,8 @@ def test_sec_032_staff_sessions_exclude_customers(ctx):
 @tc("TC-CORE-TENANT-026", profile="P-MAIL")
 def test_tenant_026_suspended_tenant_customer_token(ctx):
     st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 200, what="before: T_CUST works")
-    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT, body={"statusCode": "SUSPENDED"})
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": f"TC-CORE-TENANT-026 {ctx.RUN}"})
     st(r, 200, what="suspend the run's tenant A")
     try:
         st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 403, "TENANT_SUSPENDED", what="issued customer token refused")
@@ -2574,12 +3788,14 @@ ORDER = {
                   *rng("SEQ", 3, 14),
                   *rng("SETTINGS", 4, 10),
                   *rng("SEC", 7, 13), "SEC-028", *rng("SEC", 14, 20), "SEC-029", "SEC-030", "SEC-031", "SEC-033",
+                  *rng("SEC", 35, 40), *rng("SEC", 41, 55),
                   "NOTIF-001",
                   *rng("FILE", 1, 18), "FILE-024", *rng("FILE", 19, 21), "FILE-023",
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
-                  "TENANT-025", *rng("TENANT", 19, 24)),
+                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 58), "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
@@ -2643,6 +3859,10 @@ def run(args):
         order = [t for t in order if t in set(args.only.split(","))]
     meta = {"profile": args.profile, "base": BASE["url"], "run": run_id, "started": now.isoformat(timespec="seconds"),
             "cap": args.cap, "local_root": args.local_root}
+    if args.instance:
+        meta["instance"] = args.instance
+    if args.code_under_test:
+        meta["code_under_test"] = args.code_under_test
     sink = None
     if args.profile == "P-MAIL":
         from smtp_sink import SmtpSink
@@ -2712,11 +3932,14 @@ def main():
     ap.add_argument("--cap", type=int, default=None, help="P-CAP: the max-export-rows the instance runs with (2 or 3)")
     ap.add_argument("--local-root", default=None, help="P-LOCAL: erp.core.files.local.root of the instance")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--instance", default=None, help="free text recorded in the result: how the app instance was started")
+    ap.add_argument("--code-under-test", default=None, help="free text recorded in the result: branch and commit")
+    ap.add_argument("--report-out", default=None, help="with --report: write here instead of core-verify-report.md")
     ap.add_argument("--report", nargs="+", default=None, help="merge result JSON files into core-verify-report.md")
     args = ap.parse_args()
     if args.report:
         import core_verify_report
-        return core_verify_report.build(args.report)
+        return core_verify_report.build(args.report, args.report_out)
     return run(args)
 
 

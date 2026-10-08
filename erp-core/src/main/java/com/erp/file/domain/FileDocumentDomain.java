@@ -5,6 +5,7 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.file.entity.FileDocument;
 import com.erp.file.exception.FileErrorCodes;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -34,6 +35,21 @@ public final class FileDocumentDomain {
 
     private FileDocumentDomain(String currentStatus) {
         this.currentStatus = currentStatus;
+    }
+
+    /**
+     * RULE-FILE-012 (tenant-maturity C5) — a restricted document ({@code requiredAuthority} set) exists only for a caller
+     * holding that authority; anyone else gets 404 {@code FILE_DOCUMENT_NOT_FOUND}, so its existence is not revealed.
+     */
+    public static void assertVisibleTo(Long documentId, String requiredAuthority, Collection<String> callerAuthorities) {
+        if (requiredAuthority != null && !callerAuthorities.contains(requiredAuthority)) {
+            throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId);
+        }
+    }
+
+    /** RULE-FILE-012 — deleting a restricted document removes its content (a tombstone row stays); others keep it (RULE-FILE-006). */
+    public static boolean purgesContentOn(String requiredAuthority, String targetStatus) {
+        return requiredAuthority != null && STATUS_DELETED.equals(targetStatus);
     }
 
     /** Reconstructs a Domain view over a persisted entity — no validation. */
@@ -99,6 +115,18 @@ public final class FileDocumentDomain {
                                              Boolean categoryAllowPublic) {
         return VISIBILITY_PUBLIC.equals(visibility) && publicSlug != null
             && STATUS_ACTIVE.equals(fileStatusId) && Boolean.TRUE.equals(categoryAllowPublic);
+    }
+
+    /**
+     * tenant-maturity D.4 (RULE-FILE-010) — as above, but an uncategorised document (no
+     * {@code categoryId}: only the image store publishes one) needs no category permission. The public
+     * lookup query applies the same conditions.
+     */
+    public static boolean isPubliclyServable(String visibility, String publicSlug, String fileStatusId,
+                                             Long categoryId, Boolean categoryAllowPublic) {
+        return categoryId == null
+            ? VISIBILITY_PUBLIC.equals(visibility) && publicSlug != null && STATUS_ACTIVE.equals(fileStatusId)
+            : isPubliclyServable(visibility, publicSlug, fileStatusId, categoryAllowPublic);
     }
 
     public String getCurrentStatus() {

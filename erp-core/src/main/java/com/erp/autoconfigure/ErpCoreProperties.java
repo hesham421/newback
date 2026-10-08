@@ -1,6 +1,7 @@
 package com.erp.autoconfigure;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.time.Duration;
@@ -38,6 +39,7 @@ public class ErpCoreProperties {
 
     private final Frontend frontend = new Frontend();
 
+    @Valid
     private final Tenant tenant = new Tenant();
 
     // erp-core step 08 — event bus executor and NOTIF asynchronous delivery
@@ -51,6 +53,9 @@ public class ErpCoreProperties {
     /** erp-core step 11 — reporting. */
     @Valid
     private final Report report = new Report();
+
+    /** tenant-maturity C4 — the {@code Idempotency-Key} mechanism ({@code com.erp.common.idempotency}). */
+    private final Idempotency idempotency = new Idempotency();
 
     /** Authentication settings. */
     @Getter
@@ -115,6 +120,38 @@ public class ErpCoreProperties {
 
         /** Brute-force protection of the customer login (bucket4j, keyed {@code tenant:realm:username}). */
         private final LoginRateLimit customerLoginRateLimit = new LoginRateLimit();
+
+        /** tenant-maturity D — the STAFF password policy (RULE-SEC-056). */
+        @Valid
+        private final PasswordPolicySettings passwordPolicy = new PasswordPolicySettings();
+    }
+
+    /**
+     * tenant-maturity D — {@code erp.core.security.password-policy.*}: what a STAFF password must meet
+     * wherever a person chooses one. The {@code SEC-400-PASSWORD-POLICY} message names the default
+     * composition; an application that disables a requirement overrides that key in its own bundle.
+     */
+    @Getter
+    @Setter
+    public static class PasswordPolicySettings {
+
+        /** Fewest characters (code points). */
+        @Positive
+        private int minLength = 8;
+
+        /**
+         * Most characters (code points), at most 72: BCrypt hashes no more than 72 bytes, so a larger value
+         * fails startup (and the policy always refuses more than 72 UTF-8 bytes, whatever the characters).
+         */
+        @Positive
+        @Max(value = 72, message = "erp.core.security.password-policy.max-length must be at most 72: BCrypt hashes at most 72 bytes")
+        private int maxLength = 72;
+
+        /** At least one letter (any script). */
+        private boolean requireLetter = true;
+
+        /** At least one digit. */
+        private boolean requireDigit = true;
     }
 
     /** Login attempts allowed per key and period (erp-core step 06). */
@@ -247,10 +284,12 @@ public class ErpCoreProperties {
 
         /**
          * erp-core step 07: the default paths whose tenant comes from the path itself — the public
-         * file URLs, which must work in a plain browser/curl without a header or token.
+         * file URLs, which must work in a plain browser/curl without a header or token; tenant-maturity E adds
+         * the public branding the login page reads before any token exists.
          */
         public static final List<String> DEFAULT_PATH_TENANT_PATHS = List.of(
-            "/api/v1/public/files/{tenantCode}/**");
+            "/api/v1/public/files/{tenantCode}/**",
+            "/api/v1/public/tenants/{tenantCode}/branding");
 
         /**
          * Paths whose tenant is resolved from the {@code {tenantCode}} path variable instead of the
@@ -259,6 +298,46 @@ public class ErpCoreProperties {
          * anonymous there. Setting this replaces the list.
          */
         private List<String> pathTenantPaths = new ArrayList<>(DEFAULT_PATH_TENANT_PATHS);
+
+        /** tenant-maturity E (RULE-TENANT-022): the public branding's requests per client address (bucket4j). */
+        private final PublicBrandingRateLimit publicBrandingRateLimit = new PublicBrandingRateLimit();
+
+        /** tenant-maturity C5 (RULE-TENANT-027): {@code erp.core.tenant.export.*}. */
+        @Valid
+        private final Export export = new Export();
+    }
+
+    /**
+     * tenant-maturity C5 — {@code erp.core.tenant.export.*}: {@code POST /api/v1/platform/tenants/{id}/export} refuses a
+     * tenant with more rows than {@link #maxRows} (all files together) with 422 {@code TENANT_EXPORT_TOO_LARGE}.
+     */
+    @Getter
+    @Setter
+    public static class Export {
+
+        /** Most rows one tenant export may contain; read on every export. */
+        @Positive
+        private long maxRows = 200_000;
+
+        /** Review round 1 (RULE-TENANT-028): exports running at once on a node, all tenants; one more is 429 {@code TENANT_EXPORT_BUSY}. */
+        @Positive
+        private int maxConcurrent = 2;
+    }
+
+    /**
+     * tenant-maturity E — {@code erp.core.tenant.public-branding-rate-limit.*}: requests to
+     * {@code GET /api/v1/public/tenants/{tenantCode}/branding} allowed per client address and period, counted before the
+     * tenant is resolved (unknown codes included); over it → 429 {@code TENANT_BRANDING_RATE_LIMITED}. Per JVM.
+     */
+    @Getter
+    @Setter
+    public static class PublicBrandingRateLimit {
+
+        /** Requests allowed per {@link #period} for one client address. */
+        private int capacity = 60;
+
+        /** The refill period of {@link #capacity}. */
+        private Duration period = Duration.ofMinutes(1);
     }
 
     /** Links that point into the frontend (e.g. the emailed password-reset link). */
@@ -381,5 +460,26 @@ public class ErpCoreProperties {
         /** Most rows one export may contain; a larger result answers 422 {@code REPORT_EXPORT_TOO_LARGE}. */
         @Positive
         private int maxExportRows = 100_000;
+    }
+
+    /**
+     * tenant-maturity C4 — {@code erp.core.idempotency.*}: the optional {@code Idempotency-Key} header (first consumer
+     * {@code POST /api/v1/platform/tenants}); a stored answer is replayed for {@link #retention}, then purged.
+     */
+    @Getter
+    @Setter
+    public static class Idempotency {
+
+        /** Honours the {@code Idempotency-Key} header; {@code false} ignores it (no row is read or written). */
+        private boolean enabled = true;
+
+        /** How long a stored answer is replayed; an older key counts as unused. Must be positive. */
+        private Duration retention = Duration.ofHours(24);
+
+        /**
+         * Cron of {@code IdempotencyKeyRetentionJob}'s own {@code @Scheduled} trigger, which fires only in an
+         * application that enables scheduling; {@code -} (the default) disables it.
+         */
+        private String retentionCron = "-";
     }
 }

@@ -47,8 +47,8 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
                 + " where table_schema = 'public' and column_name = 'tenant_id' order by table_name");
 
         // 18 (step 05) + SEC_CUSTOMER_VERIFY_TOKEN (step 06) + NOTIF_INBOX (step 08) + CORE_NUMBER_SERIES (step 09)
-        // + CORE_AUDIT_EVENT (step 10)
-        assertThat(columns).hasSize(22);
+        // + CORE_AUDIT_EVENT (step 10) + CORE_IDEMPOTENCY_KEY (tenant-maturity C4, V21)
+        assertThat(columns).hasSize(23);
         assertThat(columns).allSatisfy(column -> {
             assertThat(column.get("is_nullable")).as("%s nullable", column.get("table_name"))
                 .isEqualTo(NULLABLE_TENANT_TABLES.contains(column.get("table_name")) ? "YES" : "NO");
@@ -95,7 +95,8 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
             });
         // 13 (step 05) + UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (step 06) + UQ_CORE_NUMBER_SERIES_CODE_PERIOD (step 09)
         // - UQ_CU_APP_CONFIG_CONFIG_KEY (step 09: now a unique index on (COALESCE(TENANT_ID, 0), CONFIG_KEY))
-        assertThat(uniqueColumns).hasSize(14);
+        // + UQ_CORE_IDEMPOTENCY_KEY (tenant-maturity C4, V21)
+        assertThat(uniqueColumns).hasSize(15);
         assertThat(uniqueColumns.values()).allSatisfy(cols -> assertThat(cols.split(",")).contains("tenant_id"));
     }
 
@@ -109,8 +110,8 @@ class TenantSchemaIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(byTenantAware.get(false)).containsExactlyInAnyOrderElementsOf(GLOBAL_ENTITIES);
         // + CustomerVerifyToken (step 06) + NotificationInboxItem (step 08), + NumberSeries - AppConfiguration (step 09)
-        // + AuditEvent (step 10)
-        assertThat(byTenantAware.get(true)).hasSize(21);
+        // + AuditEvent (step 10) + IdempotencyKey (tenant-maturity C4)
+        assertThat(byTenantAware.get(true)).hasSize(22);
     }
 
     @Test

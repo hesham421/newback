@@ -1,6 +1,7 @@
 package com.erp.testsupport;
 
 import com.jayway.jsonpath.JsonPath;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -108,6 +109,55 @@ public final class StaffApiClient {
 
     public HttpResponse<String> delete(String token, String path) {
         return send(authorized(json(path), token).DELETE());
+    }
+
+    /** tenant-maturity D — an unauthenticated {@code POST} carrying {@code X-Tenant-Code} (e.g. a public SEC path). */
+    public HttpResponse<String> postAnonymous(String tenantCode, String path, String jsonBody) {
+        return send(json(path).header("X-Tenant-Code", tenantCode).POST(body(jsonBody)));
+    }
+
+    /** tenant-maturity D — {@code PATCH} with a JSON body. */
+    public HttpResponse<String> patch(String token, String path, String jsonBody) {
+        return send(authorized(json(path), token).method("PATCH", body(jsonBody)));
+    }
+
+    /** tenant-maturity D — a staff login with an explicit password; the raw response (no assertion). */
+    public HttpResponse<String> login(String tenantCode, String username, String password) {
+        return send(json("/api/v1/sec/auth/login")
+            .header("X-Tenant-Code", tenantCode)
+            .POST(body("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}")));
+    }
+
+    /** tenant-maturity D — {@code PUT} of a multipart body with one part {@code file}. */
+    public HttpResponse<String> putFile(String token, String path, String fileName, byte[] content) {
+        return putFile(token, path, "file", fileName, content);
+    }
+
+    /** {@code PUT} of a multipart body with one part named {@code partName}. */
+    public HttpResponse<String> putFile(String token, String path, String partName, String fileName, byte[] content) {
+        String boundary = "----erp" + UUID.randomUUID().toString().replace("-", "");
+        ByteArrayOutputStream multipart = new ByteArrayOutputStream();
+        multipart.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + partName + "\"; filename=\""
+            + fileName + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        multipart.writeBytes(content);
+        multipart.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return send(authorized(HttpRequest.newBuilder(URI.create(baseUrl + path)), token)
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .header("Accept-Language", "en")
+            .PUT(HttpRequest.BodyPublishers.ofByteArray(multipart.toByteArray())));
+    }
+
+    /** tenant-maturity D — a plain GET without token or tenant header, answering the raw bytes. */
+    public HttpResponse<byte[]> anonymousGet(String path) {
+        try {
+            return http.send(HttpRequest.newBuilder(URI.create(path.startsWith("http") ? path : baseUrl + path)).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     /** {@code $.error.code} of an error envelope. */

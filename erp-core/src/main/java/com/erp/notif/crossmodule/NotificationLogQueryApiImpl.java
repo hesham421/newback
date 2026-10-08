@@ -2,6 +2,7 @@ package com.erp.notif.crossmodule;
 
 import com.erp.notif.entity.NotificationLog;
 import com.erp.notif.repository.NotificationLogRepository;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -32,5 +33,11 @@ public class NotificationLogQueryApiImpl implements NotificationLogQueryApi {
                 entity.getTemplateFk() == null ? null : entity.getTemplateFk().getTemplateCode(),
                 entity.getNotificationStatusId()))
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countDispatchedSince(Instant since) {
+        return repository.countByCreatedAtGreaterThanEqual(since);
     }
 }

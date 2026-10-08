@@ -83,4 +83,8 @@ public interface UserRepository
     /** QR-SEC-022 — the users-overview ACTIVE / DISABLED sub-counts, one USER_STATUS code each, STAFF realm (step 14). */
     @Query("SELECT COUNT(u) FROM User u WHERE u.statusCode = :statusCode AND u.realm = 'STAFF'")
     long countByStatus(@Param("statusCode") String statusCode);
+
+    /** REQ-SEC-090 (tenant-maturity B) — the current tenant's CUSTOMER accounts, any status (tenant usage figures). */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.realm = 'CUSTOMER'")
+    long countCustomers();
 }

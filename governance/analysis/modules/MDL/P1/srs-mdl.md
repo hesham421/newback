@@ -746,6 +746,7 @@ analysis left the names to SEC ("derived from the page code").
 | REMOVED | consumer | FIN — the consumer the body's examples assume (AC-MDL-001 `FIN`, AC-MDL-013, platform-summary "FIN → HARD → MDL"): `fin` was removed from erp-core in step 01; no XM-FIN-001 and no FIN-owned type exists. | docs/steps/01-report.md |
 | NEW | — | No registration SPI: types and values are registered by `POST` or Flyway `INSERT` only (RULE-MDL-013). | mdl/crossmodule/ (only `MdlLookupApi`) |
 | NEW | — | MDL publishes and consumes **no** domain event (`com.erp.events`); its only outbound records are the `@Audited` rows. | mdl/ (no `events` reference) |
+Deviation records: `docs/DEVIATIONS.md` [05], [06], [10], [11].
 
 
 ## Implementation Addendum — erp-core 1.3.0

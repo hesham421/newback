@@ -2,6 +2,7 @@ package com.erp.sec.repository;
 
 import com.erp.sec.entity.RoleActionGrant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -71,6 +72,25 @@ public interface RoleActionGrantRepository
         + "WHERE g.role.rolePk = :rolePk AND s.module.moduleRegPk = :moduleRegPk")
     List<RoleActionGrant> findCascadeTargets(@Param("rolePk") Long rolePk,
                                              @Param("moduleRegPk") Long moduleRegPk);
+
+    /**
+     * Locates the grant the action revoke (REQ-SEC-081) deletes; an empty result is the
+     * {@code SEC-404-GRANT} path. {@code JOIN FETCH} loads the action and its screen for the
+     * RULE-SEC-055 decision and the {@code ACTION_REVOKED} audit entry (A.2.6).
+     */
+    @Query("SELECT g FROM RoleActionGrant g JOIN FETCH g.action a JOIN FETCH a.screen "
+        + "WHERE g.role.rolePk = :rolePk AND a.actionRegPk = :actionRegPk")
+    Optional<RoleActionGrant> findByRoleAndAction(@Param("rolePk") Long rolePk,
+                                                  @Param("actionRegPk") Long actionRegPk);
+
+    /**
+     * The role's action grants on one screen — the facts RULE-SEC-054 (screen revoke) and
+     * RULE-SEC-055 (VIEW revoke) decide their cascade from. {@code JOIN FETCH} as above.
+     */
+    @Query("SELECT g FROM RoleActionGrant g JOIN FETCH g.action a JOIN FETCH a.screen s "
+        + "WHERE g.role.rolePk = :rolePk AND s.screenRegPk = :screenRegPk")
+    List<RoleActionGrant> findAllByRoleAndScreen(@Param("rolePk") Long rolePk,
+                                                 @Param("screenRegPk") Long screenRegPk);
 
     /**
      * QR-SEC-022 — {@code privilegedRoleCount}. The gateway code is a parameter so the query

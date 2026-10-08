@@ -140,17 +140,21 @@ should be `false`.
 |---|---|---|
 | `erp.core.security.bootstrap-admin-password` | empty | Sets the password of the seeded `admin` (SYS_ADMIN of tenant `PLATFORM`) once, on first start, and activates it. Without it nobody can log in as `admin`; there is no `admin/admin`. |
 | `erp.core.security.jwt.expiration-ms` | `3600000` | Access-token lifetime. |
+| `erp.core.security.password-policy.min-length` / `max-length` / `require-letter` / `require-digit` | `8` / `72` / `true` / `true` | The STAFF password policy (1.3.0); `max-length` above 72 fails startup and every password is also limited to 72 UTF-8 bytes (BCrypt; an Arabic letter takes 2): user create, reset completion, an administrator setting a password, the own change and a new tenant's first administrator answer 400 `SEC-400-PASSWORD-POLICY` otherwise. The message names the default composition; override the key in your bundle if you disable a requirement. Customer passwords get only the 72-byte limit. |
 | `erp.core.frontend.base-url`, `password-reset-path`, `customer-verify-path`, `customer-password-reset-path` | — / `/reset` / `/customer/verify` / `/customer/reset` | Links in e-mails. |
 | `erp.core.security.public-paths`, `customer-public-paths` | see `ErpCoreProperties.Security.DEFAULT_*` | Unauthenticated paths of the staff and customer chains. **Setting one replaces the whole list**, so start from the defaults. |
-| `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable. |
+| `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable (since 1.3.0 also the public branding `/api/v1/public/tenants/{tenantCode}/branding`: keep it when you replace the list). |
 | `erp.core.files.storage` | `DB` | `DB`, `LOCAL` (`erp.core.files.local.root`) or `S3` (`erp.core.files.s3.*`). |
 | `erp.core.files.max-content-bytes` / `max-request-bytes` / `public-base-url` | 5 MB / 10 MB / empty | Upload limits and the origin of public file URLs. |
 | `erp.core.notif.retry.*` | 5 attempts, 2 s doubling, 32 s maximum | Asynchronous delivery retries. |
 | `erp.core.notif.requeue.enabled` / `stale-after-minutes` / `interval-ms` | `false` / `10` / `60000` | Requeue job for stale `QUEUED` notifications. It runs only if the application enables scheduling. **Enable it in production** (see §7). |
 | `erp.core.events.executor.*` | 4 / 16 / 500 / `erp-event-` | Event worker pool. |
 | `erp.core.security.customer-login-rate-limit.capacity` / `period` | `10` / `1m` | Customer login limit per `tenant:realm:username`. |
+| `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | `60` / `1m` | (1.3.0) Requests to the anonymous `GET /api/v1/public/tenants/{tenantCode}/branding` per client address (`getRemoteAddr()`; an IPv6 address counts by its /64), counted before the tenant is looked up (unknown codes included); over it 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` (seconds). Idle buckets expire after `period`, at most 10 000 addresses are tracked. Per JVM. Behind a reverse proxy see "Client address behind a proxy" below. |
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
+| `erp.core.idempotency.enabled` / `retention` / `retention-cron` | `true` / `24h` / `-` (off) | (1.3.0) The `Idempotency-Key` mechanism (§3): `false` ignores the header; a stored answer is replayed for `retention` (must be positive; an older key counts as unused); the cron of `IdempotencyKeyRetentionJob`, which deletes older rows, fires only if the application enables scheduling. The request hash is keyed by a key derived from `erp.core.security.jwt.secret`: rotating the secret turns a retry within the retention into a 409. |
 | `erp.core.report.max-export-rows` | `100000` | Export cap. Above it the export answers 422 `REPORT_EXPORT_TOO_LARGE`. |
+| `erp.core.tenant.export.max-rows` / `max-concurrent` | `200000` / `2` | (1.3.0) The most rows one tenant data export (`POST /api/v1/platform/tenants/{id}/export`) may contain, all files together (more answers 422 `TENANT_EXPORT_TOO_LARGE`; it bounds the number of rows, not their width), and how many exports may run at once on a node (one more answers 429 `TENANT_EXPORT_BUSY`). Read on every export; must be positive. |
 
 ### Optional infrastructure
 
@@ -161,7 +165,7 @@ Each piece is off unless the application adds the dependency and its configurati
 | Redis | `spring-boot-starter-data-redis` + `spring.data.redis.*` | FILE download tokens use the in-memory store (single node only). `spring.cache.type=redis` also works for the settings cache. |
 | SMTP | `spring-boot-starter-mail` + `spring.mail.host` (and credentials) | No `EMAIL` channel provider exists, so EMAIL notifications end `SKIPPED_NO_PROVIDER`. |
 | S3 / S3-compatible | `software.amazon.awssdk:s3` + `erp.core.files.storage=S3`, `erp.core.files.s3.bucket` (`region`, `endpoint`, `access-key`, `secret-key`, `public-base-url`) | `S3` cannot be selected. Startup fails with a message naming the property if it is selected anyway. |
-| Scheduling | `@EnableScheduling` on an application `@Configuration` | Core never enables scheduling. Without it the requeue and retention triggers never fire. You can call `NotificationRequeueJob.requeueStale()` and `AuditRetentionJob.run()` yourself. |
+| Scheduling | `@EnableScheduling` on an application `@Configuration` | Core never enables scheduling. Without it the requeue and retention triggers never fire. You can call `NotificationRequeueJob.requeueStale()`, `AuditRetentionJob.run()` and `IdempotencyKeyRetentionJob.run()` yourself. |
 
 ## 3. Database: migrations, tenants, number series, settings
 
@@ -176,10 +180,67 @@ Each piece is off unless the application adds the dependency and its configurati
 - **Tenant context.** On a request it comes from the token's `tid` claim or the `X-Tenant-Code` header.
   Outside a request (jobs, listeners), wrap the work in
   `com.erp.tenant.TenantContext.runAs(tenantId, ...)` / `callAs`, around the `@Transactional` call.
+- **Suspension and token cut-off (1.3.0).** Suspending a tenant ends its sessions; re-activating it, or
+  `POST /api/v1/platform/tenants/{id}/revoke-tokens`, cuts off every token issued before (401
+  `TENANT_TOKEN_REVOKED` on any non-public path, whole-second precision). A client treats it like any 401 and signs
+  in again; the login itself ignores a stale `Authorization` header. Revoke-tokens refuses every token up to and
+  including its own second (a login in that second signs in again a moment later); if it answers 500
+  `TENANT_REVOKE_SESSIONS_FAILED`, the tokens are already refused but the sessions were not ended — call it again. A job that works per tenant can skip suspended
+  tenants with `com.erp.tenant.crossmodule.TenantLookupApi.isActive(tenantId)` (uncached).
 - **Reference data for new tenants.** If the application seeds reference data that every tenant needs,
   it implements `com.erp.tenant.TenantProvisioningContributor` (`order()`,
   `provision(TenantProvisioning)`). Use JDBC with explicit `TENANT_ID` and copy from the source tenant.
   Provisioning (`POST /api/v1/platform/tenants`) runs it in the same transaction.
+- **Idempotent POSTs (1.3.0).** `POST /api/v1/platform/tenants` accepts an optional `Idempotency-Key` header
+  (1 to 64 characters of `A-Z a-z 0-9 . _ : -`; otherwise 400 `IDEMPOTENCY_KEY_INVALID`). The first request runs and
+  its 2xx answer is stored in `CORE_IDEMPOTENCY_KEY` in the same transaction (a failure stores nothing, so the key can be
+  retried); a retry with the same key, the same body (compared as canonical JSON: property order and whitespace do not
+  matter) and the same user answers the stored status and body with the response header `Idempotent-Replayed: true`
+  and runs nothing; another body or another user under the key answers 409 `IDEMPOTENCY_KEY_CONFLICT`. A concurrent
+  request with the same key waits for the first one and then replays it. Keys live `erp.core.idempotency.retention`
+  (24 h). A client generates one key per logical submission (a UUID) and reuses it for every retry of that submission.
+  An application can give its own expensive `POST` the same behaviour: inject
+  `com.erp.common.idempotency.IdempotentResponses` and return
+  `idempotentResponses.craftResponse(idempotencyKey, "POST /api/v1/my/things", request, MyResponse.class,
+  () -> service.create(request))` with `@RequestHeader(name = IdempotentResponses.IDEMPOTENCY_KEY_HEADER, required =
+  false) String idempotencyKey`; the service method must be `@Transactional` (it joins the key's transaction) and must
+  not commit work in its own `REQUIRES_NEW` transactions. A replay is answered before the service method, so before
+  its `@PreAuthorize`: authorize the path in the security chain as well, or the stored answer can be replayed to its
+  user for up to the retention period after that user's permission was revoked. Behind another origin, allow the request header
+  `Idempotency-Key` and expose `Idempotent-Replayed` in your CORS configuration (core configures no CORS).
+- **Tenant data export (1.3.0).** `POST /api/v1/platform/tenants/{id}/export` (`PLATFORM_TENANT_MANAGE`) answers a
+  ZIP of one CSV per table (UTF-8 with BOM, RFC 4180, a text starting with `= + - @` TAB or CR prefixed with `'`) and
+  `manifest.json`, stored as a PRIVATE file document of the PLATFORM tenant, and a single-use download token for
+  `GET /api/v1/files/download?token=` (10 minutes, same user; a new one with `POST /api/v1/files/{id}/access-token`).
+  The archive is a **restricted** FILE document: only a user holding `PLATFORM_TENANT_MANAGE` sees it through the FILE
+  API (list, metadata, token, download, delete); anyone else gets 404 `FILE_DOCUMENT_NOT_FOUND`, whatever FILE permission
+  they hold. Deleting it (`DELETE /api/v1/files/{id}?action=DELETE`) removes its bytes and keeps a metadata tombstone.
+  It is synchronous and bounded by `erp.core.tenant.export.max-rows`; one export per tenant at a time **per node**
+  (409 `TENANT_EXPORT_IN_PROGRESS`). Proxies in front of the platform API must allow a request of tens of seconds near
+  the limit; at most `erp.core.tenant.export.max-concurrent` exports run at once per node (429 `TENANT_EXPORT_BUSY`). Archives
+  stay until deleted (no automatic retention yet: delete them once downloaded). To include an application's own tenant tables, implement
+  `com.erp.tenant.TenantExportContributor` as a bean: `moduleCode()` (the ZIP folder, `^[A-Z][A-Z0-9_]{0,31}$`, unique —
+  not one of core's `AUDIT CU FILE MDL NOTIF SEC SEQUENCE TENANT`), `countRows(tenantId)` (the rows `export` will write)
+  and `export(TenantExport export)`, e.g.
+
+  ```java
+  @Component
+  public class ShopTenantExportContributor implements TenantExportContributor {
+      private static final List<String> ORDER_COLUMNS = List.of("ID", "ORDER_NO", "TOTAL", "CREATED_AT");
+      private final JdbcTemplate jdbc;
+      public ShopTenantExportContributor(DataSource dataSource) { this.jdbc = TenantExportJdbc.streaming(dataSource); }
+      public String moduleCode() { return "SHOP"; }
+      public long countRows(Long tenantId) { return TenantExportJdbc.countOfTenant(jdbc, tenantId, "SHOP_ORDER"); }
+      public void export(TenantExport export) {
+          export.csv("SHOP_ORDER", ORDER_COLUMNS, rows -> jdbc.query(
+              TenantExportJdbc.selectOfTenant(ORDER_COLUMNS, "SHOP_ORDER", "ID"), rows::addRow, export.tenantId()));
+      }
+  }
+  ```
+
+  Both methods run inside `TenantContext.callAs(tenantId)` in one read-only snapshot transaction: never write, name
+  `TENANT_ID` in every statement, stream (never load a table into memory), order by the primary key, and never export
+  a secret (password or token hashes, credentials, file bytes).
 - **Number series.** Inject `com.erp.sequence.crossmodule.NumberSeriesApi` (`next(code)`,
   `preview(code)`). Seed series in a `V1000+` script for `PLATFORM`; new tenants receive copies with the
   counter at 1. The pattern tokens are `{PREFIX} {YYYY} {YY} {MM} {SEQ:n} {TENANT}`, and the reset policy
@@ -238,9 +299,15 @@ bean with the same name and the same order.
 
 Core publishes these events, all in `com.erp.events`: `UserCreatedEvent`, `UserStatusChangedEvent`,
 `CustomerRegisteredEvent`, `CustomerVerifiedEvent`, `PasswordResetRequestedEvent`, `TenantCreatedEvent`,
-`FileDocumentPublishedEvent`, `NotificationRequestedEvent`, `NotificationDispatchedEvent` and
-`NotificationFailedEvent`. Each extends `DomainEvent`, which carries `id` (the idempotency key),
-`occurredAt`, `tenantId`, `actor` and `realm`.
+`FileDocumentPublishedEvent`, `NotificationRequestedEvent`, `NotificationDispatchedEvent`,
+`NotificationFailedEvent` and (1.3.0) `UserPasswordChangedEvent` (`userId`, `byAdmin`; NOTIF answers it with the
+`STAFF_PASSWORD_CHANGED` e-mail), `TenantSuspendedEvent` (`tenantCode`, `reason`) and `TenantActivatedEvent`
+(`tenantCode`) — 13 in all. Each extends `DomainEvent`, which carries `id` (the idempotency key),
+`occurredAt`, `tenantId`, `actor` and `realm`. The two tenant events (1.3.0) are published by the platform's
+`PATCH /api/v1/platform/tenants/{id}/status` on a real transition only; their `tenantId` is the tenant that changed
+and their `actor` the platform operator. Core reacts to them itself — SEC ends the suspended tenant's sessions, NOTIF
+holds a suspended tenant's queued notifications and sends them on activation — and an application may listen too
+(e.g. to pause its own jobs for a suspended tenant).
 
 ```java
 @Async(ErpCoreEvents.EXECUTOR)
@@ -307,8 +374,33 @@ provider implements `com.erp.file.storage.StorageProvider`: `key()`,
 
 Supporting a new key also needs a core migration that widens `CHK_FILE_DOCUMENT_STORAGE_PROVIDER`, so
 propose it to core. Other modules read files through
-`com.erp.file.crossmodule.FileDocumentLookupApi` (`isAvailable`, `publicUrl`). Public files are served at
-a stable URL once a category allows it (`allowPublic`) and the document's visibility is `PUBLIC`.
+`com.erp.file.crossmodule.FileDocumentLookupApi` (`isAvailable`, `publicUrl`, and since 1.3.0 `publicUrls`). Public
+files are served at a stable URL once a category allows it (`allowPublic`) and the document's visibility is `PUBLIC`.
+Since 1.3.0 `com.erp.file.crossmodule.FileImageStoreApi` stores a small public image for a core module
+(`storePublicImage(ImageStoreRequest)` → `ImageStoreResult`, `discard(id)`): the type is detected from the bytes
+(PNG, JPEG, WebP; SVG only when the request allows it and it passes a strict allow-list — logos must be plain /
+optimised SVG: SVGO, Inkscape "Optimized SVG", Figma or Illustrator export, no editor metadata), the document is stored
+without a category and published at once under a random slug (ADR-FILE-008). Keep
+`spring.servlet.multipart.max-file-size` above the image limits (the reference app uses 15 MB): Spring's default
+1 MB ceiling answers an over-size upload before the image rule can (400 `VALIDATION_ERROR` instead of the image error).
+
+Tenant branding (1.3.0): the platform operator sets a tenant's logo (`PUT` / `DELETE
+/api/v1/platform/tenants/{id}/logo`, ≤ 1 MB PNG / JPEG / WebP / plain SVG) and brand colour (`PATCH …/{id}/branding`);
+the UI reads them through `GET /api/v1/tenant/me` (any signed-in user, staff or customer) and, before login,
+`GET /api/v1/public/tenants/{tenantCode}/branding` (anonymous, rate-limited per address). `logoUrl` is a public file
+URL: show it with `<img>` only — an SVG logo is served as an attachment with `nosniff` and a sandbox CSP. On 429
+from the public branding show the platform mark alone (no error toast) and do not ask again before `Retry-After`.
+Public files are cached for a day (`Cache-Control: max-age=86400, public`): every upload gets a new URL (new random
+slug), but a removed or replaced logo's old URL can still be served from a browser or CDN cache for up to 24 h — always
+take `logoUrl` from the branding answer, never from a remembered URL.
+
+**Client address behind a proxy.** The branding rate limit (and the audit log's IP) use
+`HttpServletRequest.getRemoteAddr()`. Behind a reverse proxy or load balancer that is the proxy's address, so every
+visitor would share one budget. Set `server.forward-headers-strategy=native` together with
+`server.tomcat.remoteip.internal-proxies` (a regular expression matching only your proxies' addresses): Tomcat then takes
+the client from `X-Forwarded-For` only when the request comes from a listed proxy. Do not use
+`server.forward-headers-strategy=framework` unless the proxy always overwrites `X-Forwarded-For`: Spring's
+`ForwardedHeaderFilter` trusts the header from any client, so a caller could pick its own address and escape the limit.
 
 ## 9. Audit
 

@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "G,C3",
+  "current_step": null,
   "steps": [
     {
       "id": "A",
@@ -34,19 +34,19 @@
       "depends_on": [],
       "wave": "1",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/g-sec-grant-revoke",
-      "worktree": ".worktrees/tm-g",
+      "worktree": null,
       "attempts": 2,
       "deviations": 6,
       "implementer_agent": "a4bca255ce095a936",
       "reviewer_agent": "a141731810d9ee97b",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-g-report.md",
-      "merged_commit": null
+      "merged_commit": "486a8a8"
     },
     {
       "id": "D",
@@ -61,16 +61,19 @@
         "V16__sec_user_profile.sql",
         "V17__notif_seed_password_changed.sql"
       ],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/d-sec-user-profile-passwords",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 3,
+      "deviations": 12,
+      "implementer_agent": "a13c59d7399aab600",
+      "reviewer_agent": "a229488dd88b15f25",
+      "review": {
+        "verdict": "PASS",
+        "round": 3
+      },
       "report": "docs/steps/tm-d-report.md",
-      "merged_commit": null
+      "merged_commit": "38f6d91"
     },
     {
       "id": "C3",
@@ -81,16 +84,19 @@
       ],
       "wave": "2",
       "migrations": [],
-      "status": "IN_PROGRESS",
+      "status": "COMPLETE",
       "branch": "tm/c3-tenant-isolation-tests",
-      "worktree": ".worktrees/tm-c3",
-      "attempts": 0,
-      "deviations": 0,
+      "worktree": null,
+      "attempts": 1,
+      "deviations": 5,
       "implementer_agent": "ac59dc8798c2f6e2b",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "abd36c5aa783de8be",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-c3-report.md",
-      "merged_commit": null
+      "merged_commit": "260778a"
     },
     {
       "id": "B",
@@ -105,16 +111,19 @@
         "V18__tenant_profile.sql",
         "V19__tenant_lifecycle.sql"
       ],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/b-tenant-level-1",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 1,
+      "deviations": 11,
+      "implementer_agent": "ae63a19e09096e36c",
+      "reviewer_agent": "a62a12a6ee8762b83",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-b-report.md",
-      "merged_commit": null
+      "merged_commit": "79aa807"
     },
     {
       "id": "E",
@@ -128,16 +137,19 @@
       "migrations": [
         "V20__tenant_branding.sql"
       ],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/e-tenant-branding",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 2,
+      "deviations": 14,
+      "implementer_agent": "a9fbad2c773b21602",
+      "reviewer_agent": "a6978d31d755e3c2e",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-e-report.md",
-      "merged_commit": null
+      "merged_commit": "ee74409"
     },
     {
       "id": "C12",
@@ -149,16 +161,19 @@
       ],
       "wave": "5",
       "migrations": [],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/c12-tenant-events-token-cutoff",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 2,
+      "deviations": 9,
+      "implementer_agent": "ad223efb12f48d324",
+      "reviewer_agent": "a5f9d987dd2e0d394",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-c12-report.md",
-      "merged_commit": null
+      "merged_commit": "381d000"
     },
     {
       "id": "C4",
@@ -171,16 +186,19 @@
       "migrations": [
         "V21__core_idempotency_key.sql"
       ],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/c4-idempotent-provisioning",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 2,
+      "deviations": 9,
+      "implementer_agent": "a8b906cdb8e688079",
+      "reviewer_agent": "a24929cffff2f1260",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-c4-report.md",
-      "merged_commit": null
+      "merged_commit": "bf37562"
     },
     {
       "id": "C6",
@@ -191,16 +209,19 @@
       ],
       "wave": "6",
       "migrations": [],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/c6-scoped-value-spike",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 1,
+      "deviations": 7,
+      "implementer_agent": "a565847c451d8db0c",
+      "reviewer_agent": "abb709ddcfcb64019",
+      "review": {
+        "verdict": "PASS",
+        "round": 1
+      },
       "report": "docs/steps/tm-c6-report.md",
-      "merged_commit": null
+      "merged_commit": "d351bcd"
     },
     {
       "id": "C5",
@@ -211,17 +232,22 @@
         "C6"
       ],
       "wave": "7",
-      "migrations": [],
-      "status": "PENDING",
+      "migrations": [
+        "V22__file_document_required_authority.sql"
+      ],
+      "status": "COMPLETE",
       "branch": "tm/c5-tenant-export",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
-      "reviewer_agent": null,
-      "review": null,
+      "attempts": 2,
+      "deviations": 11,
+      "implementer_agent": "ab47eee7e504db185",
+      "reviewer_agent": "acfb16d2d11b7ffe6",
+      "review": {
+        "verdict": "PASS",
+        "round": 2
+      },
       "report": "docs/steps/tm-c5-report.md",
-      "merged_commit": null
+      "merged_commit": "840a450"
     },
     {
       "id": "Z",
@@ -232,16 +258,19 @@
       ],
       "wave": "8",
       "migrations": [],
-      "status": "PENDING",
+      "status": "COMPLETE",
       "branch": "tm/z-closure",
       "worktree": null,
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "deviations": 5,
+      "implementer_agent": "a2ae0c0d721c960fe",
       "reviewer_agent": null,
-      "review": null,
+      "review": {
+        "verdict": "PASS",
+        "round": 1
+      },
       "report": "docs/steps/tm-z-report.md",
-      "merged_commit": null
+      "merged_commit": "45b5de9"
     }
   ],
   "halts": [],
@@ -317,6 +346,301 @@
       "step": "G",
       "event": "REVIEW",
       "note": "fix round 1 done 0e0c7a2: ids renumbered (REQ-SEC-080/081...), generator binds common-helper codes (28/29 rows restored), menu note; round-2 review dispatched"
+    },
+    {
+      "at": "2026-10-07T20:14:36Z",
+      "step": "G",
+      "event": "COMPLETE",
+      "note": "merged 486a8a8; verify 399/10, generator 65 OK; doc conflicts (README count, DEVIATIONS) resolved append-both"
+    },
+    {
+      "at": "2026-10-07T20:15:11Z",
+      "step": "D",
+      "event": "START",
+      "note": "wave 2 (D) dispatched"
+    },
+    {
+      "at": "2026-10-07T20:15:11Z",
+      "step": "C3",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 2c11618 (399/10, P-LIVE 150 pass; JdbcTemplate audit 15/15 ok)"
+    },
+    {
+      "at": "2026-10-07T20:27:06Z",
+      "step": "C3",
+      "event": "FIXING",
+      "note": "reviewer FAIL: archived run report names wrong code under test (stale defaults); code/tests PASS; trial merge with G green 408/10"
+    },
+    {
+      "at": "2026-10-07T20:27:06Z",
+      "step": "D",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-07T20:36:10Z",
+      "step": "C3",
+      "event": "COMPLETE",
+      "note": "merged 260778a; verify 408/10; P-LIVE 156/156 archived (run 261008003190)"
+    },
+    {
+      "at": "2026-10-07T21:25:55Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 79b612f (mvn 432/10, P-LIVE 170/170, api-docs 115 ops); security-focused review dispatched"
+    },
+    {
+      "at": "2026-10-07T21:42:18Z",
+      "step": "D",
+      "event": "FIXING",
+      "note": "reviewer FAIL: SVG sanitiser bypasses (namespace-prefixed script, CSS escapes, SMIL) -> allow-list XML validation; BCrypt 72-byte limit -> 500 -> policy cap; plus 4 low (missing part 500, RULE-NOTIF id, tenant-create doc, stored filename)"
+    },
+    {
+      "at": "2026-10-07T22:35:18Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "fix round 1 done d07cd20 (SVG allow-list parse, 72-byte cap, multipart 400, ids, docs, stored names; mvn 480/10, P-LIVE 171/171); round-2 review dispatched"
+    },
+    {
+      "at": "2026-10-07T22:44:51Z",
+      "step": "D",
+      "event": "FIXING",
+      "note": "round-2 FAIL on SVG only: PIs outside root, <style> split by comment/CDATA, image-set(); LOW nested <use> amplification; passwords/multipart/names/ids/docs PASS; fix round 2 sent"
+    },
+    {
+      "at": "2026-10-07T22:55:28Z",
+      "step": "D",
+      "event": "REVIEW",
+      "note": "fix round 2 done 81224b1 (document-level PI refusal, style concat check, grammar-based CSS allow-list, <use> limits, data-*; mvn 543/10, P-LIVE 171/171); round-3 review dispatched"
+    },
+    {
+      "at": "2026-10-07T23:07:10Z",
+      "step": "D",
+      "event": "COMPLETE",
+      "note": "merged 38f6d91; verify 552/10; 3 review rounds (SVG allow-list, BCrypt 72-byte cap, multipart 400); LOW duplicate-id <use> guard carried to E"
+    },
+    {
+      "at": "2026-10-07T23:07:10Z",
+      "step": "B",
+      "event": "START",
+      "note": "wave 3 (B) dispatched"
+    },
+    {
+      "at": "2026-10-07T23:07:44Z",
+      "step": "B",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T00:03:30Z",
+      "step": "B",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE e7806e4 (mvn 572/10, P-LIVE 181/181, api-docs 118 ops); reviewer dispatched"
+    },
+    {
+      "at": "2026-10-08T00:18:03Z",
+      "step": "B",
+      "event": "FIXING",
+      "note": "reviewer PASS with 5 LOW (PLATFORM self-target admin-reset, no PLATFORM audit row, op-id churn, untested 409, username logging); fixing before merge"
+    },
+    {
+      "at": "2026-10-08T00:33:38Z",
+      "step": "B",
+      "event": "COMPLETE",
+      "note": "merged 79aa807; verify 574/10; P-LIVE 182/182; 5 LOW review items fixed (PLATFORM admin-reset refused, PLATFORM audit row, op-id churn, 409 test, logging)"
+    },
+    {
+      "at": "2026-10-08T00:33:38Z",
+      "step": "E",
+      "event": "START",
+      "note": "wave 4 (E) dispatched"
+    },
+    {
+      "at": "2026-10-08T00:34:11Z",
+      "step": "E",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T01:31:04Z",
+      "step": "E",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE d8e3839 (mvn 605/10, P-LIVE 192/192, api-docs 123 ops); reviewer dispatched"
+    },
+    {
+      "at": "2026-10-08T01:44:06Z",
+      "step": "E",
+      "event": "FIXING",
+      "note": "reviewer PASS; fixing MEDIUM test-pool exhaustion (Hikari 10x~10 contexts = PG max_connections), method-aware realm skip, proxy docs, IPv6 /64 + expiring buckets, generator string-literal bug"
+    },
+    {
+      "at": "2026-10-08T01:59:45Z",
+      "step": "E",
+      "event": "REVIEW",
+      "note": "fix round 1 done 324953c (test pool 4/1, GET-only realm skip, /64 + LRU-expiry buckets + Retry-After, generator literal fix, MockMvc test; mvn 607/10, P-LIVE 192/192); focused re-review"
+    },
+    {
+      "at": "2026-10-08T02:10:36Z",
+      "step": "E",
+      "event": "COMPLETE",
+      "note": "merged ee74409; verify 607/10; P-LIVE 192/192; review fixes: test pool 4/1, GET-only realm skip, /64+LRU buckets, Retry-After, generator literal fix"
+    },
+    {
+      "at": "2026-10-08T02:10:36Z",
+      "step": "C12",
+      "event": "START",
+      "note": "wave 5 (C1+C2) dispatched"
+    },
+    {
+      "at": "2026-10-08T02:11:08Z",
+      "step": "C12",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T02:58:59Z",
+      "step": "C12",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 3d76c69 (mvn 618/10, P-LIVE 196/196, api-docs 124 ops); security-focused review dispatched"
+    },
+    {
+      "at": "2026-10-08T03:14:12Z",
+      "step": "C12",
+      "event": "FIXING",
+      "note": "reviewer PASS; fixing: revoke cut-off rounded up to next second + audited retryable failure path (cut-off alone sufficient), dangling RULE-TENANT-012/015 cites, ErpCoreEvents deviation line"
+    },
+    {
+      "at": "2026-10-08T03:26:48Z",
+      "step": "C12",
+      "event": "REVIEW",
+      "note": "fix round 1 done 1fdc861 (revoke cut-off ceil to next second, audited retryable failure path, ids, deviations; mvn 623/10, P-LIVE 196/196); focused re-review"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C12",
+      "event": "COMPLETE",
+      "note": "merged 381d000; verify 623/10; P-LIVE 196/196"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C4",
+      "event": "START",
+      "note": "wave 6 (C4 parallel with C6)"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C6",
+      "event": "START",
+      "note": "wave 6 (C6 spike parallel with C4)"
+    },
+    {
+      "at": "2026-10-08T03:37:29Z",
+      "step": "C4",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T03:37:30Z",
+      "step": "C6",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T04:13:13Z",
+      "step": "C6",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 5f0d187: NO-GO (ScopedValue final, perf neutral, but set/clear outside scope needs ThreadLocal fallback; unscoped-set refusal breaks 282 tests = MAJOR); spike reverted, merges ADR REJECTED + leak test"
+    },
+    {
+      "at": "2026-10-08T04:19:49Z",
+      "step": "C4",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE a6ec088 (mvn 640/10, P-LIVE 199/199, api-docs 124); security-focused review dispatched"
+    },
+    {
+      "at": "2026-10-08T04:25:43Z",
+      "step": "C6",
+      "event": "FIXING",
+      "note": "reviewer PASS (M5 reproduced, mutants caught, revert complete); docs-only fixes: VIRTUAL leak-test wording, B1-unreachable note, archive M2 harness"
+    },
+    {
+      "at": "2026-10-08T04:32:22Z",
+      "step": "C6",
+      "event": "COMPLETE",
+      "note": "merged d351bcd (NO-GO, docs + leak test only); verify 631/10"
+    },
+    {
+      "at": "2026-10-08T04:41:11Z",
+      "step": "C4",
+      "event": "FIXING",
+      "note": "reviewer PASS (41 probes; replay guarded by chain, atomic, concurrency ok); fixing: ON CONFLICT claim (no key in logs), CONSUMING authz note, generator binds IdempotentResponses + brace fix, ArchUnit common->modules rule"
+    },
+    {
+      "at": "2026-10-08T04:56:56Z",
+      "step": "C4",
+      "event": "REVIEW",
+      "note": "fix round 1 done 279e37e (ON CONFLICT claim, authz note, generator binds common components + brace fix, ArchUnit common rule; mvn 642/10, P-LIVE 199/199); focused re-review"
+    },
+    {
+      "at": "2026-10-08T05:14:33Z",
+      "step": "C4",
+      "event": "COMPLETE",
+      "note": "merged bf37562; verify 650/10; generator 71 OK; P-LIVE 199/199"
+    },
+    {
+      "at": "2026-10-08T05:14:33Z",
+      "step": "C5",
+      "event": "START",
+      "note": "wave 7 (C5 export)"
+    },
+    {
+      "at": "2026-10-08T06:07:02Z",
+      "step": "C5",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 5c408b1 (mvn 661/10, P-LIVE 202/202, api-docs 125); data-security-focused review dispatched"
+    },
+    {
+      "at": "2026-10-08T06:24:40Z",
+      "step": "C5",
+      "event": "FIXING",
+      "note": "reviewer FAIL: HIGH archive readable with PERM_FILE_BROWSER_VIEW only (list/token/download via generic FILE endpoints) -> REQUIRED_AUTHORITY on FILE_DOCUMENT (V22 reserved); MEDIUM soft delete keeps bytes; LOW slugs/storage refs in audit CHANGES; LOW orphan tenant audit row; concurrency cap"
+    },
+    {
+      "at": "2026-10-08T06:52:48Z",
+      "step": "C5",
+      "event": "REVIEW",
+      "note": "fix round 1 done 10a51ad (REQUIRED_AUTHORITY V22 + 404 on all FILE paths, physical delete of restricted content, audit ignore + scrub, same-tx audit, max-concurrent 429; mvn 669/10, P-LIVE 204/204); round-2 review"
+    },
+    {
+      "at": "2026-10-08T07:02:53Z",
+      "step": "C5",
+      "event": "COMPLETE",
+      "note": "merged 840a450; verify 669/10; P-LIVE 204/204; HIGH fixed (REQUIRED_AUTHORITY, V22)"
+    },
+    {
+      "at": "2026-10-08T07:02:54Z",
+      "step": "Z",
+      "event": "START",
+      "note": "closure dispatched"
+    },
+    {
+      "at": "2026-10-08T07:03:31Z",
+      "step": "Z",
+      "event": "DISPATCH",
+      "note": "closure implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T07:44:22Z",
+      "step": "Z",
+      "event": "REVIEW",
+      "note": "closure COMPLETE 143affd: 226/226 HTTP (all profiles), mvn 669/10, docs consistency, frontend handover, plan report; recommendation MINOR 1.3.0; review dispatched"
+    },
+    {
+      "at": "2026-10-08T08:01:51Z",
+      "step": "Z",
+      "event": "COMPLETE",
+      "note": "merged 45b5de9; verify 669/10; HTTP 226/226 all profiles; plan COMPLETE (backend); release recommendation MINOR 1.3.0 by recorded exception — awaiting owner"
     }
-  ]
+  ],
+  "status": "COMPLETE"
 }

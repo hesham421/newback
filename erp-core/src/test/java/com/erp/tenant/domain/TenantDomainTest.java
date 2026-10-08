@@ -9,11 +9,12 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
+import java.time.Instant;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests of the tenant business rules (erp-core step 05). */
+/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021; C12: RULE-TENANT-023/024; C5: RULE-TENANT-027/028). */
 class TenantDomainTest {
 
     @ParameterizedTest
@@ -67,6 +68,231 @@ class TenantDomainTest {
         assertThatCode(() -> other.assertCanChangeStatusTo(TenantConstants.STATUS_SUSPENDED)).doesNotThrowAnyException();
         assertThatCode(() -> other.assertCanChangeStatusTo(TenantConstants.STATUS_ACTIVE)).doesNotThrowAnyException();
         assertThat(TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE)).isActive()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "  ", "ab", "  ab  "})
+    void aSuspension_withoutAReasonOfThreeToFiveHundredCharacters_isRefused(String reason) {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        for (String given : new String[] {reason, null, "x".repeat(501)}) {
+            assertThatThrownBy(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, given))
+                .isInstanceOf(LocalizedException.class)
+                .satisfies(e -> {
+                    assertThat(((LocalizedException) e).getErrorCode())
+                        .isEqualTo(TenantErrorCodes.TENANT_SUSPENSION_REASON_REQUIRED);
+                    assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                });
+        }
+    }
+
+    @Test
+    void aSuspensionReason_isCheckedAfterTrimming_andIgnoredForAnActivation() {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, " abc ")).doesNotThrowAnyException();
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, "x".repeat(500)))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_ACTIVE, null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void reApplyingTheCurrentStatus_isNoTransition() {
+        TenantDomain active = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+        TenantDomain suspended = TenantDomain.from(tenant(42L, TenantConstants.STATUS_SUSPENDED));
+
+        assertThat(active.changesStatusTo(TenantConstants.STATUS_ACTIVE)).isFalse();
+        assertThat(active.changesStatusTo(TenantConstants.STATUS_SUSPENDED)).isTrue();
+        assertThat(suspended.changesStatusTo(TenantConstants.STATUS_SUSPENDED)).isFalse();
+        assertThat(suspended.changesStatusTo(TenantConstants.STATUS_ACTIVE)).isTrue();
+    }
+
+    @Test
+    void adminReset_targetsOnlyAnExistingStaffUserHoldingASuperRole() {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        assertThatThrownBy(() -> other.assertCanResetAdministrator("ghost", false, false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_NOT_FOUND);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.NOT_FOUND);
+            });
+        assertThatThrownBy(() -> other.assertCanResetAdministrator("clerk", true, false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_NOT_SUPER);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> other.assertCanResetAdministrator("admin", true, true)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void adminReset_isNeverAllowedOnThePlatformTenant() {
+        TenantDomain platform = TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE));
+
+        assertThatThrownBy(platform::assertAdminResetAllowed)
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_RESET_PLATFORM);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE)).assertAdminResetAllowed())
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void theEntityTransitions_setAndClearTheSuspensionFacts() {
+        Tenant entity = tenant(42L, TenantConstants.STATUS_ACTIVE);
+        Instant suspendedAt = Instant.parse("2026-10-08T10:00:00Z");
+        Instant activatedAt = Instant.parse("2026-10-09T10:00:00Z");
+
+        entity.suspend(suspendedAt, "operator", "Unpaid invoice");
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_SUSPENDED);
+        assertThat(entity.getSuspendedAt()).isEqualTo(suspendedAt);
+        assertThat(entity.getSuspendedBy()).isEqualTo("operator");
+        assertThat(entity.getSuspensionReason()).isEqualTo("Unpaid invoice");
+
+        entity.activate(activatedAt);
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_ACTIVE);
+        assertThat(entity.getSuspendedAt()).isNull();
+        assertThat(entity.getSuspendedBy()).isNull();
+        assertThat(entity.getSuspensionReason()).isNull();
+        assertThat(entity.getTokensInvalidBefore()).isEqualTo(activatedAt);
+    }
+
+    @Test
+    void logo_isAcceptedOnlyWhenFileStoredIt_andTheRefusalNamesTheFilePart() {
+        assertThatCode(() -> TenantDomain.assertLogoAccepted(true)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertLogoAccepted(false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                LocalizedException refusal = (LocalizedException) e;
+                assertThat(refusal.getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_LOGO_INVALID);
+                assertThat(refusal.getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                assertThat(refusal.getErrors()).singleElement().satisfies(d -> assertThat(d.field()).isEqualTo("file"));
+            });
+        assertThat(TenantDomain.LOGO_MAX_BYTES).isEqualTo(1_048_576L);
+        assertThat(TenantDomain.LOGO_TYPES).containsExactlyInAnyOrder("image/png", "image/jpeg", "image/webp", "image/svg+xml");
+        assertThat(TenantDomain.LOGO_OWNER_TYPE).isEqualTo("CORE_TENANT");
+        assertThat(TenantDomain.LOGO_MODULE_CODE).isEqualTo("TENANT");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"#1A2B3C", "#1a2b3c", "#000000", "#FFFFFF", " #abcdef ", "", "   "})
+    void brandColor_acceptsHashAndSixHexDigits_orBlank(String colour) {
+        assertThatCode(() -> TenantDomain.assertBrandColorValid(colour)).doesNotThrowAnyException();
+        assertThatCode(() -> TenantDomain.assertBrandColorValid(null)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"red", "#12345", "#1234567", "1A2B3C", "#GGGGGG", "##12345", "#12 345", "rgb(1,2,3)"})
+    void brandColor_refusesAnythingElse_namingTheField(String colour) {
+        assertThatThrownBy(() -> TenantDomain.assertBrandColorValid(colour))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                LocalizedException refusal = (LocalizedException) e;
+                assertThat(refusal.getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_BRAND_COLOR_INVALID);
+                assertThat(refusal.getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                assertThat(refusal.getErrors()).singleElement().satisfies(d -> assertThat(d.field()).isEqualTo("brandColor"));
+            });
+    }
+
+    @Test
+    void branding_isServedForAnActiveTenantOnly_andPlatformMayCarryALogo() {
+        assertThatCode(() -> TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE))
+            .assertServed()).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_SUSPENDED)).assertServed())
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_SUSPENDED);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.FORBIDDEN);
+            });
+    }
+
+    @Test
+    void tokenCutOff_comparesWholeSeconds_servesTheCutOffsOwnSecond_andRefusesATokenWithoutIat() {
+        Instant cutOff = Instant.parse("2026-10-08T10:00:00.500Z");
+
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T09:59:59Z"), cutOff)).isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), cutOff))
+            .as("issued in the cut-off's own second").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:01Z"), cutOff)).isFalse();
+        assertThat(TenantDomain.isTokenRevoked(null, cutOff)).as("no iat").isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2000-01-01T00:00:00Z"), null)).as("no cut-off").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(null, null)).isFalse();
+    }
+
+    @Test
+    void revocationCutOff_isTheNextWholeSecond_soTheRevokesOwnSecondIsRefused_andTheNextOneServed() {
+        Instant cutOff = TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00.300Z"));
+
+        assertThat(cutOff).isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), cutOff))
+            .as("a token of the revoke's own second, e.g. an in-flight login").isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:01Z"), cutOff)).isFalse();
+        assertThat(TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00Z")))
+            .as("exactly on a second: still the next one").isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+    }
+
+    @Test
+    void activationCutOff_servesATokenOfTheActivationsOwnSecond() {
+        Instant activation = Instant.parse("2026-10-08T10:00:00.300Z");
+
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), activation))
+            .as("a fresh login right after the activation").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T09:59:59Z"), activation)).isTrue();
+    }
+
+    @Test
+    void tokenRevocation_isRefusedForThePlatformTenantOnly() {
+        assertThatThrownBy(() -> TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE))
+            .assertTokenRevocationAllowed())
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_REVOKE_TOKENS_PLATFORM);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_ACTIVE)).assertTokenRevocationAllowed())
+            .doesNotThrowAnyException();
+        assertThatCode(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_SUSPENDED)).assertTokenRevocationAllowed())
+            .as("a suspended tenant may be revoked").doesNotThrowAnyException();
+    }
+
+    @Test
+    void revokeTokens_setsOnlyTheCutOff() {
+        Tenant entity = tenant(7L, TenantConstants.STATUS_ACTIVE);
+        Instant at = Instant.parse("2026-10-08T10:00:00Z");
+
+        entity.revokeTokens(at);
+
+        assertThat(entity.getTokensInvalidBefore()).isEqualTo(at);
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_ACTIVE);
+    }
+
+    @Test
+    void export_isRefusedAboveTheRowLimit_andWhileTheTenantsExportRuns() {
+        assertThatCode(() -> TenantDomain.assertExportWithinLimit(5, 5)).as("the limit itself is allowed")
+            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertExportWithinLimit(6, 5))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_TOO_LARGE);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.assertExportStartable(true, true, "ACME", 2)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertExportStartable(false, false, "ACME", 2))
+            .as("the tenant's own export is checked first")
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_IN_PROGRESS);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.CONFLICT);
+            });
+        assertThatThrownBy(() -> TenantDomain.assertExportStartable(true, false, "ACME", 2))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_BUSY);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.TOO_MANY_REQUESTS);
+            });
     }
 
     private static Tenant tenant(Long id, String status) {

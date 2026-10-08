@@ -39,6 +39,7 @@ Read from `GlobalExceptionHandler.java`: the expression each handler passes to `
 | handleLocalizedException | LocalizedException | the thrown Status's HTTP status | the thrown error code | `detail.field()` when `detail.field()` is non-null, otherwise `detail.errorCode()` | `detail.field() != null ? detail.field() : detail.errorCode()` |
 | handleValidation | MethodArgumentNotValidException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `fe.getField()` | `fe.getField()` |
 | handleRequestParameter | MissingServletRequestParameterException, MethodArgumentTypeMismatchException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `parameterName` | `parameterName` |
+| handleMultipart | MissingServletRequestPartException, MultipartException | 400 BAD_REQUEST | VALIDATION_ERROR | the value of `partName` | `partName` |
 
 ## Pagination Envelope
 
@@ -94,6 +95,7 @@ A code's value is also its i18n message key, so each row carries the message the
 | DATA_INTEGRITY_VIOLATION | `DATA_INTEGRITY_VIOLATION` | com\erp\common\web\GlobalExceptionHandler.java | The request could not be completed because it violates a data constraint | تعذّر إتمام الطلب لأنه يخالف قيدًا على البيانات |  | 409 CONFLICT | shared handler (any endpoint) | — |
 | CONCURRENT_MODIFICATION | `CONCURRENT_MODIFICATION` | com\erp\common\web\GlobalExceptionHandler.java | This record was changed by someone else in the meantime. Reload it and try again. | عدّل مستخدم آخر هذا السجل في الأثناء. أعد تحميله ثم حاول مجددًا. |  | 409 CONFLICT | shared handler (any endpoint) | — |
 | ACCESS_DENIED | `ACCESS_DENIED` | com\erp\common\web\GlobalExceptionHandler.java | You do not have permission to perform this operation | ليس لديك صلاحية لتنفيذ هذه العملية |  | 403 FORBIDDEN | shared handler (any endpoint) | — |
+| NOT_FOUND | `NOT_FOUND` | com\erp\common\web\GlobalExceptionHandler.java | The requested resource was not found | المورد المطلوب غير موجود |  | 404 NOT_FOUND | shared handler (any endpoint) | — |
 | INTERNAL_ERROR | `INTERNAL_ERROR` | com\erp\common\web\GlobalExceptionHandler.java | An unexpected error occurred. Please try again later. | حدث خطأ غير متوقع. يرجى المحاولة لاحقاً. |  | 500 INTERNAL_SERVER_ERROR | shared handler (any endpoint) | — |
 
 ## Status -> HTTP Status Reference

@@ -220,3 +220,303 @@ bind later steps.
 
 - [TM-A] Plan §3 screen id `SCR-TENANT-001` → written `SCR-REQ-TENANT-001` (`PLATFORM_TENANTS`): every analysed module numbers its screen requirements `SCR-REQ-<MOD>-NNN` (e.g. `SCR-REQ-SEC-005`), and package A mirrors SEC's id style.
 - [TM-A] plan §3 "the 18 TENANT_ID columns" → 22 documented (V10's 18 + SEC_CUSTOMER_VERIFY_TOKEN V11:68, NOTIF_INBOX V13:40, CORE_NUMBER_SERIES V14:33, CORE_AUDIT_EVENT V15:18) (the plan counted V10 only; TenantSchemaIntegrationTest:51 asserts 22)
+
+## [TM-G] tenant-maturity G — revoke a single screen or action grant
+
+- [TM-G] Plan §9 names the "revoking VIEW cascades vs refusing" decision ADR-SEC-041 → written as **ADR-SEC-062** (ADR-SEC numbers up to 061 were issued historically and dropped during vendoring, `docs/governance-vendoring-report.md` Appendix A; ADR-SEC-041 was the PENDING sign-up partial index). Mapping: plan ADR-SEC-041 = ADR-SEC-062.
+- [TM-G] Skill rule A.6.5 (a delete answers 204 with no body) → both new revokes answer 200 with a count DTO, like the existing module revoke (`RoleGrantController` Javadoc; srs-sec.md 1.3.0 addendum §4): the count is what lets the client confirm the cascade (RULE-SEC-054/055).
+- [TM-G] Review round 1, api-docs → the first TM-G regeneration (`2d849bf`) had lost 29 business-error rows: since `6b01816` the Domain objects raise their codes through `com.erp.common` helpers (`DomainRules.assertUnique` / `assertNotBlank`, `OwnedLookups.read`, `StatusTransitions.assertAllowed`, `InstantFieldValueConverter`), which the generator's call walk did not follow, so those endpoints read "None reached" and the codes lost their Status in `index.md`. Fixed at the source: `business_error_extractor` now reads, from the source, helpers that throw a code their caller supplies (parameter, constructor-bound field, or a constant of an instantiated shared class) and binds the code at the caller's site with the helper's Status (`tests/test_helper_codes.py`). After regeneration 28 of the 29 rows are back; the 29th (`FileService.sha256Hex` 500 `INTERNAL_ERROR`) is a genuine change: `TokenHasher.sha256Hex` throws `IllegalStateException`, which the shared handler answers as 500 `INTERNAL_ERROR`. Other differences from the 2026-10-05 docs are genuine too (the `NOT_FOUND` framework row, walked-method lists). The `check` FAILs are the five known generator limitations of `docs/api-docs/README.md`, unchanged; `check_completeness.py` 107/107. `test_security_extractor` now writes its temp files as UTF-8 (it failed on a cp1252 default before).
+- [TM-G] HTTP-run archive for tenant-maturity packages (no convention existed beyond the phase-D `core-verify-report.md`) → the run's JSON in `docs/test-api/results/` plus a per-run report next to it (`<timestamp>-P-LIVE-report.md`, generated with the new `--report-out`; `--instance` / `--code-under-test` record the instance in the JSON). `core-verify-report.md` stays the 1.0.0 phase-D record and was not regenerated.
+- [TM-G] Review round 1, id clash → the brief's "next REQ-SEC-036, AC-SEC-036, RULE-SEC-008" counted only the vendored analysis, but ids continue from the highest number EVER issued: the pre-vendoring SEC analysis (`governance-shared`, all history) reached REQ-SEC-079, AC-SEC-085, RULE-SEC-053, ENT-SEC-014, DBF-SEC-116, XM-SEC-005, QR-SEC-054, API-SEC-050, and REQ-SEC-036 / AC-SEC-036 are still cited for logout in `AuthService` and `SecLogoutIntegrationTest`. Package G's ids were renumbered: REQ-SEC-036 → **REQ-SEC-080**, REQ-SEC-037 → **REQ-SEC-081**, AC-SEC-036 → **AC-SEC-086**, AC-SEC-037 → **AC-SEC-087**, RULE-SEC-008 → **RULE-SEC-054**, RULE-SEC-009 → **RULE-SEC-055** (addendum, registry, ADR-SEC-062, code Javadoc, tests, test plan, CHANGELOG, report). The logout comments were left as they are: the current `srs-sec.md` has no logout requirement to repoint them to.
+
+## [TM-C3] tenant-maturity C3 — automated tenant-isolation tests
+
+- [TM-C3] Plan §5 C.3 names the integration test `TenantIsolationIT` → the module matrix was added to the existing step-05 class `TenantIsolationIntegrationTest` (the repo names integration tests `*IntegrationTest`, and a class of exactly that name already held the SEC-user isolation tests; a second isolation class would have split one subject in two).
+- [TM-C3] Plan "assert a cross-tenant id answers 404" → MDL has no read-by-id endpoint, so the 404 (`MDL-404-TYPE`) is asserted on the by-id update `PUT /api/v1/mdl/lookup-types/{id}`, which also leaves B's row unchanged; AUDIT has no by-id endpoint at all, so A's query `GET /api/v1/audit/events?entityId=<B's role id>` answers an empty page; CU addresses a row by key, so B's key answers 404 `APP_CONFIGURATION_NOT_FOUND` (AC-TENANT-024).
+- [TM-C3] Plan "the review rule makes it a checklist item of `gov-validate-backend-feature`" → added to that skill's "Automatic rejection — regardless of score" list, not to a scored Stage 3 list, so the 148-point scale and its thresholds stay unchanged (a raw SQL statement without `TENANT_ID` is an isolation bug, not a minor note).
+- [TM-C3] One global-entity list → `CoreLibraryRulesArchTest` rule 2 now reads `TenantScopedEntityTest.GLOBAL_ENTITIES` (same five classes, same assertion); `TenantSchemaIntegrationTest` keeps its own runtime (metamodel) list of simple names, unchanged.
+- [TM-C3] Brief "HTTP suite: add TC-CORE cases, §4 row, §6 counts" → none added: the package changes no endpoint and no HTTP behaviour (orchestrator instruction); the two test classes are named in `core-test-plan.md` §9, and the full P-LIVE suite was run once to show no regression.
+
+## [TM-D] tenant-maturity D — users: passwords, photo, profile, staff /me
+
+- [TM-D] Plan §9 ADR names → actual numbers (ADR-SEC numbers up to 061 were issued historically, 062 went to TM-G): plan ADR-SEC-039 ("admin-set password forces a change at next login") = **ADR-SEC-063**; plan ADR-SEC-040 ("staff /me excludes roles/permissions") = **ADR-SEC-064**. Plan ADR-FILE-001 = **ADR-FILE-008** (001..007 taken by the as-built FILE ADRs of the analysis-coverage work). ADR-SEC-065 (held spare for this package) is unused.
+- [TM-D] Plan §11 migration numbers → the orchestrator's reservation for the execution order D → B → E → C4: `V19__sec_user_profile.sql` = **`V16__sec_user_profile.sql`**, `V21__notif_seed_password_changed.sql` = **`V17__notif_seed_password_changed.sql`** (the seed is its own logical change, plan §11 last line).
+- [TM-D] Plan §6 D.2 admin-set result `UserStatusResponse` → **`PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }`**, shared with the own change (whose result the plan left open): a password change does not change `statusCode`, and the ended-session count is what the caller needs (srs-sec.md 1.3.0 §9.9).
+- [TM-D] Plan §6 D.4 `StoredImage storePublicImage(ImageStoreRequest)` → **`ImageStoreResult storePublicImage(...)`** (`stored(StoredImage)` or `rejected(ImageRejection)`), and the request carries **no `contentType`**: the plan requires a validation result instead of a raw exception, and the type is always detected from the bytes (a declared type would be ignored). `StoredImage` also carries the detected `contentType` and `size` (FILE srs.md 1.3.0 §1).
+- [TM-D] Plan §6 D.4 / step 07 publish rule (PUBLIC only in an `ALLOW_PUBLIC` category) → **image-store documents carry no category** and the public lookup also serves an uncategorised PUBLIC document; `PATCH /files/{id}/visibility` still refuses one (ADR-FILE-008, RULE-FILE-010). A seeded per-tenant category would need a seed migration, a FILE provisioning contributor and stay tenant-editable. The 4-argument `FileDocumentDomain.isPubliclyServable` keeps its meaning; a 5-argument overload takes the category id.
+- [TM-D] Plan §6 D.2 "CHANGED PUT /users/{id} + phone, jobTitleAr/En, preferredLocale" → the four fields keep their value when **absent (null)** and are cleared by an empty string (also on `PATCH /me`), so a client built before 1.3.0 never wipes what the user set on `/me`.
+- [TM-D] Plan §6 D.1 policy users "create, reset, admin-set, self-change, tenant admin-reset" → also **a new tenant's first administrator** (`POST /api/v1/platform/tenants`, field `adminPassword`, raised by `SecTenantProvisioningContributor` before any insert), which is a STAFF user create; **not** the CUSTOMER realm (register / reset keep `@Size(min = 8)`), and not the operator-configured bootstrap admin password (`Test1234` meets the policy anyway). Tenant-provisioned and bootstrap administrators are not flagged for a forced change (TENANT srs 1.3.0 rows).
+- [TM-D] Skill build-create-service "another module reacts only by calling back through that module's cross-module interface" / step 08's "callers invoke `NotificationDispatchApi`" → NOTIF **listens to the public core event `UserPasswordChangedEvent`** (`StaffPasswordChangedNotifier`, RULE-NOTIF-023, XM-NOTIF-003), as plan §6 D.3 and the brief ask: the event lives in `com.erp.events`, the bus every module may depend on, not in an internal SEC package; the password-reset and customer mails keep calling the dispatch API because they carry secrets the event must not carry.
+- [TM-D] Photo rules first written as a `UserPhotoDomain` → folded into **`UserDomain`** (`PHOTO_TYPES`, `PHOTO_MAX_BYTES`, `assertPhotoAccepted`; also `assertCurrentPasswordMatches` for RULE-SEC-060): one Domain object per entity (gov-enforce-backend-contract A.0.7). `PasswordPolicy` stays a separate Domain object (plan-named, configured, reused by package B).
+- [TM-D] Forced-change flag source (plan: "consider carrying it in the token vs a DB read") → **neither**: `JwtAuthenticationFilter` already loads the `SEC_USER` row on every request, so the flag rides on `AuthRealm` details (ADR-SEC-063); no extra query and no stale claim after the change. `AuthRealm` gains a component; its one-argument constructor stays.
+- [TM-D] HTTP suite: users an administrator creates now must change the password first, so the fixture users' first sign-in (`alice-`, `p-noperm-`, `lim-`, `rv-`, `rpt-`, P-MAIL `c2-`) goes through **`first_login`**, which changes the password to the same value with the login's own token (no reuse rule exists, open point below); no assertion was changed or dropped. JUnit fixtures were unaffected except two exact lists that now include the package's additions: `PlatformTenantApiIntegrationTest` names the five copied NOTIF templates (was a count of 4) and `ReferenceApplicationSmokeTest` lists the core chain V2..V17.
+- [TM-D] api-docs: the `/me` controller methods are named `getMyProfile` … `removeMyPhoto` and the user photo ones `setUserPhoto` / `removeUserPhoto` (springdoc derives operation ids from method names; plain names shifted the existing `get_1`/`get_2` ids), the photo mappings are `@PutMapping("<path>")` without `consumes` (the generator matches only the plain form; springdoc infers multipart from the `MultipartFile` parameter), and the policy is read into a typed local before `assertAcceptable` (the generator does not follow a chained call's return type). No behaviour change.
+- [TM-D] Open (not fixed, pre-existing): `MaxUploadSizeExceededException` has no handler in `GlobalExceptionHandler`, so an application that keeps Spring's default 1 MB multipart ceiling answers an over-size photo with 500 `INTERNAL_ERROR` instead of 400 `SEC-400-PHOTO-INVALID`; the reference app sets 15 MB (`docs/CONSUMING.md` §8). Open: the password policy has no history / reuse rule.
+- [TM-D] Review round 1, SVG → the first RULE-FILE-009 was a string blacklist that namespace prefixes (`<s:script>`, `<h:script>`, `<x:foreignObject>`), CSS escapes (`@imp\ort`, `u\rl(`), SMIL (`<animate attributeName="href">`, `<set attributeName="onmouseover">`) and `xml:base` bypassed. Replaced by an **allow-list** (`SvgAllowList`): strict UTF-8, hardened namespace-aware DOM parse (DOCTYPE refused, no entities, no XInclude), SVG-namespace static-drawing elements only (no `a`, `image`, `feImage`, animation, `switch`, `metadata`, no foreign elements or attributes — Inkscape/Sodipodi metadata is refused, export plain SVG), listed attributes only, `href` only `#fragment`, no `\` / `@import` / `javascript:` / `expression(` / non-`#` `url(` in any value or `<style>`, CDATA only in `<style>`. SVG without the SVG namespace is now refused too (a browser does not render it as an image).
+- [TM-D] Review round 1, BCrypt → BCrypt hashes at most 72 bytes, so a longer password (80 ASCII characters, 62 Arabic letters) answered 500 on every password path. `PasswordPolicy` now also caps the UTF-8 length at 72 bytes, `max-length` defaults to **72** (plan: 200) and a configured value above 72 **fails startup** (`@Max(72)`; `PasswordPolicy.create` also clamps). The CUSTOMER realm (register, reset completion) gets the byte limit only (`PasswordPolicy.CUSTOMER`, 8..72, no composition rule) with the same `SEC-400-PASSWORD-POLICY`; the request DTOs keep `@Size(max = 200)` as a transport bound so the policy code answers. The bootstrap admin password is still unchecked (over 72 bytes it fails startup inside BCrypt).
+- [TM-D] Review round 1, multipart → `MissingServletRequestPartException` and `MultipartException` (incl. `MaxUploadSizeExceededException`) are mapped by `GlobalExceptionHandler` to 400 `VALIDATION_ERROR` (part named when known), no new code; fixes the pre-existing 500 of `POST /api/v1/files` without a `file` part too. An over-size photo in an app keeping Spring's 1 MB ceiling therefore answers 400 `VALIDATION_ERROR`, not `SEC-400-PHOTO-INVALID`.
+- [TM-D] Review round 1, ids → RULE-NOTIF-009 renumbered **RULE-NOTIF-023** (RULE-NOTIF-001..022 are the analysis-coverage work's as-built NOTIF rules). The header comment of `V17__notif_seed_password_changed.sql` keeps "RULE-NOTIF-009": the migration is not edited for a comment (checksum). XM-NOTIF-003 stays (the snapshot lists no as-built XM-NOTIF ≥ 003).
+- [TM-D] Review round 1, file name → `ImageStoreRequest.fileName` became **`baseName`**: the stored name is `<baseName>.<ext of the detected type>` (`photo.png`, later `logo.svg`), never the client's name (a `poly.html` upload was served as `filename="poly.html"`).
+- [TM-D] Review round 1, api-docs → tenant create's `SEC-400-PASSWORD-POLICY` (raised through the provisioning SPI, which the generator does not walk) is stated in the `@Operation` description; `docs/api-docs/README.md` lists it as a known limitation.
+- [TM-D] Review round 1, not done (optional nit) → `UserService.deactivate` and `PasswordResetService.complete` keep their own session loops (different audit texts and, for deactivate, the `assertCanTerminate` guard); reuse of `UserSessionTerminator` left for a refactoring step.
+- [TM-D] Review round 1, ArchUnit rule 1 (allowed dependencies) → `org.w3c.dom..` and `org.xml.sax..` added to `CoreLibraryRulesArchTest.ALLOWED_DEPENDENCY_PACKAGES`: they are the JDK's own XML API (module `java.xml`, like the already allowed `javax..`), used by the hardened DOM parse of `SvgAllowList`; no new library.
+- [TM-D] Review round 2, SVG → the round-1 allow-list still let through processing instructions at document level (`<?xml-stylesheet …?>` before or after the root), `<style>` text split by comments or CDATA (`@imp<!---->ort`, `u<!---->rl(`, `u<![CDATA[rl(…`, `java<!---->script:`), and URL-less fetching CSS (`image-set('http://…' 1x)`); and it accepted renderer amplification through nested `<use>` (10^12 instances). Now: document level = comments + one `<svg>` root only; `<style>` = text/CDATA only, checked concatenated; CSS refuses `//` (every absolute or protocol-relative URL), `data:`, any at-rule but `@media`, any function outside a non-fetching allow-list (so `image-set`, `-webkit-image-set`, `image`, `src`, `cross-fade`, `element`, `paint`, `local`), and is checked as written and without `/*…*/`; at most 100 `<use>`, none referencing a `<use>` or a subtree with one; nesting ≤ 64. Inert `data-*` attributes (Illustrator `data-name`) are now accepted; `<metadata>`, `sodipodi:*`, `inkscape:*`, DOCTYPE stay refused (logos must be plain / optimised SVG). RULE-FILE-009 rewritten item by item to match `SvgAllowList`.
+
+## [TM-B] tenant-maturity B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+
+- [TM-B] Plan §4 B.1 / §11 migration numbers → the orchestrator's reservation for the execution order D → B → E → C4: `V16__tenant_profile.sql` = **`V18__tenant_profile.sql`**, `V17__tenant_lifecycle.sql` = **`V19__tenant_lifecycle.sql`** (TENANT `P2/db-script-tenant.md` 1.3.0 addendum).
+- [TM-B] Plan §4 B.2 admin-reset body `{ username, newPassword }` → **+ optional `requireChangeAtNextLogin`** (null = TRUE): an operator-chosen password is an administrator-chosen password, so SEC ADR-SEC-063 / RULE-SEC-058 apply (forced change by default, opt-out per request); the flag passes to SEC, which applies the default (srs-tenant.md 1.3.0 B10).
+- [TM-B] Plan §4 B.4 `SecAdminRecoveryApi.int resetSuperUserPassword(String username, String rawPassword)` → **`findRecoveryTarget(String)` → `Optional<RecoveryTarget(userId, username, superRole)>` + `resetSuperUserPassword(String, String, Boolean requireChangeAtNextLogin)`**: plan B.3 puts the "admin-reset target" rule in `TenantDomain` with the super-role fact computed by SEC, so SEC answers the facts and TENANT decides (`TENANT_ADMIN_NOT_FOUND` / `TENANT_ADMIN_NOT_SUPER`); both calls run in one transaction of the target tenant, so check and write are atomic. A non-super name passed directly to the reset answers SEC's `SEC-404-USER` (unreachable through TENANT).
+- [TM-B] Plan §4 B.4 NOTIF "existing dispatch API + `countDispatchedSince(Instant)`" → **`NotificationLogQueryApi.countDispatchedSince`**: `NotificationDispatchApi` is NOTIF's write surface; the dispatch-history read surface is `NotificationLogQueryApi` (NOTIF srs.md 1.3.0 §4).
+- [TM-B] Skill build-create-service A.5.3 / A.5.4 (`@Transactional` on every service method) → `TenantService.resetAdministratorPassword` and `getUsage` are **not** `@Transactional`: a transaction opened in the PLATFORM request binds the PLATFORM Hibernate session (`TenantContext` Javadoc, REQ-TENANT-018), so each opens one transaction inside `TenantContext.callAs(id)` with a `TransactionTemplate` (the `PermissionCatalogSynchronizer` precedent; read-only for usage).
+- [TM-B] Skill build-create-dto A.3.12 (`UsageResponse` carries `canDelete` / `canDeactivate` + reason) → **`TenantUsageResponse`** carries the plan's figures (+ `id`): a tenant is never deleted (POL-TENANT-005) and its suspension is never blocked by data, so there is no eligibility to report.
+- [TM-B] `SecAdminRecoveryApi`'s gate: ArchUnit rule 5 forbids an authority literal and a `T(...)` of another module's permission class, so SEC mirrors the platform authority as the non-catalog constant **`SecPermissions.PLATFORM_TENANT_MANAGE`** (like `ROLE_CUSTOMER`); it is not contributed by SEC.
+- [TM-B] `UserSessionTerminator` resolved the acting user by the principal's username in the current tenant; inside the target tenant of an admin-reset that could name a different user of that tenant, so an **overload with an explicit actor** was added and the recovery passes none (`SESSION_TERMINATED` rows without an actor user); the existing callers are unchanged.
+- [TM-B] Plan B.2 "optimistic lock 409 `CONCURRENT_MODIFICATION`" → as on every erp-core PUT, the request carries **no `version`**: the `VERSION` lock answers 409 only for a write that races between read and flush.
+- [TM-B] Existing tests adapted to the new suspension rule (request data only, no assertion dropped): `PlatformTenantApiIntegrationTest.suspend_…` and `AuditedEntitiesCoverageIntegrationTest` send a `reason`; the latter's exact `CORE_TENANT` update field list gains `suspendedAt`, `suspendedBy`, `suspensionReason`. HTTP cases TENANT-020 and TENANT-026 (P-MAIL) send a reason.
+- [TM-B] Reference snapshot (`reference-snapshot.md` package B) adopted after checking it against the code, except: its `RULE-TENANT-015` citation for the search allow-list (the analysis-coverage work's as-built rule, not on `main`) → cited as REQ-TENANT-007 (CHANGED); its AUDIT / COMMON / EVENTS rows → kept in the TENANT and SEC addenda (no such folders on `main`); its single "suspension" policy wording kept as POL-TENANT-012, its "admin recovery" as POL-TENANT-013; `TOKENS_INVALID_BEFORE` written only on a real SUSPENDED → ACTIVE transition (a re-applied ACTIVE moves nothing, RULE-TENANT-004).
+- [TM-B] Open (recorded, not implemented): `TOKENS_INVALID_BEFORE` is not enforced until package C.2 — the existing test `PlatformTenantApiIntegrationTest.suspend_…` asserts a token issued before a suspension works again after re-activation, which C.2 will have to revisit.
+- [TM-B] api-docs: the PUT controller method is named `updateTenant` (springdoc derives operation ids from method names; a plain `update` shifted every `update_N` id of MDL, CU, FILE, NOTIF), and `TenantService.resetInsideTenant` takes the `TenantDomain` as its last parameter (the generator resolves a parameter's type only there), so the admin-reset endpoint binds `TENANT_ADMIN_NOT_FOUND` / `TENANT_ADMIN_NOT_SUPER`. The new paths still renumbered springdoc's `getById_N` suffixes; fixed in review round 1 (below). `SEC-400-PASSWORD-POLICY` of admin-reset is raised behind the cross-module API (not walked) and is stated in the `@Operation` description, like tenant create's.
+- [TM-B] Review round 1, admin-reset on PLATFORM → **refused** with 422 **`TENANT_ADMIN_RESET_PLATFORM`** (RULE-TENANT-017 CHANGED): on PLATFORM it let an operator reset their own password without the current one, bypassing SEC RULE-SEC-057; platform operators set each other's passwords through `PUT /api/v1/sec/users/{id}/password`. A dedicated code instead of `TENANT_PLATFORM_PROTECTED`, whose message says the platform tenant "cannot be suspended".
+- [TM-B] Review round 1, PLATFORM audit trace → every successful admin-reset also records **`TENANT_ADMIN_RESET`** in the PLATFORM tenant (entity `CORE_TENANT` / {id}, summaries with the tenant code, the target username and `sessionsTerminated`, no secret), after the target tenant's transaction committed and outside `callAs`, as its own commit (the action follows `^[A-Z_]{3,64}$` like every module-defined action; no central catalogue exists — it is listed in the addendum's B8 and the module registry). If that insert failed the reset would stand without the PLATFORM row; the target tenant's `ADMIN_PASSWORD_RESET` row is written atomically with the reset.
+- [TM-B] Review round 1, operation ids → `PlatformTenantController.getById` renamed **`getTenantById`**. Against base 5c8541c every pre-existing operation id is unchanged except tenant `GET /{id}` (`getById_6` → `getTenantById`, the requested rename) and `GET /api/v1/notifications/logs/{id}` (`getById_7` → `getById_6`): springdoc numbers the remaining `getById` methods in order, and the tenant one no longer precedes the NOTIF log one. Keeping `getById_7` would need a pinned `@Operation(operationId)` that freezes a generated suffix as a name; not done.
+- [TM-B] Review round 1, logs → the admin-reset path logs the tenant id (TENANT) and the user id (SEC), never the username (plan §1.7); `findRecoveryTarget` no longer logs the name.
+- [TM-B] Review round 1, the 409 claim → the first report called the `PUT /{id}` lock "tested" without a test; `TenantProfileIntegrationTest.anUpdateFromAStaleCopy_failsTheOptimisticLock` now writes from a stale copy through the PUT's mapping and expects `ObjectOptimisticLockingFailureException` (the repository-level pattern of `TenantScopedQueryIntegrationTest`; `GlobalExceptionHandler` maps it to 409 `CONCURRENT_MODIFICATION`).
+
+## [TM-E] tenant-maturity E — tenant branding (logo, brand colour, /tenant/me, public branding)
+
+- [TM-E] Plan §7 E.1 / §11 `V18__tenant_branding.sql` → **`V20__tenant_branding.sql`** (the orchestrator's reservation for the execution order D → B → E → C4; D and B took V16 … V19). The plan's CHECK `CHK_CORE_TENANT_BRAND_COLOR CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$')` is used verbatim.
+- [TM-E] Plan §7 E.2 rate limit "like customer login (bucket per IP)" → a **filter** (`PublicBrandingRateLimitFilter`, first in the customer chain, that path only) keyed by the client address alone (`getRemoteAddr()`), counted **before** the token and the tenant are resolved: a limiter in the controller would never see the 404 / 403 the tenant filter answers, and a key that includes the code would not bound tenant-code enumeration. **New error code `TENANT_BRANDING_RATE_LIMITED` (429)**: the plan named none and SEC's `CUSTOMER_LOGIN_RATE_LIMITED` speaks of sign-in. Defaults `capacity = 60`, `period = 1m` (`erp.core.tenant.public-branding-rate-limit.*`; a login page asks once per tenant code it settles on). Per JVM, map cleared above 10 000 addresses (the `LoginRateLimiter` precedent). RULE-TENANT-022.
+- [TM-E] Plan §7 E.2 `GET /api/v1/tenant/me` "any realm" → the path is outside the customer chain's matcher, so the core chain serves it; it is named **realm-neutral** there (`ErpCoreSecurityAutoConfiguration.TENANT_ME_PATH`, added to that chain's `RealmEnforcementFilter` skip list; still `authenticated()`), and `PasswordChangeRequiredFilter.EXEMPTIONS` gains `GET /api/v1/tenant/me` (it reveals nothing the public branding does not). SEC realm rule and RULE-SEC-059 CHANGED (srs-sec.md 1.3.0 §11).
+- [TM-E] Plan §7 E.2 audit `TENANT_LOGO_CHANGED` (actor = operator) → written **in the target tenant and in PLATFORM**, in the same transaction (one row when the tenant is PLATFORM), for `PUT` and `DELETE` (D's `PROFILE_PHOTO_CHANGED` covers set and remove alike); B's `TENANT_ADMIN_RESET` precedent for the PLATFORM row. The entity audit's `UPDATE` row of `CORE_TENANT` for `logoFileId` lands in the target tenant (the change is made inside `callAs(id)`, and the audit module records a global entity in the tenant that changed it); the brand colour's `UPDATE` row lands in PLATFORM. No explicit action for the brand colour.
+- [TM-E] Skill build-create-service A.5.3 (`@Transactional` on every write) → `TenantService.setLogo` / `removeLogo` are **not** `@Transactional` (B's admin-reset precedent): a PLATFORM transaction would bind the PLATFORM Hibernate session and the image would be stored in PLATFORM's rows. Each opens one `REQUIRES_NEW` `TransactionTemplate` inside `TenantContext.callAs(id)`: store, point, discard the previous, audit — atomic.
+- [TM-E] `logoUrl` on every `TenantResponse` → resolved by `TenantLogoUrls` inside the logo's tenant (FILE's lookup is tenant-filtered): a tenant other than the caller's costs one `REQUIRES_NEW` read-only transaction, so a page of tenants costs one lookup per tenant **with** a logo (the platform screen's pages are small; no cross-tenant FILE query was added).
+- [TM-E] `brandColor` → stored **upper case** and trimmed by the entity (`@PreUpdate`); a blank value clears it like null. The format check is `TenantDomain.assertBrandColorValid` (400 `TENANT_BRAND_COLOR_INVALID` with `fieldErrors[0].field = brandColor`), not bean validation, so the plan's code is the one answered. `TENANT_LOGO_INVALID` likewise carries `fieldErrors[0].field = file` (SEC's `SEC-400-PHOTO-INVALID` precedent).
+- [TM-E] DELETE `/{id}/logo` → **204 without a body** (plan §7 E.2, SEC's photo removal, build-create-controller A.6.5); removing a missing logo is not an error. G's "200 + count" removal precedent concerns revokes that report a cascade, which a logo removal has not.
+- [TM-E] `TenantBrandingService.getPublicTenantBranding` is `@PreAuthorize("permitAll()")` (FILE's public-download precedent) and resolves the tenant **again from the path code** (`findByCode`), so a misconfigured `path-tenant-paths` can never answer another tenant's branding; both reads call `TenantDomain.assertServed()` (403 `TENANT_SUSPENDED`), which the filter normally answers first — it makes the generated api-docs list the code.
+- [TM-E] SVG logos → the public path keeps serving SVG as an **attachment** with `nosniff` and the sandbox CSP (step 07's inline list unchanged, no FILE ADR): `<img>` renders it, opening the URL downloads it. SVG stays accepted (plan §7 E.3); the frontend shows logos through `<img>` only, and the upload hint recommends PNG / WebP (srs-tenant.md 1.3.0 E7).
+- [TM-E] TM-D review carry-over → `SvgAllowList` refuses an SVG with **duplicate `id` values** (`putIfAbsent != null`): the nested-`<use>` guard resolved an id to the last element while browsers resolve the first, so a flat decoy hid a 10^9-instance chain. RULE-FILE-009 item (8) CHANGED through a FILE 1.3.0 package-E row (§8), D's text untouched. Reviewer probe `SvgProbe3` re-run: 0 unexpected verdicts.
+- [TM-E] Reference snapshot (`reference-snapshot.md` package E, ADR-TENANT-005 draft) adopted after checking it against the code, except: its migration `V18` (→ V20); its RULE text "`<script`, `on*=` attributes and external hrefs rejected" (the built rule is FILE's strict allow-list, RULE-FILE-009, cited instead); its placeholder cases TC-CORE-TENANT-040 … 048 (→ TENANT-038 … 046 and PLATFORM-005); its "open point" on the chain of `/tenant/me` (resolved: realm-neutral on the core chain, above); it named no rate-limit code (→ `TENANT_BRANDING_RATE_LIMITED`, above) and no rule for the limit (→ RULE-TENANT-022). Its fact 5 (`/tenant/me` reaches the staff chain only) is confirmed.
+- [TM-E] Tests → the rate limit is tested in the shared context (`TenantBrandingIntegrationTest.publicBranding_isRateLimitedPerClientAddress_unknownCodesIncluded`), from the IPv6 loopback `[::1]` (a client address no other test uses, assumption-skipped where the host has none) with the default budget: an extra Spring context for a small budget failed with "too many clients" — the cached contexts' pools already fill the test database's 100 connections (`TestPostgres` pins CI's limit), even with a two-connection pool. `TenantBrandingIntegrationTest` uses the reference app's multipart limits (the `UserPhotoIntegrationTest` property set, so the two share one context).
+- [TM-E] api-docs: the new controller methods have unique names (`setTenantLogo`, `removeTenantLogo`, `updateTenantBranding`, `getMyTenantBranding`, `getPublicTenantBranding`) so springdoc's operation ids of other modules do not shift.
+- [TM-E] api-docs generator limit (recorded, not fixed): `security_extractor.METHOD_NAME_AFTER_ANNOTATION_RE` finds the Java method after a mapping annotation by the first `public|private|protected … name(` — the word "public" inside an `@Operation` text followed later by "word (" was read as the declaration ("path"), so the public-branding endpoint lost its business responses. The `@Operation` texts of that method avoid the lower-case word "public"; the generator was not changed (outside this package; its unit suite stays as merged).
+- [TM-E] Review round 1, test pools → `spring.datasource.hikari.maximum-pool-size=4`, `minimum-idle=1` in `application-test.properties` (pre-existing exposure: about 10 cached contexts × Hikari's default 10 = the 100 `max_connections` that `TestPostgres` pins to CI's `postgres:16`). Scratch run with one deliberately added context (not committed): the 11th context started and the database counted 27 client backends at the end of the whole erp-core suite (worst case 11 × 4 = 44). No test needed a larger pool. `TestPostgres` keeps `max_connections=100` (it mirrors CI on purpose). The round-0 workaround in the report (an IPv6-loopback test) is replaced: the rate limit is now tested through MockMvc over the context's `springSecurityFilterChain` with explicit client addresses (never skipped).
+- [TM-E] Review round 1, realm skip → `RealmEnforcementFilter` gains a method-specific list (`realmNeutralGetPaths`); `/api/v1/tenant/me` is realm-neutral for `GET` only (POST / PUT / PATCH with a customer token: 403 `REALM_MISMATCH`), like `PasswordChangeRequiredFilter.EXEMPTIONS`.
+- [TM-E] Review round 1, rate-limit buckets → IPv6 keyed by /64 (`InetAddress.ofLiteral`, no DNS), an access-ordered map whose entries expire after `period` unused and which holds at most 10 000 keys (least recently used evicted), `Retry-After` on 429 (whole seconds until one request refills, from bucket4j's `ConsumptionProbe`). No Caffeine: it is not on erp-core's classpath and the map is enough. **Follow-up, not changed here:** SEC's `LoginRateLimiter` still clears all buckets above 10 000 keys and keys by `tenant:realm:username` — the same bounded-expiry treatment belongs to a SEC change of its own.
+- [TM-E] Review round 1, api-doc generator → `security_extractor.find_controller_for_endpoint` searches the Java method name on a copy whose string, text-block and char literals are blanked (`blank_string_literals`, offsets kept), so an `@Operation` text with "public … word (" is no longer read as the declaration; two unit tests (the first fails on the old code). The round-0 entry above ("generator unchanged") is superseded; the public-branding `@Operation` keeps its natural wording.
+- [TM-E] Review round 1, docs → CONSUMING: `server.forward-headers-strategy=native` with `server.tomcat.remoteip.internal-proxies` behind a proxy, a warning that `framework` trusts any client's `X-Forwarded-For` unless the proxy overwrites it, the frontend's 429 fallback (platform mark, honour `Retry-After`), and the 24 h public-file cache of an old logo URL (a new upload always gets a new slug).
+
+## [TM-C12] tenant-maturity C12 — tenant lifecycle events and per-tenant token cut-off
+
+- [TM-C12] Plan §5 C.2 "the JWT filter exposes `iat` on the authentication details" → **a request attribute**
+  `com.erp.tenant.TenantTokenFacts(tenantId, issuedAt)` that `JwtAuthenticationFilter` sets for **every signature-valid
+  token** with a `tid`, whether or not it authenticates; `AuthRealm` is unchanged (the tenant module may not depend on
+  `com.erp.sec.security`, and after C.1 a suspended or revoked tenant's token no longer authenticates because its
+  session is terminated). ADR-TENANT-002, srs-tenant.md 1.3.0 C10.
+- [TM-C12] `TenantResolutionFilter` → also checks a **dropped** token (signature-valid, not authenticated) on a
+  non-public path: tenant suspended → 403 `TENANT_SUSPENDED`, issued before the cut-off → 401 `TENANT_TOKEN_REVOKED`,
+  else unauthenticated as before. Without it, C.1's session termination would have turned the 1.2.0 answer for an
+  issued token of a suspended tenant (403, TC-CORE-TENANT-022 / -031, `PlatformTenantApiIntegrationTest`) into a bare
+  401 and the cut-off code would never be seen after a re-activation. A public path ignores a revoked token (also an
+  authenticated one whose session is still open), so a login sent with a stale `Authorization` header works.
+- [TM-C12] Cut-off precision (plan silent; the reference draft said "a token issued in the same second as the cut-off is
+  refused") → **whole seconds, strict**: refused when `iat` (s) < the cut-off truncated to the second; a token of the
+  cut-off's own second is **served**, so a login right after an activation works (TC-CORE-TENANT-024/-032/-043 sign in
+  within the same second). A token issued in that second *before* the cut-off is still refused through its session,
+  which the same operation ends (401 `SEC-401-INVALID-CREDENTIALS`). RULE-TENANT-023, ADR-TENANT-002.
+- [TM-C12] Revoke-tokens on PLATFORM (plan silent) → **refused**, 422 `TENANT_REVOKE_TOKENS_PLATFORM` (new code; the
+  `TENANT_ADMIN_RESET_PLATFORM` precedent): it would sign every platform operator out, the caller included. A suspended
+  tenant may be revoked. RULE-TENANT-024.
+- [TM-C12] Revoke-tokens response (reference draft: `TenantResponse`) → `TenantTokenRevocationResponse { id, code,
+  sessionsTerminated }`, 200 (`Status.UPDATED`): the count is the result (admin-reset precedent); the cut-off is never
+  returned.
+- [TM-C12] Revoke-tokens transactions → the cut-off is written in a **PLATFORM** `TransactionTemplate` and commits first
+  (TM-E's note: `CORE_TENANT` writes stay in the PLATFORM request like `updateStatus`), then one `REQUIRES_NEW`
+  transaction inside `callAs(id)` ends the sessions (`SecAdminRecoveryApi.terminateAllSessions`) and records
+  `TOKENS_REVOKED` in the tenant and in PLATFORM (TM-E's two-row precedent). `TenantService.revokeTokens` is not
+  `@Transactional` (B / E precedent, build-create-service A.5.3 deviation already recorded for them).
+- [TM-C12] Events → payload name `tenantCode` (the plan's `code`), like `TenantCreatedEvent`; explicit constructor (the
+  event's tenant is the changed tenant, the actor the PLATFORM operator, realm `STAFF`). SEC's
+  `TenantSuspendedSessionListener` is **synchronous** after commit (sessions are closed when the PATCH answers); NOTIF's
+  `NotificationTenantActivationListener` is asynchronous.
+- [TM-C12] NOTIF (plan: "the retry/claim job skips rows of suspended tenants") → the check sits at the **claim**
+  (`NotificationDeliveryProcessor.prepare`, every delivery path) and in `NotificationRequeueJob` (per-tenant skip), and a
+  re-activated tenant's held rows are **re-dispatched on `TenantActivatedEvent`** — the requeue job is off by default, so
+  without the listener they would wait for an application that enables it. Status set unchanged. RULE-NOTIF-024.
+  `NotificationRequeueJob` gains a constructor with `TenantLookupApi`; the older ones keep working without the job-level
+  skip.
+- [TM-C12] `TenantLookupApi.isActive` → not `@Transactional`: without a current tenant it reads as PLATFORM (the
+  `TenantResolutionFilter` precedent), inside a tenant it joins the caller's session (`CORE_TENANT` is global); uncached
+  (a state lifecycle is never cache-eligible, gov-enforce-caching-rules).
+- [TM-C12] No migration: `TOKENS_INVALID_BEFORE` is `V19__tenant_lifecycle.sql`'s (package B; the plan's §11 row
+  "V17 B / C.2"). No migration number was reserved for C12.
+- [TM-C12] Reference snapshot (`reference-snapshot.md` C1, C2, ADR-TENANT-002 draft) adopted after checking it against the
+  code, except: the same-second rule (above), the revoke-tokens response (above), the draft's "the JWT filter exposes
+  `iat` on the authentication details" (above), the event count "10 → 12" (the catalogue already had 11 with D's
+  `UserPasswordChangedEvent`: 11 → 13), "NOTIF registers no listener" (it listens to `TenantActivatedEvent`, above), and
+  its placeholder cases TC-CORE-TENANT-036/-037 (→ TENANT-047 … 050). Its facts 3 and 6 (`isActive` and `iat` missing)
+  are confirmed and closed by this package.
+- [TM-C12] `PlatformTenantApiIntegrationTest.suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresThem`
+  → renamed `…_andActivateRestoresLoginButNotTheOldTokens`; its last assertion changes from "old token 200" to "old token
+  401 `TENANT_TOKEN_REVOKED`, a fresh token 200" (the analysis-first behaviour change REQ-TENANT-034); nothing else in it
+  is weakened.
+- [TM-C12] Commit hygiene: the `TenantResolutionFilter` refinement "a public path ignores a revoked authenticated token"
+  landed in the test commit (`test(tenant): …`) together with the test that found it.
+- [TM-C12] Review round 1, revoke-tokens → its cut-off is **the start of the next whole second** after now
+  (`TenantDomain.revocationCutOff`), activation keeps the activation instant: the cut-off alone now refuses every token up
+  to and including the revoke's own second (the reviewer re-opened a session after a revoke and a token of that second
+  was served; a login whose session committed after the termination query was the same gap). A login later in that
+  second is refused and signs in again a moment later. The comparison (`iat` s < cut-off s) is unchanged. A failure of
+  the session step after the cut-off committed is caught: `TOKENS_REVOKED` in PLATFORM says the sessions were NOT
+  terminated, and the call answers **500 `TENANT_REVOKE_SESSIONS_FAILED`** (new code, `Status.INTERNAL_ERROR`; message:
+  the tokens are already refused, repeat the call); a repeat moves the cut-off forward and ends the sessions. ADR-TENANT-002
+  Decision and Reason 5, C7, RULE-TENANT-023, REQ-TENANT-035 amended (the first wording overclaimed the session step).
+- [TM-C12] Review round 1, ids → the C12 block cited RULE-TENANT-012 and RULE-TENANT-015, which are not defined on main
+  (reserved for the analysis-coverage work): replaced by REQ-TENANT-012 (tenant from the access token) and
+  REQ-TENANT-010; the no-caching note rests on gov-enforce-caching-rules (C7).
+- [TM-C12] Plan §5 C.1 "registered in `ErpCoreEvents` (count 10 → 12)" → `ErpCoreEvents` only holds the executor's bean
+  name, it is no registry: the event catalogue is `docs/CONSUMING.md` §5 and `PROJECT-OVERVIEW.md` (11 → 13 with D's
+  `UserPasswordChangedEvent`), where the two events were added; `ErpCoreEvents` is unchanged.
+- [TM-C12] Review round 1, nits → `NotificationLogDomain.deliversFor` (it returned its argument) removed; the requeue job
+  reads `TenantLookupApi.isActive` directly and `isDeliverable(tenantActive)` stays the claim's rule.
+  `NotificationTenantActivationListener` submits to the core event executor itself and logs a rejected task at WARN.
+  ADR-TENANT-002 records "accepted after the code check (6bfe756)".
+
+## [TM-C6] tenant-maturity C6 — `ScopedValue` spike for `TenantContext` (no-go)
+
+- [TM-C6] Plan §5 C.6 "if go: merged as its own PR; if no-go: the ADR records why" → **no-go** (ADR-TENANT-004 REJECTED): the spike code (commit ae5fe50: `TenantContext`, `JwtAuthenticationFilter`, `TenantAndSecurityContextTaskDecorator`) is reverted on the branch (10a77b5); what merges is the analysis, the ADR with its measurements, one test class, the P-LIVE archive of the spike build and the report. No production file differs from main (abbae25).
+- [TM-C6] Plan "keep `set` / `clear` working for the servlet filter by a bounded `ScopedValue.where(...).run(chain)` in the filter" → the spike opened that scope in `JwtAuthenticationFilter` (the first tenant-aware filter of both chains, which binds the token tenant before `TenantResolutionFilter` runs); `TenantResolutionFilter`'s `set` / `clear` (C12's mid-request clear included) updated the request frame unchanged. Outside any scope `set` needed a `ThreadLocal` fallback to keep the public behaviour (H2), which is what decided the no-go.
+- [TM-C6] Plan "`TenantIsolationIT` … NOTIF claim job under virtual threads" → `TenantIsolationIntegrationTest` (C3 precedent) and 13 more tenant / NOTIF / decorator classes run once with `SPRING_THREADS_VIRTUAL_ENABLED=true` as a one-off command (65 / 65), not as a committed Spring context (embedded PostgreSQL connection limit, TM-E note).
+- [TM-C6] Plan "p95 of the filter" → measured per request end to end (client-side HTTP timing of `GET /api/v1/tenant/me`, token and header-only, fresh JVM per round, A B A B A B, N = 3 000 after 500 warm-up) plus an in-process harness of `current` / `callAs` / `set`; no JMH (not a project dependency). Method and numbers in ADR-TENANT-004.
+- [TM-C6] Brief "HTTP suite: add TC-CORE cases, regenerate api-docs" → none added and nothing regenerated: no endpoint, DTO or HTTP behaviour changes. The full P-LIVE suite ran on the spike jar as gate H3 (run `2610080758F9`, 196 / 196) and is archived as evidence; it is the spike's run, not the merged code's (whose production code is main's).
+- [TM-C6] `TenantContextLeakTest` lives in `com.erp.events.support`, not `com.erp.tenant`: `CrossModuleBoundaryArchTest` also analyses test classes, and the test drives the events module's task decorator.
+- [TM-C6] The reference snapshot's ADR-TENANT-004 draft cited RULE-TENANT-013 / -014 → not defined on main (reserved for the analysis-coverage work's as-built rules): the ADR cites REQ-TENANT-017, -018, -023 and RULE-TENANT-023 instead.
+## [TM-C4] tenant-maturity C4 — idempotent provisioning
+
+- [TM-C4] Migration number (plan §5 C.4 / §11 `V20__core_idempotency_key.sql`) → `V21__core_idempotency_key.sql`: the
+  execution order put D, B and E (V16 … V20) before C4 (plan §1.3 "re-derived at creation time"; the reserved number).
+- [TM-C4] `CORE_IDEMPOTENCY_KEY` columns (plan: nine) → **twelve**: + `CREATED_BY VARCHAR(100) NOT NULL`, `UPDATED_BY`,
+  `UPDATED_AT`, because the entity `IdempotencyKey` extends `AuditableEntity` (tenant-scoped: `TenantScopedEntityTest`
+  needs no new global entity, and `db/migration/core/README.md` requires the audit columns on a tenant-scoped table).
+  `CREATED_BY` is NOT NULL because it identifies the key's owner. Index names not in the plan:
+  `IDX_CORE_IDEMPOTENCY_KEY_TENANT`, `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT`; `PK_CORE_IDEMPOTENCY_KEY`,
+  `FK_CORE_IDEMPOTENCY_KEY_TENANT` (conventions). The reference analysis' open point, decided in the P2 entry.
+- [TM-C4] Plan names for the mechanism (plan silent on its shape) → `com.erp.common.idempotency.IdempotentResponses`, a
+  response helper the controller calls with the header, the endpoint id, the bound body and the service call (beside
+  `OperationCode`; build-create-controller A.6.3 "service + response helper"); the service is unchanged. Not a servlet
+  filter: a filter cannot share the service's transaction, and a typed replay keeps the generated api-docs' response
+  schema. The new error codes are therefore not walked by the api-doc generator: the create's `@Operation` names them.
+- [TM-C4] Concurrency (plan silent) → no "in progress" state and no `IDEMPOTENCY_KEY_IN_PROGRESS` code: the claim row is
+  inserted first in the operation's own transaction, so `UQ_CORE_IDEMPOTENCY_KEY` makes a same-key request wait and then
+  replay (or run, if the first rolled back). Only 2xx answers are stored; a failure leaves no row (one transaction).
+- [TM-C4] Request hash (plan: "same body hash") → lower-case hex **HMAC-SHA256** of the canonical JSON of the bound body
+  (sorted properties and map keys), keyed by a key derived from `erp.core.security.jwt.secret` with its own label: the
+  body contains `adminPassword`, and a plain SHA-256 would be an offline password verifier. Rotating the JWT secret
+  turns a retry within 24 h into a 409.
+- [TM-C4] Namespace (plan: unique per tenant, key, endpoint; reference draft: "operators of PLATFORM share the
+  namespace") → kept, but a stored answer is replayed **only to the user who stored it** (`CREATED_BY`); another user →
+  409 `IDEMPOTENCY_KEY_CONFLICT`. A replay is served before the service's `@PreAuthorize`, so it must never reach a
+  user who did not make the request.
+- [TM-C4] Retention (plan: "24 h via the scheduled-job pattern") → also enforced at lookup (a row older than the
+  retention is deleted and the key treated as unused), so the window holds when the application never schedules the
+  job. `IdempotencyKeyRetentionJob` uses plain JDBC, tenant by tenant (RULE-TENANT-011), outside the raw-JDBC packages:
+  added to `CoreLibraryRulesArchTest.RAW_JDBC_CLASSES` (the `NotificationRequeueJob` precedent) — `com.erp.common` must
+  not import `com.erp.tenant` (`TenantContext`) to iterate tenants through JPA.
+- [TM-C4] Configuration → `erp.core.idempotency.enabled` (true), `retention` (24h, must be positive),
+  `retention-cron` (`-`); `IdempotencySettings` is built by `ErpCoreAutoConfiguration`, so `com.erp.common.idempotency`
+  imports nothing outside `com.erp.common`.
+- [TM-C4] Analysis home (the reference snapshot used a COMMON analysis folder) → none in this repository: the
+  mechanism's rules are in the TENANT 1.3.0 package-C4 block (`srs-tenant.md` I6), its contract in `docs/CONSUMING.md`.
+- [TM-C4] C12 follow-up (C12 review nit, assigned to C4) → `TenantService.revokeTokens`' failure path guards the PLATFORM
+  `TOKENS_REVOKED` write: an audit failure is logged and attached (suppressed) to the session failure, which becomes the
+  cause of the 500 `TENANT_REVOKE_SESSIONS_FAILED` (`initCause`; `LocalizedException` has no cause constructor).
+- [TM-C4] Stale registry row fixed in passing: `project-registry.md` TENANT row said 2 ADRs / 13 tenant operations;
+  now 4 ADRs (001; 002, 003, 005 of 1.3.0) / 14 operations (C12's revoke-tokens).
+- [TM-C4] Header documentation → the `Idempotency-Key` parameter's `@Schema` pattern is `^[A-Za-z0-9._:-]+$` with
+  `minLength = 1`, `maxLength = 64` (not `{1,64}`): braces inside a controller annotation string end the api-doc
+  generator's brace-counted method-body scan early (`security_extractor._method_body_span`), which dropped the create's
+  permission and 403 row on the first regeneration. Generator unchanged (a later generator fix can blank string
+  literals there too, as `blank_string_literals` already does elsewhere).
+- [TM-C4] Review round 1, claim → `IdempotencyKeyClaims`: `INSERT … ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY
+  DO NOTHING` with an explicit `TENANT_ID` (the claim transaction's Hibernate session tenant) instead of a JPA insert
+  that failed on the constraint: Hibernate logged that failure at WARN with the key in the constraint detail. A lost
+  claim is now "0 rows" (PostgreSQL still waits for the concurrent uncommitted insert), nothing is logged; a second
+  documented `RAW_JDBC_CLASSES` entry. `IdempotencyKey.claim(...)` (the JPA factory) removed.
+- [TM-C4] Review round 1, replay authorization → documented (ADR-TENANT-003, CONSUMING §3): a replay precedes the
+  service's `@PreAuthorize`, so a consumer must also authorize its path in the security chain. No authorization
+  callback was added to `IdempotentResponses` (the platform chain already gates tenant create; a callback would
+  duplicate the service's `@PreAuthorize` expression in code).
+- [TM-C4] Review round 1, api-doc generator → `business_error_extractor` binds the constant throws reachable inside an
+  injected shared (`common`) `@Component` at the caller's site (`IdempotentResponses` → `IDEMPOTENCY_KEY_INVALID`,
+  `IDEMPOTENCY_KEY_CONFLICT` on the create); `security_extractor.find_delegate` blanks string literals before its brace
+  scan, and the header's `@Schema` pattern is back to `^[A-Za-z0-9._:-]{1,64}$` (supersedes the earlier `+` line).
+  The response header `Idempotent-Replayed` stays in the description (no response-header rendering: README row).
+- [TM-C4] Review round 1, lock timeout on the claim (optional INFO) → not added: the wait lasts one provisioning
+  transaction and a timeout would need a new answer code; documented in ADR-TENANT-003 Consequences.
+- [TM-C4] Review round 1, ArchUnit → new rule: `com.erp.common..` depends on no module package and not on
+  `com.erp.autoconfigure..` (`CoreLibraryRulesArchTest.common_depends_on_no_module_and_not_on_autoconfigure`).
+
+## [TM-C5] tenant-maturity C5 — tenant data export
+
+- [TM-C5] SPI (plan §5 C.5: `String moduleCode(); void export(TenantExport ctx)`) → + `long countRows(Long tenantId)`:
+  the plan asks to refuse more than N rows **before** exporting; each module counts its own rows (one `COUNT(*)` per
+  table naming `TENANT_ID`) in the same snapshot. The archive also caps the rows while writing (a contributor whose
+  count disagrees is refused the same way). `TenantExport.csv(fileName, columns, rows)` with a `Rows` sink
+  (`addRow(ResultSet)` usable as a `RowCallbackHandler`, `add(Object...)`) and `TenantExportJdbc` (fetch size 1 000,
+  one-table statement builders) are the SPI's helpers.
+- [TM-C5] Response (plan: `{ fileId, downloadToken }`) → `TenantExportResponse { tenantId, tenantCode, fileId, fileName,
+  sizeBytes, rowCount, downloadToken, downloadTokenExpiresAt }`, 200 `Status.SUCCESS` (additive fields; nothing of the
+  tenant changes).
+- [TM-C5] FILE cross-module API (plan: "existing FILE mechanism"; `FileImageStoreApi` stores PUBLIC images only) → NEW
+  `FilePrivateStoreApi` (XM-FILE-003, RULE-FILE-011): `storePrivateFile` (PRIVATE, uncategorised, type from the declared
+  content type, SHA-256, no upload limits — the producer bounds the file) and `issueDownloadToken` (API-FILE-002's token,
+  bound to the calling username, without `PERM_FILE_BROWSER_VIEW`: the consumer's permission covers it).
+  `FileService.tokenKey`, `safeFileName`, `deriveFileType` became package-visible (shared, not duplicated).
+- [TM-C5] Consistency (plan silent) → count and files in one read-only `REPEATABLE READ` transaction of the tenant (one
+  snapshot); the PLATFORM storage and audit in a second transaction; the token after it.
+- [TM-C5] Files and columns (plan: "never the password hash, never file bytes") → exact lists in `srs-tenant.md`
+  1.3.0 X7 (21 files); also excluded: token tables `SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN`,
+  `SEC_ACTIVE_SESSION.TOKEN_REF`, `NOTIF_CHANNEL_CONFIG.CONFIG_JSON`, `NOTIF_LOG.VARIABLES_JSON`,
+  `FILE_DOCUMENT.STORAGE_REF` / `PUBLIC_SLUG`, `CORE_TENANT.TOKENS_INVALID_BEFORE`, `CORE_IDEMPOTENCY_KEY`, platform-wide
+  rows (registries, CU defaults), every `TENANT_ID` / `VERSION`. Global registry references in the grant files are
+  resolved to codes. CU values are exported as stored (CU has no secret marking: documented in srs-cu.md 1.3.0).
+- [TM-C5] CSV (plan silent) → UTF-8 **with** BOM and the formula guard (the REPORT export precedent, step 11), NULL as
+  an empty field and an empty text as `""`; a binary column is refused by the writer.
+- [TM-C5] PLATFORM (plan silent) → exportable (its data is tenant data; one audit row). Suspended tenant → exportable.
+- [TM-C5] Guard (plan: in-memory) → per node; two nodes may export one tenant at once (two archives, harmless):
+  RULE-TENANT-028, ADR-TENANT-006. Not wrapped in C4's `IdempotentResponses` (its work commits in several
+  transactions, ADR-TENANT-003 Consequences).
+- [TM-C5] Archives are kept until a platform operator deletes them (no retention job in v1); FILE's upload limits do not
+  apply to them (the row limit bounds them); the `DB` storage provider holds one archive in memory while storing it.
+- [TM-C5] HTTP suite: the row limit (422) and the in-progress guard (409) are JUnit-only (the running app keeps the
+  default limit; a held export needs the test to take the slot) — `docs/test-api/core-test-plan.md` §9.
+- [TM-C5] No migration (the plan reserved none); no new permission, page code or screen (D5: `PLATFORM_TENANTS`).
+- [TM-C5] Review round 1 — archive access (the archive was an ordinary PRIVATE document: any PLATFORM user holding
+  `PERM_FILE_BROWSER_VIEW` could list, re-token and download it) → **restricted documents**: NEW nullable
+  `FILE_DOCUMENT.REQUIRED_AUTHORITY VARCHAR(100)` (`V22__file_document_required_authority.sql`, the reserved number),
+  set by the private store from `PrivateFileStoreRequest.requiredAuthority` (the export: `PLATFORM_TENANT_MANAGE`); FILE's
+  owner list filters such documents and metadata / access token / download / visibility / archive / delete answer **404**
+  `FILE_DOCUMENT_NOT_FOUND` (not 403: existence not revealed) to a caller without the authority; `isAvailable` is false for
+  them (FILE RULE-FILE-012). Alternative (TENANT-only re-download and delete endpoints, archive outside the FILE API)
+  rejected in ADR-TENANT-006 (duplicated FILE paths; the column protects every FILE endpoint and any producer).
+- [TM-C5] Review round 1 — RULE-FILE-006 (soft delete keeps the bytes) → except for a restricted document: its delete removes
+  the content (DB in the transaction, LOCAL / S3 after the commit) and keeps a `DELETED` tombstone. A retention purge
+  (`erp.core.tenant.export.retention`, the `AuditRetentionJob` pattern) is a **follow-up**, not done in 1.3.0.
+- [TM-C5] Review round 1 — `FileDocument` `@Audited` → `ignore = {"storageRef", "publicSlug"}`; the AUDIT contributor removes
+  both fields from older `FILE_DOCUMENT` rows' `CHANGES` when exporting (srs-tenant.md X14); the stored audit rows are not
+  rewritten.
+- [TM-C5] Review round 1 — the tenant's `TENANT_EXPORTED` row (was a nested, separately committed transaction) → written in the
+  PLATFORM storing transaction with an explicit `tenantId`, so a failed store leaves no row anywhere.
+- [TM-C5] Review round 1 — no global cap → `erp.core.tenant.export.max-concurrent` (2, per node) and 429 `TENANT_EXPORT_BUSY`
+  (`TOO_MANY_REQUESTS`, without `Retry-After`: a `LocalizedException` answer carries no headers — the
+  `CUSTOMER_LOGIN_RATE_LIMITED` precedent); the tenant's own running export is answered 409 first.
+- [TM-C5] Review round 1 — TC-CORE-TENANT-056 counts `TENANT_EXPORTED` rows of PLATFORM before and after (was "exactly one",
+  true only on a fresh database).
+
+## [TM-Z] tenant-maturity Z — closure
+
+- [TM-Z] Package C5 left the failure path of RULE-FILE-012's `LOCAL` / `S3` purge unspecified → recorded as a known limitation, not changed: the after-commit delete of a deleted restricted document's object only logs a WARN when the provider fails, so the object stays behind the committed `DELETED` tombstone with no retry (FILE `P1/srs.md` 1.3.0 §10). Follow-up: a sweeper together with the export-archive retention job (closure is not the place for a new behaviour).
+- [TM-Z] Plan §11 expected migration sequence → actual, consolidated (each package recorded its own line; the execution order A → G → C3 → D → B → E → C12 → C6 → C4 → C5 re-derived the numbers, plan §1.3): `V16__tenant_profile` = **`V18__tenant_profile.sql`** (B), `V17__tenant_lifecycle` = **`V19__tenant_lifecycle.sql`** (B), `V18__tenant_branding` = **`V20__tenant_branding.sql`** (E), `V19__sec_user_profile` = **`V16__sec_user_profile.sql`** (D), `V20__core_idempotency_key` = **`V21__core_idempotency_key.sql`** (C4), `V21__notif_seed_password_changed` = **`V17__notif_seed_password_changed.sql`** (D, its own file); unplanned **`V22__file_document_required_authority.sql`** (C5 review round 1, restricted documents). The chain V2 … V22 is sequential and additive (`MigrationNamingTest`), each script is named exactly in its module's P2 addendum, `ReferenceApplicationSmokeTest` lists all of them, and the core migration README's chain table now lists V16 … V22 (it stopped at V15).
+- [TM-Z] Package E's TENANT block cited `RULE-TENANT-012` ("request-tenant resolution order, source 1: path") as an existing rule; RULE-TENANT-012 … 015 are reserved for the analysis-coverage work and not defined on `main` (the C12 review fixed the same slip in its own block) → the four citations in `srs-tenant.md` (E5 note, REQ-TENANT-032, the E rules table, the config row), the registry row and TC-CORE-TENANT-043's trace now name **REQ-TENANT-011** (tenant from the path), which is the as-built definition of that source. Package E's report keeps the old wording (history).
+- [TM-Z] Merge damage at the C6 → C4 block boundary of `TENANT/P1/srs-tenant.md` and `TENANT/P0/platform-summary.md`: C4's `Source version` line followed C6's last table row without a blank line, so Markdown read it as a table row → blank line inserted; no content changed. Every other 1.3.0 addendum (32 files) has one heading and its blocks in package order; no id is defined twice.
+- [TM-Z] Stale counts and pointers corrected (documentation only): `PROJECT-OVERVIEW.md` (105 → 125 operations; C12 / C4 / C6 tenancy facts; 1.3.0 addenda and TENANT ADR-001 … 006 in the reference map; the 1.3.0-SNAPSHOT version row; the 72-byte password cap), `project-registry.md` (123 → 125 operations; the 1.3.0 cross-module reads; TENANT's addendum summary), `governance/README.md` (1.3.0 addenda), `docs/RELEASE.md` (`TenantExportContributor` in the public SPI list), `docs/CHANGELOG.md` `[Unreleased]` (one section in package order with a "Behaviour changes" list).

@@ -3,6 +3,7 @@ package com.erp.sec.mapper;
 import com.erp.sec.dto.RoleActionGrantNodeResponse;
 import com.erp.sec.dto.RoleScreenGrantNodeResponse;
 import com.erp.sec.dto.RoleScreenGrantResponse;
+import com.erp.sec.dto.ScreenGrantRevokeResponse;
 import com.erp.sec.entity.Role;
 import com.erp.sec.entity.RoleScreenGrant;
 import com.erp.sec.entity.ScreenRegistry;
@@ -36,6 +37,13 @@ public class RoleScreenGrantMapper {
             .screenId(entity.getScreen() == null ? null : entity.getScreen().getScreenRegPk())
             .grantedBy(entity.getGrantedBy())
             .grantedAt(entity.getGrantedAt())
+            .build();
+    }
+
+    /** REQ-SEC-080 confirmation — the count comes from the cascade the service actually performed. */
+    public ScreenGrantRevokeResponse toRevokeResponse(int revokedActionGrants) {
+        return ScreenGrantRevokeResponse.builder()
+            .revokedActionGrants(revokedActionGrants)
             .build();
     }
 

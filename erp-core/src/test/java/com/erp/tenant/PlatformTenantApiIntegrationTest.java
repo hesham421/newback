@@ -67,8 +67,10 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("select count(*) from mdl_lookup_type where tenant_id = ?",
             Integer.class, tenantId)).isEqualTo(4);
         // PASSWORD_RESET, ACCOUNT_ACTIVATION (V9) + CUSTOMER_VERIFY_EMAIL, CUSTOMER_PASSWORD_RESET (V11, step 06)
-        assertThat(jdbcTemplate.queryForObject("select count(*) from notif_template where tenant_id = ?",
-            Integer.class, tenantId)).isEqualTo(4);
+        // + STAFF_PASSWORD_CHANGED (V17, tenant-maturity D): every PLATFORM template is copied, nothing else
+        assertThat(jdbcTemplate.queryForList("select template_code from notif_template where tenant_id = ?",
+            String.class, tenantId)).containsExactlyInAnyOrder("PASSWORD_RESET", "ACCOUNT_ACTIVATION",
+            "CUSTOMER_VERIFY_EMAIL", "CUSTOMER_PASSWORD_RESET", "STAFF_PASSWORD_CHANGED");
 
         // ... but never PLATFORM_TENANT_MANAGE: the platform API stays closed to it
         assertThat(jdbcTemplate.queryForObject("select count(*) from sec_role_action_grant g"
@@ -142,14 +144,19 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(TenantHttp.errorCode(missing)).isEqualTo("TENANT_NOT_FOUND");
     }
 
+    /**
+     * tenant-maturity C12 (REQ-TENANT-034): re-activation no longer brings an earlier token back — it answers 401
+     * {@code TENANT_TOKEN_REVOKED}; login works again at once. Before C12 the old token worked again.
+     */
     @Test
-    void suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresThem() {
+    void suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresLoginButNotTheOldTokens() {
         String code = TenantHttp.unique("SUSP");
         long id = http.provisionTenant(platformToken, code);
         String issuedBeforeSuspension = http.token(code, "admin");
 
+        // tenant-maturity B: a suspension carries a reason (RULE-TENANT-016)
         HttpResponse<String> suspended = http.patch(platformToken, TENANTS + "/" + id + "/status",
-            "{\"statusCode\":\"SUSPENDED\"}");
+            "{\"statusCode\":\"SUSPENDED\",\"reason\":\"Suspension test\"}");
         assertThat(suspended.statusCode()).isEqualTo(200);
         assertThat((String) JsonPath.read(suspended.body(), "$.data.statusCode")).isEqualTo("SUSPENDED");
 
@@ -161,11 +168,16 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(withOldToken.statusCode()).isEqualTo(403);
         assertThat(TenantHttp.errorCode(withOldToken)).isEqualTo("TENANT_SUSPENDED");
 
+        TenantHttp.awaitSecondAfterIssueOf(issuedBeforeSuspension);
         HttpResponse<String> activated = http.patch(platformToken, TENANTS + "/" + id + "/status",
             "{\"statusCode\":\"ACTIVE\"}");
         assertThat(activated.statusCode()).isEqualTo(200);
         assertThat(http.login(code, "admin", TenantHttp.PASSWORD).statusCode()).isEqualTo(200);
-        assertThat(http.post(issuedBeforeSuspension, "/api/v1/sec/users/search", "{}").statusCode()).isEqualTo(200);
+        HttpResponse<String> oldTokenAfterActivation = http.post(issuedBeforeSuspension, "/api/v1/sec/users/search", "{}");
+        assertThat(oldTokenAfterActivation.statusCode()).isEqualTo(401);
+        assertThat(TenantHttp.errorCode(oldTokenAfterActivation)).isEqualTo("TENANT_TOKEN_REVOKED");
+        assertThat(http.post(http.token(code, "admin"), "/api/v1/sec/users/search", "{}").statusCode())
+            .as("a token issued after the activation is served").isEqualTo(200);
     }
 
     @Test

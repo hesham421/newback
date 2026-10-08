@@ -148,7 +148,7 @@ public class SignupRequestService {
 
             // A just-approved sign-up holds no roles yet — an empty array, not a missing key.
             return ServiceResult.success(
-                userMapper.toResponse(created, List.of()), Status.UPDATED);
+                userMapper.toResponse(created, List.of(), null), Status.UPDATED);
         }
 
         entity.reject(principal);

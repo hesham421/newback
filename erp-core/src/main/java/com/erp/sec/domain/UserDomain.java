@@ -8,12 +8,13 @@ import com.erp.sec.entity.User;
 import com.erp.sec.exception.SecErrorCodes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Domain companion for ENT-SEC-001 (User): the reactivation transition guard (API-SEC-010 — only
  * a DISABLED user may be reactivated → {@code SEC-409-INVALID-TRANSITION}) and username/email
- * uniqueness (API-SEC-006/007, fact = QR-SEC-033 → {@code SEC-409-USER-DUP}). Decides only;
- * {@code User.activate()} / {@code deactivate()} execute the field mutation.
+ * uniqueness (API-SEC-006/007, fact = QR-SEC-033 → {@code SEC-409-USER-DUP}); since tenant-maturity D
+ * also RULE-SEC-057/058/061 (passwords, photo). Decides only; the entity executes the field mutation.
  */
 public final class UserDomain {
 
@@ -28,6 +29,22 @@ public final class UserDomain {
      * account. It is not a BCrypt hash, so no password matches it; the two must stay identical.
      */
     public static final String BOOTSTRAP_PASSWORD_PLACEHOLDER = "BOOTSTRAP-PASSWORD-NOT-SET";
+
+    /** RULE-SEC-061 (tenant-maturity D) — a profile photo is at most 1 MB (plan §6 D.4). */
+    public static final long PHOTO_MAX_BYTES = 1_048_576L;
+
+    /** RULE-SEC-061 — PNG, JPEG, WebP; never SVG (logos only, RULE-FILE-009). */
+    public static final Set<String> PHOTO_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
+
+    /** RULE-FILE-005 owner of a photo document: {@code SEC_USER} / user id / module {@code SEC}. */
+    public static final String PHOTO_OWNER_TYPE = "SEC_USER";
+    public static final String PHOTO_MODULE_CODE = "SEC";
+
+    /** Base name of a stored photo; FILE adds the extension of the detected type (never the client's name). */
+    public static final String PHOTO_BASE_NAME = "photo";
+
+    /** The multipart part name of a photo upload. */
+    private static final String FIELD_PHOTO_FILE = "file";
 
     /** Request-body field names as UserCreateRequest/UserUpdateRequest spell them. */
     private static final String FIELD_USERNAME = "username";
@@ -156,6 +173,63 @@ public final class UserDomain {
     public void assertEmailAvailable(boolean emailAlreadyTaken) {
         if (emailAlreadyTaken) {
             throw duplicate(false, true);
+        }
+    }
+
+    /**
+     * RULE-SEC-058 (tenant-maturity D, ADR-SEC-063) — whether a password an administrator chose (user
+     * create, admin-set) must be changed by its owner: unless the request says {@code false}, yes.
+     */
+    public static boolean passwordChangeRequiredFor(Boolean requireChangeAtNextLogin) {
+        return requireChangeAtNextLogin == null || requireChangeAtNextLogin;
+    }
+
+    /**
+     * RULE-SEC-057 — the administrator-set endpoint never targets the caller's own account; one's own
+     * password changes through {@code PUT /api/v1/sec/me/password}, which asks for the current one.
+     *
+     * @throws LocalizedException {@code SEC-422-PASSWORD-SELF} (Status.BUSINESS_RULE_VIOLATION → 422)
+     */
+    public static void assertNotSelfForAdminPasswordSet(boolean targetIsCaller) {
+        if (targetIsCaller) {
+            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION, SecErrorCodes.SEC_422_PASSWORD_SELF);
+        }
+    }
+
+    /**
+     * REQ-SEC-091 (tenant-maturity B) — the platform's recovery resets only a STAFF user holding an active super
+     * role; anything else is "no such super user" (TENANT refuses first with its own codes, RULE-TENANT-017).
+     *
+     * @throws LocalizedException {@code SEC-404-USER} (Status.NOT_FOUND → 404)
+     */
+    public static void assertRecoverableSuperUser(boolean staffSuperUser, String username) {
+        if (!staffSuperUser) {
+            throw new LocalizedException(Status.NOT_FOUND, SecErrorCodes.SEC_404_USER, username);
+        }
+    }
+
+    /**
+     * RULE-SEC-060 — a self-change needs the current password ({@code PasswordEncoder.matches}, checked by
+     * the service as at login, ADR-SEC-002).
+     *
+     * @throws LocalizedException {@code SEC-403-PASSWORD-CURRENT-INVALID} (Status.FORBIDDEN → 403)
+     */
+    public static void assertCurrentPasswordMatches(boolean matches) {
+        if (!matches) {
+            throw new LocalizedException(Status.FORBIDDEN, SecErrorCodes.SEC_403_PASSWORD_CURRENT_INVALID);
+        }
+    }
+
+    /**
+     * RULE-SEC-061 — refuses a profile photo FILE's image store did not accept against
+     * {@link #PHOTO_MAX_BYTES} / {@link #PHOTO_TYPES}.
+     *
+     * @throws LocalizedException {@code SEC-400-PHOTO-INVALID} (400) with {@code fieldErrors[0].field = file}
+     */
+    public static void assertPhotoAccepted(boolean accepted) {
+        if (!accepted) {
+            throw new LocalizedException(Status.VALIDATION_ERROR,
+                List.of(ErrorDetail.ofField(FIELD_PHOTO_FILE, SecErrorCodes.SEC_400_PHOTO_INVALID)));
         }
     }
 

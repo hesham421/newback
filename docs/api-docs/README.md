@@ -7,10 +7,10 @@ code or its annotations and regenerate.
 
 | | |
 |---|---|
-| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`) |
+| Generated | 2026-10-05 (public-file auth fix regenerated from the fixed build the same day; `sec/` users, active-sessions, security-dashboard and `notif/` notification-dispatch regenerated again after the Phase D fix loop, merged `3803b07`). 2026-10-07/08 (TM-G, branch `tm/g-sec-grant-revoke`): whole app regenerated from the 1.3.0-SNAPSHOT build after the generator learned to bind codes raised through the shared `com.erp.common` helpers (`DomainRules`, `OwnedLookups`, `StatusTransitions`, `InstantFieldValueConverter`). Against the 2026-10-05 docs the only changes are `sec/`'s two new revoke endpoints and the genuine changes since then: the `NOT_FOUND` framework row (1.2.0), the walked-method lists of FILE/NOTIF (private helpers moved to `com.erp.common`), and the `FileService.sha256Hex` 500 row (`TokenHasher.sha256Hex` now throws `IllegalStateException`, answered by the shared `INTERNAL_ERROR` handler). 2026-10-08 (TM-D, branch `tm/d-sec-user-profile-passwords`): whole app regenerated; `sec/` gains the eight password / profile / photo endpoints (new `endpoints/my-profile.md`) and the changed user, login and reset-completion shapes; `file/` changes only in walked-method lists (the new `isPubliclyServable` overload). TM-D review round 1 (same day): regenerated again — the customer register / reset-completion business rows gain `SEC-400-PASSWORD-POLICY` (72-byte limit), tenant create's description names the provisioning-SPI error, every module's shared handler table gains the multipart row (`VALIDATION_ERROR`). 2026-10-08 (TM-B, branch `tm/b-tenant-level-1`): whole app regenerated; `tenant/` gains `PUT /{id}`, `POST /{id}/admin-reset`, `GET /{id}/usage` and the profile / suspension fields, and binds `TENANT_SUSPENSION_REASON_REQUIRED`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER`; elsewhere only springdoc's `getById_N` suffixes (file categories, notification channels / templates) and two SEC walked-method lists changed. 2026-10-08 (TM-E, branch `tm/e-tenant-branding`): whole app regenerated; `tenant/` gains `PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding` and the new `endpoints/tenant-branding.md` (`GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding`), `TenantResponse` + `logoUrl` / `brandColor`, and binds `TENANT_LOGO_INVALID`, `TENANT_BRAND_COLOR_INVALID` and (through `TenantDomain.assertServed`) `TENANT_SUSPENDED`; `TENANT_BRANDING_RATE_LIMITED` is filter-raised (no throw site); no other module changed. TM-E review round 1 (same day): the generator blanks string literals before it looks for a mapping's Java method (an `@Operation` text with "public … word (" had been read as the declaration); regenerated — only the public-branding endpoint's summary and description text changed, no other module 2026-10-08 (TM-C5, branch `tm/c5-tenant-export`): whole app regenerated; only `tenant/` changed — `POST /{id}/export` (`TenantExportResponse`; binds `TENANT_NOT_FOUND`, `TENANT_EXPORT_IN_PROGRESS`, `TENANT_EXPORT_TOO_LARGE`, `INTERNAL_ERROR`), the two codes in the error table and the catalog row. The operation counts above were stale since TM-C12 (`revoke-tokens`): corrected to the live 125 operations / 101 paths. TM-C5 review round 1 (same day): regenerated; `file/` — owner list, metadata, access token, download, visibility and delete gain the `FILE_DOCUMENT_NOT_FOUND` 404 row of restricted documents (`FileDocumentDomain.assertVisibleTo`, RULE-FILE-012); `tenant/` — the export binds 429 `TENANT_EXPORT_BUSY`; no row removed, no other module changed. |
 | Source | `GET /v3/api-docs` (the aggregate document, all groups) of the running `erp-app-reference`, profile `dev`. The documented API is that of erp-core **1.1.0** (tag `v1.1.0` → `10a6811`), which contains the Phase D fix loop. OpenAPI `info.version` reads `v0`. |
-| Generator | `governance/tools/api-doc-generator` (unchanged; moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07), driven by `_tools/generate_all.py` |
-| Operations | **105** (86 paths) |
+| Generator | `governance/tools/api-doc-generator` (moved there from `erp-app-reference/governance/governance-tools/` on 2026-10-07; TM-G added the shared-helper binding of `extractors/business_error_extractor.py`), driven by `_tools/generate_all.py` |
+| Operations | **125** (101 paths) |
 
 ## Modules
 
@@ -22,8 +22,8 @@ the catalog.
 
 | Module | Folder | Operations | Endpoint files |
 |---|---|---:|---|
-| SEC: identity, roles, staff and customer auth, customer accounts | [`sec/`](sec/index.md) | 40 | active-sessions, audit-log, authentication, customer-accounts-public, customer-accounts-self, menu, module-registry, role-grants, roles, security-dashboard, sign-up-requests, users |
-| TENANT: platform tenant provisioning | [`tenant/`](tenant/index.md) | 5 | platform-tenants |
+| SEC: identity, roles, staff and customer auth, customer accounts | [`sec/`](sec/index.md) | 50 | active-sessions, audit-log, authentication, customer-accounts-public, customer-accounts-self, menu, module-registry, my-profile, role-grants, roles, security-dashboard, sign-up-requests, users |
+| TENANT: platform tenant provisioning, tenant branding, tenant data export | [`tenant/`](tenant/index.md) | 15 | platform-tenants, tenant-branding |
 | FILE: files, categories, public files | [`file/`](file/index.md) | 14 | file-categories, file-documents, file-lookups, public-files |
 | NOTIF: templates, channels, dispatch, logs, inbox (staff and customer) | [`notif/`](notif/index.md) | 18 | notification-channels, notification-dispatch, notification-inbox, notification-logs, notification-lookups, notification-templates |
 | MDL: master data lookups | [`mdl/`](mdl/index.md) | 11 | lookup-consumer-api, lookup-type-management, lookup-value-management |
@@ -32,7 +32,7 @@ the catalog.
 | AUDIT: generic audit events | [`audit/`](audit/index.md) | 1 | audit-log |
 | REPORT: report definitions, run and export | [`report/`](report/index.md) | 4 | reports |
 | APP: reference-app endpoints (dev profile only) | [`app/`](app/index.md) | 1 | dev-support |
-| **Total** | | **105** | |
+| **Total** | | **125** | |
 
 Notes:
 - `/api/v1/customers/me/inbox/**` is served by `com.erp.notif.controller.NotificationInboxController`, so it is
@@ -79,7 +79,7 @@ The generator's own per-module discovery is bypassed (see `docs/DEVIATIONS.md`, 
 
 `_tools/check_completeness.py` lists every (method, path) in `/v3/api-docs` and checks that each one is
 documented under exactly one `<module>/endpoints/*.md`. It also checks that no documented endpoint is
-missing from the app. The result at generation time was 105/105, with 0 missing, 0 duplicated and 0 stale.
+missing from the app. The result at generation time was 123/123, with 0 missing, 0 duplicated and 0 stale.
 
 ## `check` results at generation time
 
@@ -92,6 +92,26 @@ Five modules pass every assertion: SEC, TENANT, MDL, SEQUENCE and REPORT. These 
 | CU | unique-constraints 0 vs 1 | The "declared" count matches the text `@UniqueConstraint` in a Javadoc of `AppConfiguration`, not a real annotation. This is a generator false positive. |
 | AUDIT | business-errors 0/1 | `AUDIT_ACTION_INVALID` is thrown only on the write path (`AuditApi`, cross-module). The single HTTP endpoint is a read. The result is correct, but the assertion has no waiver mechanism here. |
 | APP | permissions, business-errors | `DevPasswordResetController` delegates to `com.erp.sec.service.DevPasswordResetSupportService`, which is outside the app's source root (`SERVICE_SOURCE_MISSING`). |
+
+Not a `check` failure, but a known gap of the business-error extraction: errors raised by a module through the
+tenant provisioning SPI (`TenantProvisioningContributor` implementations, e.g. SEC's 400 `SEC-400-PASSWORD-POLICY` for
+`adminPassword` since 1.3.0) are not reached by the generator's call walk from `POST /api/v1/platform/tenants`, so
+they appear only in that endpoint's description (TM-D review round 1).
+
+Also not a `check` failure: the generator renders request headers but no **response** headers. The
+`Idempotent-Replayed: true` header of a replayed `POST /api/v1/platform/tenants` (1.3.0, TM-C4) is therefore named only
+in that endpoint's description; its codes `IDEMPOTENCY_KEY_INVALID` and `IDEMPOTENCY_KEY_CONFLICT` are bound to the
+endpoint like any other (the generator follows an injected `com.erp.common` component, TM-C4 review round 1).
+
+Also not a `check` failure: **bogus `of` rows**. Eleven Business Responses rows have the code and constant `of`, e.g.
+`400 BAD_REQUEST · of · of · PasswordPolicy.assertAcceptable` — `sec/endpoints/users.md` (3), `my-profile.md` (2),
+`authentication.md`, `customer-accounts-public.md` (2), `tenant/endpoints/platform-tenants.md` (2),
+`report/endpoints/reports.md`; present since the 1.3.0 regenerations. The generator reads the factory call
+`FieldError.of(...)` passed to a `LocalizedException` as an error code. `of` is never a code: ignore the row; the real
+answer of that throw site is the other row of the same method (e.g. `SEC-400-PASSWORD-POLICY` "as a `fieldErrors[]`
+entry") or the one named in the endpoint's description (`SEC-400-PHOTO-INVALID`, `TENANT_BRAND_COLOR_INVALID`,
+`TENANT_LOGO_INVALID`; `VALIDATION_ERROR` for the report export format), with the field in `fieldErrors`. To be fixed
+in the generator's business-error extractor, never by hand (TM-Z review).
 
 The affected endpoints document the outcome explicitly (for example "**Authorization**: not extracted — no controller method matching this route was found")
 instead of claiming that no permission is required. Do not fix these by hand-editing the docs.

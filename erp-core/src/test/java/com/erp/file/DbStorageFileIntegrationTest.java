@@ -19,4 +19,16 @@ class DbStorageFileIntegrationTest extends AbstractFileStorageIntegrationTest {
         assertThat(row.get("storage_ref")).isEqualTo(String.valueOf(documentId));
         assertThat((byte[]) row.get("file_content")).isEqualTo(content);
     }
+
+    @Override
+    protected void assertContentRemoved(long documentId, String storageRef) {
+        assertThat(jdbcTemplate.queryForObject("select file_content is null from file_document where id = ?", Boolean.class,
+            documentId)).isTrue();
+    }
+
+    @Override
+    protected void assertContentKept(long documentId, String storageRef) {
+        assertThat(jdbcTemplate.queryForObject("select file_content is not null from file_document where id = ?",
+            Boolean.class, documentId)).isTrue();
+    }
 }

@@ -255,6 +255,7 @@ effective rule is this table. `CuPermissions.java:21-27` Javadoc maps the API id
 | NEW | infrastructure | `com.erp.autoconfigure.ErpCoreCacheAutoConfiguration` (`AutoConfiguration.imports`, before Boot's `CacheAutoConfiguration`): `@EnableCaching(order = LOWEST_PRECEDENCE - 1)` and a `CacheManagerCustomizer<ConcurrentMapCacheManager>` that registers `erpCoreSettings` on the simple cache manager; the application chooses the provider | ErpCoreCacheAutoConfiguration.java:30-46; erp-core/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports |
 | NEW | infrastructure | OpenAPI group `cu` (`CU — Common Utils`, package `com.erp.cu.controller`) — the source of `docs/api-docs/cu/` | autoconfigure/ErpCoreOpenApiAutoConfiguration.java:74 |
 | NEW | events | none published, none consumed (RULE-CU-013) | docs/steps/09-report.md:58 |
+Deviation records: V10; `docs/DEVIATIONS.md` [06], [09], [10].
 
 
 ## Implementation Addendum — erp-core 1.3.0

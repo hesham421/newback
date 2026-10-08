@@ -100,15 +100,61 @@ class CommentsAreNotCode(unittest.TestCase):
                 '    @PostMapping("/login")\n'
                 '    @SecurityRequirements // public: permitAll — the word public must not be read as a declaration\n'
                 '    @Operation(summary = "Login")\n'
-                '    public R login(@RequestBody Req r) { return xService.login(r); }\n}\n')
+                '    public R login(@RequestBody Req r) { return xService.login(r); }\n}\n', encoding="utf-8")
             (root / "XService.java").write_text(
                 'package x;\npublic class XService {\n    /* public void login(Req r) — commented out */\n'
-                '    public R login(Req r) { return null; }\n}\n')
+                '    public R login(Req r) { return null; }\n}\n', encoding="utf-8")
             controller_file, method = se.find_controller_for_endpoint(root, "POST", "/api/v1/x/auth/login")
             self.assertEqual(method, "login")
-            lookup = se.resolve_permission(controller_file.read_text(), method, root, controller_name="PubController")
+            lookup = se.resolve_permission(controller_file.read_text(encoding="utf-8"), method, root, controller_name="PubController")
             self.assertEqual(lookup.outcome, se.DECLARED_NONE)
             self.assertEqual(lookup.checked, ["PubController.login", "XService.login"])
+
+
+class StringLiteralsAreNotCode(unittest.TestCase):
+    """tenant-maturity E review round 1: prose inside an @Operation text ("the public branding ... path (") was
+    read as the method declaration, so the endpoint's call walk started from a method named "path"."""
+
+    def test_public_and_a_parenthesis_inside_an_annotation_text_are_not_the_declaration(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "BrandController.java").write_text(
+                'package x;\n@RestController\n@RequestMapping("/api/v1")\npublic class BrandController {\n'
+                '    @GetMapping("/public/tenants/{tenantCode}/branding")\n'
+                '    @Operation(summary = "Get a tenant\'s public branding by its code",\n'
+                '        description = "No token: the tenant comes from the path (unknown 404); see"\n'
+                '            + " erp.core.tenant.public-branding-rate-limit.capacity (default 60) \\" quoted ( ")\n'
+                '    public R getPublicTenantBranding(@PathVariable String tenantCode) { return null; }\n}\n',
+                encoding="utf-8")
+            _, method = se.find_controller_for_endpoint(root, "GET", "/api/v1/public/tenants/{tenantCode}/branding")
+            self.assertEqual(method, "getPublicTenantBranding")
+
+    def test_a_brace_inside_a_parameter_annotation_string_does_not_end_the_method_body(self):
+        """tenant-maturity C4 review round 1: "{1,64}" in a @Schema pattern closed the brace-counted body scan on
+        the parameter line, so the delegate call below it was never seen and the permission was dropped."""
+        source = (
+            'package x;\npublic class IdemController {\n'
+            '    private final ItemService service;\n'
+            '    private final IdempotentResponses idempotentResponses;\n'
+            '    @PostMapping\n'
+            '    public R create(\n'
+            '            @Parameter(schema = @Schema(maxLength = 64, pattern = "^[A-Za-z0-9._:-]{1,64}$"))\n'
+            '            @RequestHeader(name = "Idempotency-Key", required = false) String key,\n'
+            '            @Valid @RequestBody ItemCreateRequest request) {\n'
+            '        return idempotentResponses.craftResponse(key, "POST /x", request, R.class,\n'
+            '            () -> service.create(request));\n'
+            '    }\n}\n')
+        self.assertEqual(se.find_delegate(source, "create"), ("ItemService", "create"))
+
+    def test_blanking_keeps_offsets_quotes_and_newlines(self):
+        source = 'a("public x (", \'"\', "esc \\" public y (")\n"""\npublic z (\n""" b(c)'
+        blanked = se.blank_string_literals(source)
+        self.assertEqual(len(blanked), len(source))
+        self.assertNotIn("public", blanked)
+        self.assertEqual(blanked.count("\n"), source.count("\n"))
+        self.assertTrue(blanked.startswith('a("'))
+        self.assertTrue(blanked.endswith('""" b(c)'))
 
 
 class AnnotationCount(unittest.TestCase):

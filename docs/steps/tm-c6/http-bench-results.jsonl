@@ -1,0 +1,6 @@
+{"label": "A1-threadlocal", "token /tenant/me": {"n": 3000, "p50": 3.313, "p95": 11.084, "p99": 21.147, "mean": 4.425}, "header-only /tenant/me": {"n": 3000, "p50": 0.738, "p95": 2.019, "p99": 4.011, "mean": 0.988}}
+{"label": "B1-scoped", "token /tenant/me": {"n": 3000, "p50": 4.189, "p95": 8.536, "p99": 15.62, "mean": 4.665}, "header-only /tenant/me": {"n": 3000, "p50": 0.834, "p95": 1.521, "p99": 7.206, "mean": 1.09}}
+{"label": "A2-threadlocal", "token /tenant/me": {"n": 3000, "p50": 3.301, "p95": 11.819, "p99": 21.384, "mean": 4.364}, "header-only /tenant/me": {"n": 3000, "p50": 0.686, "p95": 1.813, "p99": 4.478, "mean": 0.901}}
+{"label": "B2-scoped", "token /tenant/me": {"n": 3000, "p50": 3.648, "p95": 12.632, "p99": 20.001, "mean": 4.784}, "header-only /tenant/me": {"n": 3000, "p50": 0.754, "p95": 2.151, "p99": 6.921, "mean": 1.151}}
+{"label": "A3-threadlocal", "token /tenant/me": {"n": 3000, "p50": 3.189, "p95": 10.849, "p99": 21.21, "mean": 4.168}, "header-only /tenant/me": {"n": 3000, "p50": 0.713, "p95": 1.945, "p99": 4.344, "mean": 1.005}}
+{"label": "B3-scoped", "token /tenant/me": {"n": 3000, "p50": 3.366, "p95": 9.991, "p99": 18.446, "mean": 4.27}, "header-only /tenant/me": {"n": 3000, "p50": 0.735, "p95": 2.134, "p99": 4.657, "mean": 1.067}}

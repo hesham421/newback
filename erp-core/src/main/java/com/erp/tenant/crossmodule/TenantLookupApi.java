@@ -11,4 +11,16 @@ public interface TenantLookupApi {
 
     /** The code of the tenant with this id, or empty when no such tenant exists. */
     Optional<String> codeOf(Long tenantId);
+
+    /**
+     * tenant-maturity D — the code and both names of the tenant with this id (e.g. SEC's staff
+     * {@code /me}), or empty when no such tenant exists.
+     */
+    Optional<TenantSummary> summaryOf(Long tenantId);
+
+    /**
+     * tenant-maturity C12 (XM-TENANT-001) — whether the tenant with this id exists and is ACTIVE; false for null, an
+     * unknown id or a suspended tenant. Uncached (a status change counts at once); needs no current tenant.
+     */
+    boolean isActive(Long tenantId);
 }

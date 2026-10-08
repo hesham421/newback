@@ -5,12 +5,14 @@ import com.erp.sec.repository.ActiveSessionRepository;
 import com.erp.sec.repository.UserRepository;
 import com.erp.sec.security.JwtAuthenticationFilter;
 import com.erp.sec.security.JwtTokenValidator;
+import com.erp.sec.security.PasswordChangeRequiredFilter;
 import com.erp.sec.security.RealmEnforcementFilter;
 import com.erp.sec.security.SecSecurityErrorHandler;
 import com.erp.sec.service.MenuService;
 import com.erp.tenant.TenantContext;
 import com.erp.tenant.permission.TenantPermissions;
 import com.erp.tenant.repository.TenantRepository;
+import com.erp.tenant.security.PublicBrandingRateLimitFilter;
 import com.erp.tenant.security.TenantResolutionFilter;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,6 +100,20 @@ public class ErpCoreSecurityAutoConfiguration {
     public static final String PUBLIC_FILE_PATHS = "/api/v1/public/files/**";
 
     /**
+     * tenant-maturity E (REQ-TENANT-032) — the anonymous public branding, {@code GET} only, on the customer chain like
+     * {@link #PUBLIC_FILE_PATHS}: public for the realm and tenant filters, tenant from the path
+     * ({@code erp.core.tenant.path-tenant-paths}), rate-limited per client address first (RULE-TENANT-022).
+     */
+    public static final String PUBLIC_TENANT_BRANDING_PATHS = "/api/v1/public/tenants/*/branding";
+
+    /**
+     * tenant-maturity E (REQ-TENANT-031) — the branding of the caller's tenant: authenticated, but its {@code GET} is
+     * realm-neutral on the core chain (a CUSTOMER token is not refused with {@code REALM_MISMATCH} there) and allowed
+     * during a pending forced password change (RULE-SEC-059).
+     */
+    public static final String TENANT_ME_PATH = "/api/v1/tenant/me";
+
+    /**
      * {@code @Lazy} keeps the JPA and method-security infrastructure out of the security-config
      * bootstrap: the filter is built while the filter chain is, long before those are ready.
      */
@@ -139,8 +155,11 @@ public class ErpCoreSecurityAutoConfiguration {
                 .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
-            .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF,
-                properties.getSecurity().getPublicPaths(), securityErrorHandler), TenantResolutionFilter.class);
+            .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF, properties.getSecurity().getPublicPaths(),
+                List.of(TENANT_ME_PATH), securityErrorHandler), TenantResolutionFilter.class)
+            // tenant-maturity D (RULE-SEC-059): a pending forced password change blocks all but three calls
+            .addFilterAfter(new PasswordChangeRequiredFilter(properties.getSecurity().getPublicPaths(),
+                securityErrorHandler), RealmEnforcementFilter.class);
         return http.build();
     }
 
@@ -166,6 +185,8 @@ public class ErpCoreSecurityAutoConfiguration {
         // TENANT_REQUIRED) and take their tenant from the path.
         List<String> unauthenticatedPaths = new ArrayList<>(customerPublicPaths);
         unauthenticatedPaths.add(PUBLIC_FILE_PATHS);
+        unauthenticatedPaths.add(PUBLIC_TENANT_BRANDING_PATHS); // tenant-maturity E
+        ErpCoreProperties.PublicBrandingRateLimit brandingLimit = properties.getTenant().getPublicBrandingRateLimit();
         TenantResolutionFilter tenantResolutionFilter = new TenantResolutionFilter(
             tenantRepository::getObject, messageSource, unauthenticatedPaths, properties.getTenant().getExemptPaths(),
             properties.getTenant().getPathTenantPaths());
@@ -179,12 +200,16 @@ public class ErpCoreSecurityAutoConfiguration {
                 }
                 auth.requestMatchers(HttpMethod.GET, PUBLIC_FILE_PATHS).permitAll(); // erp-core step 07
                 auth.requestMatchers(HttpMethod.HEAD, PUBLIC_FILE_PATHS).permitAll();
+                auth.requestMatchers(HttpMethod.GET, PUBLIC_TENANT_BRANDING_PATHS).permitAll(); // tenant-maturity E
                 auth.anyRequest().hasAuthority(JwtAuthenticationFilter.ROLE_CUSTOMER);
             })
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint(securityErrorHandler)
                 .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // tenant-maturity E (RULE-TENANT-022): counted before the token and the tenant are looked at
+            .addFilterBefore(new PublicBrandingRateLimitFilter(PUBLIC_TENANT_BRANDING_PATHS, brandingLimit.getCapacity(),
+                brandingLimit.getPeriod(), messageSource), JwtAuthenticationFilter.class)
             .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
             .addFilterAfter(new RealmEnforcementFilter(User.REALM_CUSTOMER, unauthenticatedPaths, securityErrorHandler),
                 TenantResolutionFilter.class);
