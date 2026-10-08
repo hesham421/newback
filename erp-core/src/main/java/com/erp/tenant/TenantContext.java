@@ -21,10 +21,20 @@ import java.util.function.Supplier;
  * session — and so its tenant — at transaction begin. Switching the tenant inside an open transaction
  * does not affect that transaction; call {@code runAs} <em>around</em> the transactional call (or use
  * {@code Propagation.REQUIRES_NEW} inside it) so that a new session opens under the new tenant.
+ *
+ * <p><b>Binding (spike ADR-TENANT-004).</b> The tenant lives in a {@link ScopedValue} frame: {@link #callAs} and
+ * {@link #callScoped} bind a new frame for a bounded scope; {@link #set}/{@link #clear} update the innermost frame.
+ * Outside any scope they fall back to a per-thread value (API compatibility), refused when the environment variable
+ * {@code ERP_TENANT_CONTEXT_STRICT=true} is set (spike probe M5).
  */
 public final class TenantContext {
 
-    private static final ThreadLocal<Long> CURRENT = new ThreadLocal<>();
+    private static final ScopedValue<Frame> SCOPE = ScopedValue.newInstance();
+
+    /** The value of {@link #set} outside any scope — what the {@code ThreadLocal} held before the spike. */
+    private static final ThreadLocal<Long> UNSCOPED = new ThreadLocal<>();
+
+    private static final boolean STRICT = Boolean.parseBoolean(System.getenv("ERP_TENANT_CONTEXT_STRICT"));
 
     private TenantContext() {
         throw new UnsupportedOperationException("Utility class — cannot be instantiated");
@@ -32,12 +42,12 @@ public final class TenantContext {
 
     /** The current tenant id, or {@code null} when none is set. */
     public static Long current() {
-        return CURRENT.get();
+        return SCOPE.isBound() ? SCOPE.get().tenantId : UNSCOPED.get();
     }
 
     /** The current tenant id, if any. */
     public static Optional<Long> find() {
-        return Optional.ofNullable(CURRENT.get());
+        return Optional.ofNullable(current());
     }
 
     /**
@@ -45,7 +55,7 @@ public final class TenantContext {
      * programming error (e.g. a system job that forgot {@link #runAs}), never a client error.
      */
     public static Long require() {
-        Long tenantId = CURRENT.get();
+        Long tenantId = current();
         if (tenantId == null) {
             throw new LocalizedException(Status.INTERNAL_ERROR, TenantErrorCodes.TENANT_CONTEXT_MISSING);
         }
@@ -54,17 +64,28 @@ public final class TenantContext {
 
     /** Whether the current tenant is the PLATFORM tenant; {@code false} when none is set. */
     public static boolean isPlatform() {
-        return Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(CURRENT.get());
+        return Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(current());
     }
 
     /** Sets the current tenant. Whoever sets it owns clearing it ({@link #clear()} in a finally). */
     public static void set(Long tenantId) {
-        CURRENT.set(Objects.requireNonNull(tenantId, "tenantId"));
+        Objects.requireNonNull(tenantId, "tenantId");
+        if (SCOPE.isBound()) {
+            SCOPE.get().tenantId = tenantId;
+        } else if (STRICT) {
+            throw new IllegalStateException("TenantContext.set outside a tenant scope (ERP_TENANT_CONTEXT_STRICT)");
+        } else {
+            UNSCOPED.set(tenantId);
+        }
     }
 
     /** Removes the current tenant from this thread. */
     public static void clear() {
-        CURRENT.remove();
+        if (SCOPE.isBound()) {
+            SCOPE.get().tenantId = null;
+        } else {
+            UNSCOPED.remove();
+        }
     }
 
     /** Runs {@code action} as {@code tenantId}, then restores whatever tenant (or none) was current. */
@@ -78,16 +99,24 @@ public final class TenantContext {
     /** Calls {@code action} as {@code tenantId}, then restores whatever tenant (or none) was current. */
     public static <T> T callAs(Long tenantId, Supplier<T> action) {
         Objects.requireNonNull(tenantId, "tenantId");
-        Long previous = CURRENT.get();
-        CURRENT.set(tenantId);
-        try {
-            return action.get();
-        } finally {
-            if (previous == null) {
-                CURRENT.remove();
-            } else {
-                CURRENT.set(previous);
-            }
+        return ScopedValue.where(SCOPE, new Frame(tenantId)).call(action::get);
+    }
+
+    /**
+     * Spike ADR-TENANT-004 — calls {@code op} in a new scope that starts with {@code tenantId} ({@code null} = none);
+     * {@link #set}/{@link #clear} inside it change only this scope, which ends with {@code op}.
+     */
+    public static <T, X extends Throwable> T callScoped(Long tenantId, ScopedValue.CallableOp<T, X> op) throws X {
+        return ScopedValue.where(SCOPE, new Frame(tenantId)).call(op);
+    }
+
+    /** One binding of the scoped value; only the thread that bound it reads or writes it. */
+    private static final class Frame {
+
+        private Long tenantId;
+
+        private Frame(Long tenantId) {
+            this.tenantId = tenantId;
         }
     }
 }
