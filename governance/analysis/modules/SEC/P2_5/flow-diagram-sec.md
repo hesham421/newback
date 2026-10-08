@@ -142,6 +142,10 @@ Priority  : HIGH (REQ-SEC-080, REQ-SEC-081)
 Sessions are not ended: the affected users' next requests already see the change (1.3.0 §6), so the flow has no
 "users signed out" step.
 
+TM-F1 as built (`ui-ux-spec-sec.md` SEC-U16, SEC-U27): in the forced-change flow the `GET /api/v1/tenant/me` logo
+step arrives with F2 (TENANT P2_5 TEN-U01, TEN-U04); until then SCR-SEC-012 shows the platform mark. The flag set by
+the login answer or by a 403 is cleared only by `PUT /me/password` 200 (or a sign-out), never by a later `['me']` read.
+
 ## Story coverage (addendum)
 
 | US / REQ | Flow | SCR |
