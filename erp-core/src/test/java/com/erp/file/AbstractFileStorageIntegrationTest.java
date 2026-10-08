@@ -45,6 +45,12 @@ abstract class AbstractFileStorageIntegrationTest extends AbstractIntegrationTes
     /** The STORAGE_PROVIDER value new uploads must carry. */
     protected abstract String expectedProvider();
 
+    /** tenant-maturity C5 review round 1 (RULE-FILE-012) — asserts the provider no longer holds the document's content. */
+    protected abstract void assertContentRemoved(long documentId, String storageRef);
+
+    /** The provider still holds the document's content. */
+    protected abstract void assertContentKept(long documentId, String storageRef);
+
     @BeforeEach
     void setUpClient() {
         http = new FileHttp(port);
@@ -73,6 +79,29 @@ abstract class AbstractFileStorageIntegrationTest extends AbstractIntegrationTes
             .containsEntry("visibility", "PRIVATE").containsEntry("content_hash", sha256(content));
         assertThat(row.get("public_slug")).isNull();
         assertStoredByProvider(id, content);
+    }
+
+    @Test
+    void deletingARestrictedDocument_removesItsContent_archivingOrDeletingAnOrdinaryOneKeepsIt() {
+        long restricted = http.uploadOk(platformToken, null, "restricted.png", FileHttp.png("restricted"));
+        long ordinary = http.uploadOk(platformToken, null, "ordinary.png", FileHttp.png("ordinary"));
+        jdbcTemplate.update("update file_document set required_authority = 'PLATFORM_TENANT_MANAGE' where id = ?", restricted);
+        String restrictedRef = jdbcTemplate.queryForObject("select storage_ref from file_document where id = ?",
+            String.class, restricted);
+        String ordinaryRef = jdbcTemplate.queryForObject("select storage_ref from file_document where id = ?",
+            String.class, ordinary);
+
+        assertThat(http.delete(platformToken, "/api/v1/files/" + restricted + "?action=ARCHIVE").statusCode()).isEqualTo(200);
+        assertContentKept(restricted, restrictedRef);
+        assertThat(http.delete(platformToken, "/api/v1/files/" + restricted + "?action=DELETE").statusCode()).isEqualTo(200);
+        assertThat(http.delete(platformToken, "/api/v1/files/" + ordinary + "?action=DELETE").statusCode()).isEqualTo(200);
+
+        Map<String, Object> tombstone = jdbcTemplate.queryForMap(
+            "select file_status_id, file_name, file_size, content_hash from file_document where id = ?", restricted);
+        assertThat(tombstone).containsEntry("file_status_id", "DELETED").containsEntry("file_name", "restricted.png");
+        assertThat(tombstone.get("content_hash")).isNotNull();
+        assertContentRemoved(restricted, restrictedRef);
+        assertContentKept(ordinary, ordinaryRef);
     }
 
     @Test

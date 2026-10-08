@@ -195,6 +195,11 @@ final class FileHttp {
         return send(authorized(json(path), token).PUT(body(jsonBody)));
     }
 
+    /** tenant-maturity C5 review round 1 — {@code DELETE} with the caller's token. */
+    HttpResponse<String> delete(String token, String path) {
+        return send(authorized(json(path), token).DELETE());
+    }
+
     /** A request with an arbitrary method and no token or tenant header. */
     HttpResponse<String> anonymous(String method, String path) {
         return send(HttpRequest.newBuilder(URI.create(baseUrl + path)).method(method, HttpRequest.BodyPublishers.noBody()));

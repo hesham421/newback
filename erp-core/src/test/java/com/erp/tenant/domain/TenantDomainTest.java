@@ -279,12 +279,19 @@ class TenantDomainTest {
                 assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_TOO_LARGE);
                 assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
             });
-        assertThatCode(() -> TenantDomain.assertExportStartable(true, "ACME")).doesNotThrowAnyException();
-        assertThatThrownBy(() -> TenantDomain.assertExportStartable(false, "ACME"))
+        assertThatCode(() -> TenantDomain.assertExportStartable(true, true, "ACME", 2)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertExportStartable(false, false, "ACME", 2))
+            .as("the tenant's own export is checked first")
             .isInstanceOf(LocalizedException.class)
             .satisfies(e -> {
                 assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_IN_PROGRESS);
                 assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.CONFLICT);
+            });
+        assertThatThrownBy(() -> TenantDomain.assertExportStartable(true, false, "ACME", 2))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_BUSY);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.TOO_MANY_REQUESTS);
             });
     }
 

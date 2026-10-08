@@ -3,6 +3,7 @@ package com.erp.tenant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.erp.autoconfigure.ErpCoreProperties;
+import com.erp.file.crossmodule.FileDocumentLookupApi;
 import com.erp.tenant.export.TenantExportGuard;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
@@ -55,6 +56,8 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
     private ErpCoreProperties properties;
     @Autowired
     private TenantExportGuard guard;
+    @Autowired
+    private FileDocumentLookupApi fileDocuments;
 
     private TenantHttp http;
     private String platformToken;
@@ -160,6 +163,8 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
         assertThat(everything).doesNotContain("$2a$", "$2b$", "$2y$", "\u0089PNG");
         assertThat(secrets).isNotEmpty().allSatisfy(secret -> assertThat(everything).doesNotContain(secret));
         assertThat(everything).as("nothing of tenant B").doesNotContain(codeB, userOfB);
+        assertThat(everything).as("historic FILE_DOCUMENT audit changes are scrubbed, other fields kept")
+            .doesNotContain("legacy-object-key-" + codeA, "legacy-slug-" + codeA).contains("legacy-name-" + codeA);
         assertThat(rows(entries, "CU/CU_APP_CONFIGURATION.csv")).anySatisfy(row ->
             assertThat(row).contains("EXPORT_FORMULA", "'=SUM(A1)"));
         assertThat(rows(entries, "NOTIF/NOTIF_INBOX.csv")).anySatisfy(row ->
@@ -198,7 +203,7 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
         String code = TenantHttp.unique("EXR");
         long running = http.provisionTenant(platformToken, code);
         long other = http.provisionTenant(platformToken, TenantHttp.unique("EXO"));
-        assertThat(guard.tryStart(running)).isTrue();
+        assertThat(guard.tryStart(running, Integer.MAX_VALUE)).isEqualTo(TenantExportGuard.Start.STARTED);
         try {
             HttpResponse<String> second = http.post(platformToken, TENANTS + "/" + running + "/export", "");
 
@@ -237,6 +242,111 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
         assertThat(TenantHttp.errorCode(missing)).isEqualTo("TENANT_NOT_FOUND");
     }
 
+    @Test
+    void theArchiveIsRestricted_aFileViewerSeesNothingOfIt_theOperatorUsesIt_andDeletingItRemovesItsBytes() {
+        long tenant = http.provisionTenant(platformToken, TenantHttp.unique("EXF"));
+        HttpResponse<String> exported = http.post(platformToken, TENANTS + "/" + tenant + "/export", "");
+        assertThat(exported.statusCode()).as(exported.body()).isEqualTo(200);
+        long archive = ((Number) JsonPath.read(exported.body(), "$.data.fileId")).longValue();
+        assertThat(jdbcTemplate.queryForObject("SELECT REQUIRED_AUTHORITY FROM FILE_DOCUMENT WHERE ID = ?", String.class,
+            archive)).isEqualTo("PLATFORM_TENANT_MANAGE");
+        HttpResponse<String> ordinary = http.uploadPng(platformToken, tenant, "ordinary.png");
+        assertThat(ordinary.statusCode()).isEqualTo(201);
+        long ordinaryId = ((Number) JsonPath.read(ordinary.body(), "$.data.id")).longValue();
+        String viewer = http.token(TenantConstants.PLATFORM_TENANT_CODE,
+            TenantHttp.fileViewerOperator(jdbcTemplate, passwordEncoder));
+        String archiveList = "/api/v1/files?ownerId=" + tenant + "&ownerType=CORE_TENANT&moduleCode=TENANT";
+
+        HttpResponse<String> listed = http.get(viewer, archiveList);
+        assertThat(listed.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<Object>>read(listed.body(), "$.data.content")).as("the archive is filtered out").isEmpty();
+        for (HttpResponse<String> refused : List.of(http.get(viewer, "/api/v1/files/" + archive),
+                http.post(viewer, "/api/v1/files/" + archive + "/access-token", ""),
+                http.delete(viewer, "/api/v1/files/" + archive + "?action=DELETE"))) {
+            assertThat(refused.statusCode()).as(refused.body()).isEqualTo(404);
+            assertThat(TenantHttp.errorCode(refused)).isEqualTo("FILE_DOCUMENT_NOT_FOUND");
+        }
+        String operatorToken = JsonPath.read(http.post(platformToken, "/api/v1/files/" + archive + "/access-token", "").body(),
+            "$.data.accessToken");
+        assertThat(http.getBytes(viewer, "/api/v1/files/download?token=" + operatorToken).statusCode())
+            .as("another user's token never serves it").isEqualTo(401);
+        assertThat(http.get(viewer, "/api/v1/files/" + ordinaryId).statusCode()).as("ordinary documents unaffected")
+            .isEqualTo(200);
+        assertThat(http.get(viewer, "/api/v1/files?ownerId=" + tenant + "&ownerType=PRODUCT&moduleCode=SHOP").body())
+            .contains("ordinary.png");
+        assertThat(jdbcTemplate.queryForObject("SELECT FILE_STATUS_ID FROM FILE_DOCUMENT WHERE ID = ?", String.class, archive))
+            .as("the viewer's delete changed nothing").isEqualTo("ACTIVE");
+        assertThat(TenantContext.callAs(TenantConstants.PLATFORM_TENANT_ID, () -> fileDocuments.isAvailable(archive)))
+            .as("no module may reference the archive").isFalse();
+        assertThat(TenantContext.callAs(TenantConstants.PLATFORM_TENANT_ID, () -> fileDocuments.isAvailable(ordinaryId)))
+            .isTrue();
+
+        HttpResponse<String> operatorList = http.get(platformToken, archiveList);
+        assertThat(JsonPath.<List<Object>>read(operatorList.body(), "$.data.content")).hasSize(1);
+        assertThat(http.get(platformToken, "/api/v1/files/" + archive).statusCode()).isEqualTo(200);
+        assertThat(http.getBytes(platformToken, "/api/v1/files/download?token=" + operatorToken).statusCode()).isEqualTo(200);
+        HttpResponse<String> deleted = http.delete(platformToken, "/api/v1/files/" + archive + "?action=DELETE");
+        assertThat(deleted.statusCode()).as(deleted.body()).isEqualTo(200);
+
+        Map<String, Object> tombstone = jdbcTemplate.queryForMap("SELECT FILE_STATUS_ID, FILE_CONTENT, FILE_NAME, FILE_SIZE,"
+            + " CONTENT_HASH FROM FILE_DOCUMENT WHERE ID = ?", archive);
+        assertThat(tombstone.get("file_status_id")).isEqualTo("DELETED");
+        assertThat(tombstone.get("file_content")).as("the bytes are gone").isNull();
+        assertThat((String) tombstone.get("file_name")).startsWith("tenant-export-");
+        assertThat(((Number) tombstone.get("file_size")).longValue()).isPositive();
+        assertThat(tombstone.get("content_hash")).isNotNull();
+        HttpResponse<String> ordinaryDeleted = http.delete(platformToken, "/api/v1/files/" + ordinaryId + "?action=DELETE");
+        assertThat(ordinaryDeleted.statusCode()).isEqualTo(200);
+        assertThat(jdbcTemplate.queryForObject("SELECT FILE_CONTENT IS NOT NULL FROM FILE_DOCUMENT WHERE ID = ?",
+            Boolean.class, ordinaryId)).as("an ordinary document keeps its bytes (RULE-FILE-006)").isTrue();
+    }
+
+    @Test
+    void aFailedStore_answers500_recordsTenantExportedNowhere_andFreesTheSlot() {
+        long tenant = http.provisionTenant(platformToken, TenantHttp.unique("EXX"));
+        jdbcTemplate.execute("CREATE OR REPLACE FUNCTION C5_FAIL_EXPORT_STORE() RETURNS TRIGGER AS $$ BEGIN"
+            + " IF NEW.OWNER_TYPE = 'CORE_TENANT' AND NEW.OWNER_ID = " + tenant
+            + " THEN RAISE EXCEPTION 'injected store failure'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql");
+        jdbcTemplate.execute("CREATE TRIGGER C5_FAIL_EXPORT_STORE BEFORE INSERT ON FILE_DOCUMENT FOR EACH ROW"
+            + " EXECUTE FUNCTION C5_FAIL_EXPORT_STORE()");
+        try {
+            HttpResponse<String> failed = http.post(platformToken, TENANTS + "/" + tenant + "/export", "");
+
+            assertThat(failed.statusCode()).as(failed.body()).isEqualTo(500);
+            assertThat(auditRows(tenant, tenant)).as("no TENANT_EXPORTED in the tenant").isZero();
+            assertThat(auditRows(1L, tenant)).as("nor in PLATFORM").isZero();
+            assertThat(guard.isRunning(tenant)).isFalse();
+        } finally {
+            jdbcTemplate.execute("DROP TRIGGER IF EXISTS C5_FAIL_EXPORT_STORE ON FILE_DOCUMENT");
+            jdbcTemplate.execute("DROP FUNCTION IF EXISTS C5_FAIL_EXPORT_STORE()");
+        }
+        assertThat(http.post(platformToken, TENANTS + "/" + tenant + "/export", "").statusCode()).isEqualTo(200);
+        assertThat(auditRows(tenant, tenant)).isEqualTo(1);
+    }
+
+    @Test
+    void atTheConcurrencyLimit_anotherTenantsExportIs429Busy() {
+        long running = http.provisionTenant(platformToken, TenantHttp.unique("EXC"));
+        long other = http.provisionTenant(platformToken, TenantHttp.unique("EXD"));
+        ErpCoreProperties.Export export = properties.getTenant().getExport();
+        int limit = export.getMaxConcurrent();
+        export.setMaxConcurrent(1);
+        assertThat(guard.tryStart(running, 1)).isEqualTo(TenantExportGuard.Start.STARTED);
+        try {
+            HttpResponse<String> busy = http.post(platformToken, TENANTS + "/" + other + "/export", "");
+
+            assertThat(busy.statusCode()).as(busy.body()).isEqualTo(429);
+            assertThat(TenantHttp.errorCode(busy)).isEqualTo("TENANT_EXPORT_BUSY");
+            assertThat(guard.isRunning(other)).isFalse();
+            assertThat(TenantHttp.errorCode(http.post(platformToken, TENANTS + "/" + running + "/export", "")))
+                .as("the running tenant's own export is 409 first").isEqualTo("TENANT_EXPORT_IN_PROGRESS");
+        } finally {
+            guard.finish(running);
+            export.setMaxConcurrent(limit);
+        }
+        assertThat(http.post(platformToken, TENANTS + "/" + other + "/export", "").statusCode()).isEqualTo(200);
+    }
+
     /** A second staff user, a session, a customer, a file, a notification, an inbox row, a CU override, a number series. */
     private void seedEveryModule(String code, long tenant, String channelSecret) {
         String token = http.token(code, "admin");
@@ -260,6 +370,14 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
             + " VALUES (nextval('SEQ_CORE_NUMBER_SERIES'), ?, 'EXPORT_SERIES', 'EX', 'test')", tenant);
         jdbcTemplate.update("UPDATE NOTIF_CHANNEL_CONFIG SET CONFIG_JSON = ? WHERE TENANT_ID = ?",
             "{\"password\":\"" + channelSecret + "\"}", tenant);
+        assertThat(http.putFile(platformToken, TENANTS + "/" + tenant + "/logo", "logo.png", TenantBrandingIntegrationTest.PNG)
+            .statusCode()).as("a PUBLIC image with a slug").isEqualTo(200);
+        jdbcTemplate.update("INSERT INTO CORE_AUDIT_EVENT (ID, TENANT_ID, OCCURRED_AT, ACTOR, ACTOR_REALM, ACTION, ENTITY_TYPE,"
+            + " ENTITY_ID, CHANGES, CREATED_AT, VERSION) VALUES (nextval('SEQ_CORE_AUDIT_EVENT'), ?, now(), 'legacy', 'STAFF',"
+            + " 'UPDATE', 'FILE_DOCUMENT', '1', CAST(? AS JSONB), now(), 0)", tenant,
+            "[{\"field\":\"storageRef\",\"old\":null,\"new\":\"tenant/" + tenant + "/legacy-object-key-" + code + "\"},"
+                + "{\"field\":\"publicSlug\",\"old\":null,\"new\":\"legacy-slug-" + code + "\"},"
+                + "{\"field\":\"fileName\",\"old\":\"a.png\",\"new\":\"legacy-name-" + code + ".png\"}]");
     }
 
     private Map<String, Long> countsOf(long tenant) {
@@ -281,6 +399,10 @@ class TenantExportIntegrationTest extends AbstractIntegrationTest {
                 "SELECT TOKEN_HASH FROM SEC_PWD_RESET_TOKEN WHERE TENANT_ID = ?",
                 "SELECT TOKEN_REF FROM SEC_ACTIVE_SESSION WHERE TENANT_ID = ?",
                 "SELECT STORAGE_REF FROM FILE_DOCUMENT WHERE TENANT_ID = ? AND STORAGE_PROVIDER <> 'DB'",
+                "SELECT PUBLIC_SLUG FROM FILE_DOCUMENT WHERE TENANT_ID = ? AND PUBLIC_SLUG IS NOT NULL",
+                "SELECT DISTINCT e->>'new' FROM CORE_AUDIT_EVENT, jsonb_array_elements(CHANGES) e WHERE TENANT_ID = ?"
+                    + " AND ENTITY_TYPE = 'FILE_DOCUMENT' AND jsonb_typeof(CHANGES) = 'array'"
+                    + " AND e->>'field' IN ('storageRef', 'publicSlug') AND e->>'new' IS NOT NULL",
                 "SELECT VARIABLES_JSON FROM NOTIF_LOG WHERE TENANT_ID = ? AND VARIABLES_JSON IS NOT NULL")
             .forEach(sql -> secrets.addAll(jdbcTemplate.queryForList(sql, String.class, tenant)));
         assertThat(secrets).as("the tenant has hashes and session references").hasSizeGreaterThanOrEqualTo(4);
