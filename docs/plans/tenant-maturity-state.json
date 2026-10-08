@@ -186,11 +186,11 @@
       "migrations": [
         "V21__core_idempotency_key.sql"
       ],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/c4-idempotent-provisioning",
       "worktree": ".worktrees/tm-c4",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 9,
       "implementer_agent": "a8b906cdb8e688079",
       "reviewer_agent": null,
       "review": null,
@@ -536,6 +536,12 @@
       "step": "C6",
       "event": "REVIEW",
       "note": "implementer COMPLETE 5f0d187: NO-GO (ScopedValue final, perf neutral, but set/clear outside scope needs ThreadLocal fallback; unscoped-set refusal breaks 282 tests = MAJOR); spike reverted, merges ADR REJECTED + leak test"
+    },
+    {
+      "at": "2026-10-08T04:19:49Z",
+      "step": "C4",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE a6ec088 (mvn 640/10, P-LIVE 199/199, api-docs 124); security-focused review dispatched"
     }
   ]
 }
