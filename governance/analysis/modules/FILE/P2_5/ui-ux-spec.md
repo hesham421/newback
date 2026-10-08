@@ -85,3 +85,17 @@ against a real SEC API by P4.2 before FE implementation clears.
 
 *End of ui-ux-spec-FILE.md — every field/permission traced to srs-FILE.md B3/B4.*
 *Component names/CSS/routing are PROPOSAL intent, not binding (CONTRACT-11).*
+
+---
+
+## Implementation Addendum — frontend 1.3.0
+Source version : mxdashboard 1.3.0 (unreleased) against erp-core 1.3.0 (newback `f48b9ab`)
+Change         : tenant-maturity plan §8 F3 — the platform operator re-downloads a tenant export archive through a deep link from `PLATFORM_TENANTS` (`../../TENANT/P2_5/ui-ux-spec-tenant.md` TEN-U59); FILE 1.3.0 RULE-FILE-012 (restricted documents)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| # | Kind | Screen | Item | Detail |
+|---|---|---|---|---|
+| FILE-U01 | CHANGED | SCR-FILE-002 File browser (`/files/browser`, `FILE_BROWSER`) | scope drawer module Select | when the URL scope carries a `moduleCode` that is not among the module-registry options (e.g. `TENANT`, the owner module of tenant export archives, which has no SEC registry row), that code is added as one extra option labelled with the bare code, so a deep-linked scope stays visible and editable; the URL scope itself is already read as is by `useFileBrowserUrlState` (`moduleCode`, `ownerType`, `ownerId`, `fileId`) — no other change |
+| FILE-U02 | unchanged (note) | SCR-FILE-002 | restricted documents | a document stored with a required authority (a tenant export archive: `PLATFORM_TENANT_MANAGE`) is left out of `GET /api/v1/files` for a caller without it, and `GET /api/v1/files/{id}`, `POST /api/v1/files/{id}/access-token`, the download, visibility and delete answer 404 `FILE_DOCUMENT_NOT_FOUND`: the browser's existing empty list / not-found handling applies; no new message |
+
+Test cases: newfront `docs/test-e2e/front-test-plan.md` TC-FE-PLATFORM-022 (deep link, re-download, restricted for a FILE-only user).

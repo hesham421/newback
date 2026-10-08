@@ -55,8 +55,8 @@ Statement      : Original analysis above is unchanged; this addendum records the
 
 | SCR | Kind | الاسم / Name | Route | Page code |
 |---|---|---|---|---|
-| SCR-SEC-011 | NEW | ملفي الشخصي / My profile | `/account/profile` (`?action=edit`, `?photo=1`, `?changePassword=1`) | none — authentication only (SEC-U70) |
-| SCR-SEC-012 | NEW | تغيير كلمة المرور الإلزامي / Forced password change | `/account/change-password` | none — authentication only, outside the shell (SEC-U71) |
+| SCR-SEC-011 | NEW | ملفي الشخصي / My profile | `/account/profile` (`?editId=me`, `?photo=1`, `?changePassword=1`) | none — authentication only (SEC-U70) |
+| SCR-SEC-012 | NEW | تغيير كلمة المرور الإلزامي / Forced password change | `/account/change-password` | none — authentication only (`<AuthenticatedRoute>`, no menu read), outside the shell (SEC-U71, SEC-U15) |
 
 ## FLOW — تغيير كلمة المرور الإلزامي عند الدخول / Forced password change at sign-in          traces=US-SEC-001,REQ-SEC-084,REQ-SEC-085,REQ-SEC-088,SCR-SEC-001,SCR-SEC-012,SCR-SEC-010
 ```
@@ -64,7 +64,8 @@ Screens   : SCR-SEC-001 → SCR-SEC-012 → SCR-SEC-010
 Sequence  : /login → POST /api/v1/sec/auth/login answers passwordChangeRequired = true
             → session established, flag set (SEC-U20) → /account/change-password (SEC-U04)
             → GET /api/v1/tenant/me (logo) + GET /api/v1/sec/me (flag) → current + new + confirm
-            → PUT /api/v1/sec/me/password 200 → flag cleared in the store and in ['me'] → /dashboard with the SAME token
+            → PUT /api/v1/sec/me/password 200 → flag cleared in the store and in ['me'], the menu query reset
+            → toast account.toastPasswordChanged {sessionsTerminated} → /dashboard with the SAME token (menu refetched, 200)
 Branch    : any shell route opened meanwhile → redirected to /account/change-password (SEC-U03)
 Branch    : a staff call answering 403 SEC-403-PASSWORD-CHANGE-REQUIRED (a reload, another tab) → flag set,
             redirect, no toast (SEC-U22)
@@ -80,6 +81,7 @@ Priority  : HIGH (REQ-SEC-084)
 Screens   : SCR-SEC-004
 Sequence  : /security/users → row → /security/users/:id → Set password
             → /security/users/:id?passwordFor=:id (second-level drawer) → new + confirm + "require change" (on)
+            → Submit → ConfirmDialog (the user's sessions all end) → Confirm
             → PUT /api/v1/sec/users/{id}/password 200 → toast users.toastPasswordSet {sessionsTerminated}
             → second level closes, the view drawer re-reads the user (passwordChangeRequired = true)
 Branch    : the signed-in user's own row → no Set password action; the hint links to /account/profile?changePassword=1
@@ -115,7 +117,7 @@ Priority  : MEDIUM (REQ-SEC-087)
 ## FLOW — تعديل ملفي واللغة المفضلة / Edit my profile and preferred language          traces=US-SEC-001,REQ-SEC-086,SCR-SEC-011,SCR-SEC-010
 ```
 Screens   : SCR-SEC-010 → SCR-SEC-011
-Sequence  : topbar account menu → My profile → /account/profile → Edit → ?action=edit
+Sequence  : topbar account menu → My profile → /account/profile → Edit → ?editId=me
             → PATCH /api/v1/sec/me (changed fields only) 200 → toast → preferredLocale ar/en applied at once
 Branch    : next sign-in → GET /api/v1/sec/me → preferredLocale applied after login (SEC-U24)
 Trigger   : a staff user keeps their own details current

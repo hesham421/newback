@@ -68,14 +68,14 @@ cover every tenant action, and the branding reads need only a signed-in user (or
 ### C. SCR-TENANT-001 — screens, routes, drawers and URL state (plan §8 F3)
 | # | Kind | Item | URL / state | Detail |
 |---|---|---|---|---|
-| TEN-U20 | CHANGED | detail drawer | `?tenantId=<id>` | sections (top → bottom): identity (code, names, status) · profile (TEN-U41) · suspension facts (TEN-U42, only when `suspendedAt` is set) · branding summary row (TEN-U43) · usage (TEN-U44, Disclosure) · `AuditTrail` (unchanged) · actions (TEN-U50 …) |
+| TEN-U20 | CHANGED | detail drawer | `?tenantId=<id>` | sections (top → bottom): identity (code, names, status) · profile (TEN-U41) · suspension facts (TEN-U42, only when `suspendedAt` is set) · branding summary row (TEN-U43) · usage (TEN-U44, Disclosure) · the link "Exported archives" (`tenant-archives-link`, TEN-U59) · `AuditTrail` (unchanged) · actions (TEN-U50 …) |
 | TEN-U21 | NEW | edit drawer | `?editId=<id>` (`useDrawerUrlState('editId')`) | opened by "Edit" in the detail drawer: the URL becomes `?editId=<id>` (the detail param is replaced — one first-level drawer at a time); Cancel / save return to `?tenantId=<id>`; fields TEN-U40; code read-only with `FieldLock` (locked skin) and `tenants.codeReadOnlyHint` |
 | TEN-U22 | NEW | logo / branding drawer, second level | `?tenantId=<id>&logoFor=<id>` | opened from the branding summary row (`tenant-branding-change`); a sibling drawer above the detail drawer: current logo (`<img>` of `logoUrl`) or "Platform mark only", constraints text, file input + preview, brand colour, "Save", "Remove logo"; closing removes `logoFor` only; a `logoFor` without the matching `tenantId` is dropped |
 | TEN-U23 | NEW | admin-reset drawer, second level | `?tenantId=<id>&adminResetFor=<id>` | opened by "Reset administrator password" in the detail drawer; **never offered on the PLATFORM row** (the action is hidden; a deep link with the PLATFORM id is dropped from the URL); fields TEN-U45; Submit opens a final ConfirmDialog (TEN-U53) |
 | TEN-U24 | CHANGED | suspend confirmation | Zustand `useTenantStatusConfirmStore` (no route, as in 1.2.0) | the ConfirmDialog gains a mandatory reason (TEN-U46) — a confirmation with a text field is still a sensitive-action confirmation |
 | TEN-U25 | NEW | revoke-tokens and export confirmations | Zustand `useTenantActionConfirmStore` `{ kind: 'revokeTokens' | 'export', tenant }` (no route, like the suspend and module-revoke confirmations) | ConfirmDialogs TEN-U54, TEN-U55 |
 | TEN-U26 | NEW | create drawer — idempotency | `?action=create` (unchanged URL) | an `Idempotency-Key` (`crypto.randomUUID()`) is minted when the create drawer opens and kept in the drawer's Zustand store; every retry of the SAME body sends the same key; when any field changes after a failed attempt a new key is minted before the next submit (the same key with another body answers 409); a 201 with `Idempotent-Replayed: true` is a success like any 201 (same toast, same close) |
-| TEN-U27 | CHANGED | filters | filter drawer | + "Contact e-mail contains" (`contactEmail`, text filter) and "Country code" (`countryCode`, `EQUALS`, upper-cased); the sort whitelist gains `contactEmail`, `countryCode`, `suspendedAt` (`modules/platform/shared/api/searchWhitelist.ts`); `suspendedAt` is shown, not filtered (Decision TEN-U79) |
+| TEN-U27 | CHANGED | filters | filter drawer | + "Contact e-mail contains" (`contactEmail`, text filter) and "Country code" (`countryCode`, `EQUALS`, upper-cased); the sort whitelist gains `contactEmail`, `countryCode`, `suspendedAt` (`modules/platform/shared/api/searchWhitelist.ts`) to mirror the contract — they are SORT-ONLY fields with no list column and no sort control in v1 (the list keeps its 1.2.0 columns; Decision TEN-U123); `suspendedAt` is shown in the detail, not filtered (Decision TEN-U79) |
 
 ### D. SCR-TENANT-001 — fields
 | # | Kind | Where | Field | Control and rule | Read-only |
@@ -98,11 +98,11 @@ cover every tenant action, and the branding reads need only a signed-in user (or
 | TEN-U52 | NEW | Remove logo (`tenant-logo-remove`, only when `logoUrl` is set) | `DELETE /api/v1/platform/tenants/{id}/logo` (204, idempotent) | ConfirmDialog `tenants.confirmRemoveLogoTitle` (sensitive) | toast `tenants.toastLogoRemoved`; "Platform mark only" |
 | TEN-U53 | NEW | Reset administrator password (`tenant-action-admin-reset`; hidden on PLATFORM) | `POST /api/v1/platform/tenants/{id}/admin-reset` | the drawer's Submit opens ConfirmDialog `tenants.confirmAdminResetTitle` naming the username and the tenant | toast `tenants.toastAdminReset` {username, sessionsTerminated}; the target must change the password at the next sign-in by default (SEC P2_5 forced-change flow) |
 | TEN-U54 | NEW | Sign every user out (`tenant-action-revoke-tokens`; hidden on PLATFORM) | `POST /api/v1/platform/tenants/{id}/revoke-tokens` (no body) | ConfirmDialog `tenants.confirmRevokeTokensTitle` | toast `tenants.toastTokensRevoked` {code, sessionsTerminated}; on 500 `TENANT_REVOKE_SESSIONS_FAILED` the dialog stays open with the message and a "Try again" button (`tenant-revoke-retry`) that repeats the call (the tokens are already refused) |
-| TEN-U55 | NEW | Export data (`tenant-action-export`; every row, PLATFORM and suspended tenants included) | `POST /api/v1/platform/tenants/{id}/export` (no body; request timeout raised above the 30 s default — 10 minutes — because it is synchronous) then at once `GET /api/v1/files/download?token={downloadToken}` through the FILE module's `fetchFileDownload` (not `httpClient`, so its 401 `FILE_ACCESS_TOKEN_INVALID` never ends the session), saved as `fileName` | ConfirmDialog `tenants.confirmExportTitle`; while running it shows an indeterminate progress bar and the elapsed seconds, its Cancel is disabled, and nothing is retried automatically | the dialog shows `fileName`, `rowCount`, `sizeBytes` (`formatBytes`) and the re-download hint; toast `tenants.toastExportReady` |
+| TEN-U55 | NEW | Export data (`tenant-action-export`; every row, PLATFORM and suspended tenants included) | `POST /api/v1/platform/tenants/{id}/export` (no body; request timeout raised above the 30 s default — 10 minutes — because it is synchronous) then at once `GET /api/v1/files/download?token={downloadToken}` through the FILE module's `fetchFileDownload` (not `httpClient`, so its 401 `FILE_ACCESS_TOKEN_INVALID` never ends the session), saved as `fileName` | ConfirmDialog `tenants.confirmExportTitle`; while running it shows an indeterminate progress bar and the elapsed seconds, its Cancel is disabled, and nothing is retried automatically | the dialog shows `fileName`, `rowCount`, `sizeBytes` (`formatBytes`), the re-download hint and the link `tenant-export-open-files` → `/files/browser?moduleCode=TENANT&ownerType=CORE_TENANT&ownerId=<tenantId>&fileId=<fileId>` (TEN-U59); toast `tenants.toastExportReady`; results shown inside the ConfirmDialog — Decision TEN-U124 |
 | TEN-U56 | CHANGED | Suspend (`tenant-action-suspend`) | `PATCH /api/v1/platform/tenants/{id}/status` `{ statusCode: 'SUSPENDED', reason }` | the ConfirmDialog with the reason (TEN-U46); effect text CHANGED (`tenants.confirmSuspendEffect`) | toast `tenants.toastStatusChanged`; the detail shows the suspension facts |
 | TEN-U57 | CHANGED | Activate (`tenant-action-activate`) | `PATCH …/status` `{ statusCode: 'ACTIVE' }` (no reason) | none (as before) | toast as before; facts cleared; every earlier token of the tenant now answers 401 `TENANT_TOKEN_REVOKED` — its users sign in again (TEN-U08) |
 | TEN-U58 | CHANGED | Create (`POST /api/v1/platform/tenants`) | + header `Idempotency-Key` (TEN-U26) | — | as before; a replay is a success |
-| TEN-U59 | unchanged | Re-download an archive later | FILE browser SCR-FILE-002 (`/files/browser`): scope module `TENANT`, owner type `CORE_TENANT`, owner id = the tenant id → metadata drawer → Download (`POST /api/v1/files/{id}/access-token` → download) | — | the archive is RESTRICTED: a user without `PLATFORM_TENANT_MANAGE` never sees it (404 `FILE_DOCUMENT_NOT_FOUND`, the FILE browser's existing 404 handling); deleting it (`DELETE /api/v1/files/{id}`) removes its bytes and keeps a `DELETED` tombstone — no TENANT screen change |
+| TEN-U59 | NEW | Re-download an archive later (`tenant-archives-link` in the detail drawer; `tenant-export-open-files` in the export result) | a DEEP LINK into the FILE browser SCR-FILE-002: `/files/browser?moduleCode=TENANT&ownerType=CORE_TENANT&ownerId=<tenantId>` (the result link adds `&fileId=<fileId>`, which opens the archive's metadata drawer) → Download (`POST /api/v1/files/{id}/access-token` → download). The FILE browser's scope Select lists only SEC module-registry rows, which have no `TENANT` row, so picking the scope by hand cannot reach the archive; `useFileBrowserUrlState` already reads any `moduleCode` / `ownerType` / `ownerId` / `fileId` from the URL (checked in mxdashboard 1.2.0), so the link works as is. FILE needs one small change, recorded in `../../FILE/P2_5/ui-ux-spec.md` addendum FILE-U01: the scope drawer keeps a deep-linked `moduleCode` that is not a registry row as an extra option, so the scope stays editable | — | the archive is RESTRICTED: a user without `PLATFORM_TENANT_MANAGE` never sees it (the owner list leaves it out; `GET /files/{id}` answers 404 `FILE_DOCUMENT_NOT_FOUND`, shown by the FILE browser's existing not-found handling); deleting it (`DELETE /api/v1/files/{id}`) removes its bytes and keeps a `DELETED` tombstone |
 
 ### F. Errors and messages (SCR-TENANT-001; the server message is localized by `Accept-Language`)
 | # | Kind | Code | Where | Text |
@@ -206,14 +206,16 @@ cover every tenant action, and the branding reads need only a signed-in user (or
 | | NEW | `tenants.confirmExport` | One ZIP archive of every module's data (CSV), without passwords, tokens or file contents. A large tenant takes tens of seconds; keep this window open. | أرشيف ZIP واحد لبيانات كل الوحدات (CSV)، دون كلمات مرور أو رموز أو محتوى ملفات. قد يستغرق المستأجر الكبير عشرات الثواني؛ أبقِ هذه النافذة مفتوحة. |
 | | NEW | `tenants.exportRunning` | Exporting… {seconds} s | جارٍ التصدير… {seconds} ث |
 | | NEW | `tenants.exportDone` | {fileName} — {rows} rows, {size} | {fileName} — {rows} سجل، {size} |
-| | NEW | `tenants.exportRedownloadHint` | The archive is kept in the file browser (module TENANT); download it again from there. | يُحفظ الأرشيف في مستعرض الملفات (الوحدة TENANT)؛ نزّله من جديد من هناك. |
+| | NEW | `tenants.exportRedownloadHint` | The archive stays in the file browser; open it from here to download it again. | يبقى الأرشيف في مستعرض الملفات؛ افتحه من هنا لتنزيله مجددًا. |
+| | NEW | `tenants.actionOpenArchives` | Exported archives | الأرشيفات المصدَّرة |
+| | NEW | `tenants.actionOpenArchive` | Open in the file browser | فتح في مستعرض الملفات |
 | | NEW | `tenants.errExportTooLarge` | This tenant is too large to export in one archive. | هذا المستأجر أكبر من أن يُصدَّر في أرشيف واحد. |
 | | NEW | `tenants.errExportInProgress` | An export of this tenant is already running. | يجري الآن تصدير لهذا المستأجر. |
 | | NEW | `tenants.errExportBusy` | Too many exports are running. Try again shortly. | تجري الآن عمليات تصدير كثيرة. أعد المحاولة بعد قليل. |
 | | NEW | `tenants.errExportDownload` | The archive was created but the download failed; get it from the file browser. | أُنشئ الأرشيف لكن تعذّر تنزيله؛ نزّله من مستعرض الملفات. |
 | | NEW | `tenants.errIdempotencyInvalid` | The request could not be identified. Reopen the form and try again. | تعذّر تعريف الطلب. أعد فتح النموذج وحاول مجددًا. |
 | | NEW | `tenants.errIdempotencyConflict` | This submission was already used with other values. Submit again to send the new values. | استُخدم هذا الإرسال من قبل بقيم أخرى. أرسل مجددًا لإرسال القيم الجديدة. |
-Plus the seven toast keys of §G. Reused: `users.fieldNewPassword`, `users.fieldConfirmPassword`,
+Every NEW key is also declared in `core/i18n/i18n.types.ts`. Plus the seven toast keys of §G. Reused: `users.fieldNewPassword`, `users.fieldConfirmPassword`,
 `users.fieldRequireChange`, `users.localeNone` / `users.localeAr` / `users.localeEn`, `account.passwordPolicyHint`,
 `account.passwordBytes`, `account.errPasswordPolicy` (SEC P2_5), `tenants.fieldAdminUsername`, `common.*`.
 
@@ -236,8 +238,8 @@ Plus the seven toast keys of §G. Reused: `users.fieldNewPassword`, `users.field
 | TEN-U113 | CHANGED | POST | `/api/v1/platform/tenants/search` | `platform-tenants.md` | TEN-U27 (+ filters / sorts) |
 | TEN-U114 | unchanged | GET | `/api/v1/platform/tenants` | `platform-tenants.md` | — (the screen uses the search) |
 | TEN-U115 | CONSUMED | GET | `/api/v1/files/download` (`?token=`) | `../../file/endpoints/file-documents.md` | TEN-U55 |
-| TEN-U116 | CONSUMED | POST | `/api/v1/files/{id}/access-token` | `../../file/endpoints/file-documents.md` | TEN-U59 (FILE browser, unchanged) |
-| TEN-U117 | CONSUMED | GET | `/api/v1/files` | `../../file/endpoints/file-documents.md` | TEN-U59 (FILE browser owner list, unchanged) |
+| TEN-U116 | CONSUMED | POST | `/api/v1/files/{id}/access-token` | `../../file/endpoints/file-documents.md` | TEN-U59 (FILE browser, through the deep link) |
+| TEN-U117 | CONSUMED | GET | `/api/v1/files` | `../../file/endpoints/file-documents.md` | TEN-U59 (FILE browser owner list, through the deep link) |
 `logoUrl` (`/api/v1/public/files/{tenantCode}/{publicSlug}`, `public-files.md`) is only ever the `src` of an `<img>`; the
 frontend never requests it itself.
 
@@ -253,6 +255,8 @@ frontend never requests it itself.
 | TEN-U120 | NEW (Decision) | the export dialog while running | (a) closable, the request continues; (b) Cancel disabled until the answer | **(b)**: the request is synchronous and must not be retried automatically; closing would lose the single-use token of the immediate download |
 | TEN-U121 | NEW (Decision) | `TENANT_BRANDING_RATE_LIMITED` text | (a) an inline note; (b) nothing visible | **(b)** as the handover says (mark only, no toast); the code has no UI key |
 | TEN-U122 | NEW (note) | CORS for `Idempotency-Key` / `Idempotent-Replayed` | — | none needed: the frontend is served same-origin through the proxy (1.2.0 deployment rule, core configures no CORS); a cross-origin deployment must allow the request header and expose the response header (handover F3) |
+| TEN-U123 | NEW (note) | sort-only fields | (a) add list columns for `contactEmail`, `countryCode`, `suspendedAt`; (b) whitelist them for sort only | **(b)** in v1: the plan's F3 rows add no list column; the whitelist mirrors the contract (TEN-U27) so a later column needs no mapper change; no sort control offers them now |
+| TEN-U124 | NEW (Decision) | where the results of revoke-tokens and export are shown | (a) a new result drawer; (b) inside the ConfirmDialog that started the action (outcome state), plus the toast | **(b)**, the `ModuleRevokeConfirm` precedent (SEC-005 shows `revokedScreenGrants` / `revokedActionGrants` in its dialog): the result is the outcome of the confirmed action — read-only facts (file name, rows, size, session count, retry) and the archive link — not a form, so it does not break the "no modal for forms" mandate; the dialog closes with Close |
 
 ### K. data-testid (new; used by the `TC-FE-*` cases)
 `tenant-logo`, `sidebar-brand-separator`, `sidebar-brand-mark`, `auth-tenant-logo`, `tenant-action-edit`,
@@ -264,7 +268,7 @@ frontend never requests it itself.
 `tenant-admin-reset-username`, `tenant-admin-reset-password`, `tenant-admin-reset-confirm-password`,
 `tenant-admin-reset-require-change`, `tenant-admin-reset-submit`, `tenant-suspend-reason`,
 `tenant-action-revoke-tokens`, `tenant-revoke-retry`, `tenant-action-export`, `tenant-export-progress`,
-`tenant-export-result`, `tenants-filter-contactEmail`, `tenants-filter-countryCode`.
+`tenant-export-result`, `tenant-export-open-files`, `tenant-archives-link`, `tenants-filter-contactEmail`, `tenants-filter-countryCode`.
 
 ### L. Traceability
 | Rows | Serves | Test cases (newfront `docs/test-e2e/front-test-plan.md`) |
@@ -275,7 +279,7 @@ frontend never requests it itself.
 | TEN-U05 | REQ-TENANT-030, REQ-TENANT-031 | TC-FE-XCUT-018 |
 | TEN-U10, U11, U14, U15 | REQ-TENANT-032 | TC-FE-XCUT-019 |
 | TEN-U12 | REQ-TENANT-032, RULE-TENANT-006 | TC-FE-XCUT-020 |
-| TEN-U13, U73, U81a | RULE-TENANT-022 | TC-FE-XCUT-021 |
+| TEN-U13, U73, U121 | RULE-TENANT-022 | TC-FE-XCUT-021 |
 | TEN-U06 | REQ-TENANT-031 | TC-FE-XCUT-022 |
 | TEN-U04 (forced change exemption) | REQ-TENANT-031; SEC RULE-SEC-059 | TC-FE-XCUT-023 |
 | TEN-U07, U08, U72 | REQ-TENANT-034, RULE-TENANT-023 | TC-FE-XCUT-024 |
@@ -289,12 +293,12 @@ frontend never requests it itself.
 | TEN-U44 | REQ-TENANT-028 | TC-FE-PLATFORM-015 |
 | TEN-U23, U45, U53, U61, U63, U84 | REQ-TENANT-027, RULE-TENANT-017 | TC-FE-PLATFORM-016 |
 | TEN-U23, U54 (PLATFORM row), U62, U66 | RULE-TENANT-017, RULE-TENANT-024 | TC-FE-PLATFORM-017 |
-| TEN-U25, U54, U85 | REQ-TENANT-035 | TC-FE-PLATFORM-018 |
+| TEN-U25, U54, U85, U124 | REQ-TENANT-035 | TC-FE-PLATFORM-018 |
 | TEN-U67 | REQ-TENANT-035 | TC-FE-PLATFORM-019 |
-| TEN-U55, U80a, U86 | REQ-TENANT-037, RULE-TENANT-027 | TC-FE-PLATFORM-020 |
+| TEN-U55, U120, U86 | REQ-TENANT-037, RULE-TENANT-027 | TC-FE-PLATFORM-020 |
 | TEN-U68, U69 | RULE-TENANT-027, RULE-TENANT-028 | TC-FE-PLATFORM-021 |
-| TEN-U59 | REQ-TENANT-037 (restricted archive) | TC-FE-PLATFORM-022 |
-| TEN-U26, U58, U70, U82a | REQ-TENANT-036, RULE-TENANT-025, RULE-TENANT-026 | TC-FE-PLATFORM-023 |
+| TEN-U59, U124 | REQ-TENANT-037 (restricted archive); FILE P2_5 FILE-U01 | TC-FE-PLATFORM-020, TC-FE-PLATFORM-022 |
+| TEN-U26, U58, U70, U122 | REQ-TENANT-036, RULE-TENANT-025, RULE-TENANT-026 | TC-FE-PLATFORM-023 |
 | TEN-U48, U63, U70 | REQ-TENANT-001 (1.3.0 policy), REQ-TENANT-036 | TC-FE-PLATFORM-024 |
-| TEN-U27, U41 | REQ-TENANT-007, REQ-TENANT-025 | TC-FE-PLATFORM-025 |
+| TEN-U27, U41, U123 | REQ-TENANT-007, REQ-TENANT-025 | TC-FE-PLATFORM-025 |
 ══════════════════════════════════════════════════════════════════

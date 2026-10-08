@@ -142,10 +142,13 @@ Screens   : SCR-TENANT-001 · later SCR-FILE-002
 Sequence  : ?tenantId=:id → Export data → ConfirmDialog → Export
             → POST /api/v1/platform/tenants/{id}/export (synchronous: progress + elapsed seconds, no automatic retry)
             → 200 { fileName, rowCount, sizeBytes, downloadToken } → GET /api/v1/files/download?token= at once → ZIP saved
-            → the dialog shows the file name, rows and size → toast
+            → the dialog shows the file name, rows and size and the link "Open in the file browser" → toast
 Branch    : 409 TENANT_EXPORT_IN_PROGRESS / 422 TENANT_EXPORT_TOO_LARGE / 429 TENANT_EXPORT_BUSY ("try again shortly") → message in the dialog
 Branch    : the download fails (token used / expired) → message: get it from the file browser
-Branch    : re-download later → /files/browser, scope module TENANT, owner CORE_TENANT / id → Download (new access token);
+Branch    : re-download later → ?tenantId=:id → "Exported archives" (or the result's link)
+            → deep link /files/browser?moduleCode=TENANT&ownerType=CORE_TENANT&ownerId=:id[&fileId=]
+            → the archive → Download (POST /api/v1/files/{id}/access-token → new token → download);
+            the scope cannot be picked by hand (no TENANT row in the module registry) — the link is the way in;
             a user without PLATFORM_TENANT_MANAGE never sees the archive (404 FILE_DOCUMENT_NOT_FOUND)
 Trigger   : an organisation asks for its data (portability, exit)
 Priority  : MEDIUM (US-TENANT-016)

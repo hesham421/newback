@@ -66,31 +66,32 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | # | Kind | Screen | Route | Page code / guard | Detail |
 |---|---|---|---|---|---|
 | SEC-U01 | NEW | **SCR-SEC-011 — ملفي الشخصي / My profile** | `/account/profile` | none — authentication only: a child of the shell's `<ProtectedRoute>` (no `requiredPageCode`) | read view of the caller's own `StaffProfileResponse` + three drawers (SEC-U11 … U13); reached from the topbar account menu (SEC-U05), never from the menu; shell title `account.profileTitle` |
-| SEC-U02 | NEW | **SCR-SEC-012 — تغيير كلمة المرور الإلزامي / Forced password change** | `/account/change-password` | none — authentication only, registered OUTSIDE `AppShell` under its own `<ProtectedRoute>` without page code | `AuthScreenShell` layout (the shell's menu call would answer 403 while the change is pending); tenant logo from `GET /api/v1/tenant/me` (TENANT P2_5 TEN-U12); sign-out link; when no change is pending the route redirects to `/account/profile?changePassword=1` |
-| SEC-U03 | CHANGED | SCR-SEC-010 shell — forced-change gate | every route under `AppShell` | — | while `passwordChangeRequired` is true (auth store, SEC-U20) every shell route renders `<Navigate to="/account/change-password" replace>`; public routes (`/login`, `/sign-up`, `/password-reset*`) are not gated |
+| SEC-U02 | NEW | **SCR-SEC-012 — تغيير كلمة المرور الإلزامي / Forced password change** | `/account/change-password` | none — authentication only, registered OUTSIDE `AppShell` under the NEW `<AuthenticatedRoute>` (SEC-U15), which never reads the menu | `AuthScreenShell` layout (`GET /sec/menu` answers 403 while the change is pending); tenant logo from `GET /api/v1/tenant/me` (TENANT P2_5 TEN-U04, rendered by `<TenantLogo>` TEN-U01); sign-out link; on success the toast `account.toastPasswordChanged` (SEC-U23); when no change is pending the route redirects to `/account/profile?changePassword=1` |
+| SEC-U03 | CHANGED | SCR-SEC-010 shell — forced-change gate | every route under `AppShell` | — | `ForcedPasswordChangeGate` wraps the shell's layout guard OUTSIDE `<ProtectedRoute>` and reads only the auth store, never the menu: while `passwordChangeRequired` is true (SEC-U20) every shell route renders `<Navigate to="/account/change-password" replace>`; public routes (`/login`, `/sign-up`, `/password-reset*`) are not gated |
 | SEC-U04 | CHANGED | SCR-SEC-001 Login | `/login` | public | after a successful login with `passwordChangeRequired = true` the destination is `/account/change-password`, not the landing route (REQ-SEC-084, AC-SEC-090) |
 | SEC-U05 | NEW | SCR-SEC-010 shell — topbar account menu | Topbar, before the sign-out button | — | button `topbar-account`: `Avatar` with `photoUrl` (`<img>`) or the initials of the caller's name in the active language, from the `['me']` query (SEC-U21); menu (`role="menu"`, keyboard as `useMenuKeyboard`): header = full name + username, items "My profile" (`topbar-account-profile` → `/account/profile`), "Change password" (`topbar-account-password` → `/account/profile?changePassword=1`). The existing `topbar-sign-out` button stays where it is (Decision SEC-U73). While `['me']` loads or fails: initials placeholder glyph, menu still offers both items |
 | SEC-U06 | CHANGED | SCR-SEC-004 Users — list | `/security/users` | `SEC_USERS` VIEW | the user cell starts with a 28 px `Avatar` (`photoUrl` through `<img>`, else initials; `user-row-avatar`); two optional columns **hidden by default**: phone, job title (active language) — shown through a "Columns" menu (`users-columns-menu`, checkboxes `users-column-phone`, `users-column-jobTitle`); the choice lives in Zustand (`useUserSearchStore.visibleOptionalColumns`, session only, not in the URL); the export menu exports the visible columns |
 | SEC-U07 | CHANGED | SCR-SEC-004 Users — entry drawer | `/security/users/new`, `/:id`, `/:id/edit` | CREATE / UPDATE | fields of SEC-U30 … U36; VIEW gains the read-only rows of SEC-U37 and the photo summary row (SEC-U08) and the "Set password" action (SEC-U09) |
-| SEC-U08 | NEW | SCR-SEC-004 — photo, second level | `/security/users/:id?photoFor=<id>` | UPDATE | opened from the drawer's photo summary row (`user-photo-row` → `user-photo-change`); a sibling drawer above the user drawer (one drawer, one job): current photo or initials, file input, preview, constraints text, "Save photo", "Remove photo" (ConfirmDialog); closing it removes `photoFor` only. A `photoFor` that differs from the route's `:id`, or on the create route, is dropped from the URL |
-| SEC-U09 | NEW | SCR-SEC-004 — set password, second level | `/security/users/:id?passwordFor=<id>` | UPDATE | opened from the VIEW drawer's action `user-set-password`; a Drawer (it is a form), never a dialog; **hidden on the signed-in user's own row** (`['me'].userPk = :id`), where the drawer shows instead the hint `users.setPasswordOwnHint` with the link `users.setPasswordOwnLink` → `/account/profile?changePassword=1` (handover F1 "Set password", RULE-SEC-057); same `photoFor` rule for a mismatching id |
+| SEC-U08 | NEW | SCR-SEC-004 — photo, second level | `/security/users/:id?photoFor=<id>` | UPDATE | opened from the drawer's photo summary row (`user-photo-row` → `user-photo-change`); a sibling drawer above the user drawer (one drawer, one job): current photo or initials, file input, preview, constraints text, "Save photo", "Remove photo" (ConfirmDialog); closing it removes `photoFor` only. Offered on the VIEW route only: a `photoFor` that differs from the route's `:id`, or on the create (`/new`) or edit (`/:id/edit`) route, is dropped from the URL. A saving level-2 drawer — Decision SEC-U78 |
+| SEC-U09 | NEW | SCR-SEC-004 — set password, second level | `/security/users/:id?passwordFor=<id>` | UPDATE | opened from the VIEW drawer's action `user-set-password`; a Drawer (it is a form); its Submit opens a final ConfirmDialog `user-set-password-confirm` (`users.confirmSetPasswordTitle`, naming the user and the end of every session — `erp-action-confirmation` §2 item 4: an administrator-initiated credential reset), and only the confirm sends the call; **hidden on the signed-in user's own row** (`['me'].userPk = :id`), where the drawer shows instead the hint `users.setPasswordOwnHint` with the link `users.setPasswordOwnLink` → `/account/profile?changePassword=1` (handover F1 "Set password", RULE-SEC-057); the same drop rule as `photoFor` (VIEW route only, matching id); a saving level-2 drawer — Decision SEC-U78 |
 | SEC-U10 | CHANGED | SCR-SEC-005 Roles — grant tree | `/security/roles?editId=<rolePk>` | `SEC_ROLES` UPDATE | a SAVED screen checkbox and a SAVED action chip become un-checkable (SEC-U50 … U53); a STAGED item is still un-staged locally as before; the super-role hint (SEC-U54) |
 
 ### B. Drawers and URL state (SCR-SEC-011)
 | # | Kind | Drawer | URL | Detail |
 |---|---|---|---|---|
-| SEC-U11 | NEW | Edit my profile | `/account/profile?action=edit` (`useDrawerUrlState`) | fields SEC-U38; one submit `PATCH /api/v1/sec/me` |
-| SEC-U12 | NEW | My photo | `/account/profile?photo=1` | same body as SEC-U08 against `/api/v1/sec/me/photo` |
-| SEC-U13 | NEW | Change my password | `/account/profile?changePassword=1` | current password, new password, confirm; `PUT /api/v1/sec/me/password` |
-| SEC-U14 | NEW | rule | all three | one drawer open at a time; Back closes the drawer; reload reopens it (URL is the whole state); the profile page itself has no in-memory open flag |
+| SEC-U11 | NEW | Edit my profile | `/account/profile?editId=me` (`useDrawerUrlState()` with its default `editId` param: `openEdit('me')`; the only accepted value is `me`, any other is dropped) | fields SEC-U38; one submit `PATCH /api/v1/sec/me` |
+| SEC-U12 | NEW | My photo | `/account/profile?photo=1` (a plain search param, like the users drawer's `?picker=roles`) | same body as SEC-U08 against `/api/v1/sec/me/photo` |
+| SEC-U13 | NEW | Change my password | `/account/profile?changePassword=1` (a plain search param) | current password, new password, confirm; `PUT /api/v1/sec/me/password` |
+| SEC-U14 | NEW | rule | all three | one drawer open at a time (opening one removes the other two params); Back closes the drawer; reload reopens it (URL is the whole state); the profile page itself has no in-memory open flag |
+| SEC-U15 | NEW | `<AuthenticatedRoute>` (`src/core/rbac/AuthenticatedRoute.tsx`) | `/account/change-password` | the authentication-only guard: `isAuthenticated` false → `<Navigate to="/login">`, else the children; it NEVER calls `useMenuFacade` / `GET /sec/menu` (the existing `<ProtectedRoute>` reads the menu even without a page code, which would fire and cache a 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` during the change). The shell keeps its `<ProtectedRoute>`, wrapped by the forced-change gate (SEC-U03), so once the flag is known the shell and its menu read are not rendered at all |
 
 ### C. Session state, cache and redirects
 | # | Kind | Item | Detail |
 |---|---|---|---|
 | SEC-U20 | NEW | `passwordChangeRequired` in the auth store | `useAuthStore.passwordChangeRequired: boolean` — set from `LoginResponse.passwordChangeRequired`, from every `['me']` answer, and by the transport on 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` (SEC-U22); cleared by a successful `PUT /me/password` and by sign-out; never persisted (a reload re-learns it from `['me']` or from the 403) |
 | SEC-U21 | NEW | query `['me']` | `GET /api/v1/sec/me`, fetched once at shell mount and by SCR-SEC-011 / SCR-SEC-012; `queryClient.clear()` on sign-out drops it; after `PATCH /me`, a photo change of the caller, or `PUT /me/password` the cache is updated from the response (the flag cleared in `['me']`, handover F1) |
-| SEC-U22 | NEW | transport: 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` | `httpClient` response interceptor, staff calls only (not `skipAuth`, not `authRealm: 'CUSTOMER'`): set the flag and navigate to `/account/change-password` through a registered handler (`setPasswordChangeRequiredHandler`, like `setSessionRevokedHandler`); **no toast**, the session is kept (the token stays valid, REQ-SEC-084) |
-| SEC-U23 | NEW | same token after the change | after `PUT /me/password` answers 200 the same token keeps working (AC-SEC-090): no re-login; navigate to the landing route; the user's OTHER sessions end server-side (`sessionsTerminated`) |
+| SEC-U22 | NEW | transport: 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` | `httpClient` response interceptor, staff calls only (not `skipAuth`, not `authRealm: 'CUSTOMER'`): set the flag and navigate to `/account/change-password` through a registered handler (`setPasswordChangeRequiredHandler`, like `setSessionRevokedHandler`); **no toast**, the session is kept (the token stays valid, REQ-SEC-084). Live trigger: a reload or a second tab of a session with a pending change (the flag is not persisted, so the shell's first `GET /sec/menu` answers this 403) |
+| SEC-U23 | NEW | same token after the change | after `PUT /me/password` answers 200 the same token keeps working (AC-SEC-090): no re-login; the flag is cleared (store + `['me']`); the menu query is RESET (`queryClient.resetQueries({ queryKey: SEC_QUERY_ROOTS.menu })`) so a 403 cached before the change never surfaces as `MenuUnavailableView` and the shell refetches it; the success toast `account.toastPasswordChanged` {sessionsTerminated} is shown (as on the profile path); then the landing route; the user's OTHER sessions end server-side |
 | SEC-U24 | NEW | `preferredLocale` after login | when `['me']` first resolves in a new session and `preferredLocale` is `ar` / `en` and differs from the current language → `useAuthStore.setLanguage(preferredLocale)` (dir + lang switch); a later manual toggle is NOT written back to the server (Decision SEC-U74) |
 | SEC-U25 | NEW | `preferredLocale` saved | a successful `PATCH /me` whose `preferredLocale` is `ar` / `en` switches the UI language at once; `""` (not set) leaves the current language |
 | SEC-U26 | NEW | photo URLs | `photoUrl` is public (no token), rendered only through `<img>`; always the value of the latest `['me']` / user response (a replaced photo has a new URL; the old one may stay cached for 24 h); `onError` → initials |
@@ -113,7 +114,7 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 ### E. Actions and permissions
 | # | Kind | Action | Where | Permission | Call | Confirm |
 |---|---|---|---|---|---|---|
-| SEC-U41 | NEW | Set password | SCR-SEC-004 `?passwordFor=` | `PERM_SEC_USERS_UPDATE` | `PUT /api/v1/sec/users/{id}/password` | none (a Drawer form) |
+| SEC-U41 | NEW | Set password | SCR-SEC-004 `?passwordFor=` | `PERM_SEC_USERS_UPDATE` | `PUT /api/v1/sec/users/{id}/password` | ConfirmDialog `user-set-password-confirm` opened by the drawer's Submit (`erp-action-confirmation` §2 item 4), like the tenant admin-reset (TENANT P2_5 TEN-U53) |
 | SEC-U42 | NEW | Save / remove another user's photo | SCR-SEC-004 `?photoFor=` | `PERM_SEC_USERS_UPDATE` | `PUT` / `DELETE /api/v1/sec/users/{id}/photo` | remove: ConfirmDialog `users.confirmPhotoRemoveTitle` |
 | SEC-U43 | NEW | Edit my profile | SCR-SEC-011 | signed-in STAFF | `PATCH /api/v1/sec/me` | — |
 | SEC-U44 | NEW | Save / remove my photo | SCR-SEC-011 `?photo=1` | signed-in STAFF | `PUT` / `DELETE /api/v1/sec/me/photo` | remove: ConfirmDialog |
@@ -125,7 +126,7 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | SEC-U52 | NEW | Revoke the saved VIEW action grant | same, the screen's gateway chip | same | same | the same ConfirmDialog with the warning `roles.revokeViewWarning` (RULE-SEC-055): the other N saved actions of the screen go too, and the screen STAYS in the role's menu (its pages answer 403) until the screen itself is unchecked |
 | SEC-U53 | NEW | after a revoke | SCR-SEC-005 | — | the response count `revokedActionGrants` is shown in the dialog's outcome and in the toast; the grants query `roleQueryKeys.grants(roleId)` (`['role-grants', roleId]`) is invalidated; sessions are not ended (the next request of an affected user already sees it — no message about sessions) | — |
 | SEC-U54 | NEW | super-role hint | SCR-SEC-005 grant panel, role with `isSuper = true` | VIEW | — | `Alert tone="info"` `role-super-hint`: `roles.superRoleHint` above the tree |
-| SEC-U55 | REMOVED | "Individual revoke unavailable" | SCR-SEC-005 (saved-node title, panel note, module confirm) | — | — | the text `roles.individualRevokeUnavailable` is removed with its key: it is false since 1.3.0 |
+| SEC-U55 | REMOVED | "Individual revoke unavailable" | SCR-SEC-005 — its four uses: `RoleGrantControls.tsx` (two saved-node titles), `RoleGrantPanel.tsx` (panel note), `ModuleRevokeConfirm.tsx` (module confirm) | — | — | the text `roles.individualRevokeUnavailable` is removed with its key from `en.ts`, `ar.ts` and the key type `core/i18n/i18n.types.ts`: it is false since 1.3.0 |
 | SEC-U56 | unchanged | Revoke a module | SCR-SEC-005 | UPDATE | `DELETE /api/v1/sec/roles/{id}/modules/{moduleId}` | `ModuleRevokeConfirm` as before (RULE-SEC-003) |
 
 ### F. Empty / error states and messages
@@ -152,7 +153,8 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | SEC-U85 | NEW | `roles.toastScreenRevoked` | Screen grant revoked; {count} action grant(s) revoked with it. | تم سحب منح الشاشة، وسُحبت معه {count} من منح الإجراءات. |
 | SEC-U86 | NEW | `roles.toastActionRevoked` | {count} action grant(s) revoked. | تم سحب {count} من منح الإجراءات. |
 `{count}` is `sessionsTerminated` (SEC-U80, U84) or `revokedActionGrants` (SEC-U85, U86). The photo toasts are reused by
-SCR-SEC-011 (own photo).
+SCR-SEC-011 (own photo); `account.toastPasswordChanged` is shown by both password-change paths — the profile drawer
+(SEC-U13) and the forced change (SCR-SEC-012, SEC-U23).
 
 ### H. i18n keys (both dictionaries, `src/core/i18n/translations/{en,ar}.ts`)
 | # | Kind | Key | en | ar |
@@ -193,6 +195,8 @@ SCR-SEC-011 (own photo).
 | | NEW | `users.fieldConfirmPassword` | Confirm the new password | تأكيد كلمة المرور الجديدة |
 | | NEW | `users.setPasswordOwnHint` | Your own password is changed from My profile. | تُغيَّر كلمة مرورك من ملفي الشخصي. |
 | | NEW | `users.setPasswordOwnLink` | Change my password | تغيير كلمة مروري |
+| | NEW | `users.confirmSetPasswordTitle` | Set this password? | تعيين كلمة المرور هذه؟ |
+| | NEW | `users.confirmSetPassword` | The password of {username} is replaced and every open session of that user ends. | ستُستبدل كلمة مرور {username} وتنتهي كل الجلسات المفتوحة لذلك المستخدم. |
 | | NEW | `account.profileTitle` | My profile | ملفي الشخصي |
 | | NEW | `account.profileSubtitle` | Your account, contact details and language | حسابك وبيانات التواصل واللغة |
 | | NEW | `account.sectionAccount` | Account | الحساب |
@@ -229,7 +233,7 @@ SCR-SEC-011 (own photo).
 | | NEW | `roles.revokeSavedHint` | Saved — uncheck to revoke | محفوظ — أزل التحديد للسحب |
 | | NEW | `roles.superRoleHint` | This role holds every authority regardless of grants; grants only shape its menu. | يملك هذا الدور كل الصلاحيات بغض النظر عن المنح؛ المنح تحدد قائمته فقط. |
 | | REMOVED | `roles.individualRevokeUnavailable` | — | — |
-Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldPhone` and `users.fieldPreferredLang` (in both dictionaries since 1.0, unused until now), `users.fieldUsername`, `users.fieldEmail`,
+Every NEW key is also declared in `core/i18n/i18n.types.ts` (the dictionaries are typed against it). Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldPhone` and `users.fieldPreferredLang` (in both dictionaries since 1.0, unused until now), `users.fieldUsername`, `users.fieldEmail`,
 `users.fieldFullNameAr`, `users.fieldFullNameEn`, `users.colLastLogin`, `errors.passwordMismatch`, `topbar.signOut`,
 `common.*`.
 
@@ -261,13 +265,14 @@ Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldPhone` an
 | # | Kind | Decision | Alternatives | Choice and why |
 |---|---|---|---|---|
 | SEC-U70 | NEW (Decision — plan §8 F1, handover §0) | authentication-only routes for `/account/*` | (a) a new page code `SEC_PROFILE` in the menu; (b) authentication-only routes | **(b)**: `ProtectedRoute` is page-code based, and the profile and the forced change are for every signed-in STAFF user; the backend added no page code (`/me` is `isAuthenticated()`), so a page code would be a frontend invention the menu cannot deliver. `/account/profile` is a child of the shell's authentication-only layout route; `/account/change-password` is outside the shell (SEC-U02) |
-| SEC-U71 | NEW (Decision) | where the forced-change page lives | (a) inside `AppShell`; (b) a standalone auth-only page | **(b)**: while the change is pending `GET /sec/menu` answers 403, so the shell cannot render its navigation; `AuthScreenShell` (the login layout) is the honest frame, with the tenant logo from `/tenant/me` (allowed during the change) |
+| SEC-U71 | NEW (Decision) | where the forced-change page lives | (a) inside `AppShell`; (b) a standalone auth-only page | **(b)**: while the change is pending `GET /sec/menu` answers 403, so the shell cannot render its navigation; `AuthScreenShell` (the login layout) is the honest frame, with the tenant logo from `/tenant/me` (allowed during the change). The page is guarded by `<AuthenticatedRoute>` (SEC-U15), not `<ProtectedRoute>`, so it makes no menu request, and the menu query is reset after the change (SEC-U23) |
 | SEC-U72 | NEW (Decision) | confirming a non-VIEW action revoke | (a) revoke at once on uncheck; (b) ConfirmDialog for every revoke | **(b)**: every revoke narrows a role's access immediately for all its users (no session end, no undo); the plan names a confirm for the screen and a warning for VIEW — one dialog component serves all three with the cascade text only where it applies |
 | SEC-U73 | NEW (Decision) | sign-out placement once the account menu exists | (a) move sign-out into the account menu; (b) keep the separate `topbar-sign-out` button | **(b)**: one-click sign-out stays, the existing locator and TC-FE-AUTH-005 stay valid, and the account menu holds only what is new |
 | SEC-U74 | NEW (Decision) | language toggle vs `preferredLocale` | (a) the toggle PATCHes `/me`; (b) the toggle is local, the profile saves the preference | **(b)**: the plan applies `preferredLocale` after login and on save; writing every toggle would turn a quick switch into a profile change |
 | SEC-U75 | NEW (Decision) | photo removal | (a) remove at once; (b) ConfirmDialog | **(b)**: the same rule as the tenant logo (TENANT P2_5) — a removal has no undo and the old URL may stay cached |
 | SEC-U76 | NEW (Decision) | users drawer URL | plan text `?action=create` / `?editId=` vs the as-built route segments | **as built** (`/security/users/new`, `/:id`, `/:id/edit` — the owner's decision recorded in `usersRoutePaths.ts`); the new second levels are query parameters on those routes (`?photoFor=`, `?passwordFor=`), like the existing `?picker=roles` |
 | SEC-U77 | NEW (Decision) | optional list columns | (a) always shown; (b) hidden by default with a column menu | **(b)** as the plan says; the visibility is a per-session view preference in Zustand, not navigation state, so it is not in the URL |
+| SEC-U78 | NEW (Decision) | level-2 drawers that SAVE (`?photoFor=`, `?passwordFor=`; TENANT `?logoFor=`, `?adminResetFor=`) | (a) the `CLAUDE.md` §3 / `erp-ui-and-state-mandates` §2.5 rule — a level-2 drawer returns a value to its parent and never saves; (b) a level-2 drawer that saves its own record | **(b), a deliberate exception** dictated by plan §8 F1 / F3 and the handover: the parent is a READ-ONLY detail drawer (users VIEW route, tenant `?tenantId=`) with no form to return a value to, and each action is its own endpoint (photo multipart, password set, logo, admin-reset) — one drawer, one job, one submit; offered on read-only parents only (SEC-U08, SEC-U09: never on `/new` or `/:id/edit`) |
 
 ### K. data-testid (new; used by the `TC-FE-*` cases)
 `topbar-account`, `topbar-account-menu`, `topbar-account-profile`, `topbar-account-password`, `user-row-avatar`,
@@ -278,16 +283,16 @@ Plus the seven toast keys of §G. Labels reused unchanged: `users.fieldPhone` an
 `photo-remove`, `account-profile`, `account-edit`, `account-photo-change`, `account-change-password`,
 `account-password-current`, `account-password-new`, `account-password-confirm`, `account-password-submit`,
 `account-forced-change`, `account-forced-sign-out`, `role-revoke-screen-confirm`, `role-revoke-action-confirm`,
-`role-revoke-cascade-count`, `role-revoke-view-warning`, `role-super-hint`.
+`role-revoke-cascade-count`, `role-revoke-view-warning`, `role-super-hint`, `user-set-password-confirm`.
 
 ### L. Traceability
 | Rows | Serves | Test cases (newfront `docs/test-e2e/front-test-plan.md`) |
 |---|---|---|
 | SEC-U06 | SCR-REQ-SEC-004 CHANGED (1.3.0 §9.4), REQ-SEC-088 | TC-FE-SEC-013 |
 | SEC-U07, U30 … U35, U46 | REQ-SEC-088, RULE-SEC-058, RULE-SEC-062 | TC-FE-SEC-014 |
-| SEC-U09, U36, U41, U61, U80 | REQ-SEC-083, RULE-SEC-057, RULE-SEC-058 | TC-FE-SEC-015, TC-FE-SEC-016 |
+| SEC-U09, U36, U41, U61, U78, U80 | REQ-SEC-083, RULE-SEC-057, RULE-SEC-058 | TC-FE-SEC-015, TC-FE-SEC-016 |
 | SEC-U34, U60 | REQ-SEC-082, RULE-SEC-056 | TC-FE-SEC-017 |
-| SEC-U02 … U04, U20, U22, U23, U47, U63 | REQ-SEC-084, REQ-SEC-085, RULE-SEC-059 | TC-FE-SEC-018, TC-FE-SEC-019 |
+| SEC-U02 … U04, U15, U20, U22, U23, U47, U63, U71, U84 | REQ-SEC-084, REQ-SEC-085, RULE-SEC-059 | TC-FE-SEC-018, TC-FE-SEC-019 |
 | SEC-U01, U11, U38, U43, U66, U83 | REQ-SEC-086 | TC-FE-SEC-020 |
 | SEC-U24, U25 | REQ-SEC-086, REQ-SEC-088, RULE-SEC-062 | TC-FE-SEC-021 |
 | SEC-U12, U26, U40, U44, U64, U75, U81, U82 | REQ-SEC-087, RULE-SEC-061 | TC-FE-SEC-022 |
