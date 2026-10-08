@@ -203,7 +203,9 @@ Each piece is off unless the application adds the dependency and its configurati
   `idempotentResponses.craftResponse(idempotencyKey, "POST /api/v1/my/things", request, MyResponse.class,
   () -> service.create(request))` with `@RequestHeader(name = IdempotentResponses.IDEMPOTENCY_KEY_HEADER, required =
   false) String idempotencyKey`; the service method must be `@Transactional` (it joins the key's transaction) and must
-  not commit work in its own `REQUIRES_NEW` transactions. Behind another origin, allow the request header
+  not commit work in its own `REQUIRES_NEW` transactions. A replay is answered before the service method, so before
+  its `@PreAuthorize`: authorize the path in the security chain as well, or the stored answer can be replayed to its
+  user for up to the retention period after that user's permission was revoked. Behind another origin, allow the request header
   `Idempotency-Key` and expose `Idempotent-Replayed` in your CORS configuration (core configures no CORS).
 - **Number series.** Inject `com.erp.sequence.crossmodule.NumberSeriesApi` (`next(code)`,
   `preview(code)`). Seed series in a `V1000+` script for `PLATFORM`; new tenants receive copies with the

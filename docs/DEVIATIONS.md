@@ -428,3 +428,21 @@ bind later steps.
   generator's brace-counted method-body scan early (`security_extractor._method_body_span`), which dropped the create's
   permission and 403 row on the first regeneration. Generator unchanged (a later generator fix can blank string
   literals there too, as `blank_string_literals` already does elsewhere).
+- [TM-C4] Review round 1, claim → `IdempotencyKeyClaims`: `INSERT … ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY
+  DO NOTHING` with an explicit `TENANT_ID` (the claim transaction's Hibernate session tenant) instead of a JPA insert
+  that failed on the constraint: Hibernate logged that failure at WARN with the key in the constraint detail. A lost
+  claim is now "0 rows" (PostgreSQL still waits for the concurrent uncommitted insert), nothing is logged; a second
+  documented `RAW_JDBC_CLASSES` entry. `IdempotencyKey.claim(...)` (the JPA factory) removed.
+- [TM-C4] Review round 1, replay authorization → documented (ADR-TENANT-003, CONSUMING §3): a replay precedes the
+  service's `@PreAuthorize`, so a consumer must also authorize its path in the security chain. No authorization
+  callback was added to `IdempotentResponses` (the platform chain already gates tenant create; a callback would
+  duplicate the service's `@PreAuthorize` expression in code).
+- [TM-C4] Review round 1, api-doc generator → `business_error_extractor` binds the constant throws reachable inside an
+  injected shared (`common`) `@Component` at the caller's site (`IdempotentResponses` → `IDEMPOTENCY_KEY_INVALID`,
+  `IDEMPOTENCY_KEY_CONFLICT` on the create); `security_extractor.find_delegate` blanks string literals before its brace
+  scan, and the header's `@Schema` pattern is back to `^[A-Za-z0-9._:-]{1,64}$` (supersedes the earlier `+` line).
+  The response header `Idempotent-Replayed` stays in the description (no response-header rendering: README row).
+- [TM-C4] Review round 1, lock timeout on the claim (optional INFO) → not added: the wait lasts one provisioning
+  transaction and a timeout would need a new answer code; documented in ADR-TENANT-003 Consequences.
+- [TM-C4] Review round 1, ArchUnit → new rule: `com.erp.common..` depends on no module package and not on
+  `com.erp.autoconfigure..` (`CoreLibraryRulesArchTest.common_depends_on_no_module_and_not_on_autoconfigure`).

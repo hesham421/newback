@@ -98,5 +98,10 @@ tenant provisioning SPI (`TenantProvisioningContributor` implementations, e.g. S
 `adminPassword` since 1.3.0) are not reached by the generator's call walk from `POST /api/v1/platform/tenants`, so
 they appear only in that endpoint's description (TM-D review round 1).
 
+Also not a `check` failure: the generator renders request headers but no **response** headers. The
+`Idempotent-Replayed: true` header of a replayed `POST /api/v1/platform/tenants` (1.3.0, TM-C4) is therefore named only
+in that endpoint's description; its codes `IDEMPOTENCY_KEY_INVALID` and `IDEMPOTENCY_KEY_CONFLICT` are bound to the
+endpoint like any other (the generator follows an injected `com.erp.common` component, TM-C4 review round 1).
+
 The affected endpoints document the outcome explicitly (for example "**Authorization**: not extracted — no controller method matching this route was found")
 instead of claiming that no permission is required. Do not fix these by hand-editing the docs.

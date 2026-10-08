@@ -77,7 +77,7 @@ core-test-plan, core_api_verify.py, run archive, `docs/api-docs/tenant/endpoints
 | # | Item | Evidence |
 |---|---|---|
 | 1 | `V21__core_idempotency_key.sql`: table, `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)`, `SEQ_CORE_IDEMPOTENCY_KEY`, index on `CREATED_AT`; AuditableEntity decision with the exact column list | P2 entry; migration; `TenantSchemaIntegrationTest` (23 / 15 / 22), `ReferenceApplicationSmokeTest` (V21), `MigrationNamingTest` |
-| 2 | Mechanism in `com.erp.common.idempotency`, no common → tenant dependency | `CrossModuleBoundaryArchTest`, `CoreLibraryRulesArchTest` green; `IdempotencySettings` built in autoconfigure |
+| 2 | Mechanism in `com.erp.common.idempotency`, no common → tenant dependency | `IdempotencySettings` built in autoconfigure, no `com.erp` import outside common; since review round 1 enforced by `CoreLibraryRulesArchTest.common_depends_on_no_module_and_not_on_autoconfigure` (before it, no ArchUnit rule guarded `com.erp.common` — the earlier citation of the two suites was not evidence) |
 | 3 | Optional header ≤ 64, charset validated, invalid → 400 | `IdempotencyKeyDomainTest`, integration test, TC-CORE-TENANT-053 |
 | 4 | Same key + same body → replay with `Idempotent-Replayed: true`, nothing re-provisioned (tenant count) | integration test (field order too), TC-CORE-TENANT-051 |
 | 5 | Same key + different body → 409 `IDEMPOTENCY_KEY_CONFLICT` (AR+EN) | integration test, TC-CORE-TENANT-052; both bundles |
@@ -161,7 +161,32 @@ RULE-TENANT-011 checked on the retention job), `api-verify`.
   business data). The table count for `TenantSchemaIntegrationTest` is now 23 / 15 / 22.
 - For C6 (ScopedValue): the mechanism reads the tenant only through Hibernate's resolver (no `TenantContext` call in
   common); the claim transaction is opened in the request thread before the service.
-- Api-doc generator: a `{…}` inside a controller annotation string breaks `security_extractor._method_body_span`
-  (permission dropped silently); avoid braces in `@Schema(pattern)` on controller parameters, or fix the generator by
-  blanking string literals there.
+- Api-doc generator: fixed in review round 1 (string literals blanked in `find_delegate`; injected `common` components'
+  codes bound).
 - Test DB pool: the concurrency test holds two request transactions at once (pool 4 per context) — no new context.
+
+## Review round 1
+
+Verdict PASS (evidence `rev-c4/`); the items below were fixed on the same branch, analysis first (45c5c3f: srs-tenant I12,
+registry-srs, db-script, ADR-TENANT-003 amended), no rebase.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1 | A lost claim race logged the key: Hibernate's `org.hibernate.orm.jdbc.error` WARN printed the unique-violation detail `(tenant_id, idempotency_key, endpoint)=(1, <key>, …)` | `IdempotencyKeyClaims`: `INSERT … ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING`, explicit `TENANT_ID` = the claim transaction's Hibernate session tenant (common still imports nothing from `com.erp.tenant`), audit columns written by the statement; 1 row = claimed, 0 rows = lost (PostgreSQL waits for a concurrent uncommitted insert, then inserts nothing if it committed, or inserts if it rolled back). Same transaction, same wait-then-replay. `RAW_JDBC_CLASSES` + the class; the JPA factory `IdempotencyKey.claim` removed | `TenantIdempotentProvisioningIntegrationTest.aRequestWaitsForAnUncommittedClaim_thenAnswersTheCommittedRow_orRunsAfterARollback` (holds a claim open in a test transaction, proves the request waits on `pg_locks`, then commit → 409 from the stored row / rollback → 201) and `twoSimultaneousFirstRequestsWithOneKey_…` both assert the captured output never names the key or `uq_core_idempotency_key`; the full `mvn verify` log has 0 occurrences of `uq_core_idempotency_key` (1 before the fix), the P-LIVE app log 0 occurrences of the key or the constraint |
+| 2 | CONSUMING §3 and ADR-TENANT-003 omitted that a replay skips the service's `@PreAuthorize` | one sentence in each (and srs I12): authorize the path in the security chain too, or the stored answer can be replayed to its user up to the retention after a permission revocation. No authorization callback (it would duplicate the `@PreAuthorize` expression; DEVIATIONS) | docs |
+| 3 | api-docs showed the codes and the header only in prose | generator: `business_error_extractor` binds the constant throws reachable inside an injected shared (`common`) `@Component` (its private methods, static and chained-factory calls into other shared classes) at the caller's site → the create's Business Responses table lists 400 `IDEMPOTENCY_KEY_INVALID` and 409 `IDEMPOTENCY_KEY_CONFLICT`. Response headers are not rendered by the generator: `docs/api-docs/README.md` row for `Idempotent-Replayed` | `test_helper_codes.InjectedSharedComponentCodes` (3 tests, fixtures `HxIdempotentResponses`, `HxKeyDomain`, `HxResponder`, `HxIdemController`); regeneration diff = exactly those two rows |
+| 4 | Generator brace bug in `security_extractor` | `find_delegate` blanks string literals before the brace-counted scan; the header's `@Schema` pattern is `^[A-Za-z0-9._:-]{1,64}$` again | `test_security_extractor.test_a_brace_inside_a_parameter_annotation_string_does_not_end_the_method_body` (fails on the previous extractor, passes now); regeneration keeps the create's permission and 403 row; nothing else changed |
+| 5 | NIT: no ArchUnit rule guarded `com.erp.common`; report citation | `CoreLibraryRulesArchTest.common_depends_on_no_module_and_not_on_autoconfigure` (`sec`, `tenant`, `mdl`, `cu`, `file`, `notif`, `sequence`, `audit`, `report`, `events`, `autoconfigure`; `events` uses common, never the reverse — green on the whole tree); acceptance row 2 corrected | the rule |
+| 6 | INFO: lock timeout on the claim | not added (a new answer code for a wait of one provisioning transaction); documented in DEVIATIONS / srs I12 | — |
+
+Verification after round 1:
+- `mvn -q verify` (offline, clean `target/`, code of d6752f2): BUILD SUCCESS, erp-core lines 82.27 %.
+  erp-core **642** tests, 0 failures, 0 errors, 0 skipped (95 suites; +1 ArchUnit rule, +1 integration test);
+  erp-app-reference **10**, 0 / 0 / 0.
+- HTTP suite run **`26100808554B`**, P-LIVE, port 18108, fresh `erp_tm_c4` (dropped): **199 PASS / 0 FAIL / 0 BLOCKED**
+  (22 profile cases not run) — `docs/test-api/results/20261008T085516-P-LIVE.json` / `-report.md`, replacing run
+  `2610080813D9`.
+- api-docs (tenant) regenerated: the create gains the two Business Responses rows, nothing else changed;
+  `check_completeness.py`: sum 124, missing 0, duplicated 0, stale 0, PASS; `check`: TENANT PASS, the five known
+  limitations unchanged. Generator unit tests: **71**, OK (67 + 4).
+- Ids unchanged (no new REQ / RULE / code); next free TC ids unchanged.
