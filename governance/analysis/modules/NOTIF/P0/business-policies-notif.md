@@ -85,3 +85,4 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | # | Policy-level delta | Kind | Source |
 |---|---|---|---|
 | 1 | A staff user is told by e-mail when their password is set by an administrator or changed by themselves: SEC publishes `UserPasswordChangedEvent(userId, byAdmin)` and NOTIF dispatches `STAFF_PASSWORD_CHANGED`, seeded in every tenant and copied to new ones. This is NOTIF's first consumption of an event it does not own (from the shared `com.erp.events` bus). | NEW | srs.md 1.3.0 (RULE-NOTIF-023, XM-NOTIF-003) |
+| 2 | Package C12. A suspended tenant's queued notifications are not delivered while it is suspended: no attempt claims them and the requeue job skips them; they keep their status (`QUEUED`, no new status) and are sent once the tenant is activated again. | NEW | srs.md 1.3.0 §5 (RULE-NOTIF-024, XM-NOTIF-004/005) |

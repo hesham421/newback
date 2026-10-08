@@ -1734,3 +1734,58 @@ error code or migration changes. Two SEC rules gain one named exception each:
 
 Frontend impact: the shell may load `GET /api/v1/tenant/me` right after any login, a customer's included, and before
 a forced password change is completed.
+
+### 12. Package C12 — sessions end when a tenant is suspended or its tokens are revoked; the JWT filter exposes the token's facts
+Change         : tenant-maturity plan package C12 — `TenantSuspendedEvent` → SEC terminates the tenant's sessions (plan §5 C.1); `SecAdminRecoveryApi.terminateAllSessions()` for TENANT's `POST /api/v1/platform/tenants/{id}/revoke-tokens` and the token facts the tenant filter compares with the cut-off (plan §5 C.2)
+Statement      : Sections 1–11 above (packages G, D, B and E) are unchanged; §12 records package C12's implemented deltas.
+
+Ids continue from the highest number ever issued (REQ-SEC-091, AC-SEC-097, XM-SEC-006; ADR-SEC-065 held, 066 … 068
+the analysis-coverage work's). Package C12 adds **REQ-SEC-092/093, AC-SEC-098/099 and XM-SEC-007**. No endpoint,
+entity field, table, permission, error code or migration of SEC changes. The rules are TENANT's (RULE-TENANT-006
+CHANGED, RULE-TENANT-023, ADR-TENANT-002); SEC ends sessions and reports the token's facts.
+
+#### 12.1 Requirements (§A4) — NEW
+
+### REQ-SEC-092 — إنهاء جلسات المستأجر المعلّق / End a suspended tenant's sessions
+Pattern    : event
+Statement  : When `TenantSuspendedEvent` is delivered after the suspension commits, the system shall terminate every open session (`SEC_ACTIVE_SESSION.TERMINATED_AT` NULL) of the suspended tenant, of both realms, setting `TERMINATED_BY` to the event's actor (the platform operator) and recording one `SESSION_TERMINATED` row per session in that tenant's `SEC_AUDIT_LOG` (no actor user — the operator is not a user of that tenant; the details name the operator); a failure is logged and never undoes the suspension.
+Traces     : US-SEC-011 (supporting TENANT US-TENANT-003)
+Entities   : ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §5 C.1 ("today tokens are refused by the filter, but `SEC_ACTIVE_SESSION` rows stay open — this closes them"); REQ-SEC-028 (a terminated session's token is unusable)
+Source     : docs/plans/tenant-maturity-plan.md §5 C.1
+Priority   : HIGH
+Note       : the listener `com.erp.sec.service.TenantSuspendedSessionListener` is `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`, **synchronous** (in the operator's request, so the sessions are closed when the PATCH answers), and works inside `TenantContext.callAs(event.getTenantId())` with a `REQUIRES_NEW` `TransactionTemplate` (the original transaction has committed; its resources are still bound).
+#### AC-SEC-098 — [REQ-SEC-092]
+Given tenant T with two open staff sessions and one open customer session, and tenant U with an open session
+When the platform operator suspends T
+Then T's three sessions have `TERMINATED_AT` set and `TERMINATED_BY` = the operator, T's `SEC_AUDIT_LOG` has three new `SESSION_TERMINATED` rows without an actor user, U's session is still open, and T's old tokens are refused (403 `TENANT_SUSPENDED`, TENANT RULE-TENANT-006) (`TenantLifecycleEventsIntegrationTest`)
+
+### REQ-SEC-093 — إنهاء كل جلسات المستأجر الحالي للمنصة / Platform termination of every session of the current tenant
+Pattern    : event
+Statement  : The system shall expose `SecAdminRecoveryApi.terminateAllSessions()`, gated by the authority `PLATFORM_TENANT_MANAGE` and running in the current tenant inside the caller's transaction: it terminates every open session of the tenant, both realms (`TERMINATED_BY` = the caller's username), records one `SESSION_TERMINATED` row per session in `SEC_AUDIT_LOG` (no actor user; the details say the tenant's tokens were revoked by that platform operator) and answers how many it ended.
+Traces     : US-SEC-011 (supporting TENANT US-TENANT-015)
+Entities   : ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §5 C.2 (revoke-tokens "sets the cut-off to now() and terminates sessions"); the B recovery surface already carries the platform gate
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+#### AC-SEC-099 — [REQ-SEC-093]
+Given tenant T with one staff and one customer session
+When TENANT's revoke-tokens calls `terminateAllSessions()` inside T
+Then it answers 2, both sessions are terminated with `TERMINATED_BY` = the operator and two `SESSION_TERMINATED` rows are recorded in T; a caller without `PLATFORM_TENANT_MANAGE` is refused (`TenantTokenCutOffIntegrationTest`)
+
+#### 12.2 Cross-module (A7) — NEW / CHANGED
+| Kind | Id / interface | What | Gate | Implemented by |
+|---|---|---|---|---|
+| NEW | XM-SEC-007 (EVENT-CONSUME) | `com.erp.events.TenantSuspendedEvent` (published by TENANT) → REQ-SEC-092 | — | `TenantSuspendedSessionListener` → `UserSessionTerminator.terminateAllOpenSessions` |
+| CHANGED | `com.erp.sec.crossmodule.SecAdminRecoveryApi` | + `int terminateAllSessions()` (write, joins the caller's transaction) | authority `PLATFORM_TENANT_MANAGE` (`SecPermissions.PLATFORM_TENANT_MANAGE`) | `SecAdminRecoveryApiImpl` → `SessionService.terminateAllSessionsForPlatform` |
+| CHANGED (tenant root API, written) | `com.erp.tenant.TenantTokenFacts` | `JwtAuthenticationFilter` puts `TenantTokenFacts(tid, iat)` as request attribute `TenantTokenFacts.REQUEST_ATTRIBUTE` for **every signature-valid token** carrying a numeric `tid`, before it looks the user and the session up — so TENANT's filter can compare `iat` with the tenant's cut-off and can answer for a token SEC drops (terminated session): TENANT RULE-TENANT-023 | — | `JwtAuthenticationFilter` |
+`ActiveSessionRepository` gains `findAllNonTerminated()` (the current tenant's open sessions, both realms, tenant-filtered
+by the `@TenantId` discriminator). `UserSessionTerminator` gains `terminateAllOpenSessions(String terminatedBy,
+String detailsAr, String detailsEn)` (the per-user loop of package D, for every user).
+
+#### 12.3 Behaviour notes
+| Kind | Note |
+|---|---|
+| CHANGED (REQ-SEC-028 request half) | unchanged verdict: a token whose session is terminated (now also by a suspension or a revocation) does not authenticate. What the caller sees is decided by TENANT's filter on a non-public path: 403 `TENANT_SUSPENDED` (tenant suspended), 401 `TENANT_TOKEN_REVOKED` (issued before the tenant's cut-off), otherwise SEC's 401 `SEC-401-INVALID-CREDENTIALS` as before. A public path (login, sign-up, password reset, customer public paths) ignores a stale token. |
+| NEW (decision) | The plan said "the JWT filter exposes `iat` on the authentication details": a request attribute typed by the tenant module is used instead (`AuthRealm` is SEC-internal, and the token SEC drops has no authentication at all) — TENANT ADR-TENANT-002. `AuthRealm` is unchanged. |
+| NEW (scope) | No SEC endpoint changes: a staff administrator still terminates single sessions with API-SEC-026; tenant-wide termination is the platform's (`PLATFORM_TENANT_MANAGE`). |

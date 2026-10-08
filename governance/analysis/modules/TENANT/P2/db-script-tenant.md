@@ -330,3 +330,27 @@ schema change in FILE (FILE RULE-FILE-010, ADR-FILE-008).
 
 ### Deviations
 - Plan §7 E.1 / §11 `V18__tenant_branding.sql` → `V20__tenant_branding.sql` (execution order D, B before E).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — the token cut-off `CORE_TENANT.TOKENS_INVALID_BEFORE` enforced; `TenantLookupApi.isActive` (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+**No migration, no new column, constraint, index or sequence.** The column exists since
+`V19__tenant_lifecycle.sql` (package B, DBF-TENANT-042; the plan's §11 row `V17__tenant_lifecycle.sql` "B / C.2" was
+written by B). DBF ids are unchanged (last DBF-TENANT-044).
+
+### Columns — CHANGED use
+| DBF id | Column | Delta | Writers | Reader |
+|---|---|---|---|---|
+| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE (TIMESTAMPTZ, NULL) | now **enforced**: a token whose `iat` (whole seconds) is less than this instant truncated to the second is refused (RULE-TENANT-023, ADR-TENANT-002); still never exposed | SUSPENDED → ACTIVE (`Tenant.activate`), `POST /{id}/revoke-tokens` (`Tenant.revokeTokens`) — both the application's `Instant.now()`, in a PLATFORM transaction | `TenantResolutionFilter` (as PLATFORM, every request with a token) |
+| DBF-TENANT-005 | CORE_TENANT.STATUS_CODE | + read by `TenantLookupApi.isActive` (XM-TENANT-001, NOTIF) | — | NOTIF claim / requeue |
+
+### XM register — delta
+| Kind | XM id | Kind | Column → target | Owner of the target | Enforcement | Status |
+|---|---|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | crossmodule read (exposed) | + `TenantLookupApi.isActive(Long)` → `CORE_TENANT.STATUS_CODE` (DBF-TENANT-005) by `ID` | consumer NOTIF (claim, requeue) | none (Java interface; `TenantRepository.findById`, uncached) | IMPLEMENTED (1.3.0) |
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | `TOKENS_INVALID_BEFORE` on `CORE_TENANT` instead of a token denylist table | ADR-TENANT-002 (ACCEPTED) |

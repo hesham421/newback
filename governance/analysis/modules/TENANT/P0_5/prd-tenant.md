@@ -252,3 +252,34 @@ DEFERRED — delta
 
 APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header, decision D5); the stories are
 IMPLEMENTED with package E and checked against the code in its check commit.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW stories (ids continue from US-TENANT-014)
+
+US-TENANT-015
+  Title          : إبطال رموز مستأجر / Revoke a tenant's tokens
+  Story          : As a platform operator, I need to invalidate every token a tenant's users hold without suspending the tenant, so that a compromised tenant starts again from fresh logins.
+  Priority       : HIGH
+  Success metric : after `revoke-tokens` every earlier token answers 401 `TENANT_TOKEN_REVOKED` and a fresh login works (TC-CORE-TENANT-048)
+  Traces         : POL-TENANT-015, POL-TENANT-006
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-035
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+CHANGED behaviour of existing stories
+| Story | Delta | Source |
+|---|---|---|
+| US-TENANT-003 suspend and re-activate | a suspension ends every open session of the tenant and holds its queued notifications; a re-activation cuts off every token issued before it (users sign in again); both publish a lifecycle event | REQ-TENANT-033, -034; POL-TENANT-015 |
+| US-TENANT-004 work inside one tenant | a token issued before the tenant's cut-off is refused 401 `TENANT_TOKEN_REVOKED`, whichever realm | REQ-TENANT-034 |
+
+TRACEABILITY — delta
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-015 | POL-TENANT-006, POL-TENANT-015 | REQ-TENANT-035 |
+| US-TENANT-003 (CHANGED) | + POL-TENANT-015 | REQ-TENANT-034 |
+Every policy POL-TENANT-001 … 015 appears in at least one row (015 → US-003, US-015).
+
+APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the story is IMPLEMENTED with
+package C12 and checked against the code in its check commit.

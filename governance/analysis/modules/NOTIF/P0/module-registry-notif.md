@@ -167,3 +167,9 @@ EXPOSED SURFACE — delta
 |---|---|---|---|
 | `com.erp.notif.crossmodule.NotificationLogQueryApi` | NEW method `countDispatchedSince(Instant)` | TENANT (`GET /api/v1/platform/tenants/{id}/usage`) | `P1/srs.md` 1.3.0 §4 |
 Entities owned, lookups, permissions, dependencies: unchanged.
+
+Package C12 (tenant-maturity plan §5 C.1) — dependency deltas; full text in `P1/srs.md` 1.3.0 §5.
+| Kind | Module | Kind of link | What | Source |
+|---|---|---|---|---|
+| NEW | tenant | crossmodule (XM-NOTIF-004) | `TenantLookupApi.isActive(Long)` — read at every delivery claim and by the requeue job (RULE-NOTIF-024) | `P1/srs.md` 1.3.0 §5 |
+| NEW | events (TENANT publishes) | event bus (XM-NOTIF-005) | consumes `TenantActivatedEvent` → re-dispatches the tenant's held `QUEUED` rows; `TenantSuspendedEvent` exists but NOTIF registers no listener for it | same |

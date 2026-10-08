@@ -147,3 +147,19 @@ Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003
 
 Event
 "P2 1.3.0 (package E): TENANT — 1 table, 1 sequence, 44 DBF (22 own + 22 discriminator), 3 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — the token cut-off enforced; `TenantLookupApi.isActive`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C12).
+
+Tables, columns, constraints, sequences — delta: none (no migration; `TOKENS_INVALID_BEFORE` is V19's DBF-TENANT-042,
+now enforced by `TenantResolutionFilter` and written by revoke-tokens too).
+
+XM index — delta
+| Kind | XM id | Kind | Column → target | Status |
+|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | crossmodule read (exposed) | + `TenantLookupApi.isActive(Long)` → `CORE_TENANT.STATUS_CODE` (consumer NOTIF) | IMPLEMENTED (1.3.0) |
+
+Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003 (unchanged)

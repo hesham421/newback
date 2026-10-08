@@ -140,3 +140,31 @@ PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, scr
 
 RESOLVED DECISIONS — delta: 5 · who sets a tenant's logo → the platform administrator from `PLATFORM_TENANTS`
 (decision D5, ADR-TENANT-005). POLICIES OWNED — delta: + POL-TENANT-014.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta: `CORE_TENANT.TOKENS_INVALID_BEFORE` (V19) is now enforced and also written by revoke-tokens; no
+new column, no migration.
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | SEC | crossmodule (in-core API) | `SecAdminRecoveryApi.terminateAllSessions()` — inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 C7 |
+| NEW | events | publishes | `TenantSuspendedEvent(tenantId, tenantCode, reason, actor)`, `TenantActivatedEvent(tenantId, tenantCode, actor)` — after commit | C6 |
+| NEW (consumer of TENANT) | SEC | listener | `TenantSuspendedEvent` → terminates the tenant's sessions (SEC REQ-SEC-092) | C6 |
+| NEW (consumer of TENANT) | NOTIF | crossmodule + listener | `TenantLookupApi.isActive` (claim, requeue) and `TenantActivatedEvent` → re-dispatch (NOTIF RULE-NOTIF-024) | C7 |
+| CHANGED | audit | SOFT | + action `TOKENS_REVOKED` (target tenant and PLATFORM) | C8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| CHANGED | `TenantLookupApi` + `boolean isActive(Long tenantId)` (XM-TENANT-001) | NOTIF | crossmodule | C7 |
+| NEW | `com.erp.tenant.TenantTokenFacts` (root package) | SEC `JwtAuthenticationFilter` | request attribute | C7; ADR-TENANT-002 |
+| NEW | `POST /api/v1/platform/tenants/{id}/revoke-tokens` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | C1 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5).
+
+RESOLVED DECISIONS — delta: 2 · token cut-off vs `jti` denylist → per-tenant cut-off (ADR-TENANT-002). POLICIES
+OWNED — delta: + POL-TENANT-015.

@@ -1109,3 +1109,185 @@ the `CORE_TENANT` update, the discard of the previous document and the audit row
 | NEW | Error codes `TENANT_LOGO_INVALID`, `TENANT_BRAND_COLOR_INVALID`, `TENANT_BRANDING_RATE_LIMITED` (both languages). |
 | NOTE | Render `logoUrl` through `<img>` only (E7); a replaced logo gets a new URL (every upload is a new document with a new random slug), so a cache never serves the old file under the new URL; but public files carry `Cache-Control: max-age=86400, public` (FILE step 07), so a removed or replaced logo's **old** URL may still be served for up to 24 h by a browser or CDN cache that already holds it — the shell must always take `logoUrl` from `/tenant/me` / the public branding (not from a remembered URL). While a tenant is suspended its logo URL and its public branding answer 403. |
 | NOTE | The public branding answers 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` when an address exceeds its budget: the login page shows the platform mark alone (no toast) and does not retry before `Retry-After`. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events (plan §5 C.1, item 15) and the per-tenant token cut-off with `POST /{id}/revoke-tokens` (plan §5 C.2, item 14)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+032, RULE 022 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 014, US 014,
+XM 003, DBF 044. This block mints **REQ/AC-TENANT-033 … 035, RULE-TENANT-023 … 024** (POL-TENANT-015 in P0,
+US-TENANT-015 in P0_5) and decision **ADR-TENANT-002** (the plan's own number, reserved for C.2). No ENT, XM,
+SCR-REQ, DBF, permission, page code or migration is added: `CORE_TENANT.TOKENS_INVALID_BEFORE` exists since
+`V19__tenant_lifecycle.sql` (DBF-TENANT-042, package B). Platform paths are relative to
+`/api/v1/platform/tenants`. Rows marked **FE** are read by the frontend (plan §8 F3). SEC's and NOTIF's sides are
+in `../../SEC/P1/srs-sec.md` 1.3.0 §12 and `../../NOTIF/P1/srs.md` 1.3.0 §5.
+
+### C1. Endpoints
+The platform row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain gate
+"caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller.
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | POST | `/{id}/revoke-tokens` | `PLATFORM_TENANT_MANAGE` | — (no body) | 200 `TenantTokenRevocationResponse { id, code, sessionsTerminated }` — the cut-off instant is not returned | 404 · `TENANT_NOT_FOUND`; 422 · `TENANT_REVOKE_TOKENS_PLATFORM` (`{id}` = PLATFORM) | REQ-TENANT-035; RULE-TENANT-023, -024 |
+| CHANGED — **FE** | PATCH | `/{id}/status` | as before | as before | as before | as before; a real transition publishes `TenantSuspendedEvent` / `TenantActivatedEvent` after commit; a suspension ends the tenant's sessions (SEC); an activation cuts off every earlier token | REQ-TENANT-033, -034 |
+| CHANGED — **FE** | (filter) | every authenticated request, both chains, `GET /api/v1/tenant/me` included | — | — | — | + 401 · `TENANT_TOKEN_REVOKED` — the token's `iat` lies before its tenant's `TOKENS_INVALID_BEFORE` (written by `TenantResolutionFilter`, like `TENANT_SUSPENDED`) | REQ-TENANT-034; RULE-TENANT-023 |
+
+Order of checks — revoke-tokens: tenant (`TENANT_NOT_FOUND`) → not PLATFORM (`TENANT_REVOKE_TOKENS_PLATFORM`) →
+cut-off written (PLATFORM request, own commit) → inside tenant {id}, one transaction: sessions terminated, audit.
+Tenant filter, token branch: tenant gone or not ACTIVE (403 `TENANT_SUSPENDED`) → token before the cut-off (401
+`TENANT_TOKEN_REVOKED`) → served.
+
+Controller method `revokeTenantTokens` (unique name, so springdoc's operation ids of other modules do not shift);
+service `TenantService.revokeTokens`.
+
+### C2. Requirements (§A4) — NEW
+
+### REQ-TENANT-033 — أحداث دورة حياة المستأجر / Tenant lifecycle events
+Pattern    : event
+Statement  : When a platform operator suspends an ACTIVE tenant or activates a SUSPENDED one and the transaction commits, the system shall publish `TenantSuspendedEvent(tenantId, tenantCode, reason, actor)` or `TenantActivatedEvent(tenantId, tenantCode, actor)` on the core event bus (`com.erp.events`), delivered to `@TransactionalEventListener(AFTER_COMMIT)` listeners only after the commit; re-applying the current status, a refused change (PLATFORM protection, missing reason, unknown tenant) and a rolled-back transaction publish nothing. On `TenantSuspendedEvent` SEC terminates every open session of that tenant, both realms (SEC REQ-SEC-092); while the tenant is not ACTIVE NOTIF neither claims nor re-dispatches its `QUEUED` notifications and, on `TenantActivatedEvent`, re-dispatches them (NOTIF RULE-NOTIF-024).
+Traces     : US-TENANT-003 (CHANGED)
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-002 (CHANGED); the 1.2.0 suspension paused tokens but left `SEC_ACTIVE_SESSION` rows open and let queued mail leave a suspended tenant
+Source     : docs/plans/tenant-maturity-plan.md §5 C.1
+Priority   : HIGH
+#### AC-TENANT-033 — [REQ-TENANT-033]
+Given a tenant T whose administrator holds two open staff sessions and whose customer holds one, another tenant U with an open session, and a probe listening after commit
+When the operator suspends T with `reason = "  Unpaid invoice  "`
+Then one `TenantSuspendedEvent` arrives after the commit with `tenantId = T`, `tenantCode = T's code`, `reason = "Unpaid invoice"`, `actor` = the operator, realm `STAFF`; T's three sessions are terminated (`TERMINATED_BY` = the operator, one `SESSION_TERMINATED` row each in T's `SEC_AUDIT_LOG`), U's session is still open, and every old token of T answers 403 `TENANT_SUSPENDED`;
+suspending T again, suspending PLATFORM, suspending without a reason and a status change rolled back by its caller publish nothing;
+when the operator activates T, one `TenantActivatedEvent(T, code, operator)` arrives; activating it again publishes nothing;
+a notification queued in T while it is suspended stays `QUEUED` with `ATTEMPTS = 0` (no mail), is not re-dispatched by the requeue job, and is `SENT` after the activation
+
+### REQ-TENANT-034 — حدّ إبطال الرموز لكل مستأجر / Per-tenant token cut-off
+Pattern    : unwanted behaviour
+Statement  : If an access token of either realm reaches a non-public path and its `iat` lies before its tenant's `TOKENS_INVALID_BEFORE` (RULE-TENANT-023), then the system shall refuse the request with 401 `TENANT_TOKEN_REVOKED`, whether the token's session is still open or was already terminated; the cut-off is set to the time of every SUSPENDED → ACTIVE transition (RULE-TENANT-016) and of every `revoke-tokens` call (REQ-TENANT-035); a token issued at or after it — in particular a fresh login right after an activation — is served.
+Traces     : US-TENANT-003 (CHANGED), US-TENANT-004 (CHANGED), US-TENANT-015
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-015; ADR-TENANT-002
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+Note       : behaviour change — before 1.3.0 a token issued before a suspension worked again after the re-activation.
+#### AC-TENANT-034 — [REQ-TENANT-034]
+Given a tenant T, a staff token and a customer token of T issued in second S with their sessions open
+When `TOKENS_INVALID_BEFORE` is set within second S (after the issue)
+Then both tokens are still served (`/api/v1/sec/menu`, `/api/v1/customers/me`, `/api/v1/tenant/me` → 200);
+when it is set to second S + 1, each of those calls answers 401 `TENANT_TOKEN_REVOKED` (`/api/v1/tenant/me` for both realms included), a fresh login answers 200 and its token is served, and a login sent with the stale token in `Authorization` answers 200;
+and after a suspension and a re-activation of T in a later second, a token issued before the suspension answers 401 `TENANT_TOKEN_REVOKED` while a login right after the activation is served
+
+### REQ-TENANT-035 — إبطال رموز مستأجر / Revoke a tenant's tokens
+Pattern    : event
+Statement  : When a platform operator posts `POST /api/v1/platform/tenants/{id}/revoke-tokens`, the system shall set the tenant's `TOKENS_INVALID_BEFORE` to now (in the PLATFORM request, its own commit), then, in one transaction of tenant {id}, terminate every open session of the tenant (both realms, SEC) and record `TOKENS_REVOKED` in the tenant's and in PLATFORM's audit logs, and answer the tenant's id, code and the number of terminated sessions; it shall refuse the PLATFORM tenant (422 `TENANT_REVOKE_TOKENS_PLATFORM`, RULE-TENANT-024); a suspended tenant may be revoked (its sessions are already ended, the cut-off is written).
+Traces     : US-TENANT-015
+Entities   : ENT-TENANT-001; SEC ENT-SEC-010 (through `SecAdminRecoveryApi.terminateAllSessions`)
+Rationale  : POL-TENANT-015, POL-TENANT-006; ADR-TENANT-002
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+#### AC-TENANT-035 — [REQ-TENANT-035]
+Given tenant T with a staff and a customer session opened in an earlier second, and tenant U with a session
+When the operator posts `/{T}/revoke-tokens`
+Then the system answers 200 `{ id: T, code, sessionsTerminated: 2 }` without any cut-off field; both old tokens answer 401 `TENANT_TOKEN_REVOKED`; fresh logins are served; U's token is served; `TOKENS_REVOKED` is recorded once in T and once in PLATFORM (actor = the operator, entity `CORE_TENANT` / T, summaries naming T's code and the session count, no instant); each ended session has one `SESSION_TERMINATED` row in T's `SEC_AUDIT_LOG`;
+`/{1}/revoke-tokens` answers 422 `TENANT_REVOKE_TOKENS_PLATFORM` and changes nothing, an unknown id 404 `TENANT_NOT_FOUND`, T's administrator 403 `SEC-403-FORBIDDEN`, no token 401; a suspended tenant answers 200 with `sessionsTerminated = 0`
+
+### C3. Business rules (§A5) — NEW / CHANGED
+
+### RULE-TENANT-023 — حدّ إبطال الرموز لكل مستأجر / Per-tenant token cut-off
+Scope      : ENT-TENANT-001.tokensInvalidBefore; every authenticated request
+Trigger    : on every request carrying a signature-valid bearer token, on a non-public path of either chain
+Statement  : A token is revoked when its tenant's `TOKENS_INVALID_BEFORE` is set and the token's `iat` (whole seconds) is **less than** the cut-off truncated to the second (a token issued in the cut-off's own second is served; one without `iat` is revoked). The tenant filter refuses a revoked token with 401 `TENANT_TOKEN_REVOKED` (security context cleared) — for a token that authenticated and for one SEC dropped (terminated session, inactive user), because SEC exposes the facts of every signature-valid token (`com.erp.tenant.TenantTokenFacts(tenantId, issuedAt)`, request attribute). The tenant's status is checked first: a token whose tenant is gone or suspended answers 403 `TENANT_SUSPENDED`, authenticated or not. A public path (`erp.core.security.public-paths`, the customer chain's unauthenticated paths) ignores a stale token, so a client can sign in again with an old `Authorization` header. The cut-off is written by RULE-TENANT-016 (activation) and REQ-TENANT-035 (revoke-tokens), never exposed (responses, audit).
+Data source: ENT-TENANT-001.statusCode, .tokensInvalidBefore, read as PLATFORM; the token's `tid` and `iat`
+Message    : ar: "لم يعد رمز الدخول صالحًا لهذا المستأجر: يرجى تسجيل الدخول مجددًا" · en: "This sign-in is no longer valid for this tenant: please sign in again"
+Traces     : REQ-TENANT-034, REQ-TENANT-035
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2; ADR-TENANT-002
+Decided by : `TenantDomain.isTokenRevoked(issuedAt, tokensInvalidBefore)`; applied by `TenantResolutionFilter`
+
+### RULE-TENANT-024 — مستأجر المنصة لا تُبطَل رموزه / PLATFORM's tokens are not revoked
+Scope      : ENT-TENANT-001
+Trigger    : on `/{id}/revoke-tokens`
+Statement  : The system shall refuse `revoke-tokens` for the PLATFORM tenant (id 1) with 422 `TENANT_REVOKE_TOKENS_PLATFORM` and change nothing: it would sign every platform operator out, the caller included (PLATFORM is never suspended either, RULE-TENANT-005); a platform operator's session is ended through SEC's session API. Every other tenant may be revoked, ACTIVE or SUSPENDED.
+Data source: ENT-TENANT-001.id
+Message    : ar: "لا يمكن إبطال رموز مستأجر المنصة ''{0}'': سيُخرج ذلك جميع مشغّلي المنصة" · en: "The tokens of the platform tenant ''{0}'' cannot be revoked: it would sign every platform operator out"
+Traces     : REQ-TENANT-035
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2 (the plan leaves PLATFORM open; decided here, ADR-TENANT-002)
+Decided by : `TenantDomain.assertTokenRevocationAllowed`
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | RULE-TENANT-006 (a suspended tenant is not served) | + on `TenantSuspendedEvent` SEC terminates every open session of the tenant (both realms; the rows stayed open in 1.2.0), and NOTIF does not claim or re-dispatch the tenant's `QUEUED` notifications while it is not ACTIVE (status set unchanged). Because the sessions are now terminated, SEC drops such a token; the tenant filter still answers 403 `TENANT_SUSPENDED` for it on a non-public path (RULE-TENANT-023's "SEC dropped" branch), so the 1.2.0 answer is kept. |
+| CHANGED | RULE-TENANT-016 (suspension reason; activation) | the `TOKENS_INVALID_BEFORE` an activation writes is now enforced (RULE-TENANT-023); the transition also publishes `TenantActivatedEvent` / a suspension `TenantSuspendedEvent` (REQ-TENANT-033) |
+| CHANGED | RULE-TENANT-012 (request-tenant resolution order) | source 2 (the token) also checks the cut-off; a signature-valid token that SEC did not authenticate is checked for its tenant's status and cut-off on a non-public path before the header source is tried |
+| CHANGED | RULE-TENANT-015 (no caching) | holds for `TenantLookupApi.isActive` too: a status change is effective at once for NOTIF's claim |
+
+### C4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_TOKEN_REVOKED` | 401 | (written by the filter) | `TenantResolutionFilter` (RULE-TENANT-023) | — |
+| `TENANT_REVOKE_TOKENS_PLATFORM` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertTokenRevocationAllowed` | tenant code |
+`TENANT_PLATFORM_PROTECTED` is not reused (its message is about suspension), the `TENANT_ADMIN_RESET_PLATFORM`
+precedent. Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity
+C12` block each). `TENANT_TOKEN_REVOKED` is answered by a filter, so the generated api-docs do not list it per
+endpoint (like `TENANT_SUSPENDED` for tokens); the revoke-tokens `@Operation` names it.
+
+### C5. ENT-TENANT-001 Tenant — CHANGED (field use); DTOs
+| Kind | Field | Delta |
+|---|---|---|
+| CHANGED | tokensInvalidBefore | now **enforced** (RULE-TENANT-023) and written by `revoke-tokens` too (`Tenant.revokeTokens(Instant)`); still system-only and never exposed |
+New DTO: `TenantTokenRevocationResponse { id, code, sessionsTerminated }`. No request DTO (the endpoint has no
+body). `TenantResponse` unchanged (no cut-off field).
+
+### C6. Events — NEW (`com.erp.events`, core catalogue 11 → 13)
+| Event | Payload (besides the `DomainEvent` envelope) | Constructor | Publisher | Consumers |
+|---|---|---|---|---|
+| `TenantSuspendedEvent` | `tenantCode`, `reason` (the stored, trimmed reason); `getTenantId()` = the suspended tenant, `getActor()` = the operator, realm `STAFF` | explicit (the fact belongs to the suspended tenant, the publisher is the PLATFORM operator — the `TenantCreatedEvent` shape) | `TenantService.updateStatus`, ACTIVE → SUSPENDED only, inside the transaction after the row is flushed | SEC `TenantSuspendedSessionListener` (REQ-SEC-092) |
+| `TenantActivatedEvent` | `tenantCode`; `getTenantId()` = the activated tenant, `getActor()` = the operator, realm `STAFF` | explicit (as above) | `TenantService.updateStatus`, SUSPENDED → ACTIVE only | NOTIF `NotificationTenantActivationListener` (RULE-NOTIF-024) |
+Plain values only (no entity, no secret). The plan's payload name `code` is `tenantCode` here, as on
+`TenantCreatedEvent`. `revoke-tokens` publishes no event (SEC is called directly, so the response can carry the
+count).
+
+### C7. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | `TenantLookupApi` + `boolean isActive(Long tenantId)` — false for null, an unknown id or a tenant not ACTIVE; reads `CORE_TENANT.STATUS_CODE` (DBF-TENANT-005) by id; uncached (gov-enforce-caching-rules: a state lifecycle is never cacheable, and the claim must see a status change at once); usable without a current tenant (reads as PLATFORM, the `TenantResolutionFilter` precedent) | TENANT (exposed) | NOTIF (claim and requeue, RULE-NOTIF-024) |
+| NEW | — | `com.erp.tenant.TenantTokenFacts(Long tenantId, Instant issuedAt)` + `REQUEST_ATTRIBUTE` — root-package public type, set by SEC's `JwtAuthenticationFilter` for every signature-valid token, read by `TenantResolutionFilter` | TENANT (exposed, root package) | SEC (writes it) |
+| NEW (consumed) | — | `com.erp.sec.crossmodule.SecAdminRecoveryApi` + `int terminateAllSessions()` (SEC REQ-SEC-093) — inside `TenantContext.callAs(id)`, joins that transaction | SEC | revoke-tokens |
+| NEW (published) | — | `TenantSuspendedEvent`, `TenantActivatedEvent` (C6) | events | SEC, NOTIF, applications |
+| CHANGED | — | `com.erp.audit.crossmodule.AuditApi` — + action `TOKENS_REVOKED` (C8) | audit | revoke-tokens |
+`TenantService.revokeTokens` is not `@Transactional` (the B / E precedent): the cut-off is written by a
+`TransactionTemplate` of the PLATFORM request (the `CORE_TENANT` row is global; `updateStatus` writes it there
+too), then one `REQUIRES_NEW` transaction inside `callAs(id)` ends the sessions and records both audit rows.
+The cut-off commits first on purpose: if the session step fails, the tokens are already refused.
+
+### C8. Audit, sessions
+| Operation | `CORE_AUDIT_EVENT` | Sessions (SEC) |
+|---|---|---|
+| suspend (C.1) | as before (`UPDATE` row of `CORE_TENANT` in PLATFORM) | every open session of the tenant terminated after commit, `TERMINATED_BY` = the operator; one `SESSION_TERMINATED` row each in the tenant's `SEC_AUDIT_LOG` (no actor user: the operator is not a user of that tenant; the details name the operator) |
+| activate | as before; the cut-off is not recorded (entity-audit denylist word `token`) | — (none are open) |
+| revoke-tokens | `TOKENS_REVOKED` recorded **twice in the same transaction of tenant {id}**: once in tenant {id} and once in PLATFORM (`tenantId = 1`): actor = the operator's username, realm `STAFF`, `actorUserId` null, entity `CORE_TENANT` / {id}, summaries naming the tenant code and the number of sessions terminated — never the cut-off instant. The cut-off's own `UPDATE` writes no entity-audit row (its only change is a denylisted field). | every open session of the tenant, both realms, terminated in that transaction, `SESSION_TERMINATED` rows as for a suspension |
+
+### C9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
+| Kind | Section | Delta |
+|---|---|---|
+| CHANGED | B1 Operations | + revoke a tenant's tokens (sign every user of the tenant out) |
+| CHANGED | B3 Input | a "revoke tokens" action on a tenant row other than PLATFORM (sensitive: confirmation naming the tenant; the result shows `sessionsTerminated`) |
+| unchanged | B4 Access | same two actions; the endpoint needs `PLATFORM_TENANT_MANAGE` (D5) |
+| CHANGED | B5 API expectations | + `POST /{id}/revoke-tokens` (C1) |
+
+### C10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-002 — per-tenant cut-off instead of a `jti` denylist; second precision, same-second tokens served; the token facts as a request attribute; PLATFORM refused. |
+| CHANGED (plan) | Plan C.2 "the JWT filter exposes `iat` on the authentication details" → a request attribute `TenantTokenFacts(tenantId, issuedAt)` set for every signature-valid token (ADR-TENANT-002): the tenant module may not read SEC's `AuthRealm`, and after C.1 the token of a suspended or revoked tenant no longer authenticates (its session is terminated), so the facts are needed for a token SEC dropped. |
+| NEW (decision) | The tenant filter checks a dropped token's tenant on non-public paths (403 `TENANT_SUSPENDED` / 401 `TENANT_TOKEN_REVOKED`): without it, C.1's session termination would turn the 1.2.0 answer for an issued token of a suspended tenant (403 `TENANT_SUSPENDED`, TC-CORE-TENANT-022) into a bare 401, and the cut-off code would never be seen after a re-activation. Public paths are exempt so a login with a stale header still works. |
+| NEW (decision) | Revoke-tokens refuses PLATFORM (RULE-TENANT-024, new code `TENANT_REVOKE_TOKENS_PLATFORM`); a suspended tenant may be revoked. |
+| CHANGED (plan) | Response of revoke-tokens: `TenantTokenRevocationResponse { id, code, sessionsTerminated }` (the reference analysis proposed `TenantResponse`): the count is the operation's result (the admin-reset precedent), and the tenant record itself does not change visibly. 200 with a body, `Status.UPDATED`. |
+| NEW (decision) | `TenantSuspendedEvent` / `TenantActivatedEvent` carry `tenantCode` (the plan's `code`), like `TenantCreatedEvent`. SEC's listener runs **synchronously** after commit (in the operator's request, inside `callAs(tenantId)` with a `REQUIRES_NEW` transaction), so the sessions are closed when the PATCH answers; a failure there is logged and never undoes the suspension (the token is refused by the tenant filter anyway, and the cut-off of a later activation covers a session that stayed open). |
+| NEW (decision) | NOTIF re-dispatches a re-activated tenant's queued notifications on `TenantActivatedEvent` (asynchronous listener) rather than waiting for the requeue job, which is off by default (`erp.core.notif.requeue.enabled=false`) — the plan said "the job simply does not claim them while suspended" and left their delivery to the job (NOTIF srs.md 1.3.0 §5). |
+| NEW (decision) | No new XM-TENANT id: XM-TENANT-001 is CHANGED (`isActive`), the consumed SEC method is recorded here (B7 precedent), the token facts type is root-package public API like `TenantContext`. |
+
+### C11. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW | `POST /{id}/revoke-tokens` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); not offered for PLATFORM (422 `TENANT_REVOKE_TOKENS_PLATFORM`); show `sessionsTerminated` after success. |
+| NEW | Error codes `TENANT_TOKEN_REVOKED` (401, any request of a signed-in user) and `TENANT_REVOKE_TOKENS_PLATFORM` (both languages). On 401 `TENANT_TOKEN_REVOKED` the shell clears the session and returns to the login page (as for any 401), optionally saying "your organisation's sessions were ended". |
+| CHANGED | After a tenant is re-activated, its users sign in again (their earlier tokens answer 401 `TENANT_TOKEN_REVOKED`); a suspension ends their sessions at once. |

@@ -163,3 +163,11 @@ Package B (tenant-maturity plan §4 B.4) — registry delta; full text in `srs.m
 | CHANGED | `NotificationLogQueryApi` (exposed) | + `countDispatchedSince(Instant)` (current tenant's `NOTIF_LOG` rows created since) | TENANT (usage) |
 No rule, XM, entity, API, permission or error-code delta. Last sequence per atom unchanged (RULE: 023 · XM: 003 ·
 API: 012 · US: 008).
+
+Package C12 (tenant-maturity plan §5 C.1) — registry deltas; full text in `srs.md` 1.3.0 §5.
+| Kind | Item | Delta |
+|---|---|---|
+| NEW | RULE-NOTIF-024 | the claim and the requeue job skip `QUEUED` rows of a tenant that is not ACTIVE (status unchanged); `TenantActivatedEvent` re-dispatches them |
+| NEW | XM-NOTIF-004 (CROSSMODULE-READ) | `TenantLookupApi.isActive(Long)` — TENANT |
+| NEW | XM-NOTIF-005 (EVENT-CONSUME) | `TenantActivatedEvent` — events (TENANT publishes) |
+No entity, API, permission, status or error-code delta. Last sequence per atom: RULE: 024 · XM: 005 · API: 012 · US: 008.

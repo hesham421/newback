@@ -224,3 +224,23 @@ Package E (tenant-maturity plan §7 E.2) — registry deltas; full text in `srs-
 No requirement, entity, endpoint, permission, error code or schema delta. Last sequence per atom unchanged (REQ: 091 ·
 AC: 097 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064; 065 held spare,
 066 … 068 the analysis-coverage work's).
+
+Package C12 (tenant-maturity plan §5 C.1, C.2) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §12.
+
+Requirements — new items (package C12)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-092 / AC-SEC-098 | End a suspended tenant's sessions (`TenantSuspendedEvent` → every open session of the tenant, both realms) | US-SEC-011; TENANT REQ-TENANT-033, RULE-TENANT-006 |
+| NEW | REQ-SEC-093 / AC-SEC-099 | Platform termination of every session of the current tenant (`SecAdminRecoveryApi.terminateAllSessions`) | US-SEC-011; TENANT REQ-TENANT-035 |
+
+Dependencies — delta
+| XM-ID | Type | Target | Module |
+|---|---|---|---|
+| XM-SEC-007 | EVENT-CONSUME | `TenantSuspendedEvent` | events (TENANT publishes) |
+
+Exposed surface (package C12): `SecAdminRecoveryApi` + `terminateAllSessions()` (CHANGED, gate `PLATFORM_TENANT_MANAGE`);
+`JwtAuthenticationFilter` writes TENANT's `TenantTokenFacts` request attribute (CHANGED). Entities, screens,
+permissions, error codes, schema: unchanged.
+
+Last sequence per atom (highest ever issued): REQ: 093 · AC: 099 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 ·
+XM: 007 · QR: 054 · API: 050 · ADR: 064 (065 held spare; 066 … 068 the analysis-coverage work's)

@@ -99,3 +99,15 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | NEW — FE | Branding for the UI | a tenant gets an optional logo and brand colour, set by the platform operator on `PLATFORM_TENANTS` (`PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding`); `GET /api/v1/tenant/me` (authenticated, any realm) and `GET /api/v1/public/tenants/{tenantCode}/branding` (public, path tenant, rate-limited per client address) feed the shell and the login page; the logo document lives in the tenant's own rows as a PUBLIC file | `../P1/srs-tenant.md` 1.3.0 E1 |
 | CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ FILE (FileImageStoreApi, FileDocumentLookupApi.publicUrl; soft reference CORE_TENANT.LOGO_FILE_ID)` | E6 |
 | CHANGED | DEFERRED | "branding" leaves DEFERRED; a tenant self-service branding screen is deferred (ADR-TENANT-005) | plan §0 D5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Lifecycle events | `TenantSuspendedEvent`, `TenantActivatedEvent` are published after commit on real transitions; SEC ends the suspended tenant's sessions, NOTIF holds its queued notifications until it is active again; core event catalogue 11 → 13 | `../P1/srs-tenant.md` 1.3.0 C6 |
+| CHANGED — FE | Tenant of a request | the resolution order is unchanged; a token whose `iat` is before its tenant's `TOKENS_INVALID_BEFORE` is refused 401 `TENANT_TOKEN_REVOKED` (both realms, `/api/v1/tenant/me` included), also when its session was already ended; a re-activation cuts off every earlier token | C3 RULE-TENANT-023 |
+| NEW — FE | Tenant management | `POST /api/v1/platform/tenants/{id}/revoke-tokens` signs every user of a tenant out (not PLATFORM) | C1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecAdminRecoveryApi.terminateAllSessions)`; `SEC ──event──▶ TenantSuspendedEvent`; `NOTIF ──crossmodule──▶ TENANT (TenantLookupApi.isActive)`, `NOTIF ──event──▶ TenantActivatedEvent` | C7 |
+| CHANGED | DEFERRED | "lifecycle events" and "token cut-off enforcement" leave DEFERRED; idempotent provisioning (C.4), export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |
