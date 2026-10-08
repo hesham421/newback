@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "B",
+  "current_step": "E",
   "steps": [
     {
       "id": "A",
@@ -111,20 +111,19 @@
         "V18__tenant_profile.sql",
         "V19__tenant_lifecycle.sql"
       ],
-      "status": "FIXING",
+      "status": "COMPLETE",
       "branch": "tm/b-tenant-level-1",
-      "worktree": ".worktrees/tm-b",
+      "worktree": null,
       "attempts": 1,
       "deviations": 11,
       "implementer_agent": "ae63a19e09096e36c",
       "reviewer_agent": "a62a12a6ee8762b83",
       "review": {
-        "verdict": "PASS-with-findings",
-        "round": 1,
-        "findings": 5
+        "verdict": "PASS",
+        "round": 2
       },
       "report": "docs/steps/tm-b-report.md",
-      "merged_commit": null
+      "merged_commit": "79aa807"
     },
     {
       "id": "E",
@@ -138,9 +137,9 @@
       "migrations": [
         "V20__tenant_branding.sql"
       ],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/e-tenant-branding",
-      "worktree": null,
+      "worktree": ".worktrees/tm-e",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -423,6 +422,18 @@
       "step": "B",
       "event": "FIXING",
       "note": "reviewer PASS with 5 LOW (PLATFORM self-target admin-reset, no PLATFORM audit row, op-id churn, untested 409, username logging); fixing before merge"
+    },
+    {
+      "at": "2026-10-08T00:33:38Z",
+      "step": "B",
+      "event": "COMPLETE",
+      "note": "merged 79aa807; verify 574/10; P-LIVE 182/182; 5 LOW review items fixed (PLATFORM admin-reset refused, PLATFORM audit row, op-id churn, 409 test, logging)"
+    },
+    {
+      "at": "2026-10-08T00:33:38Z",
+      "step": "E",
+      "event": "START",
+      "note": "wave 4 (E) dispatched"
     }
   ]
 }
