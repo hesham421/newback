@@ -3,6 +3,9 @@ import { expect, type APIRequestContext } from '@playwright/test'
 import { backendUrl, PLATFORM, USERS } from './env.ts'
 import { apiSignIn, bearer } from './session.ts'
 
+/** 1.3.0: a suspension carries a reason of 3..500 characters (TENANT_SUSPENSION_REASON_REQUIRED otherwise). */
+export const HARNESS_SUSPENSION_REASON = 'E2E harness suspension'
+
 export async function setTenantStatus(
   request: APIRequestContext,
   code: string,
@@ -20,7 +23,7 @@ export async function setTenantStatus(
     expect(tenant, `tenant ${code}`).toBeDefined()
     const patched = await request.patch(`${backendUrl}/api/v1/platform/tenants/${tenant?.id}/status`, {
       headers: bearer(token),
-      data: { statusCode },
+      data: statusCode === 'SUSPENDED' ? { statusCode, reason: HARNESS_SUSPENSION_REASON } : { statusCode },
     })
     expect(patched.status(), `${code} → ${statusCode}`).toBe(200)
   } finally {
