@@ -129,3 +129,162 @@ RESOLVED DECISIONS
 |---|---|---|---|---|
 | 1 | Row-level (discriminator) or schema-per-tenant? | row-level, shared schema | erp-core plan step 05 (fixed decision), as built | ADR-TENANT-001 |
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+Policy-level deltas: none. POL-TENANT-001 … 011 are CONFIRMED by the code locations in their `Source` lines.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-011 (this module mints its policy ids, as the baseline did). Full
+behaviour in `../P1/srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0", package B block.
+
+POL-TENANT-012 — التعليق بسبب مسجَّل / Suspension carries a recorded reason
+  Statement (ar) : يجب على النظام ألا يعلّق مستأجرًا دون سبب (من 3 إلى 500 حرف)، وأن يسجّل من علّقه ومتى ولماذا، وأن يمحو هذه الحقائق عند إعادة التفعيل.
+  Statement (en) : The system shall not suspend a tenant without a reason (3 to 500 characters), shall record who suspended it, when and why, and shall clear those facts when the tenant is re-activated.
+  Pattern   : event
+  Trigger   : Status change of a tenant
+  Rationale : an operator's decision that locks an organisation out must be accountable and visible on the tenant record
+  Source    : docs/plans/tenant-maturity-plan.md §4 B.1, B.2; RULE-TENANT-016; REQ-TENANT-026
+  Status    : CONFIRMED (erp-core 1.3.0, package B)
+
+POL-TENANT-013 — استعادة مدير المستأجر من المنصة / Platform-side recovery of a tenant administrator
+  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تعيين كلمة مرور جديدة لمستخدم موظف يحمل دورًا فائقًا في مستأجر معيّن غير مستأجر المنصة، مع إنهاء جلساته وإلزامه افتراضيًا بتغييرها عند الدخول التالي وتسجيل العملية في سجل تدقيق ذلك المستأجر وسجل تدقيق المنصة دون كلمة المرور.
+  Statement (en) : The system shall let a platform operator set a new password for a staff user holding a super role in a given tenant other than PLATFORM, terminating that user's sessions, requiring by default a change at the next sign-in, and recording the operation in that tenant's and in PLATFORM's audit logs without the secret.
+  Pattern   : event
+  Trigger   : `POST /api/v1/platform/tenants/{id}/admin-reset`
+  Rationale : a tenant whose only administrator is locked out cannot repair itself from inside (POL-TENANT-004's rationale); the recovery must not become a way to take over ordinary users (super role only)
+  Source    : docs/plans/tenant-maturity-plan.md §4 B.2, B.4; RULE-TENANT-017; REQ-TENANT-027; SEC ADR-SEC-063
+  Status    : CONFIRMED (erp-core 1.3.0, package B)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-001 | unchanged for the code (immutable, `^[A-Z0-9_]{3,32}$`); the names and the new profile fields (contact e-mail and phone, country, default language, time zone, notes) become editable by the platform operator (`PUT /{id}`) | REQ-TENANT-025 |
+| POL-TENANT-002 | unchanged: two statuses; a suspension now carries a reason and its facts (POL-TENANT-012), an activation records a token cut-off that package C.2 enforces | REQ-TENANT-026 |
+| POL-TENANT-006 | unchanged: the new operations (edit, admin-reset, usage) are platform-only like the others (`PLATFORM_TENANT_MANAGE`, plan §0 D5) | srs-tenant.md 1.3.0 B1 |
+| POL-TENANT-007 | applies to the usage figures: each is counted inside the tenant asked for, never including another tenant's rows | REQ-TENANT-028 |
+
+CUSTOM LOOKUP VALUES — delta
+| Lookup key | Added values | Source |
+|---|---|---|
+| (value set of `CORE_TENANT.DEFAULT_LOCALE`, CHECK `CHK_CORE_TENANT_LOCALE`, not an MDL lookup) | `ar`, `en` (NULL allowed) | V18__tenant_profile.sql |
+
+SCOPE EXCEPTIONS — delta
+| Kind | Excluded / Deferred | Delta |
+|---|---|---|
+| CHANGED | Rename / delete a tenant | renaming the names leaves the exceptions (POL-TENANT-001 CHANGED); delete stays excluded (POL-TENANT-005) |
+| unchanged | Quotas, `ARCHIVED` status, per-tenant self-signup switch, per-tenant rate limits | level 2, later version (plan §0 D2) |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-013. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package E block.
+
+POL-TENANT-014 — العلامة التجارية يضبطها مدير المنصة فقط / Branding is set by the platform administrator only
+  Statement (ar) : يجب على النظام قصر ضبط شعار المستأجر ولون علامته على مشغّل المنصة من شاشة `PLATFORM_TENANTS`؛ لا شاشة ذاتية للمستأجر في 1.3.0، والشعار ملف عام في صفوف المستأجر نفسه، ويقرأ كل مستخدم للمستأجر علامته دون صلاحية، ويقرؤها الزائر المجهول برمز المستأجر قبل الدخول.
+  Statement (en) : The system shall let only a platform operator, from the `PLATFORM_TENANTS` screen, set a tenant's logo and brand colour; there is no tenant self-service screen in 1.3.0, the logo is a PUBLIC document in the tenant's own rows, every user of the tenant reads the branding without a permission, and an anonymous visitor reads it by tenant code before signing in.
+  Pattern   : ubiquitous
+  Trigger   : the logo / branding endpoints; `GET /api/v1/tenant/me`; `GET /api/v1/public/tenants/{tenantCode}/branding`
+  Rationale : decision D5 — branding belongs to the onboarding the platform operator performs; no new module, screen, permission or grant for one attribute (ADR-TENANT-005)
+  Source    : docs/plans/tenant-maturity-plan.md §0 D5, §7 E.1–E.3; ADR-TENANT-005; RULE-TENANT-018 … 022; REQ-TENANT-029 … 032
+  Status    : CONFIRMED (erp-core 1.3.0, package E)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-006 | unchanged: the branding writes are platform-only like every tenant operation (`PLATFORM_TENANT_MANAGE`); the two branding reads are not tenant management and need no permission | srs-tenant.md 1.3.0 E1 |
+| POL-TENANT-008 | the public branding is a second path whose tenant comes from the path (after the public files) | REQ-TENANT-032 |
+
+SCOPE EXCEPTIONS — delta
+| Kind | Excluded / Deferred | Delta |
+|---|---|---|
+| NEW | Tenant self-service branding screen (`TENANT_BRANDING`) | deferred: the alternative recorded in ADR-TENANT-005 |
+| NEW | Server-side resizing of logos; per-tenant theme beyond one accent colour | out of scope (plan §6 D.4, §8 F2) |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 5 | Who sets a tenant's logo | the platform administrator from `PLATFORM_TENANTS` | decision D5 (2026-10-07) | ADR-TENANT-005 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-014. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C12 block.
+
+POL-TENANT-015 — إعادة التفعيل والإبطال يقطعان الرموز السابقة / Re-activation and revocation cut off earlier tokens
+  Statement (ar) : يجب على النظام ألا يقبل رمز دخول صدر قبل آخر إعادة تفعيل للمستأجر أو آخر إبطال صريح لرموزه من مشغّل المنصة؛ يحفظ النظام حدًّا زمنيًا واحدًا لكل مستأجر، وينهي الإبطال جلسات المستأجر، ولا تُبطَل رموز مستأجر المنصة.
+  Statement (en) : The system shall refuse an access token issued before the tenant's last re-activation or the platform operator's last explicit revocation of its tokens; one cut-off instant is kept per tenant, a revocation also ends the tenant's sessions, and the PLATFORM tenant's tokens are never revoked this way.
+  Pattern   : ubiquitous
+  Trigger   : every authenticated request; `PATCH /{id}/status` to ACTIVE; `POST /api/v1/platform/tenants/{id}/revoke-tokens`
+  Rationale : tokens issued before a suspension must not come back to life when the tenant is re-activated, and a compromised tenant needs a "sign everyone out" without being suspended; a platform-wide denylist is avoided (ADR-TENANT-002)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.2; RULE-TENANT-023, -024; REQ-TENANT-034, -035; ADR-TENANT-002
+  Status    : CONFIRMED (erp-core 1.3.0, package C12)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-002 | still two statuses (no `ARCHIVED`, level 2); a suspension now also **ends every open session** of the tenant (SEC, on `TenantSuspendedEvent`) and **holds its queued notifications** (NOTIF claims none until the tenant is ACTIVE again, then sends them); a re-activation cuts off every token issued before it (POL-TENANT-015) | REQ-TENANT-033, -034 |
+| POL-TENANT-006 | unchanged: revoke-tokens is platform-only like every tenant operation (`PLATFORM_TENANT_MANAGE`) | REQ-TENANT-035 |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 2 | Token cut-off vs `jti` denylist | per-tenant cut-off `TOKENS_INVALID_BEFORE`, compared in whole seconds (activation: a token of the activation's own second is served; revoke-tokens: the cut-off is the next whole second, so the revoke's own second is refused); PLATFORM not revocable | plan §9 (recommendation), package C12 | ADR-TENANT-002 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-015. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C4 block.
+
+POL-TENANT-016 — التجهيز لا يتكرر بمفتاح عدم التكرار / Provisioning is idempotent under an idempotency key
+  Statement (ar) : عند تكرار طلب إنشاء مستأجر بمفتاح عدم التكرار نفسه والمحتوى نفسه ومن المستخدم نفسه يجب على النظام إعادة الاستجابة المخزّنة دون إنشاء شيء، ورفض المحتوى المختلف أو المستخدم المختلف تحت المفتاح نفسه؛ لا تُخزَّن إلا الاستجابات الناجحة، وتُحفظ المفاتيح 24 ساعة.
+  Statement (en) : When a tenant-create request is repeated with the same `Idempotency-Key`, the same body and by the same user, the system shall replay the stored answer and create nothing; another body or another user under the same key shall be refused; only successful answers are stored, and keys are kept for 24 hours.
+  Pattern   : optional · `POST /api/v1/platform/tenants` with the header
+  Trigger   : a create request carrying `Idempotency-Key`
+  Rationale : a retried provisioning call (timeout, client crash) must neither create a second tenant nor fail with `TENANT_CODE_DUPLICATE`; the stored answer commits with the tenant it describes (ADR-TENANT-003)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.4; RULE-TENANT-025, -026; REQ-TENANT-036; ADR-TENANT-003
+  Status    : CONFIRMED (erp-core 1.3.0, package C4)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-004 | still all-or-nothing; with `Idempotency-Key` the stored answer is part of the same transaction (a crash before the commit leaves neither the tenant nor a replayable answer) | REQ-TENANT-036 |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 3 | Where idempotency keys live | a core table `CORE_IDEMPOTENCY_KEY` behind the common mechanism `com.erp.common.idempotency`, tenant-scoped, 24 h retention (expired rows ignored at lookup and purged by a job), only 2xx answers stored in the operation's transaction, replayed to the same user only; first consumer tenant create | plan §9 (recommendation), package C4 | ADR-TENANT-003 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-016. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C5 block.
+
+POL-TENANT-017 — تصدير بيانات المستأجر بلا أسرار / A tenant's data can be exported, never its secrets
+  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تصدير بيانات مستأجر كملف مضغوط واحد تكتب فيه كل وحدة جداولها بنفسها بصيغة CSV، دون كلمات المرور المجزّأة أو الرموز أو بيانات اعتماد القنوات أو محتوى الملفات، وبحدّ أقصى لعدد السجلات، ويُسلَّم الملف عبر رمز تنزيل يُستخدم مرة واحدة.
+  Statement (en) : The system shall let a platform operator export a tenant's data as one archive in which every module writes its own tables as CSV, never the password hashes, tokens, channel credentials or file bytes, within a configured row limit, handed out through a single-use download token.
+  Pattern   : event · `POST /api/v1/platform/tenants/{id}/export`
+  Trigger   : a platform operator's export request
+  Rationale : portability of a tenant's data is a platform duty; the shared schema makes it a `TENANT_ID`-filtered copy (ADR-TENANT-001 consequences); the archive must not become a way to carry credentials out (ADR-TENANT-006)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.5; REQ-TENANT-037; RULE-TENANT-027, -028; ADR-TENANT-006
+  Status    : CONFIRMED (erp-core 1.3.0, package C5)
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 6 | How a tenant's data is exported | synchronously in v1, bounded by `erp.core.tenant.export.max-rows`, one snapshot, one CSV per table written by its module (SPI), ZIP + manifest stored as a PRIVATE PLATFORM document, single-use download token, one export per tenant at a time per node | plan §5 C.5, package C5 | ADR-TENANT-006 |

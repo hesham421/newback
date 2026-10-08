@@ -79,25 +79,44 @@ US-FILE-005
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 03, 05, 07, 10
+Steps          : 02, 03, 05, 06, 07, 08, 10
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
-Paths cited below are relative to the erp-core repository at that tag. No US ids are minted here.
+Paths cited below are relative to the erp-core repository (`com/erp/…` = `erp-core/src/main/java/com/erp/…`).
+No US ids are minted here.
+
+Product capabilities — القدرات
+| Kind | Capability | Actor | Implemented behaviour | Source |
+|---|---|---|---|---|
+| NEW | Publish / withdraw a file | staff with `FILE:DOCUMENT:PUBLISH` | Makes a document PUBLIC (a random 32-character slug; an already public file keeps its slug) or PRIVATE again (slug cleared). Refused when the category does not allow public files; refused (404) for a deleted file. An archived file can be published but is not served until it is active, which the lifecycle does not allow. | docs/steps/07-report.md; DEVIATIONS [07]; com/erp/file/service/FileService.java:313-346 |
+| NEW | Open a public file without signing in | anyone (e.g. a storefront visitor) | `GET` the stable public URL; cacheable for one day (`Cache-Control`, `ETag` = content hash); redirected to the storage provider's URL when it has one (S3 with a public base URL). Only raster images and PDF open inline; anything else downloads. | DEVIATIONS [07]; ADR-FILE-002 |
+| NEW | Mark a category as public-capable | staff managing categories | Category flag `allowPublic` (create and update). | V12__file_storage.sql |
+| NEW | Choose where files are stored | platform operator | Configuration selects DB, local disk or S3 for new uploads; existing files stay readable where they are. | docs/steps/07-report.md; ADR-FILE-001 |
+
+Existing stories — القصص الحالية
+| Kind | Story | Delta | Source |
+|---|---|---|---|
+| CHANGED | US-FILE-001 upload and store | Upload needs `PERM_FILE_BROWSER_CREATE` (the SRS left upload to the owning module's screen). Content goes to the configured storage provider; a SHA-256 hash is recorded; metadata shows `storageProvider`, `visibility`, `publicUrl`. Size: the category limit replaces the default; type: only a category allow-list restricts, matched on the sniffed content (PDF / Office / ZIP cannot be sniffed by the JDK — an allow-list naming them rejects them, a known limitation). Files are visible only inside the uploader's tenant. | DEVIATIONS [07] (`publicUrl` entry); docs/steps/05-report.md; FileService.java:108-163 |
+| CHANGED | US-FILE-002 time-limited secure link | The link expires after 10 minutes (the story said ~100), can be used once, and only by the user who requested it; a deleted file yields no link. | FileService.java:166-230; com/erp/file/domain/FileAccessTokenDomainService.java:28; ADR-FILE-003 |
+| CHANGED | US-FILE-003 categories with types and limits | + `allowPublic`; category code unique per tenant, stored upper-cased; the list is a POST search; a category can be deactivated but not reactivated, and its code cannot be changed. | V10; V12; com/erp/file/service/FileCategoryService.java; ADR-FILE-006 |
+| CHANGED | US-FILE-004 attach files to any module's records | A consuming module uploads over REST with the ownership triple and keeps the id as a soft reference; it validates that reference in-process through `FileDocumentLookupApi.isAvailable` (NOTIF does so for template attachments). Ownership filters the list but does not restrict who may read. | com/erp/file/crossmodule/FileDocumentLookupApi.java; FileService.java:52-55 |
+| CHANGED | US-FILE-005 archive or remove files | One endpoint, `DELETE /api/v1/files/{id}?action=ARCHIVE` (default) or `DELETE`, needing the browser UPDATE permission to archive and the DELETE permission to remove; archive → delete is allowed, un-archive is not, a removed file is final. Removal is a soft delete: the file disappears from downloads, links and public URLs but stays listed with its status; its bytes are kept. | FileService.java:280-304; com/erp/file/domain/FileDocumentDomain.java:27-31 |
+| REMOVED | SCOPE EXCLUSIONS "External filesystem storage — bytes in DB (BYTEA)" | LOCAL and S3 providers exist; DB remains the default. | docs/steps/07-report.md |
+| CHANGED | OPEN ITEMS "delete semantics" | Resolved as soft delete (RULE-FILE-006) with the visibility rules above. | FileService.java:177-180, 216-219 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 NEW product capabilities
 | Capability | Actor | Implemented behaviour | Source |
 |---|---|---|---|
-| Publish / withdraw a file | staff with `FILE:DOCUMENT:PUBLISH` | Makes a document PUBLIC (a random 32-character slug; an already public file keeps its slug) or PRIVATE again (slug cleared). Refused when the category does not allow public files. | docs/steps/07-report.md; DEVIATIONS [07] |
-| Open a public file without signing in | anyone (e.g. a storefront visitor) | `GET` the stable public URL; cacheable for one day (`Cache-Control`, `ETag` = content hash); redirected to the storage provider's URL when it has one (S3 with a public base URL). | DEVIATIONS [07] |
-| Mark a category as public-capable | staff managing categories | Category flag `allowPublic`. | V12__file_storage.sql |
-| Choose where files are stored | platform operator | Configuration selects DB, local disk or S3 for new uploads. | docs/steps/07-report.md |
+| Profile photo stored as a public image | any staff user (SEC "my profile"), or an administrator for another user | PNG / JPEG / WebP, at most 1 MB, detected from the content; a PUBLIC file at a non-guessable URL; replacing or removing it withdraws the previous one. | srs.md 1.3.0 (RULE-FILE-008..010); ADR-FILE-008 |
+| Tenant logo stored as a public image (package E) | platform administrator | as above, plus SVG without active content; the logo belongs to the tenant it depicts. | srs.md 1.3.0 §5 (planned consumer) |
 
 CHANGED behaviour of existing stories
 | Story | Delta | Source |
 |---|---|---|
-| US-FILE-001 upload and store | Content goes to the configured storage provider; a SHA-256 hash is recorded; metadata shows `storageProvider`, `visibility`, `publicUrl`. Files are visible only inside the uploader's tenant. | DEVIATIONS [07] (`publicUrl` entry); docs/steps/05-report.md |
-| US-FILE-002 time-limited secure link | Unchanged for private files (single-use token). | DEVIATIONS [07] |
-| US-FILE-003 categories with types and limits | + `allowPublic`; category code unique per tenant. | V10, V12 |
-
-Scope exclusion "External filesystem storage — bytes in DB (BYTEA)" no longer holds: LOCAL and S3
-providers exist; DB remains the default.
+| US-FILE-004 attach files to any module's records | A core module that needs a public image (photo, logo) uses the in-process `FileImageStoreApi` instead of the REST upload; such images carry no category. | XM-FILE-002; ADR-FILE-008 |

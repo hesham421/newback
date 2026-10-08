@@ -38,3 +38,16 @@ registry row have no endpoint at all.
 - Two SRS operations stay unbuilt until a SEC change set takes them up. The screens must not offer those buttons as
   working.
 - Non-breaking: no REQ, RULE or DBF changes. Declaring an endpoint that already exists changes no behaviour.
+
+## Note — 2026-10-08 (vendored analysis)
+The contract ids this ADR declares — API-SEC-032, API-SEC-033, API-SEC-034, API-SEC-035, API-SEC-036 —
+and the change set it refers to (CS-SEC-001, SEC v2, never implemented) exist nowhere in the vendored
+analysis: `governance/analysis/modules/SEC/` carries no API-SEC catalogue (it lived in the dropped
+P3_1 stage), and CS-SEC-001 is mentioned only in `governance/analysis/platform/project-registry.md`
+as unimplemented. The five endpoints themselves are as built and are recorded by path in
+`P1/srs-sec.md` → "Implementation Addendum — erp-core 1.2.0" §1 (`GET /api/v1/sec/users/{id}`,
+`GET /api/v1/sec/roles/{id}`, `PUT /api/v1/sec/roles/{id}`, `GET /api/v1/sec/roles/{id}/grants`,
+`POST /api/v1/sec/signup-requests/search`, each with the permission this ADR names). The two
+DEFERRED operations are still unbuilt at erp-core 1.2.0: `PERM_SEC_ROLES_DELETE` is registered and
+consumed by no gate, and `PERM_SEC_MODULE_REGISTRY_UPDATE` gates the three registration endpoints
+rather than a deactivation (ADR-SEC-067).

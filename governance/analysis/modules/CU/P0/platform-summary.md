@@ -92,8 +92,9 @@ SRS is produced in P1 (SRS Governance Engine) — never here.
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 01–12 (plan), 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Steps          : 01–12, 14, 15 (shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 The full description of the implemented platform (erp-core library + consuming apps, the new core
 modules tenant / audit / events / sequence / report, conventions, release policy) is recorded once in
@@ -101,9 +102,26 @@ modules tenant / audit / events / sequence / report, conventions, release policy
 erp-core 1.2.0" (decision recorded there).
 
 CU's own platform-relevant changes:
-| Change | Source |
-|---|---|
-| Settings: platform default + tenant override, typed cached `SettingsApi`, `?scope=TENANT` or `PLATFORM` on the configuration API | docs/steps/09-report.md |
-| `com.erp.common` is public API of the versioned library (`AuditableEntity` / `GlobalAuditableEntity`, `ApiResponse`, `LocalizedException`, `SpecBuilder`, `PageableBuilder`, `GlobalExceptionHandler`) | docs/RELEASE.md |
-| Events capability moved to the `com.erp.events` core module (async, after commit) | docs/steps/08-report.md |
-| Error handling hardening: 404 `NOT_FOUND`, 400 for overflowing `page`, wrapped `LocalizedException` (1.2.0) | docs/steps/15-report.md |
+| Kind | Change | Source |
+|---|---|---|
+| CHANGED | Module 1.4 Common Utils is no longer ROOT: `com.erp.cu` depends on tenant (`CORE_TENANT` FK, `TenantContext`), SEC (permission SPI) and audit (`@Audited`); the four code capabilities it grouped (filtering, exceptions, i18n, events) live in the foundation packages `com.erp.common` and `com.erp.events`, which every module — CU included — consumes | erp-core/src/main/java/com/erp/{common,events,cu}; ../P1/srs-cu.md §6 |
+| NEW | Settings: platform default + tenant override, typed cached `SettingsApi` (no TTL, evicted on CU writes only, provider chosen by the application), `?scope=TENANT` or `PLATFORM` on the configuration API; platform defaults are managed from the PLATFORM tenant only (`PLATFORM_SETTINGS_MANAGE`, refusal 403 `ACCESS_DENIED`) | docs/steps/09-report.md; ../P1/srs-cu.md RULE-CU-004 … 008 |
+| CHANGED | Dependency map line "ALL → USES → Common Utils: exceptions / config / events / specification-filtering": only *config* is served by `com.erp.cu` (`SettingsApi`, with no core consumer yet); the rest is `com.erp.common` / `com.erp.events` | ../P1/srs-cu.md §6 |
+| CHANGED | Events capability moved to the `com.erp.events` core module (asynchronous, after commit); CU publishes no event | docs/steps/08-report.md |
+| CHANGED | Error handling hardening (1.2.0): 404 `NOT_FOUND`, 400 for an overflowing `page`, wrapped `LocalizedException` answered with its own code | docs/steps/15-report.md |
+
+Note: `com.erp.common` is public API of the versioned library (`AuditableEntity` / `GlobalAuditableEntity`,
+`ApiResponse`, `LocalizedException`, `SpecBuilder`, `PageableBuilder`, `GlobalExceptionHandler`); its release
+policy is platform-wide (`docs/RELEASE.md`), not a CU policy.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (commit 6b01816; CHANGELOG [Unreleased]); no CU behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | `AppConfigurationDomain` | uses the shared `com.erp.common.domain.DomainRules` (`assertNotBlank`, `assertUnique`) | erp-core/src/main/java/com/erp/cu/domain/AppConfigurationDomain.java:39-40,51 |
+| CHANGED | `ConfigurationService.owner` | uses `TenantContext.isPlatform()` (new in 1.3.0) | erp-core/src/main/java/com/erp/cu/service/ConfigurationService.java:214 |
+
+No platform-level delta for CU (modules, dependency map and build order unchanged from the 1.2.0 addendum).

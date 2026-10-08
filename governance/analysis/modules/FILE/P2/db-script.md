@@ -179,35 +179,73 @@ Pipeline Status Grid: FILE · P2 = done
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 07 (migrations V5, V8, V10, V12)
+Steps          : 04, 05, 06, 07 (migrations V5, V7, V8, V10, V12)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
+
+Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` unless stated otherwise
+(`com/erp/…` = `erp-core/src/main/java/com/erp/…`). No DBF ids are minted here.
+
+### Migration chain — سلسلة الترحيل
+| Kind | Migration | What it carries for FILE | Source |
+|---|---|---|---|
+| CHANGED | `V5__file_schema.sql` | `FILE_CATEGORY`, `FILE_DOCUMENT`, the two sequences, PK / UQ / CHK / FK and the three indexes — DDL verbatim from SECTION 4 (squashed in step 04 from the old `V8__file_schema`). Sequences are `CACHE 1` (the script said `NO CACHE`; equivalent). | V5 L12-13, L18-89; docs/steps/04-report.md → "Old → new mapping" |
+| NEW | `V7__sec_seed.sql` | FILE's SEC registry rows: module `FILE`, screens `FILE_CATEGORIES` / `FILE_BROWSER`, the 8 `PERM_FILE_*` actions, role `FILE_ADMIN`, module / screen / action grants to `SYS_ADMIN` and `FILE_ADMIN`. | V7 L39, L70-71, L129-136, L153, L166-199 |
+| NEW | `V8__mdl_seed.sql` | The `FILE_FILE_STATUS` / `FILE_FILE_TYPE` lookup types (owner FILE) and their 3 + 5 values in `MDL_LOOKUP_TYPE` / `MDL_LOOKUP_VALUE`. | V8 L25-31, L38-62 |
+| NEW | `V10__tenant_schema.sql` | `TENANT_ID`, `VERSION`, tenant FK / index, per-tenant unique code (step 05). | V10 |
+| NEW | `V12__file_storage.sql` | Storage SPI and public-file columns, CHECKs, slug index, `ALLOW_PUBLIC`, `FILE:DOCUMENT:PUBLISH` seed (step 07). Its one relaxation, `FILE_CONTENT DROP NOT NULL`, is prescribed by the step file. | V12 |
+
+### Per-table deltas — التغييرات لكل جدول
+| Kind | Table | Delta | Migration |
+|---|---|---|---|
+| NEW | FILE_CATEGORY / FILE_DOCUMENT | + `TENANT_ID BIGINT NOT NULL` (backfilled 1 = PLATFORM, default dropped, `FK_<TABLE>_TENANT` → `CORE_TENANT(ID)`, `IDX_<TABLE>_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 L76-77, L96-97, L115-116, L134-135 |
+| CHANGED | FILE_CATEGORY | `UQ_FILE_CATEGORY_CATEGORY_CODE` → `(TENANT_ID, CATEGORY_CODE)` | V10 L197-198 |
+| NEW | FILE_CATEGORY | + `ALLOW_PUBLIC BOOLEAN NOT NULL DEFAULT FALSE` — a native `BOOLEAN`, not the `SMALLINT 0/1 + CHK` pattern of `IS_ACTIVE_FL`; the entity maps it without a converter | V12 L54; com/erp/file/entity/FileCategory.java:74-77 |
+| CHANGED | FILE_CATEGORY.CATEGORY_CODE | Stored trimmed and upper-cased: the entity normalises it on persist and update and the service probes the normalised form; no DB CHECK enforces the case | com/erp/file/entity/FileCategory.java:79-97; com/erp/file/service/FileCategoryService.java:65, 157-159 |
+| NEW | FILE_DOCUMENT | + `STORAGE_PROVIDER VARCHAR(8) NOT NULL DEFAULT 'DB'` with `CHK_FILE_DOCUMENT_STORAGE_PROVIDER (DB, LOCAL, S3)` — the CHECK closes the SPI's key set; + `STORAGE_REF VARCHAR(512)` (DB = row id, LOCAL = relative path, S3 = object key); + `VISIBILITY VARCHAR(8) NOT NULL DEFAULT 'PRIVATE'` (`CHK_FILE_DOCUMENT_VISIBILITY`); + `PUBLIC_SLUG VARCHAR(64)` (`CHK_FILE_DOCUMENT_PUBLIC_SLUG`: PUBLIC if and only if slug present); + `CONTENT_HASH VARCHAR(64)` (SHA-256 hex, public ETag) | V12 L16-20, L30-40 |
+| NEW | FILE_DOCUMENT | backfill of existing rows: `DB` / `ID::text` / `PRIVATE` / `encode(sha256(FILE_CONTENT),'hex')` | V12 L23-28 |
+| CHANGED | FILE_DOCUMENT.FILE_CONTENT | becomes nullable (only the DB provider fills it) | V12 L32 |
+| NEW | FILE_DOCUMENT | partial unique index `UQ_FILE_DOCUMENT_PUBLIC_SLUG (TENANT_ID, PUBLIC_SLUG) WHERE PUBLIC_SLUG IS NOT NULL` | V12 L43-44; DEVIATIONS [07] |
+| NEW | SEC_ACTION_REG / SEC_ROLE_ACTION_GRANT (seed) | `FILE:DOCUMENT:PUBLISH` on screen `FILE_BROWSER`, granted to PLATFORM's `SYS_ADMIN` and `FILE_ADMIN` (copied to new tenants by provisioning) | V12 L60-69 |
+| NEW | SEC_* registry (seed) | module `FILE`, screens, 8 `PERM_FILE_*` actions, role `FILE_ADMIN`, grants (SRS B4 said "no seed for PERM_*") | V7 |
+| NEW | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE (seed) | `FILE_FILE_STATUS` (ACTIVE, ARCHIVED, DELETED), `FILE_FILE_TYPE` (IMAGE, DOCUMENT, SPREADSHEET, ARCHIVE, OTHER), owner module FILE, bilingual labels, sort orders | V8 L30-31, L53-62 |
+
+### Deviations from this analysis — الانحرافات
+| Kind | Analysis said | Implemented | Source |
+|---|---|---|---|
+| CHANGED | `FILE_CONTENT BYTEA NOT NULL`, bytes always in-database (header, design note 4, DBF-0008) | nullable; LOCAL / S3 providers keep content outside the row; the provider key is recorded per row and closed by CHECK | V12 L32-35; step 07; DEVIATIONS [07]; ADR-FILE-001 |
+| CHANGED | `UNIQUE (CATEGORY_CODE)` | `(TENANT_ID, CATEGORY_CODE)` | V10 L197-198; step 05 |
+| CHANGED | "Lookup Tables: None — LOV-FILE-001/002 are runtime-loaded codes (no MD_MASTER_LOOKUP)"; design note 3 "no lookup table, no CHECK"; BLOCK 8 "none" | The two LOVs are rows of MDL's `MDL_LOOKUP_TYPE` / `MDL_LOOKUP_VALUE` seeded by V8 (owner FILE). `FILE_TYPE_ID` / `FILE_STATUS_ID` stay plain code columns with no FK and no CHECK, as designed; the value lists live in MDL and are served through `MdlLookupApi`. | V8 L25-62; com/erp/file/service/FileLookupService.java:48-57; ADR-FILE-005 |
+| NEW | (no column) | `ALLOW_PUBLIC` as native `BOOLEAN` — departs from the module's `IS_*_FL SMALLINT` flag convention; no converter on the entity | V12 L54; FileCategory.java:74-77 |
+| NEW | (no rule) | `CATEGORY_CODE` normalised to upper-case at the application layer (persist / update / pre-check), not by the database | FileCategory.java:79-97 |
+| NEW | (beyond the step file) | `CONTENT_HASH` (ETag without hashing per request) and the three CHECKs; `CHK_FILE_DOCUMENT_STORAGE_PROVIDER` means an application-contributed provider can only replace DB / LOCAL / S3, never add a key | DEVIATIONS [07] "Design `FILE_DOCUMENT` columns"; com/erp/autoconfigure/FileStorageAutoConfiguration.java:43-45 |
+| CHANGED | `NO CACHE` on both sequences | `CACHE 1` (equivalent) | V5 L12-13 |
+| NEW | XM REGISTER: one SOFT-READ (SEC) | + HARD-FK `CORE_TENANT` on both tables; + application-layer read of MDL lookup values (no physical FK; no XM id minted here) | V10 L115-116; V8 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.4 — shared image store
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
-Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` at that tag unless
-stated otherwise. No DBF ids are minted here.
+**No schema change and no migration.** Image-store documents use the existing `FILE_DOCUMENT` columns:
+`FILE_CATEGORY_FK` NULL, `VISIBILITY = 'PUBLIC'` with a `PUBLIC_SLUG` (so `CHK_FILE_DOCUMENT_PUBLIC_SLUG` and
+`UQ_FILE_DOCUMENT_PUBLIC_SLUG` hold), `FILE_STATUS_ID = 'ACTIVE'`, `FILE_TYPE_ID = 'IMAGE'`, `OWNER_TYPE` /
+`OWNER_ID` / `MODULE_CODE` of the consumer (`SEC_USER` / user id / `SEC`). Discard sets `FILE_STATUS_ID =
+'DELETED'`, `VISIBILITY = 'PRIVATE'`, `PUBLIC_SLUG = NULL`.
 
-### Migration chain
-- Squashed in step 04: `FILE_CATEGORY` and `FILE_DOCUMENT` are created by `V5__file_schema.sql` (DDL
-  verbatim from the old `V8__file_schema`); the `FILE_FILE_STATUS` / `FILE_FILE_TYPE` lookup rows live in
-  MDL (`V8__mdl_seed.sql`); the FILE registry rows and `FILE_ADMIN` role are in `V7__sec_seed.sql`. Full
-  old → new mapping: `docs/steps/04-report.md` → "Old → new mapping".
-- Later FILE changes are additive: `V10__tenant_schema.sql` (step 05) and `V12__file_storage.sql`
-  (step 07). V12's one relaxation, `FILE_CONTENT DROP NOT NULL`, is prescribed by the step file.
+Query change (no DDL): the public lookup (`FileDocumentRepository.findPublicMetadataTupleBySlug`) accepts
+`FILE_CATEGORY_FK IS NULL` besides a category with `ALLOW_PUBLIC = TRUE` (RULE-FILE-010).
 
-### Per-table deltas
-| Table | Delta | Migration |
-|---|---|---|
-| FILE_CATEGORY / FILE_DOCUMENT | + `TENANT_ID BIGINT NOT NULL` (backfilled 1 = PLATFORM, default dropped, `FK_<TABLE>_TENANT` → `CORE_TENANT(ID)`, `IDX_<TABLE>_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 |
-| FILE_CATEGORY | `UQ_FILE_CATEGORY_CATEGORY_CODE` → `(TENANT_ID, CATEGORY_CODE)` | V10 |
-| FILE_CATEGORY | + `ALLOW_PUBLIC BOOLEAN NOT NULL DEFAULT FALSE` | V12 §2 |
-| FILE_DOCUMENT | + `STORAGE_PROVIDER VARCHAR(8) NOT NULL DEFAULT 'DB'` (`CHK_FILE_DOCUMENT_STORAGE_PROVIDER`: DB, LOCAL, S3); + `STORAGE_REF VARCHAR(512)` (DB = row id, LOCAL = relative path, S3 = object key); + `VISIBILITY VARCHAR(8) NOT NULL DEFAULT 'PRIVATE'` (`CHK_FILE_DOCUMENT_VISIBILITY`); + `PUBLIC_SLUG VARCHAR(64)` (`CHK_FILE_DOCUMENT_PUBLIC_SLUG`: PUBLIC if and only if slug present); + `CONTENT_HASH VARCHAR(64)` (SHA-256 hex, public ETag) | V12 §1 |
-| FILE_DOCUMENT | backfill of existing rows: `DB` / `ID::text` / `PRIVATE` / `encode(sha256(FILE_CONTENT),'hex')` | V12 §1 |
-| FILE_DOCUMENT | `FILE_CONTENT` becomes nullable (only the DB provider fills it) | V12 §1 |
-| FILE_DOCUMENT | partial unique index `UQ_FILE_DOCUMENT_PUBLIC_SLUG (TENANT_ID, PUBLIC_SLUG) WHERE PUBLIC_SLUG IS NOT NULL` | V12 §1; DEVIATIONS [07] |
-| SEC_ACTION_REG / SEC_ROLE_ACTION_GRANT (seed) | `FILE:DOCUMENT:PUBLISH` on screen `FILE_BROWSER`, granted to PLATFORM's `SYS_ADMIN` and `FILE_ADMIN` (copied to new tenants by provisioning) | V12 §3 |
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5, review round 1 — `FILE_DOCUMENT.REQUIRED_AUTHORITY` (restricted documents, RULE-FILE-012)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
-### Deviations from this analysis
-- Analysis: `FILE_CONTENT BYTEA NOT NULL`, bytes always in-database. Implemented: nullable; LOCAL / S3
-  providers keep content outside the row (step 07; DEVIATIONS [07]).
-- Analysis: `UNIQUE (CATEGORY_CODE)`. Implemented: `(TENANT_ID, CATEGORY_CODE)` (step 05).
-- Added beyond the step file: `CONTENT_HASH` (ETag without hashing per request) and the three CHECKs
-  (DEVIATIONS [07] "Design `FILE_DOCUMENT` columns").
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V22__file_document_required_authority.sql`
+(the number reserved for this fix). Additive only: one nullable column, no default, no backfill (every existing
+document stays unrestricted). No DBF id (the 1.2.0 addendum's precedent for columns added after the original script).
+
+| Table | Column | Type | Null | Default | Entity field | Meaning |
+|---|---|---|---|---|---|---|
+| FILE_DOCUMENT | REQUIRED_AUTHORITY | VARCHAR(100) | NULL | — | `FileDocument.requiredAuthority` (`updatable = false`) | the authority a caller must hold, besides the FILE permission, to see or act on the document (RULE-FILE-012); NULL = an ordinary document. Width 100 = `SEC_ACTION_REG.PERMISSION_CODE`. Set only by the private store (TENANT export archives: `PLATFORM_TENANT_MANAGE`). |
+
+No index (the column is only read together with an owner or id lookup), no constraint.

@@ -61,21 +61,25 @@ No registry XM row anywhere in the platform currently targets SEC with status DE
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 06, 07 (migrations V4, V7, V10, V11, V12)
+Steps          : 01, 04, 05, 06, 07, 10, 15 (migrations V4, V7, V10, V11, V12)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Registry deltas only; detail in `db-script-sec.md` → "Implementation Addendum — erp-core 1.2.0". No DBF or
 XM ids are assigned here.
 
 Tables
-| Table | ENT | Delta | Migration |
-|---|---|---|---|
-| SEC_CUSTOMER_VERIFY_TOKEN | CustomerVerifyToken (no ENT id yet) | NEW, tenant-scoped (11 columns) | V11__sec_realms.sql |
-| 10 tenant-scoped SEC tables | ENT-SEC-001..003, 007..013 | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION` | V10__tenant_schema.sql |
-| SEC_MODULE_REG / SEC_SCREEN_REG / SEC_ACTION_REG | ENT-SEC-004..006 | + `VERSION` only (global) | V10 |
-| 8 SEC tables (user-role, 3 grants, session, audit log, reset token, sign-up) | ENT-SEC-003, 007..013 | + nullable `CREATED_BY/AT`, `UPDATED_BY/AT` | V10 |
-| SEC_USER | ENT-SEC-001 | + `REALM` | V11 |
-| SEC_ROLE | ENT-SEC-002 | + `IS_SUPER` | V11 |
+| Kind | Table | ENT | Delta | Migration |
+|---|---|---|---|---|
+| CHANGED | all 13 SEC tables | ENT-SEC-001..013 | primary keys `BIGINT NOT NULL` fed by 13 named `SEQ_SEC_*` sequences (`CACHE 1`); no IDENTITY column (ADR-SEC-068) | V4__sec_schema.sql:17-31 |
+| NEW | SEC_CUSTOMER_VERIFY_TOKEN | CustomerVerifyToken (no ENT id yet) | tenant-scoped (11 columns), `SEQ_SEC_CUSTOMER_VERIFY_TOKEN` | V11__sec_realms.sql |
+| CHANGED | 10 tenant-scoped SEC tables | ENT-SEC-001..003, 007..013 | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION` | V10__tenant_schema.sql |
+| CHANGED | SEC_MODULE_REG / SEC_SCREEN_REG / SEC_ACTION_REG | ENT-SEC-004..006 | + `VERSION` only (global) | V10 |
+| CHANGED | 8 SEC tables (user-role, 3 grants, session, audit log, reset token, sign-up) | ENT-SEC-003, 007..013 | + nullable `CREATED_BY/AT`, `UPDATED_BY/AT` | V10 |
+| CHANGED | SEC_USER | ENT-SEC-001 | + `REALM` | V11 |
+| CHANGED | SEC_ROLE | ENT-SEC-002 | + `IS_SUPER` | V11 |
+| NEW | seed rows | ENT-SEC-002, 004..009 | V7: 5 modules, 17 screens, 38 actions, 4 roles (`SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN`), 8 / 20 / 59 module / screen / action grants, the bootstrap `admin`; V10 §6: `PLATFORM` module, screen and 2 actions; V12 §3: `FILE:DOCUMENT:PUBLISH` | V7, V10, V12 |
+| NEW | NOTIF_TEMPLATE rows seeded by a SEC script | — (NOTIF table) | `CUSTOMER_VERIFY_EMAIL`, `CUSTOMER_PASSWORD_RESET` per existing tenant | V11 §6 |
 
 Constraints changed (same names, composite with `TENANT_ID`)
 `UQ_SEC_USER_USERNAME (TENANT_ID, REALM, USERNAME)`, `UQ_SEC_USER_EMAIL (TENANT_ID, REALM, EMAIL)`,
@@ -85,11 +89,43 @@ Constraints changed (same names, composite with `TENANT_ID`)
 `UQ_SEC_SCREEN_REG_PAGE`, `UQ_SEC_ACTION_REG_PERM`) stay global.
 
 Lookups
-| Key | Delta | Owner |
-|---|---|---|
-| USER_STATUS | 4 values (CHECK-constrained, ADR-SEC-001 pattern) | SEC |
-| REALM | 2 values `STAFF`, `CUSTOMER` (CHECK-constrained) | SEC |
+| Kind | Key | Delta | Owner |
+|---|---|---|---|
+| CHANGED | USER_STATUS | 4 values (CHECK-constrained, ADR-SEC-001 pattern) | SEC |
+| NEW | REALM | 2 values `STAFF`, `CUSTOMER` (CHECK-constrained) | SEC |
 
 XM index
 SEC is no longer free of outbound references: every `TENANT_ID` is a HARD FK to `CORE_TENANT` (tenant
-module, no analysis folder; see `analysis/modules/SEC/P0/platform-summary.md` addendum). No XM id assigned.
+module — `analysis/modules/TENANT/` since 2026-10-07; see also `analysis/modules/SEC/P0/platform-summary.md` addendum). No XM id assigned.
+
+Sequences
+Last DBF: DBF-SEC-104 (no ids minted) · Last XM: none assigned.
+Physical sequences: 14 — the 13 `SEQ_SEC_<TABLE>` of V4 plus `SEQ_SEC_CUSTOMER_VERIFY_TOKEN` (V11); the
+"none: IDENTITY" line of §3 above was never implemented. §1's `NUMERIC` typing of 13 FK columns
+disagrees with §3 and the script (`BIGINT`); recorded in `db-script-sec.md` → addendum "Deviations".
+
+Decisions
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-SEC-068 (ACCEPTED) | sequences (`SEQ_SEC_*`) instead of IDENTITY for every SEC primary key — the as-built record; ADR-SEC-035 (v2) stated the same decision citing ids absent from this analysis |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — `SEC_USER` profile and password facts (package G added no schema)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-sec.md` → "Implementation Addendum — erp-core 1.3.0".
+
+Tables
+| Table | ENT | Delta | Migration |
+|---|---|---|---|
+| SEC_USER | ENT-SEC-001 | + `PHONE VARCHAR(30)`, `JOB_TITLE_AR VARCHAR(150)`, `JOB_TITLE_EN VARCHAR(150)`, `PREFERRED_LOCALE VARCHAR(5)`, `PHOTO_FILE_ID BIGINT`, `PASSWORD_CHANGE_REQUIRED_FL BOOLEAN NOT NULL DEFAULT FALSE`, `PASSWORD_CHANGED_AT TIMESTAMPTZ` (DBF-SEC-117..123); + `CHK_SEC_USER_LOCALE` | V16__sec_user_profile.sql |
+
+Lookups: unchanged (`PREFERRED_LOCALE` is a CHECK-constrained value set, `ar` / `en`).
+
+XM index
+| XM id | Direction | Target | Kind |
+|---|---|---|---|
+| XM-SEC-006 | SEC → FILE | `FILE_DOCUMENT.ID` from `SEC_USER.PHOTO_FILE_ID` | SOFT-READ, no FK |
+
+"P2 1.3.0: SEC — 13 tables (+1 V11 table), 123 DBF, 1 XM (XM-SEC-006)"

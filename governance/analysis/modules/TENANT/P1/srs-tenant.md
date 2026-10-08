@@ -2,7 +2,7 @@
 ══════════════════════════════════════════════════════════════════
 Module : TENANT   Version : v1 (as-built baseline)   Profile : erp
 Inputs : prd-tenant, module-registry-tenant, business-policies-tenant; the code at main @ 2274f86 (erp-core 1.2.0 behaviour)
-Counts : ENT 1 · REQ 23 · AC 23 · RULE 9 · SCR-REQ 1 · XM 2 · ADR 1
+Counts : ENT 1 · REQ 23 · AC 23 · RULE 13 (001…009, 012…015 — 010/011 are reserved for tenant-maturity package C3) · SCR-REQ 1 · XM 2 · ADR 1
 ══════════════════════════════════════════════════════════════════
 
 Written from the code, not before it. Every REQ / AC / RULE names the code location it was read from;
@@ -454,6 +454,42 @@ Message    : —
 Traces     : REQ-TENANT-011, REQ-TENANT-012
 Source     : tenant/security/TenantResolutionFilter.java:89-99, :143-147
 
+### RULE-TENANT-012 — ترتيب تحديد مستأجر الطلب / Request-tenant resolution order
+Scope      : request tenant (both security chains)
+Trigger    : on every web request
+Statement  : The system shall resolve the request tenant from exactly the first source present, in this fixed order: (1) the `{tenantCode}` variable of a path matching `erp.core.tenant.path-tenant-paths`, (2) the access token's `tid` claim, (3) the `X-Tenant-Code` header, (4) none — an exempt path proceeds, another public path is refused, a protected path is left to authorization; a later source never overrides an earlier one.
+Data source: request path, token claim, header; `erp.core.tenant.exempt-paths`, `erp.core.security.public-paths` (table "Tenant resolution order" in STANDALONE)
+Message    : per source — 404 `TENANT_NOT_FOUND`, 403 `TENANT_SUSPENDED`, 400 `TENANT_REQUIRED`
+Traces     : REQ-TENANT-011, REQ-TENANT-012, REQ-TENANT-013, REQ-TENANT-014
+Source     : tenant/security/TenantResolutionFilter.java:81-128, :160-171; autoconfigure/ErpCoreProperties.java:233-261
+
+### RULE-TENANT-013 — ربط المستأجر بالخيط وبجلسة Hibernate / Tenant binding to the thread and the Hibernate session
+Scope      : `TenantContext`; every tenant-scoped data access
+Trigger    : whenever the tenant is set, switched or read
+Statement  : The system shall hold the request tenant in a thread-local value; `runAs` / `callAs` shall restore the previous tenant (or none) afterwards, also when nested or failing; because Hibernate binds the tenant when a session opens, a switch shall take effect only for sessions opened after it (`runAs` around the transactional call, or `REQUIRES_NEW` inside it); the resolution filter's `CORE_TENANT` lookups shall run as PLATFORM.
+Data source: `TenantContext.CURRENT`; `TenantIdentifierResolver.resolveCurrentTenantIdentifier()`
+Message    : — (programming contract; a violation surfaces as `TENANT_CONTEXT_MISSING` or as a read in the wrong tenant)
+Traces     : REQ-TENANT-013, REQ-TENANT-017, REQ-TENANT-018
+Source     : tenant/TenantContext.java:15-27, :79-92; tenant/config/TenantIdentifierResolver.java:7-10; tenant/security/TenantResolutionFilter.java:173-175; events/support/TenantAndSecurityContextTaskDecorator.java:19
+
+### RULE-TENANT-014 — التساهل أثناء الإقلاع فقط ولا مستأجر جذر / Bootstrap tolerance only; no root tenant
+Scope      : `TenantIdentifierResolver`
+Trigger    : on every session open
+Statement  : While the application context is still being built, a session opened without a tenant shall resolve to the sentinel `-1` (matches no row, inserts nothing); from the `SmartLifecycle` phase just below the web server's start (`DEFAULT_PHASE - 2049`) on, it shall fail with `TENANT_CONTEXT_MISSING`; the resolver shall never relax again, and `isRoot` shall stay `false`, so no tenant — PLATFORM included — reads another tenant's rows.
+Data source: `TenantIdentifierResolver.bootstrapping`; `TenantHibernateConfiguration.PHASE`
+Message    : en: "The operation ran without a tenant context" · ar: "نُفّذت العملية دون سياق مستأجر"
+Traces     : REQ-TENANT-016, REQ-TENANT-017
+Source     : tenant/config/TenantIdentifierResolver.java:24-25, :31, :36-42, :50-52; tenant/config/TenantHibernateConfiguration.java:34, :49-52, :55-58; docs/DEVIATIONS.md [05] (resolver), [15] (resolver flag)
+
+### RULE-TENANT-015 — حقول البحث المسموحة ولا تخزين مؤقت / Search allow-list and no caching
+Scope      : ENT-TENANT-001 (read side)
+Trigger    : on search, list, status check
+Statement  : The system shall accept filters and sorts on tenants only for `id`, `code`, `nameAr`, `nameEn`, `statusCode`, `createdAt` (any other field is refused 400 `VALIDATION_ERROR` naming the field); the list shall be the search sorted by `id`; the tenant service and the resolution filter shall cache nothing, so every status check reads the row (`CORE_TENANT` is not on the caching approved register).
+Data source: `TenantService.ALLOWED_SORT_FIELDS`; `SpecBuilder` / `PageableBuilder`
+Message    : the shared `VALIDATION_ERROR` (`UNSUPPORTED_FILTER_FIELD` / `UNSUPPORTED_FILTER_OPERATOR` field detail)
+Traces     : REQ-TENANT-005, REQ-TENANT-007, REQ-TENANT-010
+Source     : tenant/service/TenantService.java:51-52, :59-61, :123-126, :133-139; common/search/SpecBuilder (unsupported-field refusal, DEVIATIONS [15])
+
 ## A6 — Lookups
 
 **STATUS_CODE of ENT-TENANT-001** — owned by TENANT — control type: fixed value set (CHECK constraint, not an MDL lookup)
@@ -560,13 +596,13 @@ lines 143–149, `messages_ar.properties` lines 140–146. Shared codes the endp
 | P0.5 | REQ | AC | RULE | ENT | SCR-REQ |
 |---|---|---|---|---|---|
 | US-TENANT-001 | REQ-TENANT-001…004, -015, -021, -022 | AC-TENANT-001…004, -015, -021, -022 | RULE-TENANT-001, -002, -003, -007 | ENT-TENANT-001 | SCR-REQ-TENANT-001 |
-| US-TENANT-002 | REQ-TENANT-005, -006, -007, -015 | AC-TENANT-005, -006, -007, -015 | — | ENT-TENANT-001 | SCR-REQ-TENANT-001 |
-| US-TENANT-003 | REQ-TENANT-008, -009, -010, -015, -022 | AC-TENANT-008, -009, -010, -015, -022 | RULE-TENANT-004, -005, -006 | ENT-TENANT-001 | SCR-REQ-TENANT-001 |
-| US-TENANT-004 | REQ-TENANT-010, -012, -013, -014, -016, -023 | AC-TENANT-010, -012, -013, -014, -016, -023 | RULE-TENANT-006, -009 | ENT-TENANT-001 | — |
-| US-TENANT-005 | REQ-TENANT-011 | AC-TENANT-011 | RULE-TENANT-009 | ENT-TENANT-001 | — |
+| US-TENANT-002 | REQ-TENANT-005, -006, -007, -015 | AC-TENANT-005, -006, -007, -015 | RULE-TENANT-015 | ENT-TENANT-001 | SCR-REQ-TENANT-001 |
+| US-TENANT-003 | REQ-TENANT-008, -009, -010, -015, -022 | AC-TENANT-008, -009, -010, -015, -022 | RULE-TENANT-004, -005, -006, -015 | ENT-TENANT-001 | SCR-REQ-TENANT-001 |
+| US-TENANT-004 | REQ-TENANT-010, -012, -013, -014, -016, -023 | AC-TENANT-010, -012, -013, -014, -016, -023 | RULE-TENANT-006, -009, -012, -013, -014 | ENT-TENANT-001 | — |
+| US-TENANT-005 | REQ-TENANT-011 | AC-TENANT-011 | RULE-TENANT-009, -012 | ENT-TENANT-001 | — |
 | US-TENANT-006 | REQ-TENANT-001, -020 | AC-TENANT-001, -020 | RULE-TENANT-007, -008 | ENT-TENANT-001 | — |
 | US-TENANT-007 | REQ-TENANT-019 | AC-TENANT-019 | — | ENT-TENANT-001 | — |
-| US-TENANT-008 | REQ-TENANT-017, -018 | AC-TENANT-017, -018 | — | — | — |
+| US-TENANT-008 | REQ-TENANT-017, -018 | AC-TENANT-017, -018 | RULE-TENANT-013, -014 | — | — |
 
 Every story traces to ≥ 1 REQ; every REQ has one AC; every RULE traces to a REQ; the screen traces to
 its REQs. No orphan, no dangling id.
@@ -583,3 +619,1151 @@ its REQs. No orphan, no dangling id.
 Both actions are effective only inside the PLATFORM tenant (RULE-TENANT-007). The frontend's PLATFORM
 screen archive is `governance/frontend/modules/PLATFORM/tests/`.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+| Kind | Item | Source |
+|---|---|---|
+| — | No delta. Endpoints (B5), rules (A5), error codes (STANDALONE), permissions (B4), entity (A3) and dependencies (A8) above are the 1.2.0 state, verified against `docs/api-docs/tenant/index.md` and `endpoints/platform-tenants.md`. | docs/steps/05-report.md; docs/DEVIATIONS.md [05], [07], [15] |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C3 — automated tenant-isolation tests (plan §5 C.3, item 12)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+REQ-TENANT-016 (row-level isolation) and RULE-TENANT-008 (provisioning SQL names `TENANT_ID`) state the
+isolation guarantee, but nothing failed the build when a new entity or a new raw SQL statement escaped it.
+This addendum turns the guarantee into one requirement with three checkable parts: the entity set, the HTTP
+behaviour of every core module, and the raw-SQL rule. It names the test or review rule that holds each part.
+Ids continue the module's sequence from the highest number ever issued (REQ / AC 023, RULE 009; the TENANT
+analysis has no pre-vendoring history). No ENT, DBF, XM, endpoint, permission, error code, schema change or
+migration is added.
+
+### 1. Requirements (§A4) — NEW
+
+### REQ-TENANT-024 — ضمان عزل المستأجرين / Tenant isolation guarantee
+Pattern    : ubiquitous
+Statement  : The system shall keep every tenant-scoped entity under Hibernate's tenant discriminator — every JPA entity of erp-core (every `@Entity` under `com.erp` in erp-core; the reference application declares none) extends `AuditableEntity` and so carries `@TenantId` on `TENANT_ID`, except the documented global set (RULE-TENANT-010) — so that a caller's search, list and read by id in every core module return only its own tenant's rows and an id of another tenant answers 404; and every raw SQL statement on a tenant-scoped table shall name `TENANT_ID` (RULE-TENANT-011).
+Traces     : US-TENANT-004
+Entities   : ENT-TENANT-001 (FK target); every tenant-scoped entity (21 classes, listed in §3)
+Rationale  : POL-TENANT-007; REQ-TENANT-016 made checkable by the build (plan §5 C.3)
+Source     : common/domain/AuditableEntity.java:35-37; common/domain/GlobalAuditableEntity.java (the global base); tenant/config/TenantIdentifierResolver.java:36-47
+Priority   : HIGH
+#### AC-TENANT-024 — [REQ-TENANT-024]
+Given two tenants A and B provisioned through `POST /api/v1/platform/tenants`, and in each of them one row of SEC (a role), MDL (a lookup type), FILE (a document), NOTIF (a template), CU (a configuration override), SEQUENCE (a number series) and AUDIT (the `CORE_AUDIT_EVENT` row written when the role was created)
+When A's administrator searches or lists each module and asks for B's row by its id
+Then every row A receives belongs to tenant A and includes A's new row, never B's; B's id answers 404 with the module's not-found code — `SEC-404-ROLE` (`GET /api/v1/sec/roles/{id}`), `MDL-404-TYPE` (`PUT /api/v1/mdl/lookup-types/{id}`: MDL has no read-by-id endpoint; B's row stays unchanged), `FILE_DOCUMENT_NOT_FOUND` (`GET /api/v1/files/{id}`), `NOTIF_TEMPLATE_NOT_FOUND` (`GET /api/v1/notifications/templates/{id}`), `APP_CONFIGURATION_NOT_FOUND` (`GET /api/v1/common/configurations/{key}` with B's key), `NUMBER_SERIES_NOT_FOUND` (`GET /api/v1/sequence/series/{id}`); AUDIT has no read-by-id endpoint, so `GET /api/v1/audit/events?entityId=<B's role id>` answers an empty page to A while B finds its row; B sees its own rows the same way (`TenantIsolationIntegrationTest`)
+And when a JPA entity of erp-core (a production `@Entity` under `com.erp` on erp-core's classpath) outside the global set does not extend `AuditableEntity`, or a class of the global set carries `@TenantId` or is not an entity, the build fails naming the class and telling the developer to make it tenant-scoped or to add it to the global list explicitly (`TenantScopedEntityTest`)
+
+### 2. Business rules (§A5) — NEW
+
+### RULE-TENANT-010 — المجموعة العامة من الكيانات / The global entity set
+Scope      : every JPA entity of erp-core
+Trigger    : at build time (ArchUnit), whenever an entity is added
+Statement  : The system shall treat exactly these entities as global (no Hibernate `@TenantId`; they extend `GlobalAuditableEntity`, not `AuditableEntity`): `com.erp.tenant.entity.Tenant` (`CORE_TENANT`, the tenant registry); `com.erp.sec.entity.ModuleRegistry` (`SEC_MODULE_REG`), `com.erp.sec.entity.ScreenRegistry` (`SEC_SCREEN_REG`) and `com.erp.sec.entity.ActionRegistry` (`SEC_ACTION_REG`), the code-defined permission catalog; `com.erp.cu.entity.AppConfiguration` (`CU_APP_CONFIGURATION`: nullable `TENANT_ID`, `NULL` = platform default, a tenant id = that tenant's override, every query names the owner explicitly in `ConfigurationService`). Every other entity extends `AuditableEntity`. A new global entity is added to the list explicitly, with an analysis entry that says why.
+Data source: the entity classes
+Message    : — (build failure: "<class> is not tenant-scoped: extend AuditableEntity — or, only if it is truly global, add it explicitly to TenantScopedEntityTest.GLOBAL_ENTITIES with an analysis entry that says why")
+Traces     : REQ-TENANT-024
+Source     : tenant/entity/Tenant.java:32-40; sec/entity/ModuleRegistry.java:29-36; sec/entity/ScreenRegistry.java:35-45; sec/entity/ActionRegistry.java:35-45; cu/entity/AppConfiguration.java:37-41, :50
+
+### RULE-TENANT-011 — كل جملة SQL صريحة تسمّي TENANT_ID / Every raw SQL statement names TENANT_ID
+Scope      : every `JdbcTemplate` / native SQL statement on a tenant-scoped table, in every module (RULE-TENANT-008 is its provisioning case)
+Trigger    : on code review (`gov-validate-backend-feature` checklist), wherever raw SQL is added
+Statement  : The system shall name `TENANT_ID` explicitly in every raw SQL statement that touches a tenant-scoped table: as the inserted value; as a predicate on every tenant-scoped table and join of a read, update or delete; or as the selected column of a deliberate cross-tenant discovery scan whose follow-up work then runs tenant by tenant. Raw SQL bypasses Hibernate's discriminator.
+Data source: the statement text
+Message    : — (review finding)
+Traces     : REQ-TENANT-024
+Source     : `governance/rules/GOVERNANCE-RULES.md` → Governance Rules; `.claude/skills/gov-validate-backend-feature/SKILL.md`; tenant/TenantProvisioningContributor.java:14-17. Where raw SQL may live at all: `CoreLibraryRulesArchTest.rule7_raw_jdbc_only_in_documented_places`, `rule7_native_queries_only_in_tenant_sequence_audit`
+
+### 3. Verified as-built facts
+| Kind | Fact | Source |
+|---|---|---|
+| NEW (note) | Tenant-scoped entities (21, each `extends AuditableEntity`): AUDIT `AuditEvent`; FILE `FileCategory`, `FileDocument`; MDL `LookupType`, `LookupValue`; NOTIF `NotificationChannelConfig`, `NotificationInboxItem`, `NotificationLog`, `NotificationTemplate`; SEC `ActiveSession`, `AuditLogEntry`, `CustomerVerifyToken`, `PasswordResetToken`, `Role`, `RoleActionGrant`, `RoleModuleGrant`, `RoleScreenGrant`, `SignupRequest`, `User`, `UserRoleAssignment`; SEQUENCE `NumberSeries`. With `CU_APP_CONFIGURATION` they are the 22 `TENANT_ID` tables of `../P2/db-script-tenant.md`. | the `@Entity` classes under erp-core/src/main/java/com/erp; `TenantSchemaIntegrationTest.everyEntity_extendsAuditableEntity_exceptTheFourGlobalOnes` (asserts 21) |
+| NEW (note) | Raw SQL on tenant-scoped tables: 15 statements, each naming `TENANT_ID` (RULE-TENANT-011). SEC provisioning 6 (`SEC_ROLE`, `SEC_ROLE_MODULE_GRANT`, `SEC_ROLE_SCREEN_GRANT`, `SEC_ROLE_ACTION_GRANT`, `SEC_USER`, `SEC_USER_ROLE`), MDL provisioning 2, NOTIF provisioning 2, SEQUENCE provisioning 1, `AuditEventStore` 3 (the insert; retention's tenant scan and per-tenant delete), `NotificationRequeueJob` 1 (tenant scan, then JPA per tenant through `TenantContext.callAs`). There is no `@Query(nativeQuery = true)` and no `createNativeQuery`. | sec, mdl, notif, sequence `tenant/*TenantProvisioningContributor.java`; audit/service/AuditEventStore.java:43-46, :98-103; notif/service/NotificationRequeueJob.java:43-44, :77-81 |
+
+### 4. Tests and rules that hold it
+| Kind | Item | Covers |
+|---|---|---|
+| NEW | ArchUnit `erp-core/src/test/java/com/erp/architecture/TenantScopedEntityTest.java` | RULE-TENANT-010; the entity part of REQ-TENANT-024 |
+| CHANGED | `erp-core/src/test/java/com/erp/tenant/TenantIsolationIntegrationTest.java` (step 05: SEC users only) gains one test per module: SEC role, MDL lookup type, FILE document, NOTIF template, CU configuration, SEQUENCE number series, AUDIT event | AC-TENANT-024, the HTTP part |
+| NEW | `governance/rules/GOVERNANCE-RULES.md` → Governance Rules: the raw-SQL rule; one checklist item of `gov-validate-backend-feature` | RULE-TENANT-011 |
+
+### 5. Frontend impact
+None: no endpoint, field, permission, page code or error code changes.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — what SEC's user profile and password policy change on the tenant side
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No TENANT id is minted by package D (other packages of the plan append their own rows to this 1.3.0
+section: C3 isolation tests, B profile / lifecycle, C events / token cut-off, E branding).
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | XM-TENANT-001 `TenantLookupApi` | + `Optional<TenantSummary> summaryOf(Long tenantId)` — `TenantSummary(Long id, String code, String nameAr, String nameEn)` in `com.erp.tenant.crossmodule`, plain values, never the entity; empty for an unknown id; no `@PreAuthorize` (code and names are what the login page and the shell show anyway). `codeOf` unchanged. Consumer: SEC `GET /api/v1/sec/me` (`tenant { code, nameAr, nameEn }`). Package E's public branding can reuse it. | SEC srs-sec.md 1.3.0 §9.5, §9.7 |
+| CHANGED | REQ-TENANT-001 (provision a tenant), SCR-REQ-TENANT-001 B5 create | `adminPassword` must meet SEC's password policy (SEC RULE-SEC-056: 8..72 characters, at most 72 bytes, a letter and a digit by default): otherwise 400 `SEC-400-PASSWORD-POLICY` with `fieldErrors[0].field = adminPassword`, raised by SEC's provisioning contributor inside the provisioning transaction, so nothing is created. The first administrator is not flagged `passwordChangeRequired` (the platform operator hands the password over; package B's admin-reset is the recovery path). | SEC srs-sec.md 1.3.0 §9.9; RULE-SEC-058 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1: editable names and profile, suspension with a recorded reason, platform-side recovery of a tenant administrator, usage figures (plan §4 B.1–B.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history): REQ / AC 024 (C3),
+RULE 011 (C3); RULE-TENANT-012 … 015 are reserved for the as-built rules of the analysis-coverage work, so
+this block mints **REQ/AC-TENANT-025 … 028, RULE-TENANT-016 … 017** (POL-TENANT-012/013, US-TENANT-009 … 011
+in P0 / P0_5, DBF-TENANT-033 … 042 in P2). No ENT, XM, SCR-REQ, permission or page code is added (plan §0
+D5: every endpoint stays behind `PLATFORM_TENANT_MANAGE`). Migrations `V18__tenant_profile.sql` and
+`V19__tenant_lifecycle.sql` (the plan expected V16 / V17; numbers re-derived at creation time, plan §1.3 /
+§11, `docs/DEVIATIONS.md` `[TM-B]`). Paths are relative to `/api/v1/platform/tenants`.
+
+### B1. Endpoints (SCR-REQ-TENANT-001 B5; `PlatformTenantController`)
+Every row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain gate
+"caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller.
+
+| Kind | Method | Path | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|
+| NEW | PUT | `/{id}` | `TenantUpdateRequest { nameAr*, nameEn*, contactEmail, contactPhone, countryCode, defaultLocale, timezone, notes }` (formats in B5) — no `code`, no `statusCode`, no `version`; a JSON field of another name is ignored (`fail-on-unknown-properties: false`) | 200 `TenantResponse` | 404 · `TENANT_NOT_FOUND`; 400 · `VALIDATION_ERROR` (field named); 409 · `CONCURRENT_MODIFICATION` (a concurrent write between read and flush, the `VERSION` lock) | REQ-TENANT-025; RULE-TENANT-003 |
+| CHANGED | PATCH | `/{id}/status` | `TenantStatusUpdateRequest { statusCode*, reason }` — `reason` required for `SUSPENDED` (3..500 characters after trimming), ignored for `ACTIVE` | 200 `TenantResponse` | + 400 · `TENANT_SUSPENSION_REASON_REQUIRED`; as before 404 · `TENANT_NOT_FOUND`, 422 · `TENANT_PLATFORM_PROTECTED` (checked first), 400 · `VALIDATION_ERROR`, 409 · `CONCURRENT_MODIFICATION` | REQ-TENANT-026; RULE-TENANT-004, -005, -016 |
+| NEW | POST | `/{id}/admin-reset` | `TenantAdminResetRequest { username* (≤ 100), newPassword* (≤ 200, raw, never logged), requireChangeAtNextLogin (Boolean, null = true) }` | 200 `TenantAdminResetResponse { username, sessionsTerminated }` | 404 · `TENANT_NOT_FOUND`; 422 · `TENANT_ADMIN_RESET_PLATFORM` (`{id}` = PLATFORM; review round 1); 404 · `TENANT_ADMIN_NOT_FOUND`; 422 · `TENANT_ADMIN_NOT_SUPER`; 400 · `SEC-400-PASSWORD-POLICY` (`fieldErrors[0].field = newPassword`, SEC RULE-SEC-056); 400 · `VALIDATION_ERROR` | REQ-TENANT-027; RULE-TENANT-017 |
+| NEW | GET | `/{id}/usage` | — | 200 `TenantUsageResponse { id, staffUsers, customerUsers, activeSessions, fileDocuments, fileBytes, notificationsLast30Days, collectedAt }` | 404 · `TENANT_NOT_FOUND` | REQ-TENANT-028 |
+| CHANGED | GET / POST / GET / PATCH / PUT | `/{id}`, `/search`, list, `/{id}/status`, `/{id}` | — | `TenantResponse` + `contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`, `timezone`, `notes`, `suspendedAt`, `suspendedBy`, `suspensionReason` (`tokensInvalidBefore` is not exposed) | — | REQ-TENANT-025, -026 |
+| CHANGED | POST | `/search` | filters / sorts | + `contactEmail`, `countryCode`, `suspendedAt` (ISO-8601 instant; a malformed value 400 `VALIDATION_ERROR`) on the allow-list `id, code, nameAr, nameEn, statusCode, createdAt` | as before | REQ-TENANT-007 |
+
+Order of checks — admin-reset: tenant (`TENANT_NOT_FOUND`) → not PLATFORM (`TENANT_ADMIN_RESET_PLATFORM`) → target exists (`TENANT_ADMIN_NOT_FOUND`) →
+target super (`TENANT_ADMIN_NOT_SUPER`) → password policy → write. Status change: request validation →
+tenant → PLATFORM protection (RULE-TENANT-005) → reason (RULE-TENANT-016) → write.
+
+### B2. Requirements (§A4) — NEW
+
+### REQ-TENANT-025 — تعديل أسماء المستأجر وملفه / Update a tenant's names and profile
+Pattern    : event
+Statement  : When a platform operator puts a tenant's names and profile (`nameAr`, `nameEn`, `contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`, `timezone`, `notes`) to `PUT /api/v1/platform/tenants/{id}`, the system shall replace them — an absent or empty optional field is cleared — and return the tenant; it shall never change the tenant's `code` or `statusCode` through this operation (body fields of those names are ignored).
+Traces     : US-TENANT-009
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-001 (CHANGED: names and profile editable, code still immutable), POL-TENANT-006
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2
+Priority   : MEDIUM
+#### AC-TENANT-025 — [REQ-TENANT-025]
+Given a provisioned tenant D
+When the operator puts new `nameAr` / `nameEn`, `contactEmail`, `contactPhone`, `countryCode = SA`, `defaultLocale = ar`, `timezone = Asia/Riyadh`, `notes`, plus `code = OTHER` and `statusCode = SUSPENDED`
+Then the system answers 200 with the new values, `code` and `statusCode` unchanged; `GET /{id}` shows the same; `POST /search` with `countryCode EQUALS SA` and with `contactEmail` finds D;
+and a second PUT without the optional fields clears them; an unknown id answers 404 `TENANT_NOT_FOUND`; `defaultLocale = fr`, `countryCode = sau`, a blank `nameEn` answer 400 `VALIDATION_ERROR` naming the field and change nothing
+
+### REQ-TENANT-026 — تعليق بسبب وحقائق التعليق / Suspend with a reason; suspension facts
+Pattern    : event
+Statement  : When a platform operator suspends a tenant, the system shall require a reason of 3 to 500 characters and record when (`suspendedAt`), by whom (`suspendedBy`, the operator's username) and why (`suspensionReason`); if the reason is missing or outside that length, the system shall refuse the suspension with 400 `TENANT_SUSPENSION_REASON_REQUIRED` and change nothing; when a suspended tenant is activated, the system shall clear the three facts and set the tenant's token cut-off (`tokensInvalidBefore`) to the activation time.
+Traces     : US-TENANT-003 (CHANGED)
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-012; RULE-TENANT-016
+Source     : docs/plans/tenant-maturity-plan.md §4 B.1, B.2
+Priority   : HIGH
+Note       : the cut-off is stored here; package C.2 (plan §5) refuses tokens issued before it. Until then an activation does not invalidate earlier tokens.
+#### AC-TENANT-026 — [REQ-TENANT-026]
+Given an ACTIVE tenant D
+When the operator suspends it without `reason`, then with `reason = "ab"`
+Then each answers 400 `TENANT_SUSPENSION_REASON_REQUIRED` and D stays ACTIVE with no facts;
+when the operator suspends it with `reason = "Unpaid invoice"`, the system answers 200 `statusCode = SUSPENDED`, `suspendedAt` set, `suspendedBy` = the operator, `suspensionReason = "Unpaid invoice"`, and D's administrator's login answers 403 `TENANT_SUSPENDED`;
+when the operator activates D, the system answers 200 `statusCode = ACTIVE` with `suspendedAt`, `suspendedBy`, `suspensionReason` null, `CORE_TENANT.TOKENS_INVALID_BEFORE` holds the activation time, and the administrator logs in again;
+and suspending PLATFORM without a reason still answers 422 `TENANT_PLATFORM_PROTECTED`
+
+### REQ-TENANT-027 — إعادة تعيين كلمة مرور مدير المستأجر / Reset a tenant administrator's password
+Pattern    : event
+Statement  : When a platform operator posts a username and a new password to `POST /api/v1/platform/tenants/{id}/admin-reset`, the system shall, in one transaction of tenant {id}, verify that the username is a STAFF user of that tenant holding an active super role (RULE-TENANT-017), apply the STAFF password policy, store the new password's hash, require a change at the next sign-in unless `requireChangeAtNextLogin` is false, terminate every open session of that user, record `ADMIN_PASSWORD_RESET` in that tenant's generic audit log (actor = the platform operator), then record `TENANT_ADMIN_RESET` in the PLATFORM tenant's audit log (entity `CORE_TENANT` / {id}), and answer the username and the number of terminated sessions; it shall refuse the reset when {id} is the PLATFORM tenant itself; a refusal changes nothing.
+Traces     : US-TENANT-010
+Entities   : ENT-TENANT-001; SEC ENT-SEC-001 (through `SecAdminRecoveryApi`)
+Rationale  : POL-TENANT-013, POL-TENANT-006, POL-TENANT-011; SEC ADR-SEC-063 (an administrator-chosen password forces a change by default)
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.4
+Priority   : HIGH
+#### AC-TENANT-027 — [REQ-TENANT-027]
+Given tenant D whose administrator `td-admin` (role `SYS_ADMIN`, `IS_SUPER`) has one open session, and a STAFF user of D without a role
+When the operator posts an unknown username → 404 `TENANT_ADMIN_NOT_FOUND`; any username to the PLATFORM tenant (id 1), the operator's own included → 422 `TENANT_ADMIN_RESET_PLATFORM`; the role-less user → 422 `TENANT_ADMIN_NOT_SUPER`; `td-admin` with `abcdefgh` → 400 `SEC-400-PASSWORD-POLICY` (`newPassword`); an unknown tenant id → 404 `TENANT_NOT_FOUND`
+Then nothing changed (the old password still signs in);
+when the operator posts `td-admin` with a valid password, the system answers 200 `{ username: td-admin, sessionsTerminated: 1 }`, the old token answers 401, the old password 401, the new password signs in with `passwordChangeRequired = true` (false when the request said `requireChangeAtNextLogin: false`), and D's audit log has one `ADMIN_PASSWORD_RESET` row for that user whose actor is the operator and which contains no password, and PLATFORM's audit log has one `TENANT_ADMIN_RESET` row for `CORE_TENANT` / D's id naming `td-admin` and the terminated-session count, without a secret
+
+### REQ-TENANT-028 — أرقام استخدام المستأجر / Tenant usage figures
+Pattern    : event
+Statement  : When a platform operator asks for `GET /api/v1/platform/tenants/{id}/usage`, the system shall return the tenant's `staffUsers`, `customerUsers`, `activeSessions`, `fileDocuments`, `fileBytes` and `notificationsLast30Days` with `collectedAt`, each counted inside tenant {id} (one read-only transaction under `TenantContext.callAs(id)`) through the cross-module APIs of SEC, FILE and NOTIF, never by reading their tables.
+Traces     : US-TENANT-011
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-006, POL-TENANT-007 (the counts of one tenant never include another's rows)
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.4
+Priority   : MEDIUM
+#### AC-TENANT-028 — [REQ-TENANT-028]
+Given a tenant D just provisioned
+When the operator asks for its usage
+Then the system answers 200 `staffUsers = 1`, `customerUsers = 0`, `activeSessions = 0`, `fileDocuments = 0`, `fileBytes = 0`, `notificationsLast30Days = 0`, `collectedAt` set;
+after D's administrator signs in and creates a user, `staffUsers = 2` and `activeSessions ≥ 1`, while another tenant's figures are unchanged by D's rows; an unknown id answers 404 `TENANT_NOT_FOUND`
+
+### B3. Business rules (§A5) — NEW / CHANGED
+
+### RULE-TENANT-016 — التعليق يتطلب سببًا والتفعيل يمحو حقائقه / Suspension requires a reason; activation clears it
+Scope      : ENT-TENANT-001
+Trigger    : on status change
+Statement  : The system shall suspend a tenant only with a `reason` whose trimmed length is 3..500 and shall then record `SUSPENDED_AT` (now), `SUSPENDED_BY` (the operator's username) and `SUSPENSION_REASON` (trimmed); a transition SUSPENDED → ACTIVE clears the three and sets `TOKENS_INVALID_BEFORE` to now. Re-applying the current status (RULE-TENANT-004) changes neither the status nor the facts nor the cut-off; a reason sent with `ACTIVE` is ignored. Evaluated after RULE-TENANT-005.
+Data source: the request's `statusCode` and `reason`; ENT-TENANT-001.statusCode
+Message    : ar: "يتطلب تعليق المستأجر سببًا من 3 إلى 500 حرف" · en: "A suspension needs a reason of 3 to 500 characters"
+Traces     : REQ-TENANT-026
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.3
+Decided by : `TenantDomain` (`assertSuspensionReasonGiven`, `changesStatusTo`); the entity's `suspend(...)` / `activate(...)` only set the fields
+
+### RULE-TENANT-017 — هدف إعادة تعيين كلمة مرور المدير / Admin-reset target
+Scope      : ENT-TENANT-001; SEC ENT-SEC-001
+Trigger    : on `/{id}/admin-reset`
+Statement  : The system shall reset a password through `/{id}/admin-reset` only for a STAFF user of tenant {id} (any account status) holding at least one ACTIVE role with `IS_SUPER = TRUE`, and never when {id} is the PLATFORM tenant (id 1): platform operators set each other's passwords through SEC's `PUT /api/v1/sec/users/{id}/password`, where RULE-SEC-057 refuses one's own account (review round 1). The facts "exists" and "holds an active super role" are computed by SEC (`SecAdminRecoveryApi.findRecoveryTarget`, inside tenant {id}) and passed into `TenantDomain` by the service; a CUSTOMER account of that name is not a target.
+Data source: SEC — `SEC_USER` (realm STAFF), `SEC_USER_ROLE`, `SEC_ROLE.IS_SUPER` / `IS_ACTIVE_FL` of tenant {id}
+Message    : `TENANT_ADMIN_RESET_PLATFORM` ar: "لا يُستعاد مستأجر المنصة ''{0}'' من هنا: تُعيَّن كلمة مرور مشغّل المنصة من شاشة المستخدمين" · en: "The platform tenant ''{0}'' is not recovered here: a platform operator's password is set on the users screen"; `TENANT_ADMIN_NOT_FOUND` ar: "لا يوجد مستخدم موظف باسم ''{0}'' في المستأجر ''{1}''" · en: "No staff user ''{0}'' exists in tenant ''{1}''"; `TENANT_ADMIN_NOT_SUPER` ar: "المستخدم ''{0}'' في المستأجر ''{1}'' لا يحمل دورًا فائقًا؛ لا يُستعاد هنا إلا مدير المستأجر" · en: "User ''{0}'' of tenant ''{1}'' holds no super role; only a tenant administrator can be recovered here"
+Traces     : REQ-TENANT-027
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.3
+Decided by : `TenantDomain.assertAdminResetAllowed` (PLATFORM), `TenantDomain.assertCanResetAdministrator` (target)
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | RULE-TENANT-003 (code immutability) | the names and the profile become editable (`PUT /{id}`); the code still never changes (`updatable = false`, not in `TenantUpdateRequest`) |
+| CHANGED | RULE-TENANT-004 (status values) | re-applying the current status also leaves the suspension facts and the cut-off untouched (RULE-TENANT-016) |
+| CHANGED (review round 1) | RULE-TENANT-017 (admin-reset target) | + never on the PLATFORM tenant (422 `TENANT_ADMIN_RESET_PLATFORM`): the first version let a platform operator reset their own password there without the current one, bypassing SEC RULE-SEC-057 |
+
+### B4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_SUSPENSION_REASON_REQUIRED` | 400 | `VALIDATION_ERROR` | `TenantDomain.assertSuspensionReasonGiven` | — |
+| `TENANT_ADMIN_RESET_PLATFORM` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertAdminResetAllowed` (review round 1) | tenant code |
+| `TENANT_ADMIN_NOT_FOUND` | 404 | `NOT_FOUND` | `TenantDomain.assertCanResetAdministrator` | username, tenant code |
+| `TENANT_ADMIN_NOT_SUPER` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertCanResetAdministrator` | username, tenant code |
+`TENANT_PLATFORM_PROTECTED` is not reused for the PLATFORM refusal: its message says the platform tenant "cannot be suspended". Referenced (SEC): `SEC-400-PASSWORD-POLICY` (400). Every new code has an entry in `messages.properties` and
+`messages_ar.properties` (one `tenant-maturity B` block each); the seven 1.2.0 codes are unchanged.
+
+### B5. ENT-TENANT-001 Tenant — CHANGED (fields)
+| Kind | Field | Logical type | Required | Rule / format (request validation → 400 `VALIDATION_ERROR`) | Written by | Label-ar | Label-en |
+|---|---|---|---|---|---|---|---|
+| CHANGED | nameAr / nameEn | text (≤ 200) | yes | not blank — now editable (`PUT /{id}`) | operator | الاسم بالعربية / بالإنجليزية | Name (Arabic / English) |
+| NEW | contactEmail | text (≤ 255) | no | e-mail format | operator | بريد التواصل | Contact e-mail |
+| NEW | contactPhone | text (≤ 30) | no | `^\+?[0-9][0-9 -]{5,28}[0-9]$` (the format of SEC's user `phone`) | operator | هاتف التواصل | Contact phone |
+| NEW | countryCode | text (2) | no | ISO 3166-1 alpha-2, upper case `^[A-Z]{2}$` | operator | رمز الدولة | Country code |
+| NEW | defaultLocale | text (≤ 5) | no | `ar` \| `en` (`CHK_CORE_TENANT_LOCALE`) | operator | اللغة الافتراضية | Default language |
+| NEW | timezone | text (≤ 64) | no | IANA zone id format `^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$` (e.g. `Asia/Riyadh`); the format is checked, not membership in the zone database | operator | المنطقة الزمنية | Time zone |
+| NEW | notes | text (≤ 1000) | no | — | operator | ملاحظات | Notes |
+| NEW | suspendedAt | date-time | no | read-only | RULE-TENANT-016 | تاريخ التعليق | Suspended at |
+| NEW | suspendedBy | text (≤ 100) | no | read-only (the operator's username) | RULE-TENANT-016 | علّقه | Suspended by |
+| NEW | suspensionReason | text (≤ 500) | no | read-only | RULE-TENANT-016 | سبب التعليق | Suspension reason |
+| NEW | tokensInvalidBefore | date-time | no | system only, not exposed | RULE-TENANT-016 (activation); package C.2 | حد صلاحية الرموز | Tokens invalid before |
+An empty string sent for an optional profile field is stored as NULL; strings are trimmed and `countryCode`
+upper-cased by the entity's `@PrePersist` / `@PreUpdate` (A.1.17). Physical names, widths and
+constraints: `../P2/db-script-tenant.md` 1.3.0 addendum (DBF-TENANT-033 … 042). New DTOs:
+`TenantUpdateRequest`, `TenantAdminResetRequest`, `TenantAdminResetResponse`, `TenantUsageResponse`;
+`TenantResponse` and `TenantStatusUpdateRequest` extended.
+
+### B6. Status lifecycle (§A7) — CHANGED
+```
+ACTIVE    --(operator suspends with a reason, RULE-TENANT-016)--> SUSPENDED   records suspendedAt / suspendedBy / suspensionReason
+SUSPENDED --(operator activates)--------------------------------> ACTIVE      clears the three, sets tokensInvalidBefore = now
+same status re-applied → nothing changes (RULE-TENANT-004)
+```
+Still two states, no `ARCHIVED` (level 2 is out of scope, plan §0 D2).
+
+### B7. Dependencies (§A8) — NEW consumed surfaces
+TENANT now consumes three modules, always inside `TenantContext.callAs(id)` and through their `crossmodule`
+packages only (ArchUnit `CrossModuleBoundaryArchTest`):
+
+| Consumed surface | Owner | Methods | Used by |
+|---|---|---|---|
+| `com.erp.sec.crossmodule.SecUserDirectoryApi` | SEC (REQ-SEC-090) | `int countStaff()`, `int countCustomers()`, `int countActiveSessions()` — current tenant | usage |
+| `com.erp.sec.crossmodule.SecAdminRecoveryApi` (NEW) | SEC (REQ-SEC-091) | `Optional<RecoveryTarget> findRecoveryTarget(String username)` → `RecoveryTarget(Long userId, String username, boolean superRole)`; `int resetSuperUserPassword(String username, String rawPassword, Boolean requireChangeAtNextLogin)` (null = TRUE, applied by SEC: RULE-SEC-058) → terminated-session count; throws `SEC-400-PASSWORD-POLICY` | admin-reset |
+| `com.erp.file.crossmodule.FileDocumentLookupApi` | FILE (XM-FILE-001, CHANGED) | `long countDocuments()`, `long sumBytes()` — current tenant, documents not `DELETED` | usage |
+| `com.erp.notif.crossmodule.NotificationLogQueryApi` | NOTIF (1.3.0 addendum) | `long countDispatchedSince(Instant since)` — current tenant's `NOTIF_LOG` rows created at or after `since` | usage |
+| `com.erp.audit.crossmodule.AuditApi` | audit | `ADMIN_PASSWORD_RESET` is written by SEC's recovery inside tenant {id}; `TENANT_ADMIN_RESET` by `TenantService` in PLATFORM (B8) | admin-reset |
+The admin-reset and usage service methods are deliberately not `@Transactional`: a transaction opened in
+the PLATFORM request would bind the PLATFORM Hibernate session (REQ-TENANT-018, `TenantContext` Javadoc),
+so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (the
+`PermissionCatalogSynchronizer` precedent): admin-reset read-write (check + write atomic), usage read-only.
+
+### B8. Audit, sessions, events
+| Operation | `CORE_AUDIT_EVENT` | Sessions | Event |
+|---|---|---|---|
+| `PUT /{id}` | `UPDATE` row of `CORE_TENANT` (`@Audited`, in PLATFORM) with the changed fields | — | — |
+| suspend / activate | `UPDATE` row of `CORE_TENANT` (`statusCode` + the suspension facts; `tokensInvalidBefore` is dropped by the audit denylist word `token`) | — (package C.1 terminates them on suspension) | — (package C.1 adds the lifecycle events) |
+| admin-reset | (1) `ADMIN_PASSWORD_RESET` in tenant {id}: actor = the operator's username, realm `STAFF`, `actorUserId` null (the operator is not a user of {id}), entity `SEC_USER` / the user's id, summaries name the user and say "by the platform operator", no secret; (2) review round 1: after the reset committed, `TENANT_ADMIN_RESET` in the PLATFORM tenant (outside `callAs`, its own commit): actor = the operator, entity `CORE_TENANT` / {id}, summaries name the tenant code, the target username and `sessionsTerminated`, no secret — so a PLATFORM auditor sees every recovery | every open session of the user terminated, one SEC `SESSION_TERMINATED` row each (no actor user: the operator is not a user of {id}) | `UserPasswordChangedEvent(userId, byAdmin = true)` in tenant {id} → NOTIF e-mails `STAFF_PASSWORD_CHANGED` to the administrator (RULE-NOTIF-023) |
+| usage | — | — | — |
+
+### B9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
+| Kind | Section | Delta |
+|---|---|---|
+| CHANGED | B1 Operations | + edit names and profile, recover the administrator's password, show usage |
+| CHANGED | B2 Search / list | filters and sorts + `contactEmail`, `countryCode`, `suspendedAt` |
+| CHANGED | B3 Input | edit form (names + profile, `code` read-only); suspend dialog with a mandatory reason (3..500); admin-reset form (`username`, `newPassword`, `requireChangeAtNextLogin` default on); usage panel (read-only) |
+| unchanged | B4 Access | same two actions; every new endpoint needs `PLATFORM_TENANT_MANAGE` (D5) |
+| CHANGED | B5 API expectations | + the rows of B1 above |
+
+### B10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| CHANGED (plan) | Migrations `V18__tenant_profile.sql` / `V19__tenant_lifecycle.sql` (plan: V16 / V17; package D took V16 / V17). |
+| NEW (decision) | `PUT /{id}` carries no `version`: no erp-core PUT does; the `VERSION` lock answers 409 `CONCURRENT_MODIFICATION` for a write that races between read and flush. It is a full replacement of the editable fields (a new endpoint, no older client to protect). |
+| CHANGED (plan) | Admin-reset body + optional `requireChangeAtNextLogin` (null = true): an operator-chosen password is an administrator-chosen password, so SEC ADR-SEC-063 / RULE-SEC-058 apply (forced change by default, opt-out per request). |
+| CHANGED (plan) | `SecAdminRecoveryApi`: + `findRecoveryTarget(username)` (the facts RULE-TENANT-017 needs, decided in `TenantDomain` per plan B.3) and `resetSuperUserPassword(username, rawPassword, requireChangeAtNextLogin)` (the request's flag passed through; SEC applies its null = TRUE default, so RULE-SEC-058 stays in SEC). Both run in the one transaction of tenant {id}, so the check and the write are atomic. |
+| CHANGED (plan) | NOTIF "existing dispatch API + `countDispatchedSince`" → `NotificationLogQueryApi.countDispatchedSince`: `NotificationDispatchApi` is NOTIF's write surface; the dispatch-history read surface is `NotificationLogQueryApi`. |
+| NEW (decision) | What each figure counts: `staffUsers` / `customerUsers` = `SEC_USER` rows of realm STAFF / CUSTOMER in any status; `activeSessions` = `SEC_ACTIVE_SESSION` rows with `TERMINATED_AT` NULL, either realm; `fileDocuments` / `fileBytes` = `FILE_DOCUMENT` rows not `DELETED` (ACTIVE, ARCHIVED) and the sum of their `FILE_SIZE`; `notificationsLast30Days` = `NOTIF_LOG` rows (one per channel, any status) created in the 30 days before `collectedAt`. |
+| NEW (decision) | `TenantUsageResponse` is a figures DTO, not build-create-dto's eligibility `UsageResponse` (`canDelete` / `canDeactivate`): a tenant is never deleted (POL-TENANT-005) and its suspension is never blocked by data. |
+| NEW (review round 1) | Admin-reset refuses the PLATFORM tenant (RULE-TENANT-017 CHANGED, 422 `TENANT_ADMIN_RESET_PLATFORM`, a dedicated code because `TENANT_PLATFORM_PROTECTED`'s message is about suspension); every successful reset is also audited in PLATFORM (`TENANT_ADMIN_RESET`, B8). Logs of the admin-reset path name the tenant id and the user id, never the username (plan §1.7). |
+| NEW (note) | `TOKENS_INVALID_BEFORE` is written on activation but enforced only by package C.2; until then an activation does not invalidate tokens issued before it. |
+
+### B11. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW | `PUT /{id}`, `POST /{id}/admin-reset`, `GET /{id}/usage` on the `PLATFORM_TENANTS` screen (no new page code, permission or menu entry). |
+| CHANGED | The suspend action must send a `reason` (3..500); without it 400 `TENANT_SUSPENSION_REASON_REQUIRED`. `TenantResponse` carries the profile and the suspension facts. |
+| NEW | Error codes `TENANT_SUSPENSION_REASON_REQUIRED`, `TENANT_ADMIN_RESET_PLATFORM`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER` (both languages); the admin-reset form is not offered for the PLATFORM row; admin-reset may also answer `SEC-400-PASSWORD-POLICY`. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding: a logo and an optional brand colour set by the platform operator from `PLATFORM_TENANTS`, `GET /api/v1/tenant/me`, public branding by tenant code (plan §0 D5, §7 E.1–E.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+028, RULE 017 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), XM 002, POL 013,
+US 011, DBF 042. This block mints **REQ/AC-TENANT-029 … 032, RULE-TENANT-018 … 022, XM-TENANT-003**
+(POL-TENANT-014, US-TENANT-012 … 014 in P0 / P0_5, DBF-TENANT-043 … 044 in P2) and decision
+**ADR-TENANT-005** (the plan's own number, reserved for E). No ENT, SCR-REQ, module, screen, permission, grant
+seed or page code is added (plan §0 D5). Migration `V20__tenant_branding.sql` (the plan expected V18; numbers
+re-derived at creation time, plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-E]`). Platform paths are relative to
+`/api/v1/platform/tenants`. Rows marked **FE** are read by the frontend (plan §8 F2, F3).
+
+### E1. Endpoints
+The three platform rows keep the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain
+gate "caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller — a tenant administrator included (RULE-TENANT-020).
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | PUT | `/{id}/logo` | `PLATFORM_TENANT_MANAGE` | `multipart/form-data`, part `file` (the image; at most 1 MB, PNG / JPEG / WebP / plain SVG, detected from the bytes) | 200 `TenantResponse` with the new `logoUrl` | 404 · `TENANT_NOT_FOUND`; 400 · `TENANT_LOGO_INVALID` (`fieldErrors[0].field = file`; empty, too large, another type, unsafe SVG); 400 · `VALIDATION_ERROR` (no `file` part, not a multipart request) | REQ-TENANT-029; RULE-TENANT-018, -019, -020 |
+| NEW — **FE** | DELETE | `/{id}/logo` | `PLATFORM_TENANT_MANAGE` | — | 204 (no body); a tenant without a logo also answers 204 (idempotent, D's photo precedent) | 404 · `TENANT_NOT_FOUND` | REQ-TENANT-029; RULE-TENANT-018, -020 |
+| NEW — **FE** | PATCH | `/{id}/branding` | `PLATFORM_TENANT_MANAGE` | `TenantBrandingUpdateRequest { brandColor }` — `#RRGGBB`; null, absent or blank clears it | 200 `TenantResponse` | 404 · `TENANT_NOT_FOUND`; 400 · `TENANT_BRAND_COLOR_INVALID` (`fieldErrors[0].field = brandColor`) | REQ-TENANT-030; RULE-TENANT-020, -021 |
+| NEW — **FE** | GET | `/api/v1/tenant/me` | `isAuthenticated()`, **any realm** (STAFF or CUSTOMER token) | — | 200 `TenantBrandingResponse { code, nameAr, nameEn, logoUrl, brandColor, defaultLocale }` of the token's tenant | 401 · `SEC-401-INVALID-CREDENTIALS`; 403 · `TENANT_SUSPENDED` (the token's tenant is suspended, RULE-TENANT-006); 404 · `TENANT_NOT_FOUND` (defensive: the token's tenant vanished) | REQ-TENANT-031 |
+| NEW — **FE** | GET | `/api/v1/public/tenants/{tenantCode}/branding` | public, no token, no header | — | 200 `TenantBrandingResponse` | 404 · `TENANT_NOT_FOUND` (unknown code); 403 · `TENANT_SUSPENDED`; 429 · `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022) | REQ-TENANT-032; RULE-TENANT-006, -012 |
+| CHANGED — **FE** | POST / GET / GET / POST / PUT / PATCH | create, `/{id}`, list, `/search`, `/{id}`, `/{id}/status` | as before | as before | `TenantResponse` + `logoUrl` (nullable: the public URL of the logo, resolved inside the tenant), `brandColor` (nullable `#RRGGBB`); `LOGO_FILE_ID` itself is not exposed | as before | REQ-TENANT-029, -030 |
+
+Order of checks — logo PUT: request binding (`file` part) → tenant (`TENANT_NOT_FOUND`) → image (`TENANT_LOGO_INVALID`)
+→ write. Branding PATCH: tenant → colour → write. Public branding: rate limit (per client address, before anything
+else) → tenant from the path (`TENANT_NOT_FOUND` / `TENANT_SUSPENDED`) → read.
+
+Wiring (`ErpCoreSecurityAutoConfiguration`, `ErpCoreProperties`):
+- `/api/v1/tenant/me` is outside the customer chain's matcher, so the core (staff) chain serves it; it is named
+  realm-neutral there **for `GET` only** (constant `TENANT_ME_PATH`; review round 1): that chain's
+  `RealmEnforcementFilter` does not refuse a CUSTOMER token on `GET /api/v1/tenant/me` (any other method still answers
+  403 `REALM_MISMATCH` to a CUSTOMER token), and the path still needs an authenticated caller
+  (`anyRequest().authenticated()`). The forced-change gate lets the `GET` through too (SEC RULE-SEC-059 CHANGED): it
+  reveals nothing the public branding does not.
+- `/api/v1/public/tenants/{tenantCode}/branding` lies under `/api/v1/public/**`, so the customer chain serves it
+  (constant `PUBLIC_TENANT_BRANDING_PATHS` = `/api/v1/public/tenants/*/branding`): `GET` permitted, public for the
+  realm and tenant filters, its tenant taken from the path — the `erp.core.tenant.path-tenant-paths` default gains
+  `/api/v1/public/tenants/{tenantCode}/branding` (REQ-TENANT-011, the path source, the step-07 mechanism of the public
+  files). An application that replaces the list and leaves the path out gets 400 `TENANT_REQUIRED` there. A
+  `PublicBrandingRateLimitFilter` runs first on that chain, for that path only (RULE-TENANT-022).
+
+### E2. Requirements (§A4) — NEW
+
+### REQ-TENANT-029 — شعار المستأجر يضبطه مدير المنصة / Tenant logo set by the platform administrator
+Pattern    : event
+Statement  : When a platform operator puts an image to `PUT /api/v1/platform/tenants/{id}/logo`, the system shall validate it through FILE's image store (RULE-TENANT-018), store it as a PUBLIC document **in tenant {id}'s own rows** (`TenantContext.callAs(id)`; owner `CORE_TENANT` / {id}, module `TENANT`, base name `logo`), reference it from `CORE_TENANT.LOGO_FILE_ID`, discard the previous logo document, record `TENANT_LOGO_CHANGED` and answer the tenant with its `logoUrl` (`/api/v1/public/files/{thatTenantCode}/{slug}`) — all in one transaction of tenant {id}; when the operator calls `DELETE …/{id}/logo`, the system shall clear the reference, discard the document and record `TENANT_LOGO_CHANGED`; a refused image changes nothing.
+Traces     : US-TENANT-012
+Entities   : ENT-TENANT-001; FILE ENTITY-FILE-001 (through `FileImageStoreApi`, XM-TENANT-003)
+Rationale  : POL-TENANT-014; ADR-TENANT-005; FILE ADR-FILE-008 (PUBLIC, non-guessable slug)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2, E.4
+Priority   : MEDIUM
+#### AC-TENANT-029 — [REQ-TENANT-029]
+Given a tenant T and a platform operator
+When the operator puts a small PNG to `/{T}/logo`
+Then the system answers 200 with `logoUrl` starting `/api/v1/public/files/{T's code}/`; `GET /{T}` carries the same `logoUrl`; T's administrator's `GET /api/v1/tenant/me` carries the same `logoUrl`; an anonymous `GET {logoUrl}` answers 200 with the bytes (`image/png`, inline); the `FILE_DOCUMENT` row has `TENANT_ID = T`, owner `CORE_TENANT` / T, module `TENANT`, and is not visible to another tenant;
+when the operator puts another image, the old URL answers 404 `FILE_DOCUMENT_NOT_FOUND` and the new one 200; an SVG carrying `<script>`, an executable and an image over 1 MB each answer 400 `TENANT_LOGO_INVALID` and keep the current logo; a plain SVG is accepted and served as `image/svg+xml` with `Content-Disposition: attachment`, `nosniff` and the sandbox CSP;
+when the operator deletes the logo, the system answers 204, `logoUrl` becomes null everywhere and the old URL answers 404; an unknown tenant id answers 404 `TENANT_NOT_FOUND`; T's administrator calling any of the three platform endpoints gets 403 `SEC-403-FORBIDDEN`; PLATFORM itself (id 1) can carry a logo
+
+### REQ-TENANT-030 — لون العلامة / Brand colour
+Pattern    : event
+Statement  : When a platform operator patches `PATCH /api/v1/platform/tenants/{id}/branding` with `brandColor`, the system shall store it upper-cased if it is `#` followed by six hexadecimal digits, clear it if it is null, absent or blank, and refuse anything else with 400 `TENANT_BRAND_COLOR_INVALID` without a change.
+Traces     : US-TENANT-012
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-014; plan §0 D5 ("optional part"): the frontend uses it only when present (plan §8 F2)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2
+Priority   : LOW
+#### AC-TENANT-030 — [REQ-TENANT-030]
+Given a tenant T
+When the operator patches `{"brandColor":"#1a2b3c"}`
+Then the system answers 200 `brandColor = "#1A2B3C"`, and `GET /{T}`, T's `/tenant/me` and the public branding show it;
+`{"brandColor":"red"}`, `"#12345"`, `"#1234567"`, `"1A2B3C"` each answer 400 `TENANT_BRAND_COLOR_INVALID` and keep `#1A2B3C`;
+`{"brandColor":null}` (or `{}`) answers 200 `brandColor = null`; the database refuses a malformed value as well (`CHK_CORE_TENANT_BRAND_COLOR`)
+
+### REQ-TENANT-031 — علامة المستأجر الحالي / Branding of the token's tenant
+Pattern    : event
+Statement  : When an authenticated caller of either realm asks for `GET /api/v1/tenant/me`, the system shall return the branding of the tenant its token names — `code`, `nameAr`, `nameEn`, `logoUrl`, `brandColor`, `defaultLocale` — and nothing else (no contact, profile, status or audit field); it is read-only and needs no permission; a staff caller with a pending forced password change may call it.
+Traces     : US-TENANT-013
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-007 (only the caller's own tenant), POL-TENANT-014 (the read side is open to every user of the tenant, ADR-TENANT-005)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2, §8 F2
+Priority   : MEDIUM
+#### AC-TENANT-031 — [REQ-TENANT-031]
+Given tenant T with a logo and a brand colour, its staff administrator and one of its customers
+When each calls `GET /api/v1/tenant/me` with their token
+Then each answers 200 with exactly the keys `code, nameAr, nameEn, logoUrl, brandColor, defaultLocale` (T's values); a token of another tenant answers that tenant's branding; no token → 401; a staff user with a pending forced change → 200; T suspended → 403 `TENANT_SUSPENDED`
+
+### REQ-TENANT-032 — علامة عامة برمز المستأجر / Public branding by tenant code
+Pattern    : event
+Statement  : When an anonymous caller asks for `GET /api/v1/public/tenants/{tenantCode}/branding`, the system shall resolve the tenant from the path (trimmed, upper-cased; REQ-TENANT-011, the path source) and return its `TenantBrandingResponse`; if the code is unknown the system shall answer 404 `TENANT_NOT_FOUND`, if the tenant is suspended 403 `TENANT_SUSPENDED`, and if the caller's address exceeded its budget 429 `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022).
+Traces     : US-TENANT-014; US-TENANT-005 (CHANGED: a second path-tenant path)
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-008; the login page needs the logo before a token exists (plan §8 F2); the rate limit bounds tenant-code enumeration
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2, E.4
+Priority   : MEDIUM
+#### AC-TENANT-032 — [REQ-TENANT-032]
+Given tenant T (ACTIVE, with a logo) and a suspended tenant S
+When an anonymous client asks for T's, an unknown code's and S's branding (T's code in lower case included)
+Then T → 200 with T's branding (the same `logoUrl` as `/tenant/me`), no contact or profile field; unknown → 404 `TENANT_NOT_FOUND`; S → 403 `TENANT_SUSPENDED`;
+and after `capacity` calls in one `period` from one address the next call — whatever the code, unknown codes included — answers 429 `TENANT_BRANDING_RATE_LIMITED`, while another address is still served
+
+### E3. Business rules (§A5) — NEW / CHANGED
+
+### RULE-TENANT-018 — شعار المستأجر / Tenant logo
+Scope      : ENT-TENANT-001; FILE ENTITY-FILE-001
+Trigger    : on `PUT` / `DELETE /{id}/logo`
+Statement  : A tenant has at most one logo: a PUBLIC `FILE_DOCUMENT` of at most 1 048 576 bytes whose content is PNG, JPEG, WebP or SVG (type detected from the bytes, RULE-FILE-008; SVG only if it passes FILE's allow-list, RULE-FILE-009 — plain / optimised SVG: no script, event attribute, external reference, editor metadata, DOCTYPE or duplicate `id`), stored in the tenant's own rows (`TENANT_ID = {id}`, owner `CORE_TENANT` / {id}, module `TENANT`), so its URL carries that tenant's code. Replacing or removing the logo discards the previous document in the same transaction (DELETED + PRIVATE: its URL answers 404 at once, RULE-FILE-010); a refused image changes nothing. The rejection comes from FILE as a value, never an exception, and the tenant raises `TENANT_LOGO_INVALID`.
+Data source: FILE's `ImageStoreResult`; ENT-TENANT-001.logoFileId
+Message    : ar: "يجب أن يكون الشعار صورة PNG أو JPEG أو WebP أو SVG بسيطة بحجم لا يتجاوز 1 ميغابايت (SVG دون نصوص برمجية أو مراجع خارجية أو بيانات محرّر: صدّره بصيغة SVG بسيطة أو محسّنة)" · en: "The logo must be a PNG, JPEG, WebP or plain SVG image of at most 1 MB (SVG without scripts, external references or editor metadata: export it as plain or optimised SVG)"
+Traces     : REQ-TENANT-029
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.3; §6 D.4
+Decided by : FILE `ImageValidationDomainService` (the verdict) and `TenantDomain.assertLogoAccepted` (the tenant's error); the constants `LOGO_OWNER_TYPE`, `LOGO_MODULE_CODE`, `LOGO_BASE_NAME`, `LOGO_MAX_BYTES`, `LOGO_TYPES` live on `TenantDomain`
+
+### RULE-TENANT-019 — مستأجر المنصة يحمل شعارًا أيضًا / PLATFORM may carry a logo
+Scope      : ENT-TENANT-001
+Trigger    : on `PUT /1/logo`
+Statement  : The PLATFORM tenant may carry a logo like any tenant (its URL is `/api/v1/public/files/PLATFORM/{slug}`); the platform **mark** the frontend shows is a static asset, never a tenant logo, so a tenant without a logo always has a fallback.
+Data source: —
+Message    : —
+Traces     : REQ-TENANT-029
+Source     : docs/plans/tenant-maturity-plan.md §7 E.3
+Decided by : no refusal exists (`TenantDomain` has no PLATFORM check on branding, unlike RULE-TENANT-005 / -017)
+
+### RULE-TENANT-020 — العلامة التجارية من المنصة فقط / Branding is written by the platform only
+Scope      : ENT-TENANT-001
+Trigger    : on the logo and branding endpoints
+Statement  : The system shall serve `PUT` / `DELETE /{id}/logo` and `PATCH /{id}/branding` only to a PLATFORM operator holding `PLATFORM_TENANT_MANAGE` (decision D5): a tenant administrator, whatever its roles, has no write path to branding in 1.3.0; every user of a tenant reads it through `GET /api/v1/tenant/me`.
+Data source: the caller's authorities and tenant
+Message    : `SEC-403-FORBIDDEN`
+Traces     : REQ-TENANT-029, REQ-TENANT-030
+Source     : docs/plans/tenant-maturity-plan.md §0 D5, §7 E.3; ADR-TENANT-005
+Decided by : the chain gate on `/api/v1/platform/**` (REQ-TENANT-015) and `@PreAuthorize(PLATFORM_TENANT_MANAGE)` on `TenantService.setLogo`, `removeLogo`, `updateBranding`
+
+### RULE-TENANT-021 — صيغة لون العلامة / Brand colour format
+Scope      : ENT-TENANT-001.brandColor
+Trigger    : on `PATCH /{id}/branding`
+Statement  : `brandColor` shall be null or, after trimming, `^#[0-9A-Fa-f]{6}$`; it is stored upper-case (`@PreUpdate`). A blank value clears it. Anything else → 400 `TENANT_BRAND_COLOR_INVALID`; the database repeats the check (`CHK_CORE_TENANT_BRAND_COLOR`).
+Data source: the request's `brandColor`
+Message    : ar: "لون العلامة ''{0}'' غير صالح: استخدم الصيغة #RRGGBB (ستة أرقام ست عشرية)" · en: "Brand colour ''{0}'' is invalid: use #RRGGBB (six hexadecimal digits)"
+Traces     : REQ-TENANT-030
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2
+Decided by : `TenantDomain.assertBrandColorValid`
+
+### RULE-TENANT-022 — حدّ معدّل العلامة العامة / Public branding rate limit
+Scope      : `GET /api/v1/public/tenants/{tenantCode}/branding`
+Trigger    : on every request to that path
+Statement  : The system shall allow each client address (`HttpServletRequest.getRemoteAddr()`, i.e. the proxy-resolved address when the application sets `server.forward-headers-strategy=native` with `server.tomcat.remoteip.internal-proxies`) at most `erp.core.tenant.public-branding-rate-limit.capacity` requests per `period` (defaults 60 per 1 minute, bucket4j, refilled greedily), counted **before** the tenant is resolved — so unknown and suspended codes consume the budget and the endpoint cannot enumerate tenant codes faster than the limit; over the limit → 429 `TENANT_BRANDING_RATE_LIMITED` with a `Retry-After` header (whole seconds until one request is available again). An IPv4 address is its own key; an IPv6 address is keyed by its **/64 prefix** (one subscriber's network, so rotating the interface bits does not reset the budget). Per JVM (a cluster gets one budget per node). The buckets are **bounded** (review round 1): a bucket unused for `period` expires (it would be full again anyway), and at most 10 000 keys are held, the least recently used one evicted first.
+Data source: the client address
+Message    : ar: "طلبات كثيرة لعلامة المستأجر. يرجى الانتظار قليلًا ثم المحاولة مجددًا" · en: "Too many tenant branding requests. Please wait a moment and try again"
+Traces     : REQ-TENANT-032
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2 ("rate-limited like customer login, bucket per IP")
+Decided by : `PublicBrandingRateLimitFilter` (`com.erp.tenant.security`, first filter of the customer chain, acting on that path only; writes the envelope like `TenantResolutionFilter`)
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | REQ-TENANT-011 (tenant from the path; resolution order source 1) | the `path-tenant-paths` default gains `/api/v1/public/tenants/{tenantCode}/branding` (still the customer chain only) |
+| CHANGED | RULE-TENANT-006 (a suspended tenant is not served) | also refuses the public branding (403 `TENANT_SUSPENDED` from the filter, and from `TenantDomain.assertServed` in the service) and `/tenant/me`; a suspended tenant's logo URL answers 403 like its other public files |
+
+### E4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_LOGO_INVALID` | 400 | `VALIDATION_ERROR` (field error `file`) | `TenantDomain.assertLogoAccepted` | — |
+| `TENANT_BRAND_COLOR_INVALID` | 400 | `VALIDATION_ERROR` (field error `brandColor`) | `TenantDomain.assertBrandColorValid` | the value sent |
+| `TENANT_BRANDING_RATE_LIMITED` | 429 | (written by the filter) | `PublicBrandingRateLimitFilter` | — |
+Referenced: `TENANT_NOT_FOUND` 404 (also thrown by `TenantBrandingService`), `TENANT_SUSPENDED` 403 (also thrown by
+`TenantDomain.assertServed` for the two branding reads, so the generated api-docs list it), `VALIDATION_ERROR` 400.
+Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity E` block each).
+
+### E5. ENT-TENANT-001 Tenant — CHANGED (fields); DTOs
+| Kind | Field | Logical type | Required | Rule / format | Written by | Label-ar | Label-en |
+|---|---|---|---|---|---|---|---|
+| NEW | logoFileId | id (soft reference to `FILE_DOCUMENT.ID`, no FK — XM-TENANT-003) | no | not exposed; the API shows `logoUrl` | `PUT` / `DELETE /{id}/logo` (RULE-TENANT-018) | الشعار | Logo |
+| NEW | brandColor | text (7) | no | `#RRGGBB`, upper-cased (RULE-TENANT-021) | `PATCH /{id}/branding` | لون العلامة | Brand colour |
+New DTOs: `TenantBrandingUpdateRequest { brandColor }` and `TenantBrandingResponse { code, nameAr, nameEn, logoUrl,
+brandColor, defaultLocale }` (no id, status, contact, profile or audit field). `TenantResponse` CHANGED: + `logoUrl`,
+`brandColor`. `TenantUpdateRequest` unchanged (profile only; the logo has its own endpoints). `logoUrl` is resolved
+inside the tenant (`TenantContext.callAs(id)`, a new read-only transaction when the caller's tenant differs), because
+FILE's lookup reads the current tenant's documents only; a logo document that is no longer servable yields null.
+Physical names, widths, constraint: `../P2/db-script-tenant.md` 1.3.0 addendum (DBF-TENANT-043, -044).
+
+### E6. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID`, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` / `SEC_USER.PHOTO_FILE_ID` convention) — written through `FileImageStoreApi.storePublicImage` / `discard` (FILE XM-FILE-002), read through `FileDocumentLookupApi.publicUrl` (XM-FILE-001), always inside `TenantContext.callAs(id)` | FILE | logo endpoints; every `TenantResponse` / `TenantBrandingResponse` |
+| CHANGED | — | `com.erp.audit.crossmodule.AuditApi` — + action `TENANT_LOGO_CHANGED` (E8) | audit | logo endpoints |
+| CONFIG | — | NEW `erp.core.tenant.public-branding-rate-limit.capacity` (60) / `period` (1m); CHANGED `erp.core.tenant.path-tenant-paths` default + `/api/v1/public/tenants/{tenantCode}/branding` | — | REQ-TENANT-011, RULE-TENANT-022 |
+| EXPOSED | — | `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) — HTTP, for the frontend shell and login page (plan §8 F2) | — | frontend |
+The write runs like package B's admin-reset: `TenantService.setLogo` / `removeLogo` are not `@Transactional` (a
+transaction of the PLATFORM request would bind the PLATFORM Hibernate session, and the image would land in PLATFORM's
+rows); each opens one transaction inside `callAs(id)` (`TransactionTemplate`, `REQUIRES_NEW`), so the stored image,
+the `CORE_TENANT` update, the discard of the previous document and the audit rows commit or roll back together.
+
+### E7. Serving an SVG logo — facts and decision (for the frontend)
+| Kind | Item |
+|---|---|
+| fact | PNG, JPEG and WebP logos are served `inline` (step 07's inline list). An SVG logo is served `Content-Type: image/svg+xml`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'` (SVG is deliberately not inline-safe, FILE srs 1.3.0 §3): an `<img src="{logoUrl}">` renders it (the disposition only affects navigation, and an SVG in `<img>` runs no script and loads nothing), opening the URL in a tab downloads it. |
+| decision | The inline list is **not** changed (no FILE ADR): SVG stays accepted for logos (plan §7 E.3) because `<img>` is the only way the frontend shows a logo (plan §8 F2 `<TenantLogo>`, F3 preview). The frontend must render `logoUrl` only through `<img>` (never `<object>`, `<embed>`, `<iframe>` or inline markup). Raster is preferred where the file is opened directly or reused outside the page (e-mail, favicon): the PLATFORM_TENANTS upload hint should say "PNG or WebP recommended; SVG must be plain or optimised". |
+| decision | No server-side resize (plan §6 D.4); the frontend constrains the height (28 px in the shell). |
+
+### E8. Audit
+| Operation | `CORE_AUDIT_EVENT` |
+|---|---|
+| `PUT /{id}/logo`, `DELETE /{id}/logo` | `TENANT_LOGO_CHANGED` (actor = the operator's username, realm `STAFF`, `actorUserId` null, entity `CORE_TENANT` / {id}, summaries "logo set" / "logo removed" with the tenant code and the document id) recorded **twice in the same transaction**: once in tenant {id} (its administrators see who changed their branding) and once in PLATFORM (`tenantId = 1`, the operator's trail — B's `TENANT_ADMIN_RESET` precedent); one row only when {id} is PLATFORM. The `@Audited` `UPDATE` row of `CORE_TENANT` (`logoFileId`) lands in tenant {id}, the tenant the change was made in (the audit module's rule for global entities). A removal of a missing logo records nothing. |
+| `PATCH /{id}/branding` | the `@Audited` `UPDATE` row of `CORE_TENANT` (`brandColor`), in PLATFORM; no explicit action |
+| `/tenant/me`, public branding | none (reads) |
+
+### E9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
+| Kind | Section | Delta |
+|---|---|---|
+| CHANGED | B1 Operations | + set / replace / remove a tenant's logo, set / clear its brand colour |
+| CHANGED | B3 Input | branding row in the tenant detail: logo file input (PNG / JPEG / WebP / plain SVG, ≤ 1 MB) with preview, remove (sensitive, confirmation), optional brand colour `#RRGGBB` |
+| unchanged | B4 Access | same two actions; the new endpoints need `PLATFORM_TENANT_MANAGE` (D5, ADR-TENANT-005) |
+| CHANGED | B5 API expectations | + the three platform rows of E1 |
+
+### E10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-005 — the logo is set by the platform administrator from `PLATFORM_TENANTS`; no tenant self-service screen in 1.3.0 (decision D5). |
+| CHANGED (plan) | Migration `V20__tenant_branding.sql` (plan: V18; packages D and B took V16 … V19). |
+| NEW (decision) | DELETE answers 204 without a body (plan §7 E.2; SEC's photo removal; build-create-controller A.6.5); removing a missing logo is not an error. G's "200 + count" precedent applies to revokes that report a cascade count, which a logo removal has not. |
+| NEW (decision) | `brandColor` is upper-cased on save (one spelling per colour); blank clears like null. |
+| NEW (decision) | `TENANT_LOGO_CHANGED` in both the target tenant and PLATFORM (E8); the brand colour relies on the entity audit. |
+| NEW (decision) | The rate limit is a filter keyed by client address only (not by tenant code), counted before the tenant lookup (RULE-TENANT-022): a limiter inside the controller would never see the 404 / 403 answers the tenant filter gives, and keying by code would not bound enumeration. A new error code `TENANT_BRANDING_RATE_LIMITED` (429; the plan named none; `CUSTOMER_LOGIN_RATE_LIMITED` is SEC's and speaks of sign-in). Default 60 per minute: a login page asks once per tenant code it settles on. |
+| NEW (decision) | `/api/v1/tenant/me` is realm-neutral on the core chain rather than moved to the customer chain: a STAFF token would be refused there, as a CUSTOMER token is on the core chain by default (SEC realm rule CHANGED, srs-sec.md 1.3.0 §11). Review round 1: for `GET` only, like the forced-change exemption. |
+| NEW (review round 1) | Rate-limit buckets: IPv6 keyed by /64, entries expire after `period` unused, at most 10 000 keys (LRU), `Retry-After` on 429 — no new dependency (Caffeine is not on erp-core's classpath; an access-ordered map does it). `LoginRateLimiter` keeps its clear-all-above-10 000 behaviour (SEC, a follow-up, not changed by E). |
+| NEW (decision) | The two read endpoints live in a new `TenantBrandingController` (`/api/v1`) with service `TenantBrandingService` (`getMyTenantBranding` `isAuthenticated()`, `getPublicTenantBranding` `permitAll()` — the FILE public-download precedent); the three writes extend `PlatformTenantController` / `TenantService`. Controller method names are unique across the application (`setTenantLogo`, `removeTenantLogo`, `updateTenantBranding`, `getMyTenantBranding`, `getPublicTenantBranding`) so springdoc's operation ids of other modules do not shift. |
+
+### E11. Frontend impact (read by the frontend repository — plan §8 F2, F3)
+| Kind | Item |
+|---|---|
+| NEW | `GET /api/v1/tenant/me` (after login, any realm) and `GET /api/v1/public/tenants/{code}/branding` (login page, no token; 404 → platform mark only; 429 → platform mark only, no toast) → `TenantBrandingResponse`. |
+| NEW | `PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); `TenantResponse` + `logoUrl`, `brandColor`. |
+| NEW | Error codes `TENANT_LOGO_INVALID`, `TENANT_BRAND_COLOR_INVALID`, `TENANT_BRANDING_RATE_LIMITED` (both languages). |
+| NOTE | Render `logoUrl` through `<img>` only (E7); a replaced logo gets a new URL (every upload is a new document with a new random slug), so a cache never serves the old file under the new URL; but public files carry `Cache-Control: max-age=86400, public` (FILE step 07), so a removed or replaced logo's **old** URL may still be served for up to 24 h by a browser or CDN cache that already holds it — the shell must always take `logoUrl` from `/tenant/me` / the public branding (not from a remembered URL). While a tenant is suspended its logo URL and its public branding answer 403. |
+| NOTE | The public branding answers 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` when an address exceeds its budget: the login page shows the platform mark alone (no toast) and does not retry before `Retry-After`. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events (plan §5 C.1, item 15) and the per-tenant token cut-off with `POST /{id}/revoke-tokens` (plan §5 C.2, item 14)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+032, RULE 022 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 014, US 014,
+XM 003, DBF 044. This block mints **REQ/AC-TENANT-033 … 035, RULE-TENANT-023 … 024** (POL-TENANT-015 in P0,
+US-TENANT-015 in P0_5) and decision **ADR-TENANT-002** (the plan's own number, reserved for C.2). No ENT, XM,
+SCR-REQ, DBF, permission, page code or migration is added: `CORE_TENANT.TOKENS_INVALID_BEFORE` exists since
+`V19__tenant_lifecycle.sql` (DBF-TENANT-042, package B). Platform paths are relative to
+`/api/v1/platform/tenants`. Rows marked **FE** are read by the frontend (plan §8 F3). SEC's and NOTIF's sides are
+in `../../SEC/P1/srs-sec.md` 1.3.0 §12 and `../../NOTIF/P1/srs.md` 1.3.0 §5.
+
+### C1. Endpoints
+The platform row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain gate
+"caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller.
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | POST | `/{id}/revoke-tokens` | `PLATFORM_TENANT_MANAGE` | — (no body) | 200 `TenantTokenRevocationResponse { id, code, sessionsTerminated }` — the cut-off instant is not returned | 404 · `TENANT_NOT_FOUND`; 422 · `TENANT_REVOKE_TOKENS_PLATFORM` (`{id}` = PLATFORM); 500 · `TENANT_REVOKE_SESSIONS_FAILED` (review round 1: the cut-off is in force but ending the sessions failed — call again) | REQ-TENANT-035; RULE-TENANT-023, -024 |
+| CHANGED — **FE** | PATCH | `/{id}/status` | as before | as before | as before | as before; a real transition publishes `TenantSuspendedEvent` / `TenantActivatedEvent` after commit; a suspension ends the tenant's sessions (SEC); an activation cuts off every earlier token | REQ-TENANT-033, -034 |
+| CHANGED — **FE** | (filter) | every authenticated request, both chains, `GET /api/v1/tenant/me` included | — | — | — | + 401 · `TENANT_TOKEN_REVOKED` — the token's `iat` lies before its tenant's `TOKENS_INVALID_BEFORE` (written by `TenantResolutionFilter`, like `TENANT_SUSPENDED`) | REQ-TENANT-034; RULE-TENANT-023 |
+
+Order of checks — revoke-tokens: tenant (`TENANT_NOT_FOUND`) → not PLATFORM (`TENANT_REVOKE_TOKENS_PLATFORM`) →
+cut-off = the start of the next whole second after now, written in the PLATFORM request (own commit) → inside tenant
+{id}, one transaction: sessions terminated, audit. Review round 1: if that last step fails, `TOKENS_REVOKED` is still
+recorded in PLATFORM (summary: sessions not terminated) and the call answers 500 `TENANT_REVOKE_SESSIONS_FAILED`; a
+repeated call moves the cut-off forward again and ends the sessions (idempotent retry).
+Tenant filter, token branch: tenant gone or not ACTIVE (403 `TENANT_SUSPENDED`) → token before the cut-off (401
+`TENANT_TOKEN_REVOKED`) → served.
+
+Controller method `revokeTenantTokens` (unique name, so springdoc's operation ids of other modules do not shift);
+service `TenantService.revokeTokens`.
+
+### C2. Requirements (§A4) — NEW
+
+### REQ-TENANT-033 — أحداث دورة حياة المستأجر / Tenant lifecycle events
+Pattern    : event
+Statement  : When a platform operator suspends an ACTIVE tenant or activates a SUSPENDED one and the transaction commits, the system shall publish `TenantSuspendedEvent(tenantId, tenantCode, reason, actor)` or `TenantActivatedEvent(tenantId, tenantCode, actor)` on the core event bus (`com.erp.events`), delivered to `@TransactionalEventListener(AFTER_COMMIT)` listeners only after the commit; re-applying the current status, a refused change (PLATFORM protection, missing reason, unknown tenant) and a rolled-back transaction publish nothing. On `TenantSuspendedEvent` SEC terminates every open session of that tenant, both realms (SEC REQ-SEC-092); while the tenant is not ACTIVE NOTIF neither claims nor re-dispatches its `QUEUED` notifications and, on `TenantActivatedEvent`, re-dispatches them (NOTIF RULE-NOTIF-024).
+Traces     : US-TENANT-003 (CHANGED)
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-002 (CHANGED); the 1.2.0 suspension paused tokens but left `SEC_ACTIVE_SESSION` rows open and let queued mail leave a suspended tenant
+Source     : docs/plans/tenant-maturity-plan.md §5 C.1
+Priority   : HIGH
+#### AC-TENANT-033 — [REQ-TENANT-033]
+Given a tenant T whose administrator holds two open staff sessions and whose customer holds one, another tenant U with an open session, and a probe listening after commit
+When the operator suspends T with `reason = "  Unpaid invoice  "`
+Then one `TenantSuspendedEvent` arrives after the commit with `tenantId = T`, `tenantCode = T's code`, `reason = "Unpaid invoice"`, `actor` = the operator, realm `STAFF`; T's three sessions are terminated (`TERMINATED_BY` = the operator, one `SESSION_TERMINATED` row each in T's `SEC_AUDIT_LOG`), U's session is still open, and every old token of T answers 403 `TENANT_SUSPENDED`;
+suspending T again, suspending PLATFORM, suspending without a reason and a status change rolled back by its caller publish nothing;
+when the operator activates T, one `TenantActivatedEvent(T, code, operator)` arrives; activating it again publishes nothing;
+a notification queued in T while it is suspended stays `QUEUED` with `ATTEMPTS = 0` (no mail), is not re-dispatched by the requeue job, and is `SENT` after the activation
+
+### REQ-TENANT-034 — حدّ إبطال الرموز لكل مستأجر / Per-tenant token cut-off
+Pattern    : unwanted behaviour
+Statement  : If an access token of either realm reaches a non-public path and its `iat` lies before its tenant's `TOKENS_INVALID_BEFORE` (RULE-TENANT-023), then the system shall refuse the request with 401 `TENANT_TOKEN_REVOKED`, whether the token's session is still open or was already terminated; the cut-off is set to the time of every SUSPENDED → ACTIVE transition (RULE-TENANT-016) and of every `revoke-tokens` call (REQ-TENANT-035); a token issued at or after it — in particular a fresh login right after an activation — is served.
+Traces     : US-TENANT-003 (CHANGED), US-TENANT-004 (CHANGED), US-TENANT-015
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-015; ADR-TENANT-002
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+Note       : behaviour change — before 1.3.0 a token issued before a suspension worked again after the re-activation.
+#### AC-TENANT-034 — [REQ-TENANT-034]
+Given a tenant T, a staff token and a customer token of T issued in second S with their sessions open
+When `TOKENS_INVALID_BEFORE` is set within second S (after the issue)
+Then both tokens are still served (`/api/v1/sec/menu`, `/api/v1/customers/me`, `/api/v1/tenant/me` → 200);
+when it is set to second S + 1, each of those calls answers 401 `TENANT_TOKEN_REVOKED` (`/api/v1/tenant/me` for both realms included), a fresh login answers 200 and its token is served, and a login sent with the stale token in `Authorization` answers 200;
+and after a suspension and a re-activation of T in a later second, a token issued before the suspension answers 401 `TENANT_TOKEN_REVOKED` while a login right after the activation is served
+
+### REQ-TENANT-035 — إبطال رموز مستأجر / Revoke a tenant's tokens
+Pattern    : event
+Statement  : When a platform operator posts `POST /api/v1/platform/tenants/{id}/revoke-tokens`, the system shall set the tenant's `TOKENS_INVALID_BEFORE` to the start of the next whole second after now (in the PLATFORM request, its own commit; so every token issued up to and including the revoke's own second is refused by the cut-off alone, RULE-TENANT-023), then, in one transaction of tenant {id}, terminate every open session of the tenant (both realms, SEC) and record `TOKENS_REVOKED` in the tenant's and in PLATFORM's audit logs, and answer the tenant's id, code and the number of terminated sessions; if ending the sessions fails, the system shall record `TOKENS_REVOKED` in PLATFORM saying the sessions were not terminated and answer 500 `TENANT_REVOKE_SESSIONS_FAILED` (the tokens are already refused; a repeated call moves the cut-off forward and ends the sessions); it shall refuse the PLATFORM tenant (422 `TENANT_REVOKE_TOKENS_PLATFORM`, RULE-TENANT-024); a suspended tenant may be revoked (its sessions are already ended, the cut-off is written).
+Traces     : US-TENANT-015
+Entities   : ENT-TENANT-001; SEC ENT-SEC-010 (through `SecAdminRecoveryApi.terminateAllSessions`)
+Rationale  : POL-TENANT-015, POL-TENANT-006; ADR-TENANT-002
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+#### AC-TENANT-035 — [REQ-TENANT-035]
+Given tenant T with a staff and a customer session opened in an earlier second, and tenant U with a session
+When the operator posts `/{T}/revoke-tokens`
+Then the system answers 200 `{ id: T, code, sessionsTerminated: 2 }` without any cut-off field; both old tokens answer 401 `TENANT_TOKEN_REVOKED`; fresh logins are served; U's token is served; `TOKENS_REVOKED` is recorded once in T and once in PLATFORM (actor = the operator, entity `CORE_TENANT` / T, summaries naming T's code and the session count, no instant); each ended session has one `SESSION_TERMINATED` row in T's `SEC_AUDIT_LOG`;
+a token issued in the revoke's own second is refused 401 `TENANT_TOKEN_REVOKED` even when its session is re-opened (no reliance on the session step), and a login after the cut-off's second is served;
+when SEC's session step fails, the cut-off is in force, PLATFORM has a `TOKENS_REVOKED` row saying the sessions were not terminated, the call answers 500 `TENANT_REVOKE_SESSIONS_FAILED`, and a repeated call answers 200 and ends the sessions;
+`/{1}/revoke-tokens` answers 422 `TENANT_REVOKE_TOKENS_PLATFORM` and changes nothing, an unknown id 404 `TENANT_NOT_FOUND`, T's administrator 403 `SEC-403-FORBIDDEN`, no token 401; a suspended tenant answers 200 with `sessionsTerminated = 0`
+
+### C3. Business rules (§A5) — NEW / CHANGED
+
+### RULE-TENANT-023 — حدّ إبطال الرموز لكل مستأجر / Per-tenant token cut-off
+Scope      : ENT-TENANT-001.tokensInvalidBefore; every authenticated request
+Trigger    : on every request carrying a signature-valid bearer token, on a non-public path of either chain
+Statement  : A token is revoked when its tenant's `TOKENS_INVALID_BEFORE` is set and the token's `iat` (whole seconds) is **less than** the cut-off truncated to the second (a token issued in the cut-off's own second is served; one without `iat` is revoked). The tenant filter refuses a revoked token with 401 `TENANT_TOKEN_REVOKED` (security context cleared) — for a token that authenticated and for one SEC dropped (terminated session, inactive user), because SEC exposes the facts of every signature-valid token (`com.erp.tenant.TenantTokenFacts(tenantId, issuedAt)`, request attribute). The tenant's status is checked first: a token whose tenant is gone or suspended answers 403 `TENANT_SUSPENDED`, authenticated or not. A public path (`erp.core.security.public-paths`, the customer chain's unauthenticated paths) ignores a stale token, so a client can sign in again with an old `Authorization` header. The cut-off is written by RULE-TENANT-016 (activation: the activation instant, so a token of the activation's own second — necessarily issued after it, no token is issued for a suspended tenant — is served) and by REQ-TENANT-035 (revoke-tokens: the start of the next whole second, so every token up to and including the revoke's own second is refused, an in-flight login of that second included; a login later in that second is refused too and signs in again a moment later — review round 1); never exposed (responses, audit).
+Data source: ENT-TENANT-001.statusCode, .tokensInvalidBefore, read as PLATFORM; the token's `tid` and `iat`
+Message    : ar: "لم يعد رمز الدخول صالحًا لهذا المستأجر: يرجى تسجيل الدخول مجددًا" · en: "This sign-in is no longer valid for this tenant: please sign in again"
+Traces     : REQ-TENANT-034, REQ-TENANT-035
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2; ADR-TENANT-002
+Decided by : `TenantDomain.isTokenRevoked(issuedAt, tokensInvalidBefore)`, `TenantDomain.revocationCutOff(now)` (revoke-tokens' cut-off); applied by `TenantResolutionFilter`
+
+### RULE-TENANT-024 — مستأجر المنصة لا تُبطَل رموزه / PLATFORM's tokens are not revoked
+Scope      : ENT-TENANT-001
+Trigger    : on `/{id}/revoke-tokens`
+Statement  : The system shall refuse `revoke-tokens` for the PLATFORM tenant (id 1) with 422 `TENANT_REVOKE_TOKENS_PLATFORM` and change nothing: it would sign every platform operator out, the caller included (PLATFORM is never suspended either, RULE-TENANT-005); a platform operator's session is ended through SEC's session API. Every other tenant may be revoked, ACTIVE or SUSPENDED.
+Data source: ENT-TENANT-001.id
+Message    : ar: "لا يمكن إبطال رموز مستأجر المنصة ''{0}'': سيُخرج ذلك جميع مشغّلي المنصة" · en: "The tokens of the platform tenant ''{0}'' cannot be revoked: it would sign every platform operator out"
+Traces     : REQ-TENANT-035
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2 (the plan leaves PLATFORM open; decided here, ADR-TENANT-002)
+Decided by : `TenantDomain.assertTokenRevocationAllowed`
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | RULE-TENANT-006 (a suspended tenant is not served) | + on `TenantSuspendedEvent` SEC terminates every open session of the tenant (both realms; the rows stayed open in 1.2.0), and NOTIF does not claim or re-dispatch the tenant's `QUEUED` notifications while it is not ACTIVE (status set unchanged). Because the sessions are now terminated, SEC drops such a token; the tenant filter still answers 403 `TENANT_SUSPENDED` for it on a non-public path (RULE-TENANT-023's "SEC dropped" branch), so the 1.2.0 answer is kept. |
+| CHANGED | RULE-TENANT-016 (suspension reason; activation) | the `TOKENS_INVALID_BEFORE` an activation writes is now enforced (RULE-TENANT-023); the transition also publishes `TenantActivatedEvent` / a suspension `TenantSuspendedEvent` (REQ-TENANT-033) |
+| CHANGED | REQ-TENANT-012 (tenant from the access token) | the token tenant is also checked against the cut-off; a signature-valid token that SEC did not authenticate is checked for its tenant's status and cut-off on a non-public path before the `X-Tenant-Code` header (REQ-TENANT-013) is tried (review round 1: cited instead of an undefined rule id) |
+
+### C4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_TOKEN_REVOKED` | 401 | (written by the filter) | `TenantResolutionFilter` (RULE-TENANT-023) | — |
+| `TENANT_REVOKE_TOKENS_PLATFORM` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertTokenRevocationAllowed` | tenant code |
+| `TENANT_REVOKE_SESSIONS_FAILED` | 500 | `INTERNAL_ERROR` | `TenantService.revokeTokens` (review round 1) — the cut-off committed, ending the sessions failed; retryable | tenant code |
+`TENANT_PLATFORM_PROTECTED` is not reused (its message is about suspension), the `TENANT_ADMIN_RESET_PLATFORM`
+precedent. Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity
+C12` block each). `TENANT_TOKEN_REVOKED` is answered by a filter, so the generated api-docs do not list it per
+endpoint (like `TENANT_SUSPENDED` for tokens); the revoke-tokens `@Operation` names it.
+
+### C5. ENT-TENANT-001 Tenant — CHANGED (field use); DTOs
+| Kind | Field | Delta |
+|---|---|---|
+| CHANGED | tokensInvalidBefore | now **enforced** (RULE-TENANT-023) and written by `revoke-tokens` too (`Tenant.revokeTokens(Instant)`); still system-only and never exposed |
+New DTO: `TenantTokenRevocationResponse { id, code, sessionsTerminated }`. No request DTO (the endpoint has no
+body). `TenantResponse` unchanged (no cut-off field).
+
+### C6. Events — NEW (`com.erp.events`, core catalogue 11 → 13)
+| Event | Payload (besides the `DomainEvent` envelope) | Constructor | Publisher | Consumers |
+|---|---|---|---|---|
+| `TenantSuspendedEvent` | `tenantCode`, `reason` (the stored, trimmed reason); `getTenantId()` = the suspended tenant, `getActor()` = the operator, realm `STAFF` | explicit (the fact belongs to the suspended tenant, the publisher is the PLATFORM operator — the `TenantCreatedEvent` shape) | `TenantService.updateStatus`, ACTIVE → SUSPENDED only, inside the transaction after the row is flushed | SEC `TenantSuspendedSessionListener` (REQ-SEC-092) |
+| `TenantActivatedEvent` | `tenantCode`; `getTenantId()` = the activated tenant, `getActor()` = the operator, realm `STAFF` | explicit (as above) | `TenantService.updateStatus`, SUSPENDED → ACTIVE only | NOTIF `NotificationTenantActivationListener` (RULE-NOTIF-024) |
+Plain values only (no entity, no secret). The plan's payload name `code` is `tenantCode` here, as on
+`TenantCreatedEvent`. `revoke-tokens` publishes no event (SEC is called directly, so the response can carry the
+count).
+
+### C7. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | `TenantLookupApi` + `boolean isActive(Long tenantId)` — false for null, an unknown id or a tenant not ACTIVE; reads `CORE_TENANT.STATUS_CODE` (DBF-TENANT-005) by id; uncached (gov-enforce-caching-rules: a state lifecycle is never cacheable, and the claim must see a status change at once); usable without a current tenant (reads as PLATFORM, the `TenantResolutionFilter` precedent) | TENANT (exposed) | NOTIF (claim and requeue, RULE-NOTIF-024) |
+| NEW | — | `com.erp.tenant.TenantTokenFacts(Long tenantId, Instant issuedAt)` + `REQUEST_ATTRIBUTE` — root-package public type, set by SEC's `JwtAuthenticationFilter` for every signature-valid token, read by `TenantResolutionFilter` | TENANT (exposed, root package) | SEC (writes it) |
+| NEW (consumed) | — | `com.erp.sec.crossmodule.SecAdminRecoveryApi` + `int terminateAllSessions()` (SEC REQ-SEC-093) — inside `TenantContext.callAs(id)`, joins that transaction | SEC | revoke-tokens |
+| NEW (published) | — | `TenantSuspendedEvent`, `TenantActivatedEvent` (C6) | events | SEC, NOTIF, applications |
+| CHANGED | — | `com.erp.audit.crossmodule.AuditApi` — + action `TOKENS_REVOKED` (C8) | audit | revoke-tokens |
+`TenantService.revokeTokens` is not `@Transactional` (the B / E precedent): the cut-off is written by a
+`TransactionTemplate` of the PLATFORM request (the `CORE_TENANT` row is global; `updateStatus` writes it there
+too), then one `REQUIRES_NEW` transaction inside `callAs(id)` ends the sessions and records both audit rows.
+The cut-off commits first and, being the start of the next whole second, refuses every earlier token **by itself**
+(review round 1): the session step is a clean-up, not part of the guarantee. If it fails, the failure is caught,
+`TOKENS_REVOKED` is recorded in PLATFORM with a summary saying the sessions were not terminated, and the call answers
+500 `TENANT_REVOKE_SESSIONS_FAILED` (the message says the tokens are already refused and the call can be repeated);
+a repeated call writes a new cut-off and ends the sessions.
+
+### C8. Audit, sessions
+| Operation | `CORE_AUDIT_EVENT` | Sessions (SEC) |
+|---|---|---|
+| suspend (C.1) | as before (`UPDATE` row of `CORE_TENANT` in PLATFORM) | every open session of the tenant terminated after commit, `TERMINATED_BY` = the operator; one `SESSION_TERMINATED` row each in the tenant's `SEC_AUDIT_LOG` (no actor user: the operator is not a user of that tenant; the details name the operator) |
+| activate | as before; the cut-off is not recorded (entity-audit denylist word `token`) | — (none are open) |
+| revoke-tokens | `TOKENS_REVOKED` recorded **twice in the same transaction of tenant {id}**: once in tenant {id} and once in PLATFORM (`tenantId = 1`): actor = the operator's username, realm `STAFF`, `actorUserId` null, entity `CORE_TENANT` / {id}, summaries naming the tenant code and the number of sessions terminated — never the cut-off instant. The cut-off's own `UPDATE` writes no entity-audit row (its only change is a denylisted field). | every open session of the tenant, both realms, terminated in that transaction, `SESSION_TERMINATED` rows as for a suspension |
+| revoke-tokens, session step failed (review round 1) | one `TOKENS_REVOKED` row in PLATFORM only (its own commit, after the failed transaction rolled back): summary "tokens of tenant {code} revoked; the sessions were NOT terminated — call again", no instant, no secret | none ended (the failed transaction rolled back); the cut-off refuses their tokens anyway |
+
+### C9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
+| Kind | Section | Delta |
+|---|---|---|
+| CHANGED | B1 Operations | + revoke a tenant's tokens (sign every user of the tenant out) |
+| CHANGED | B3 Input | a "revoke tokens" action on a tenant row other than PLATFORM (sensitive: confirmation naming the tenant; the result shows `sessionsTerminated`) |
+| unchanged | B4 Access | same two actions; the endpoint needs `PLATFORM_TENANT_MANAGE` (D5) |
+| CHANGED | B5 API expectations | + `POST /{id}/revoke-tokens` (C1) |
+
+### C10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-002 — per-tenant cut-off instead of a `jti` denylist; second precision, same-second tokens served; the token facts as a request attribute; PLATFORM refused. |
+| CHANGED (plan) | Plan C.2 "the JWT filter exposes `iat` on the authentication details" → a request attribute `TenantTokenFacts(tenantId, issuedAt)` set for every signature-valid token (ADR-TENANT-002): the tenant module may not read SEC's `AuthRealm`, and after C.1 the token of a suspended or revoked tenant no longer authenticates (its session is terminated), so the facts are needed for a token SEC dropped. |
+| NEW (decision) | The tenant filter checks a dropped token's tenant on non-public paths (403 `TENANT_SUSPENDED` / 401 `TENANT_TOKEN_REVOKED`): without it, C.1's session termination would turn the 1.2.0 answer for an issued token of a suspended tenant (403 `TENANT_SUSPENDED`, TC-CORE-TENANT-022) into a bare 401, and the cut-off code would never be seen after a re-activation. Public paths are exempt so a login with a stale header still works. |
+| NEW (decision) | Revoke-tokens refuses PLATFORM (RULE-TENANT-024, new code `TENANT_REVOKE_TOKENS_PLATFORM`); a suspended tenant may be revoked. |
+| NEW (review round 1) | Revoke-tokens' cut-off is the start of the **next** whole second (activation keeps the activation instant): the cut-off alone refuses every token up to the revoke's own second, so a failed session step, a re-opened session or a login racing the termination query leave no token alive. A failed session step is caught, recorded in PLATFORM and answered 500 `TENANT_REVOKE_SESSIONS_FAILED` (retryable). |
+| CHANGED (plan) | Response of revoke-tokens: `TenantTokenRevocationResponse { id, code, sessionsTerminated }` (the reference analysis proposed `TenantResponse`): the count is the operation's result (the admin-reset precedent), and the tenant record itself does not change visibly. 200 with a body, `Status.UPDATED`. |
+| NEW (decision) | `TenantSuspendedEvent` / `TenantActivatedEvent` carry `tenantCode` (the plan's `code`), like `TenantCreatedEvent`. SEC's listener runs **synchronously** after commit (in the operator's request, inside `callAs(tenantId)` with a `REQUIRES_NEW` transaction), so the sessions are closed when the PATCH answers; a failure there is logged and never undoes the suspension (the token is refused by the tenant filter anyway, and the cut-off of a later activation covers a session that stayed open). |
+| NEW (decision) | NOTIF re-dispatches a re-activated tenant's queued notifications on `TenantActivatedEvent` (asynchronous listener) rather than waiting for the requeue job, which is off by default (`erp.core.notif.requeue.enabled=false`) — the plan said "the job simply does not claim them while suspended" and left their delivery to the job (NOTIF srs.md 1.3.0 §5). |
+| NEW (decision) | No new XM-TENANT id: XM-TENANT-001 is CHANGED (`isActive`), the consumed SEC method is recorded here (B7 precedent), the token facts type is root-package public API like `TenantContext`. |
+
+### C11. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW | `POST /{id}/revoke-tokens` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); not offered for PLATFORM (422 `TENANT_REVOKE_TOKENS_PLATFORM`); show `sessionsTerminated` after success. |
+| NEW | Error codes `TENANT_TOKEN_REVOKED` (401, any request of a signed-in user), `TENANT_REVOKE_TOKENS_PLATFORM` and `TENANT_REVOKE_SESSIONS_FAILED` (500 on revoke-tokens: show the message and offer to repeat the action) (both languages). On 401 `TENANT_TOKEN_REVOKED` the shell clears the session and returns to the login page (as for any 401), optionally saying "your organisation's sessions were ended". |
+| CHANGED | After a tenant is re-activated, its users sign in again (their earlier tokens answer 401 `TENANT_TOKEN_REVOKED`); a suspension ends their sessions at once. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6, item 11)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+A spike, not a feature: no requirement, rule, entity, endpoint, permission, error code, property or migration is
+added, and the public API of `TenantContext` (`current`, `find`, `require`, `isPlatform`, `set`, `clear`, `runAs`,
+`callAs`) is frozen whatever the outcome. This block mints decision **ADR-TENANT-004** only (the plan's own number,
+reserved for C.6); no other id.
+
+### C6-1. The spike and its criteria
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW (decision) | ADR-TENANT-004 — `ScopedValue` for `TenantContext` | Spike on branch `spike/tenant-scoped-value`: the `ThreadLocal` replaced behind the same API (`runAs` / `callAs` → `ScopedValue.where(...).call`; the request filter opens a bounded `ScopedValue.where(...).run(chain)` inside which `set` / `clear` keep working; the task decorator binds around the task). **Go** ⇔ hard gates H1 (`ScopedValue` final at release 25), H2 (same signatures **and** behaviour, `set` / `clear` outside a request included), H3 (`mvn verify`, `TenantIsolationIntegrationTest`, decorator tests, NOTIF tests under `spring.threads.virtual.enabled=true`, full P-LIVE) and H4 (p95 of the tenant filter not worse than ThreadLocal by > 5 % beyond noise) hold, **and** a benefit is shown: B1 (no production path can bind a tenant past its scope, so REQ-TENANT-023's guard becomes unnecessary) or B2 (measurable latency gain). Otherwise **no-go**: ADR REJECTED with the evidence, the `ThreadLocal` stays, the spike code is reverted. | plan §0 D6, §5 C.6; ADR-TENANT-004 |
+| CHANGED (on go only) | REQ-TENANT-023 | re-stated for the scoped binding (a tenant cannot outlive its scope); unchanged on no-go | ADR-TENANT-004 |
+
+### C6-2. Outcome — no-go
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW (decision) | ADR-TENANT-004 → **REJECTED** | H1 (final API), H3 (`mvn verify` 631 + 10, the named tests under virtual threads 65 / 65, P-LIVE 196 / 196) and H4 (p95 of the tenant filter equal within noise) met; H2 only with a `ThreadLocal` fallback for `set` / `clear` outside a scope (refusing it breaks 56 test classes — the Spring test listener cannot hold a bounded scope — and any application calling `set`: MAJOR); so neither B1 (the leak class remains) nor B2 (no latency gain; `callAs` ≈ 2× slower in-process at nanosecond scale). The `ThreadLocal` stays; the spike code is reverted; item 11 closes for 1.3.0. | ADR-TENANT-004 Decision |
+| UNCHANGED | REQ-TENANT-023, `TenantContext` public API | as written; no production file differs from main | ADR-TENANT-004 |
+| NEW (test) | `TenantContextLeakTest` (`com.erp.events.support`) | pins the `ThreadLocal`: no next-task leak on a reused pooled platform thread after a failing / nested `callAs` or a decorated task; in-task semantics on virtual threads (never reused, so no next-task check there): the decorator with a nested PLATFORM `callAs` (C12 listeners), no inheritance, 2 000 concurrent virtual threads; the raw-`set` leak REQ-TENANT-023 guards | measurement M1 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning: the optional `Idempotency-Key` header on `POST /api/v1/platform/tenants`, the common mechanism `com.erp.common.idempotency` and its table `CORE_IDEMPOTENCY_KEY` (plan §5 C.4, item 13)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+035, RULE 024 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 015, US 015,
+XM 003, DBF 044. This block mints **REQ/AC-TENANT-036, RULE-TENANT-025 … 026** (POL-TENANT-016 in P0,
+DBF-TENANT-045 in P2) and decision **ADR-TENANT-003** (the plan's own number, reserved for C.4). No ENT, XM, SCR-REQ,
+permission or page code is added. Migration `V21__core_idempotency_key.sql` (the plan expected V20; numbers
+re-derived at creation time, plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-C4]`). The mechanism belongs to
+`com.erp.common` (no module of its own and no COMMON analysis folder in this repository): its code-level rules are
+written **here**, in its first consumer's block (I6), and its consumer-facing contract in `docs/CONSUMING.md`.
+Rows marked **FE** are read by the frontend (plan §8 F3).
+
+### I1. Endpoints
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| CHANGED — **FE** | POST | `/api/v1/platform/tenants` | as before (`PLATFORM_TENANT_MANAGE`, caller's tenant = PLATFORM) | as before + optional request header `Idempotency-Key` (1 … 64 characters of `A-Z a-z 0-9 . _ : -`) | as before (201 `TenantResponse`); a **replay** answers the stored status (201) and the stored envelope (`data` and `timestamp` of the first answer) with the response header `Idempotent-Replayed: true`; a first answer carries no such header | as before + 400 · `IDEMPOTENCY_KEY_INVALID` (header present but not 1 … 64 allowed characters, an empty value included); 409 · `IDEMPOTENCY_KEY_CONFLICT` (the key is stored for this endpoint with another request body, or by another user) | REQ-TENANT-036; RULE-TENANT-025, -026 |
+
+Order of checks: security chain (401 / 403) → body validation (400 `VALIDATION_ERROR`, unchanged: the body is bound
+before the controller runs) → header format (400 `IDEMPOTENCY_KEY_INVALID`) → stored key (replay, or 409
+`IDEMPOTENCY_KEY_CONFLICT`) → the 1.2.0 create (authority, `TENANT_CODE_*`, SEC's password policy, provisioning).
+Without the header — or with `erp.core.idempotency.enabled=false`, which ignores it — the endpoint behaves exactly as
+in 1.2.0. The new codes are answered through the common mechanism, which the api-doc generator does not walk: the
+`@Operation` description of the create names them and the header (the header itself is a documented parameter).
+
+### I2. Requirements (§A4) — NEW
+
+### REQ-TENANT-036 — تجهيز متكرر بلا أثر / Idempotent provisioning
+Pattern    : optional feature
+Statement  : Where a `POST /api/v1/platform/tenants` request carries the header `Idempotency-Key`, the system shall run the create at most once per key: it shall store the successful (2xx) answer under (the caller's tenant, the key, the endpoint) together with a keyed hash of the request body, in the same transaction as the provisioning; a later request with the same key, the same body and the same user shall be answered with the stored status and body and the header `Idempotent-Replayed: true`, creating nothing; a request with the same key and another body, or from another user, shall be refused with 409 `IDEMPOTENCY_KEY_CONFLICT`; a refused or failed create stores nothing (the same key may be retried); a key is kept for `erp.core.idempotency.retention` (24 h), after which it is treated as unused and purged (RULE-TENANT-026).
+Traces     : US-TENANT-001 (CHANGED)
+Entities   : ENT-TENANT-001; `CORE_IDEMPOTENCY_KEY` (owned by `com.erp.common.idempotency`, no ENT id — I5)
+Rationale  : POL-TENANT-016, POL-TENANT-004; ADR-TENANT-003 — a client that timed out cannot tell whether the tenant was created; a retry must neither create a second tenant nor fail with `TENANT_CODE_DUPLICATE`
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4
+Priority   : MEDIUM
+#### AC-TENANT-036 — [REQ-TENANT-036]
+Given a platform operator and a fresh tenant code E
+When the operator posts the create of E with `Idempotency-Key: K`, then the same request again, then the same body with its fields in another order
+Then the first answer is 201 without `Idempotent-Replayed`, the next two are 201 with `Idempotent-Replayed: true` and the same `data` (same `id`), exactly one tenant E exists (one `CORE_TENANT` row, one administrator), and no answer and no stored row contains the administrator's password;
+the same key with another body (code F) answers 409 `IDEMPOTENCY_KEY_CONFLICT` and F does not exist; another platform operator using K answers 409 `IDEMPOTENCY_KEY_CONFLICT`;
+a key of 65 characters, a key with a space and an empty key answer 400 `IDEMPOTENCY_KEY_INVALID` and create nothing;
+a create refused with a key (400 `TENANT_CODE_INVALID`) stores nothing: the same key with a corrected body answers 201 without `Idempotent-Replayed`;
+two simultaneous first requests with the same key and body create exactly one tenant and both answer 201 with the same `id`, one of them replayed;
+a key whose row is older than the retention is treated as unused (the same key with another body creates that tenant), and `IdempotencyKeyRetentionJob.run()` deletes every row older than the retention, tenant by tenant;
+a key row of another tenant with the same key and endpoint is never seen by PLATFORM (the request provisions);
+without the header the 1.2.0 behaviour is unchanged (a second create of E answers 409 `TENANT_CODE_DUPLICATE`)
+
+### I3. Business rules (§A5) — NEW
+
+### RULE-TENANT-025 — صيغة مفتاح عدم التكرار / Idempotency-Key format
+Scope      : `POST /api/v1/platform/tenants` (every consumer of the mechanism)
+Trigger    : a request carrying the header `Idempotency-Key`, the mechanism enabled
+Statement  : The key shall match `^[A-Za-z0-9._:-]{1,64}$` (a UUID, a ULID or any client-chosen token fits; `VARCHAR(64)` stores it verbatim, case-sensitive); otherwise — an empty value, a 65th character, a space or any other character — the system shall refuse the request with 400 `IDEMPOTENCY_KEY_INVALID` before anything is read or written. An absent header is not an error (1.2.0 behaviour).
+Data source: the request header
+Message    : ar: "ترويسة Idempotency-Key غير صالحة: استخدم من 1 إلى 64 حرفًا من الحروف اللاتينية والأرقام والرموز . _ : -" · en: "The Idempotency-Key header is invalid: use 1 to 64 characters among letters, digits and . _ : -"
+Traces     : REQ-TENANT-036
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4 ("≤ 64 chars"; the character set is decided here, ADR-TENANT-003)
+Decided by : `com.erp.common.idempotency.IdempotencyKeyDomain.assertKeyValid`
+
+### RULE-TENANT-026 — الإعادة والتعارض والاحتفاظ / Replay, conflict and retention
+Scope      : `CORE_IDEMPOTENCY_KEY` rows of the caller's tenant
+Trigger    : a valid `Idempotency-Key` on a consumer endpoint
+Statement  : A stored key is looked up by (current tenant, `IDEMPOTENCY_KEY`, `ENDPOINT`) — Hibernate's `@TenantId` restricts the lookup to the caller's tenant (PLATFORM for tenant create). A row whose `CREATED_AT` + retention is not after now is **expired**: it is deleted and the request is treated as new. A live row whose `REQUEST_HASH` equals the request's hash and whose `CREATED_BY` is the caller is **replayed** (stored `RESPONSE_STATUS`, stored envelope, `Idempotent-Replayed: true`; the operation does not run); any other live row answers 409 `IDEMPOTENCY_KEY_CONFLICT` (another body, or another user: a stored answer is never handed to a different user). Without a live row the operation runs in **one transaction** with the key's row: the row is inserted (claimed) first, so a concurrent request with the same key waits on `UQ_CORE_IDEMPOTENCY_KEY` until this transaction ends and then replays it (or, if it rolled back, runs itself); only a 2xx answer is stored (`RESPONSE_STATUS`, `RESPONSE_BODY` = the JSON envelope as answered) and commits with the provisioning; a non-2xx answer or an exception rolls the row back with the operation. The request hash is the hex HMAC-SHA256 of the canonical JSON of the bound request body (properties and map keys sorted, nulls written; headers are not part of it), keyed by a key derived from `erp.core.security.jwt.secret`.
+Data source: `CORE_IDEMPOTENCY_KEY` (I5); the authenticated username; `erp.core.idempotency.retention`
+Message    : (409) ar: "مفتاح Idempotency-Key مستخدم من قبل لطلب مختلف: أرسل مفتاحًا جديدًا لكل طلب جديد" · en: "This Idempotency-Key was already used for a different request: send a new key for a new request"
+Traces     : REQ-TENANT-036
+Source     : docs/plans/tenant-maturity-plan.md §5 C.4; ADR-TENANT-003
+Decided by : `IdempotencyKeyDomain` (`isExpired`, `assertReplayableFor`, `isStorable`); applied by `com.erp.common.idempotency.IdempotentResponses`; purge by `IdempotencyKeyRetentionJob`
+
+### I4. Error codes — NEW (common mechanism; first consumer tenant create)
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `IDEMPOTENCY_KEY_INVALID` | 400 | `VALIDATION_ERROR` | `IdempotencyKeyDomain.assertKeyValid` (RULE-TENANT-025) | — (the key is never echoed) |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | `CONFLICT` | `IdempotencyKeyDomain.assertReplayableFor` (RULE-TENANT-026); also after two lost claim races in a row (a purge between them) | — |
+Constants in `com.erp.common.idempotency.IdempotencyErrorCodes` (the mechanism's own class, not `CommonErrorCodes`,
+which lists framework codes every endpoint can answer). Messages in `messages.properties` and
+`messages_ar.properties` (one `tenant-maturity C4` block each). No "in progress" code: a concurrent request with the
+same key waits for the first one's transaction (RULE-TENANT-026), so it is answered with the replay, never with a
+"try later".
+
+### I5. `CORE_IDEMPOTENCY_KEY` — NEW table (owned by `com.erp.common.idempotency`; first consumer tenant create)
+Entity `com.erp.common.idempotency.IdempotencyKey` **extends `AuditableEntity`** (tenant-scoped, `@TenantId` on
+`TENANT_ID`): the rows are tenant data (PLATFORM's, for tenant create), so `TenantScopedEntityTest` (RULE-TENANT-010)
+holds without a new global entity, and the table carries the convention's audit columns (`db/migration/core/README.md`
+"Tenant columns"). `CREATED_BY` doubles as the owner of the key (RULE-TENANT-026). No ENT-TENANT id (the table is not
+TENANT's); its `TENANT_ID` is DBF-TENANT-045 (the discriminator register, 22 → 23 columns). Fields: `id`, `tenantId`
+(inherited), `idempotencyKey` (≤ 64), `endpoint` (≤ 200, e.g. `POST /api/v1/platform/tenants`), `requestHash` (64 hex),
+`responseStatus`, `responseBody`, the inherited audit fields and `version`. Never exposed over HTTP, never audited (no
+`@Audited`: the response body stays out of `CORE_AUDIT_EVENT`), no permission. Physical names, widths and the DDL:
+`../P2/db-script-tenant.md` 1.3.0 package C4.
+
+### I6. The common mechanism `com.erp.common.idempotency` (where its code-level rules live)
+| Class | Role |
+|---|---|
+| `IdempotentResponses` (`@Component`) | the consumer's response helper: `craftResponse(idempotencyKey, endpoint, request, dataType, action)` — without a key (or disabled) it is `OperationCode.craftResponse(action.get())`; with one it validates, hashes, replays / refuses, or runs `action` inside the claim's transaction and stores a 2xx answer (RULE-TENANT-025, -026). Header constants `IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"`, `REPLAYED_HEADER = "Idempotent-Replayed"`. |
+| `IdempotencyKeyDomain` | the rules (plain class, no Spring/JPA): key format, expiry, replay-or-conflict, what is storable |
+| `IdempotencyKey`, `IdempotencyKeyRepository` | the entity and its repository (`findByIdempotencyKeyAndEndpoint`, `deleteExpired` by id) — private to the mechanism |
+| `IdempotencySettings` | `enabled`, `retention` and the HMAC key, built by `ErpCoreAutoConfiguration` from `ErpCoreProperties` (common stays free of any `com.erp` import outside `com.erp.common`) |
+| `IdempotencyKeyRetentionJob` (`@Component`) | `run()` deletes rows older than the retention, tenant by tenant, with plain JDBC naming `TENANT_ID` (RULE-TENANT-011; a documented `RAW_JDBC_CLASSES` entry of `CoreLibraryRulesArchTest`, the `NotificationRequeueJob` precedent): `SELECT DISTINCT TENANT_ID … WHERE CREATED_AT < ?`, then `DELETE … WHERE TENANT_ID = ? AND CREATED_AT < ?`; `@Scheduled(cron = "${erp.core.idempotency.retention-cron:-}")` (the `AuditRetentionJob` pattern: the bean is always present, the trigger fires only when the application enables scheduling) |
+| `IdempotencyErrorCodes` | `IDEMPOTENCY_KEY_INVALID`, `IDEMPOTENCY_KEY_CONFLICT` |
+The mechanism imports nothing from `com.erp.tenant` (or any module): the tenant comes from Hibernate's `@TenantId`
+(the request's `TenantContext`), the user from `SecurityContextHelper`. A consumer passes a constant endpoint id and
+its bound request; the operation must run in the caller's transaction (a `@Transactional` service method joins the
+claim's transaction; work committed in its own `REQUIRES_NEW` transactions would not be covered atomically — a later
+consumer is checked for that, ADR-TENANT-003).
+
+### I7. Configuration — NEW (`erp.core.idempotency.*`, `ErpCoreProperties.Idempotency`)
+| Property | Default | What |
+|---|---|---|
+| `erp.core.idempotency.enabled` | `true` | `false` ignores the header everywhere (1.2.0 behaviour; no row is read or written) |
+| `erp.core.idempotency.retention` | `24h` | how long a stored answer is replayed; must be positive (startup fails otherwise) |
+| `erp.core.idempotency.retention-cron` | `-` (off) | cron of the purge job's own trigger; fires only in an application that enables scheduling |
+
+### I8. Dependencies (§A8) — NEW / CHANGED
+| Kind | Surface | Owner | Used by |
+|---|---|---|---|
+| NEW (consumed) | `com.erp.common.idempotency.IdempotentResponses` (common mechanism; not a module, so no XM id) | common | `PlatformTenantController.create` |
+| CHANGED | XM-TENANT-002 provisioning SPI | TENANT | unchanged contract; the contributors now run inside the idempotency claim's transaction when a key is sent (same connection, same commit) |
+`CORE_IDEMPOTENCY_KEY.TENANT_ID` → `CORE_TENANT(ID)` is an inbound HARD FK like the other discriminator columns
+(DBF-TENANT-045), not an XM.
+
+### I9. Secrets and audit
+| Item | Decision |
+|---|---|
+| `RESPONSE_BODY` of tenant create | the `TenantResponse` envelope: no administrator password, no administrator username, no token cut-off (checked by AC-TENANT-036) |
+| `REQUEST_HASH` | covers `adminPassword` (a different password is a different request), as a **keyed** HMAC: not reversible, and not checkable offline without the server secret (a plain SHA-256 of a body whose other fields are known would be a fast password verifier) |
+| Logs | the mechanism logs the endpoint and the outcome (stored / replayed / conflict), never the body, the hash or the key |
+| Audit | a replay records nothing (nothing happened); the create's own audit rows are written once, by the first request |
+
+### I10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-003 — idempotency keys in `CORE_IDEMPOTENCY_KEY` (common), 24 h retention, first consumer tenant create. |
+| CHANGED (plan) | Plan §5 C.4 lists nine columns; the table also carries `CREATED_BY` (NOT NULL), `UPDATED_BY`, `UPDATED_AT` because its entity extends `AuditableEntity` (the tenant-scoped convention; `TenantScopedEntityTest`). 12 columns (I5, P2). |
+| CHANGED (plan) | Migration `V20__core_idempotency_key.sql` → `V21__core_idempotency_key.sql` (execution order). |
+| NEW (decision) | Only 2xx answers are stored, in the operation's own transaction; failures leave no row (a retry re-executes, which is safe because the failed create left nothing behind). |
+| NEW (decision) | Concurrency: no "in progress" state and no `IDEMPOTENCY_KEY_IN_PROGRESS` code — the claim row's unique index serialises same-key requests; the second one replays the first. |
+| NEW (decision) | The hash is a keyed HMAC-SHA256 over the canonical JSON of the bound body (not the raw bytes: whitespace and property order do not make a new request; unknown properties are dropped by binding). |
+| NEW (decision) | A stored key is replayed only to the user who stored it; another user → 409 (the same namespace per tenant and endpoint, as the plan's unique constraint has it). |
+| NEW (decision) | Expired rows are ignored at lookup as well as purged, so the 24 h window holds even when the application never schedules the job. |
+| NEW (decision) | The controller passes the header to the common helper (`IdempotentResponses`, a response helper beside `OperationCode`); the service and its `@PreAuthorize` are unchanged. A replay runs before the service's authority check: the stored answer goes only to its own user (RULE-TENANT-026), who held the authority when it was stored. |
+| CHANGED (C12 follow-up) | REQ-TENANT-035 failure path: if recording the PLATFORM `TOKENS_REVOKED` row ("sessions NOT terminated") fails too, the failure is logged and attached as suppressed, and the call still answers 500 `TENANT_REVOKE_SESSIONS_FAILED` (its cause is the session failure) — before, an audit failure replaced the answer. |
+
+### I11. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW — optional | The "create tenant" form may send `Idempotency-Key` (a UUID generated when the form opens, reused for every retry of that submission): a retry after a timeout then answers the first result (`Idempotent-Replayed: true`) instead of 409 `TENANT_CODE_DUPLICATE`. A new submission (changed form) needs a new key, or it answers 409 `IDEMPOTENCY_KEY_CONFLICT`. |
+| NEW | Error codes `IDEMPOTENCY_KEY_INVALID` (400) and `IDEMPOTENCY_KEY_CONFLICT` (409), both languages. |
+| NOTE | Core configures no CORS: an application serving the frontend from another origin must allow the request header `Idempotency-Key` and expose `Idempotent-Replayed`. |
+
+### I12. Review round 1 — CHANGED (package C4)
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | RULE-TENANT-026 — the claim | The claim is no longer a JPA `saveAndFlush` that fails on `UQ_CORE_IDEMPOTENCY_KEY` (Hibernate logged that failure at WARN with the constraint detail, **the key included**, contrary to I9). It is one plain-SQL statement in the claim's transaction: `INSERT INTO CORE_IDEMPOTENCY_KEY (ID, TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT, REQUEST_HASH, RESPONSE_STATUS, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT, VERSION) VALUES (nextval('SEQ_CORE_IDEMPOTENCY_KEY'), ?, ?, ?, ?, 0, ?, ?, ?, ?, 0) ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING`. One row inserted = claimed; **0 rows = lost**. PostgreSQL makes the statement wait for a concurrent uncommitted insert of the same key: if that transaction commits, it inserts nothing (0 rows, no error, nothing logged) and the request reads and replays the stored answer; if it rolls back, the insert succeeds and the request runs. The wait-then-replay semantics are unchanged. `TENANT_ID` is named explicitly (RULE-TENANT-011): the value is the tenant of the claim transaction's Hibernate session (`Session.getTenantIdentifierValue()`, i.e. the request's tenant through `@TenantId`'s resolver; common still imports nothing from `com.erp.tenant`); the audit columns are written by the statement (the entity listener does not run for plain SQL). Class `com.erp.common.idempotency.IdempotencyKeyClaims` (`JdbcTemplate` on the transaction's connection), a documented `RAW_JDBC_CLASSES` entry like the retention job. The answer is then recorded on the claimed row through the repository (`findByIdempotencyKeyAndEndpoint`, `@Version`). |
+| CHANGED | I6 | + `IdempotencyKeyClaims`; `IdempotencyKeyRepository` keeps `findByIdempotencyKeyAndEndpoint` and `deleteExpired` (no insert through JPA any more). |
+| NEW (note) | Authorization of a replay | A replay is answered **before** the consumer's service method, so before its `@PreAuthorize`. It goes only to the user who stored the key (RULE-TENANT-026), but if that user's permission is revoked within the retention, the stored answer can still be replayed to them. A consumer must therefore authorize its path in the **security chain** as well: tenant create is gated by the platform chain (caller's tenant = PLATFORM, REQ-TENANT-015), so a replay reaches only a platform operator who created that tenant. `docs/CONSUMING.md` §3 and ADR-TENANT-003 say so for applications. |
+| CHANGED | I1 api-docs | The api-doc generator now binds codes thrown inside an injected shared (`com.erp.common`) component that a controller or service calls — `IdempotentResponses.craftResponse` → `IDEMPOTENCY_KEY_INVALID` 400, `IDEMPOTENCY_KEY_CONFLICT` 409 appear in the create's Business Responses table. The response header `Idempotent-Replayed` stays in the `@Operation` description: the generator renders no response headers (a `docs/api-docs/README.md` known-limitations row). |
+| CHANGED | I1 header schema | The generator's method-body scan blanks string literals before counting braces, so the header's OpenAPI schema states the rule as written: `pattern = "^[A-Za-z0-9._:-]{1,64}$"`, `maxLength = 64`. |
+| NEW | Module boundary | ArchUnit: no class of `com.erp.common..` depends on a module package (`sec`, `tenant`, `mdl`, `cu`, `file`, `notif`, `sequence`, `audit`, `report`, `events`) or on `com.erp.autoconfigure..` (`CoreLibraryRulesArchTest`). `events` uses common, never the reverse. |
+| DECIDED (not done) | Lock timeout on the claim | No `SET LOCAL lock_timeout`: a statement-level timeout would also bound every later statement of the provisioning transaction (or need a reset), and its failure answer would be a new code for a wait that lasts one provisioning (≈ 1 s). The wait stays as documented (ADR-TENANT-003 Consequences). |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export: `POST /api/v1/platform/tenants/{id}/export`, the export SPI `TenantExportContributor` implemented by every core module, the archive stored as a PRIVATE document of the PLATFORM tenant behind a single-use download token (plan §5 C.5, item 16)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+036, RULE 026 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 016, US 015,
+XM 003, DBF 045, ADR 005. This block mints **REQ/AC-TENANT-037, RULE-TENANT-027, -028, XM-TENANT-004**
+(POL-TENANT-017 in P0, US-TENANT-016 in P0_5) and decision **ADR-TENANT-006**. No ENT, SCR-REQ, DBF, permission,
+page code, table, column or migration is added: the archive is a `FILE_DOCUMENT` row (data, not schema). FILE's side
+(the private store and the download token, XM-FILE-003, RULE-FILE-011) is in `../../FILE/P1/srs.md` 1.3.0 §9; the
+other modules' contributors are recorded in their own P1 1.3.0 addenda (SEC §13, MDL, CU, NOTIF §6) and their exact
+file and column lists here (X7), the one place a reader needs. SEQUENCE and AUDIT have no analysis folder in this
+repository: their files are written here only. Platform paths are relative to `/api/v1/platform/tenants`. Rows
+marked **FE** are read by the frontend (plan §8 F3).
+
+### X1. Endpoints
+The platform row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain gate
+"caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller.
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | POST | `/{id}/export` | `PLATFORM_TENANT_MANAGE` | — (no body) | 200 `TenantExportResponse { tenantId, tenantCode, fileId, fileName, sizeBytes, rowCount, downloadToken, downloadTokenExpiresAt }` | 404 · `TENANT_NOT_FOUND`; 409 · `TENANT_EXPORT_IN_PROGRESS` (an export of the same tenant is running on this node); 422 · `TENANT_EXPORT_TOO_LARGE` (the tenant has more rows than `erp.core.tenant.export.max-rows`) | REQ-TENANT-037; RULE-TENANT-027, -028 |
+| CONSUMED — **FE** | GET | `/api/v1/files/download?token={downloadToken}` (FILE API-FILE-003, unchanged) | the same platform operator (`isAuthenticated()`, the token is bound to the issuing username) | — | 200 `application/zip` attachment `tenant-export-{CODE}-{yyyyMMdd'T'HHmmss'Z'}.zip` | 401 · `FILE_ACCESS_TOKEN_INVALID` (second use, expired after 10 minutes, another user); 404 · `FILE_DOCUMENT_NOT_FOUND` (a caller of another tenant) | REQ-TENANT-037; FILE RULE-FILE-003, -011 |
+| CONSUMED | POST | `/api/v1/files/{id}/access-token` (FILE API-FILE-002, unchanged) | `PERM_FILE_BROWSER_VIEW` in PLATFORM | — | a fresh single-use token for an archive already stored | as before | FILE RULE-FILE-011 |
+
+Order of checks — export: tenant (`TENANT_NOT_FOUND`) → no export of that tenant running on this node
+(`TENANT_EXPORT_IN_PROGRESS`; the slot is taken here and released on every path) → inside tenant {id}, in **one
+read-only `REPEATABLE READ` transaction** (one snapshot): every contributor counts its rows, the sum above
+`erp.core.tenant.export.max-rows` → `TENANT_EXPORT_TOO_LARGE` (nothing is written), then every contributor streams
+its CSV files into a ZIP written to a temporary file → in PLATFORM, one transaction: FILE stores the ZIP as a PRIVATE
+document and `TENANT_EXPORTED` is recorded (X10) → FILE issues the single-use download token → 200. The temporary
+file is deleted on every path (success, refusal, failure). Controller method `exportTenant` (unique name, so
+springdoc's operation ids of other modules do not shift); service `TenantExportService.export`. Synchronous in v1
+(ADR-TENANT-006).
+
+### X2. Requirements (§A4) — NEW
+
+### REQ-TENANT-037 — تصدير بيانات المستأجر / Tenant data export
+Pattern    : event
+Statement  : When a platform operator posts `POST /api/v1/platform/tenants/{id}/export`, the system shall collect, inside tenant {id} and from one consistent snapshot, every row the tenant owns in every core module — each module writing its own tables as CSV files through the export SPI (XM-TENANT-004) — zip them with a manifest, store the ZIP as a PRIVATE `FILE_DOCUMENT` of the PLATFORM tenant (`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`), record `TENANT_EXPORTED` in PLATFORM and in the tenant, and answer the document's id, name, size, the number of exported rows and a single-use download token bound to the operator (RULE-TENANT-027); it shall refuse a tenant with more rows than `erp.core.tenant.export.max-rows` (422 `TENANT_EXPORT_TOO_LARGE`) and a second export of the same tenant while one is running on the node (409 `TENANT_EXPORT_IN_PROGRESS`, RULE-TENANT-028). A suspended tenant and the PLATFORM tenant are exported like any other.
+Traces     : US-TENANT-016
+Entities   : ENT-TENANT-001; every tenant-scoped table of X7 (read); FILE ENTITY-FILE-001 (the archive, written in PLATFORM)
+Rationale  : POL-TENANT-017; ADR-TENANT-006; ADR-TENANT-001 consequences (the shared schema makes a tenant's data a `TENANT_ID`-filtered copy)
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5
+Priority   : MEDIUM
+#### AC-TENANT-037 — [REQ-TENANT-037]
+Given a provisioned tenant T with rows in every module (a second staff user, an uploaded file, a CU override, a dispatched notification and an in-app message, a number series, audit rows, an open session) and another tenant U with rows of its own
+When the platform operator posts `/{T}/export`
+Then the answer is 200 with `tenantId = T`, `tenantCode`, a `fileId`, `fileName` `tenant-export-{T's code}-….zip`, `sizeBytes` > 0, `rowCount` = the sum of the manifest's per-file counts, a `downloadToken` and its expiry;
+the document is PRIVATE, ACTIVE, file type `ARCHIVE`, owner `CORE_TENANT` / T, module `TENANT`, in PLATFORM's rows (not in T's);
+the download with the token by the same operator answers 200 `application/zip` and a second use answers 401 `FILE_ACCESS_TOKEN_INVALID`;
+the ZIP holds `manifest.json` and exactly the files of X7 (`TENANT/CORE_TENANT.csv`, the nine SEC files, …), each a UTF-8 CSV with a byte-order mark whose first record is the X7 column list and whose record count equals the manifest's count and T's rows in that table; no file contains a password hash (`$2a$` / `$2b$` / `$2y$`), a token hash, a session token reference, a channel configuration, a file's bytes, a public slug, a storage reference or a token cut-off, and nothing of U (U's users, codes, file names);
+`TENANT_EXPORTED` is recorded once in T and once in PLATFORM (actor = the operator, entity `CORE_TENANT` / T);
+with `erp.core.tenant.export.max-rows` below T's row count the answer is 422 `TENANT_EXPORT_TOO_LARGE` and nothing is stored;
+while an export of T holds the node's slot a second one answers 409 `TENANT_EXPORT_IN_PROGRESS` and an export of U is served;
+a suspended tenant and PLATFORM (id 1) are exported (200); an unknown id answers 404 `TENANT_NOT_FOUND`, T's administrator 403 `SEC-403-FORBIDDEN`, no token 401;
+no temporary file of the export is left behind
+
+### X3. Business rules (§A5) — NEW
+
+### RULE-TENANT-027 — التصدير محدود وبلا أسرار / Export is bounded and secret-free
+Scope      : `/{id}/export`; every `TenantExportContributor`
+Trigger    : an export of tenant {id}
+Statement  : The system shall export exactly the rows whose `TENANT_ID` is {id} (and the tenant's own `CORE_TENANT` row), through every `TenantExportContributor` bean in `moduleCode` order, inside `TenantContext.callAs({id})` in one read-only `REPEATABLE READ` transaction, so the count and the files see one snapshot; every contributor's SQL names `TENANT_ID` on every tenant-scoped table it reads (RULE-TENANT-011). The total of the contributors' counts above `erp.core.tenant.export.max-rows` (default 200 000, read on every export) refuses the export with 422 `TENANT_EXPORT_TOO_LARGE` before anything is written; while writing, a contributor that writes more rows than the limit is refused the same way. Never exported: password hashes, token hashes and the token tables (`SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN`), session token references (`SEC_ACTIVE_SESSION.TOKEN_REF`, the access token's `jti`), channel configuration (`NOTIF_CHANNEL_CONFIG.CONFIG_JSON`, which holds provider credentials), notification variables (`NOTIF_LOG.VARIABLES_JSON`, which can hold reset and verification links), file bytes and storage internals (`FILE_DOCUMENT.FILE_CONTENT`, `STORAGE_REF`, `PUBLIC_SLUG` — file metadata only), the token cut-off (`CORE_TENANT.TOKENS_INVALID_BEFORE`), idempotency records (`CORE_IDEMPOTENCY_KEY`: stored answers, not business data), the platform-wide rows (registries, `CU_APP_CONFIGURATION` rows with a NULL tenant) and every row's `TENANT_ID` / `VERSION`. The archive: one CSV per table (X6, X7) and `manifest.json`; it is stored as a PRIVATE `FILE_DOCUMENT` of PLATFORM (`CORE_TENANT` / {id} / `TENANT`), never PUBLIC, and handed out only through FILE's single-use download token bound to the operator (FILE RULE-FILE-011).
+Data source: the tables of X7, read by their owner modules; `erp.core.tenant.export.max-rows`
+Message    : ar: "لا يمكن تصدير المستأجر: عدد سجلاته {0} يتجاوز الحد الأقصى المسموح {1}" · en: "The tenant cannot be exported: it has {0} rows, more than the allowed maximum of {1}"
+Traces     : REQ-TENANT-037
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5; ADR-TENANT-006
+Decided by : `TenantDomain.assertExportWithinLimit(rows, maxRows)`; applied by `TenantExportService` and `TenantExportArchive` (the streaming cap)
+
+### RULE-TENANT-028 — تصدير واحد للمستأجر في وقت واحد / One export of a tenant at a time
+Scope      : `/{id}/export`
+Trigger    : an export of tenant {id} while another export of {id} runs
+Statement  : The system shall run at most one export of a given tenant at a time **per application node**: the export takes the tenant's slot in an in-memory set before it reads anything and releases it when it ends (success, refusal or failure); a second export of the same tenant while the slot is taken is refused with 409 `TENANT_EXPORT_IN_PROGRESS` and changes nothing; exports of different tenants run side by side. Across several nodes the guard does not hold (each node has its own set): two simultaneous exports of one tenant on two nodes both succeed and store two archives — harmless (read-only on the tenant, two PLATFORM documents), documented (ADR-TENANT-006).
+Data source: the node's in-memory set of tenant ids being exported (`TenantExportGuard`)
+Message    : ar: "يجري الآن تصدير بيانات المستأجر ''{0}''؛ انتظر انتهاءه ثم أعد المحاولة" · en: "An export of tenant ''{0}'' is already running; wait for it to finish, then try again"
+Traces     : REQ-TENANT-037
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5 ("in-memory guard keyed by tenant id")
+Decided by : `TenantDomain.assertExportStartable(started, code)`; the slot is held by `com.erp.tenant.export.TenantExportGuard`
+
+### X4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_EXPORT_TOO_LARGE` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertExportWithinLimit` (RULE-TENANT-027) | the tenant's row count, the limit |
+| `TENANT_EXPORT_IN_PROGRESS` | 409 | `CONFLICT` | `TenantDomain.assertExportStartable` (RULE-TENANT-028) | tenant code |
+Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity C5` block
+each). A failure to write or read the temporary archive answers 500 `INTERNAL_ERROR` (the existing common code, the
+`readBytes` precedent); nothing is stored then.
+
+### X5. The export SPI (XM-TENANT-004) — NEW, root package `com.erp.tenant` (public, like the provisioning SPI)
+| Type | Member | Contract |
+|---|---|---|
+| `TenantExportContributor` (interface; every core module implements one bean, applications may add theirs) | `String moduleCode()` | the ZIP folder of the module's files: `^[A-Z][A-Z0-9_]{0,31}$`, unique among the contributors (a duplicate or a malformed code fails the export with 500) |
+| | `long countRows(Long tenantId)` | the number of rows `export` will write for the tenant — one `SELECT COUNT(*)` per exported table, each naming `TENANT_ID`; called first, in the export's snapshot |
+| | `void export(TenantExport export)` | writes the module's files through `export.csv(...)`, streaming rows from its own SQL (`JdbcTemplate` with a fetch size, so a table is never loaded whole), every statement naming `TENANT_ID` (RULE-TENANT-011); runs inside `TenantContext.callAs(tenantId)` and the export's read-only transaction; must never write |
+| `TenantExport` (interface, implemented by the tenant module) | `Long tenantId()`, `String tenantCode()` | the tenant being exported |
+| | `void csv(String fileName, List<String> columns, Consumer<Rows> rows)` | opens `{moduleCode}/{fileName}.csv` in the ZIP (`fileName` `^[A-Z][A-Z0-9_]{0,63}$`), writes the byte-order mark and the header record `columns`, hands `rows` the sink, closes the entry and counts its records for the manifest; a duplicate file of a module fails the export with 500 |
+| `TenantExport.Rows` (sink) | `void addRow(ResultSet resultSet)` | writes the current row of a `ResultSet` — every selected column in select-list order, which must have exactly `columns.size()` columns; usable as a `RowCallbackHandler` (`jdbc.query(sql, rows::addRow, tenantId)`) |
+| | `void add(Object... values)` | writes one record from values in column order (for rows not read by SQL) |
+| `TenantExportJdbc` (utility) | `static JdbcTemplate streaming(DataSource)` | a `JdbcTemplate` with fetch size 1 000 for the contributors (PostgreSQL streams a result set only with a fetch size inside a transaction) |
+Mirrors XM-TENANT-002 (`TenantProvisioningContributor`): the tenant module never reads another module's table; each
+module reads its own. The contributors live in each module's `tenant` package (the documented raw-JDBC place of
+`CoreLibraryRulesArchTest` rule 7, like the provisioning contributors): `com.erp.tenant.export.TenantTenantExportContributor`,
+`com.erp.sec.tenant.SecTenantExportContributor`, `com.erp.mdl.tenant.MdlTenantExportContributor`,
+`com.erp.cu.tenant.CuTenantExportContributor`, `com.erp.file.tenant.FileTenantExportContributor`,
+`com.erp.notif.tenant.NotifTenantExportContributor`, `com.erp.sequence.tenant.SequenceTenantExportContributor`,
+`com.erp.audit.tenant.AuditTenantExportContributor`. The plan's SPI has two methods; `countRows` is added because the
+plan asks for the count **before** the export (X10).
+
+### X6. The archive — format
+| Item | Decision |
+|---|---|
+| Container | ZIP (`DEFLATED`), entries in contributor order (`moduleCode` ascending), files in the order each contributor writes them, `manifest.json` last; every entry's time = the export instant |
+| Entry names | `{moduleCode}/{fileName}.csv` (e.g. `SEC/SEC_USER.csv`) and `manifest.json`; a file is written even when the tenant has no row in it (header only), so every archive has the same file set |
+| CSV encoding | UTF-8 **with** a byte-order mark (`EF BB BF`) — Excel opens Arabic text correctly only with it (the REPORT export precedent, `CsvReportWriter`, step 11); RFC 4180: `,` separator, CRLF record separator, a field holding `,` `"` CR LF or leading / trailing blanks is enclosed in `"` with inner `"` doubled |
+| Header | the physical column names of X7 (upper case), one record |
+| Values | NULL → empty field; an empty text → `""` (so NULL and empty stay distinguishable); numbers plain (`BigDecimal.toPlainString`); booleans `true` / `false`; numeric flags as stored (`1` / `0`); `TIMESTAMPTZ` → ISO-8601 instant in UTC (`2026-10-08T09:30:00Z`); `TIMESTAMP` (no zone) → ISO-8601 local date-time as stored; `JSONB` / `TEXT` as stored |
+| Formula guard | a text value starting with `=`, `+`, `-`, `@`, TAB or CR is prefixed with an apostrophe (`'`), so a spreadsheet shows it as text instead of evaluating it (the REPORT precedent; CSV injection); numbers are never prefixed. A re-import strips one leading apostrophe from such values (the manifest says so) |
+| Row order | deterministic: every query ends with `ORDER BY` the table's primary key |
+| `manifest.json` | `{ "format": "erp-tenant-export", "formatVersion": 1, "tenantId", "tenantCode", "exportedAt" (ISO instant), "exportedBy" (operator username), "erpCoreVersion" (the erp-core jar's `Implementation-Version`, `unknown` when run from classes), "rowCount", "files": [ { "module", "path", "rows" } … ], "csv": { encoding, separator, recordSeparator, nullValue, emptyText, formulaGuard } }` — written with `PlainJson.MAPPER`; no secret |
+| Name of the stored document | `tenant-export-{CODE}-{yyyyMMdd'T'HHmmss'Z'}.zip`, content type `application/zip` |
+
+### X7. Files and columns per module (exact; `TENANT_ID` and `VERSION` are never written)
+| Module (contributor) | File (`{module}/{file}.csv`) | Columns (CSV header = select list, in this order) | Excluded columns of that table (why) | Order |
+|---|---|---|---|---|
+| AUDIT (`AuditTenantExportContributor`) | `AUDIT/CORE_AUDIT_EVENT` | `ID, OCCURRED_AT, ACTOR, ACTOR_REALM, ACTOR_USER_ID, ACTION, ENTITY_TYPE, ENTITY_ID, SUMMARY_AR, SUMMARY_EN, CHANGES, IP, USER_AGENT, REFERENCE, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — (`CHANGES` never holds a sensitive field: the audit denylist, `AuditApi.SENSITIVE_FIELD_WORDS`) | `ID` |
+| CU (`CuTenantExportContributor`) | `CU/CU_APP_CONFIGURATION` | `ID, CONFIG_KEY, CONFIG_VALUE, NOTES, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | rows with `TENANT_ID IS NULL` (platform defaults, not the tenant's) | `ID` |
+| FILE (`FileTenantExportContributor`) | `FILE/FILE_CATEGORY` | `ID, CATEGORY_CODE, NAME_AR, NAME_EN, MAX_SIZE_BYTES, ALLOWED_CONTENT_TYPES, ALLOW_PUBLIC, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| FILE | `FILE/FILE_DOCUMENT` | `ID, OWNER_TYPE, OWNER_ID, MODULE_CODE, FILE_NAME, CONTENT_TYPE, FILE_SIZE, FILE_TYPE_ID, FILE_STATUS_ID, FILE_CATEGORY_FK, VISIBILITY, STORAGE_PROVIDER, CONTENT_HASH, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `FILE_CONTENT` (the bytes: metadata only), `STORAGE_REF` (provider-internal location), `PUBLIC_SLUG` (the capability of a public URL) | `ID` |
+| MDL (`MdlTenantExportContributor`) | `MDL/MDL_LOOKUP_TYPE` | `LOOKUP_TYPE_PK, KEY, OWNER_MODULE_CODE, NAME_AR, NAME_EN, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `LOOKUP_TYPE_PK` |
+| MDL | `MDL/MDL_LOOKUP_VALUE` | `LOOKUP_VALUE_PK, LOOKUP_TYPE_ID, LOOKUP_TYPE_KEY, CODE, NAME_AR, NAME_EN, SORT_ORDER, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`LOOKUP_TYPE_KEY` = the type's `KEY`, joined within the tenant) | — | `LOOKUP_VALUE_PK` |
+| NOTIF (`NotifTenantExportContributor`) | `NOTIF/NOTIF_TEMPLATE` | `ID, TEMPLATE_CODE, NAME_AR, NAME_EN, SUBJECT_AR, SUBJECT_EN, BODY_AR, BODY_EN, ATTACHMENT_FILE_ID, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| NOTIF | `NOTIF/NOTIF_CHANNEL_CONFIG` | `ID, CHANNEL_TYPE_ID, IS_ENABLED_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `CONFIG_JSON` (provider settings and credentials) | `ID` |
+| NOTIF | `NOTIF/NOTIF_LOG` | `ID, RECIPIENT_ID, CHANNEL_TYPE_ID, NOTIFICATION_STATUS_ID, MODULE_CODE, REFERENCE_TYPE, REFERENCE_ID, TEMPLATE_FK, RETRY_COUNT, ATTEMPTS, NEXT_ATTEMPT_AT, SENT_AT, ERROR_MESSAGE, LAST_ERROR, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `VARIABLES_JSON` (a queued row's template variables: reset / verification links carry raw tokens) | `ID` |
+| NOTIF | `NOTIF/NOTIF_INBOX` | `ID, RECIPIENT_USER_ID, TITLE_AR, TITLE_EN, BODY_AR, BODY_EN, READ_AT, REFERENCE_TYPE, REFERENCE_ID, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| SEC (`SecTenantExportContributor`) | `SEC/SEC_USER` | `USER_PK, USERNAME, EMAIL, REALM, FULL_NAME_AR, FULL_NAME_EN, STATUS_CODE, IS_ACTIVE_FL, LAST_LOGIN_AT, PHONE, JOB_TITLE_AR, JOB_TITLE_EN, PREFERRED_LOCALE, PHOTO_FILE_ID, PASSWORD_CHANGE_REQUIRED_FL, PASSWORD_CHANGED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `PASSWORD_HASH` | `USER_PK` |
+| SEC | `SEC/SEC_ROLE` | `ROLE_PK, CODE, NAME_AR, NAME_EN, DESCRIPTION_AR, DESCRIPTION_EN, IS_SUPER, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ROLE_PK` |
+| SEC | `SEC/SEC_USER_ROLE` | `USER_ROLE_PK, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `USER_ROLE_PK` |
+| SEC | `SEC/SEC_ROLE_MODULE_GRANT` | `ROLE_MODULE_GRANT_PK, ROLE_ID, MODULE_ID, MODULE_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`MODULE_CODE` from the global `SEC_MODULE_REG`, which is not exported) | — | `ROLE_MODULE_GRANT_PK` |
+| SEC | `SEC/SEC_ROLE_SCREEN_GRANT` | `ROLE_SCREEN_GRANT_PK, ROLE_ID, SCREEN_ID, PAGE_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`PAGE_CODE` from the global `SEC_SCREEN_REG`) | — | `ROLE_SCREEN_GRANT_PK` |
+| SEC | `SEC/SEC_ROLE_ACTION_GRANT` | `ROLE_ACTION_GRANT_PK, ROLE_ID, ACTION_ID, PERMISSION_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`PERMISSION_CODE` from the global `SEC_ACTION_REG`) | — | `ROLE_ACTION_GRANT_PK` |
+| SEC | `SEC/SEC_ACTIVE_SESSION` | `ACTIVE_SESSION_PK, USER_ID, STARTED_AT, LAST_ACTIVITY_AT, IP_ADDRESS, TERMINATED_AT, TERMINATED_BY, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `TOKEN_REF` (the access token's `jti`) | `ACTIVE_SESSION_PK` |
+| SEC | `SEC/SEC_AUDIT_LOG` | `AUDIT_LOG_PK, EVENT_TYPE_CODE, ACTOR_USER_ID, OCCURRED_AT, TARGET_REF, DETAILS_AR, DETAILS_EN, IP_ADDRESS, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `AUDIT_LOG_PK` |
+| SEC | `SEC/SEC_SIGNUP_REQUEST` | `SIGNUP_REQUEST_PK, EMAIL, FULL_NAME_AR, FULL_NAME_EN, SUBMITTED_AT, STATUS_CODE, REVIEWED_BY, REVIEWED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `SIGNUP_REQUEST_PK` |
+| SEC | (not exported) | `SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN` | whole tables: short-lived credentials (`TOKEN_HASH`), no business data | — |
+| SEQUENCE (`SequenceTenantExportContributor`) | `SEQUENCE/CORE_NUMBER_SERIES` | `ID, CODE, PREFIX, PATTERN, RESET_POLICY, PERIOD_KEY, NEXT_VALUE, IS_ACTIVE, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| TENANT (`TenantTenantExportContributor`) | `TENANT/CORE_TENANT` | `ID, CODE, NAME_AR, NAME_EN, STATUS_CODE, CONTACT_EMAIL, CONTACT_PHONE, COUNTRY_CODE, DEFAULT_LOCALE, TIMEZONE, NOTES, SUSPENDED_AT, SUSPENDED_BY, SUSPENSION_REASON, LOGO_FILE_ID, BRAND_COLOR, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (the one row `ID = {id}`; `CORE_TENANT` is global, the predicate is its `ID`) | `TOKENS_INVALID_BEFORE` (the token cut-off) | `ID` |
+| (common, no contributor) | (not exported) | `CORE_IDEMPOTENCY_KEY` | whole table: stored answers of retried calls, not business data (C4 note) | — |
+21 files in 8 folders. A global table (`SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG`, `CORE_TENANT` beyond the
+tenant's own row) is never exported; a reference to one is resolved to its code (the grant files) because the
+registry's ids mean nothing outside this installation. References between the tenant's own tables stay ids (both
+sides are in the archive). REPORT owns no table (no contributor).
+
+### X8. Configuration — NEW (`erp.core.tenant.export.*`, `ErpCoreProperties.Tenant.Export`)
+| Property | Default | What |
+|---|---|---|
+| `erp.core.tenant.export.max-rows` | `200000` | the most rows one export may contain (all files together); must be positive; read on every export, so a change through the bound properties applies to the next export |
+
+### X9. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| NEW (exposed) | XM-TENANT-004 | SPI `com.erp.tenant.TenantExportContributor { String moduleCode(); long countRows(Long tenantId); void export(TenantExport export) }` + `TenantExport`, `TenantExport.Rows`, `TenantExportJdbc` (X5) | TENANT (root package) | implemented by SEC, MDL, CU, FILE, NOTIF, SEQUENCE, AUDIT and TENANT itself; applications may add their own (CONSUMING §3) |
+| NEW (consumed) | FILE XM-FILE-003 | `com.erp.file.crossmodule.FilePrivateStoreApi`: `StoredPrivateFile storePrivateFile(PrivateFileStoreRequest)`, `DownloadGrant issueDownloadToken(Long documentId)` — in the current tenant (PLATFORM here) | FILE | `TenantExportService` |
+| CHANGED (consumed) | — | `com.erp.audit.crossmodule.AuditApi` — + action `TENANT_EXPORTED` (X10) | audit | `TenantExportService` |
+`TenantExportService.export` is not `@Transactional` (the B / E / C12 precedent): the snapshot transaction is opened
+inside `TenantContext.callAs(id)` with a `TransactionTemplate` (read-only, `ISOLATION_REPEATABLE_READ`), then a
+`REQUIRES_NEW` PLATFORM transaction stores the document and audits (the tenant row in a nested `REQUIRES_NEW`
+transaction inside `callAs(id)`, committed first), then the token is issued outside any transaction. It is **not**
+wrapped in C4's `IdempotentResponses` (its work commits in several transactions — ADR-TENANT-003 Consequences); a
+retry simply exports again.
+
+### X10. Audit, secrets, memory
+| Item | Decision |
+|---|---|
+| Audit | `TENANT_EXPORTED` recorded in PLATFORM (`tenantId = 1`) and in the exported tenant, in that order inside the PLATFORM storing transaction (the tenant's row in its own nested transaction): actor = the operator's username, realm `STAFF`, `actorUserId` null in the tenant, entity `CORE_TENANT` / {id}, summaries naming the tenant code, the row count and the document id; one row when {id} is PLATFORM. A refused export (404, 409, 422) records nothing. |
+| Secrets | the X7 exclusions; the response carries the download token once (it is not logged); logs name ids, counts and sizes only, never a value of an exported row |
+| Memory | rows are streamed (fetch size 1 000) and each record is written at once to a buffered ZIP stream on a temporary file (`erp-tenant-export-*.zip` in `java.io.tmpdir`), so no table is held in memory; the temporary file is deleted in a `finally` on every path. FILE then stores the archive through the active storage provider: the `DB` provider reads it into one `BYTEA` value (bounded by `max-rows`), `LOCAL` / `S3` stream it. FILE's upload limits (`erp.core.files.max-content-bytes`) do not apply: the archive is not an upload; `max-rows` bounds it. |
+| Archives kept | an archive stays a PRIVATE PLATFORM document until a platform operator deletes it (`DELETE /api/v1/files/{id}`); no retention job in v1 |
+
+### X11. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-006 — synchronous export bounded by a row limit (v1), archive stored as a PRIVATE PLATFORM document behind FILE's single-use download token; alternatives: an asynchronous job with a status resource, streaming the ZIP in the HTTP response. |
+| CHANGED (plan) | SPI: + `long countRows(Long tenantId)` — the plan asks to count before exporting ("refuse > N rows"); the plan's two methods stay as written. |
+| CHANGED (plan) | Response `{ fileId, downloadToken }` → `TenantExportResponse` with `tenantId`, `tenantCode`, `fileName`, `sizeBytes`, `rowCount` and `downloadTokenExpiresAt` besides the two planned fields (additive). 200 with `Status.SUCCESS` (nothing of the tenant changes; the stored document is the result, like a report export). |
+| NEW (decision) | PLATFORM is exportable (its users, roles, audit and settings are tenant data like any other; its previous export archives appear as `FILE_DOCUMENT` metadata). A suspended tenant is exportable (its data is still there; the export reads, it never signs anyone in). |
+| NEW (decision) | One consistent snapshot: count and files in one read-only `REPEATABLE READ` transaction of the tenant. |
+| NEW (decision) | The in-memory guard is per node (plan: "in-memory guard keyed by tenant id"); multi-node behaviour documented in RULE-TENANT-028. |
+| NEW (decision) | CSV with a byte-order mark and the formula guard (X6), the REPORT export precedent; NULL vs empty text distinguished. |
+| NEW (decision) | The download token is FILE's existing single-use token (API-FILE-002/003): bound to the issuing username, 10 minutes, consumed by the first successful download; the archive is found only in PLATFORM's rows, so in practice only the issuing platform operator can download it. Later downloads: a new token through `POST /api/v1/files/{id}/access-token` (`PERM_FILE_BROWSER_VIEW`). |
+
+### X12. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW | An "export data" action on a tenant row of `PLATFORM_TENANTS` (no new page code, permission or menu entry): `POST /{id}/export`, then download at once with `GET /api/v1/files/download?token={downloadToken}` (same session, single use, 10 minutes); show `rowCount` and `sizeBytes`. A long export (tens of seconds for a large tenant) keeps the request open: show progress, do not retry automatically. |
+| NEW | Error codes `TENANT_EXPORT_TOO_LARGE` (422) and `TENANT_EXPORT_IN_PROGRESS` (409), both languages. |
+| NOTE | The archive is a ZIP of UTF-8 CSV files with a byte-order mark (opens in Excel with Arabic intact) and `manifest.json`. |
+
+### X13. Code check — CHANGED (package C5)
+Code compared with X1–X12 item by item (check commit): endpoint, permission, codes and statuses, response fields, SPI
+methods, the 21 files and their column lists (compared mechanically with X7: all equal), exclusions, manifest keys,
+file name, audit rows, transactions, property. One deliberate addition, recorded here and in `docs/DEVIATIONS.md`
+`[TM-C5]`:
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | X5 `TenantExportJdbc` | + `static String selectOfTenant(List<String> columns, String table, String primaryKey)` (`SELECT <columns> FROM <table> WHERE TENANT_ID = ? ORDER BY <primaryKey>`, so the select list **is** the header) and `static long countOfTenant(JdbcTemplate jdbc, Long tenantId, String... tables)` (one `COUNT(*)` per table, each naming `TENANT_ID`) beside `streaming(DataSource)`; the contributors' one-table files use them, the joined files (SEC grants, MDL values) write their SQL out. |
+| CONFIRMED | ADR-TENANT-006 | ACCEPTED (the code matches its Decision). |
+
+### X14. Review round 1 — CHANGED (package C5)
+Review round 1 found that the archive, an ordinary PRIVATE document of PLATFORM, was readable through the generic FILE
+API by any PLATFORM user holding `PERM_FILE_BROWSER_VIEW` (list → access token → download), that deleting it kept its
+bytes (FILE soft delete), that audit `CHANGES` of `FILE_DOCUMENT` carried public slugs and storage references into the
+export, that a failed store still left a committed `TENANT_EXPORTED` row in the tenant, and that nothing capped
+concurrent exports across tenants. No REQ / RULE id is minted here (RULE-TENANT-027 / -028 and AC-TENANT-037 are
+CHANGED); one error code (`TENANT_EXPORT_BUSY`) and one property (`max-concurrent`) are added. FILE's side mints
+RULE-FILE-012 and migration `V22__file_document_required_authority.sql` (`../../FILE/P1/srs.md` 1.3.0 §9.5,
+`../../FILE/P2/db-script.md` 1.3.0 package C5).
+
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | X1 order of checks | tenant (404) → this tenant's export not running (409 `TENANT_EXPORT_IN_PROGRESS`) → fewer than `erp.core.tenant.export.max-concurrent` exports running on the node (429 `TENANT_EXPORT_BUSY`) → snapshot … as before. Both slots are released on every path. |
+| CHANGED | X1 consumed FILE endpoints | the archive is a **restricted** document (FILE RULE-FILE-012): `GET /api/v1/files` (owner list) leaves it out, and `GET /api/v1/files/{id}`, `POST /{id}/access-token`, `GET /download?token=`, `PATCH /{id}/visibility` and `DELETE /{id}` answer 404 `FILE_DOCUMENT_NOT_FOUND` to a caller who does not hold `PLATFORM_TENANT_MANAGE`, whatever FILE permission they hold; a platform operator (holding it) lists, reads, re-tokens, archives and deletes it as before. 404 rather than 403 so the existence of a tenant's archive is not revealed. |
+| CHANGED | RULE-TENANT-027 | + the archive is stored with `REQUIRED_AUTHORITY = PLATFORM_TENANT_MANAGE` (`PrivateFileStoreRequest.requiredAuthority`); FILE serves it only to callers holding that authority (RULE-FILE-012). + Deleting the archive (`DELETE /api/v1/files/{id}?action=DELETE`) **removes its bytes** through the storage provider and keeps a `DELETED` metadata tombstone (name, size, hash, owner). + `AUDIT/CORE_AUDIT_EVENT.csv` never carries `storageRef` or `publicSlug`: `FileDocument` is `@Audited(ignore = {"storageRef", "publicSlug"})` from now on, and the AUDIT contributor removes both fields from the `CHANGES` of every `FILE_DOCUMENT` row it exports (rows written before this change hold them). + The tenant's `TENANT_EXPORTED` row is written in the same PLATFORM transaction as the document and the PLATFORM row (explicit `tenantId`), so a failed store leaves neither. |
+| CHANGED | RULE-TENANT-028 | + at most `erp.core.tenant.export.max-concurrent` exports (default 2, all tenants together) run at once on a node; one more answers 429 `TENANT_EXPORT_BUSY` and changes nothing (no `Retry-After`: the error envelope carries no headers — the `CUSTOMER_LOGIN_RATE_LIMITED` precedent; the message says to try again shortly). Each running export holds a connection, an open snapshot and, with the `DB` storage provider, the whole archive in memory while it is stored. |
+| CHANGED | AC-TENANT-037 | + a PLATFORM user holding the FILE browser permissions (view, delete) but not `PLATFORM_TENANT_MANAGE` does not see the archive in the owner list and gets 404 `FILE_DOCUMENT_NOT_FOUND` on its metadata, access token, download and delete, while an ordinary PLATFORM document stays visible to them; the platform operator lists it, reads it, gets a token and deletes it, after which the document is `DELETED`, its content is gone (`FILE_CONTENT` NULL for `DB`) and its metadata is kept; + `AUDIT/CORE_AUDIT_EVENT.csv` holds no public slug or storage reference, also for a `FILE_DOCUMENT` audit row written before `@Audited(ignore)`; + a failed store answers 500 and records `TENANT_EXPORTED` nowhere; + with `max-concurrent` exports running, another tenant's export answers 429 `TENANT_EXPORT_BUSY`. |
+| NEW | X4 error code | `TENANT_EXPORT_BUSY` · 429 · `TOO_MANY_REQUESTS` · `TenantDomain.assertExportStartable` (RULE-TENANT-028) · args: the limit. Messages: ar "يجري الآن تصدير عدد كبير من المستأجرين ({0} كحد أقصى)؛ أعد المحاولة بعد قليل" · en "Too many tenant exports are running (at most {0} at a time): try again shortly". |
+| CHANGED | X5 | `TenantExportGuard.tryStart(tenantId, maxConcurrent)` answers `STARTED`, `ALREADY_RUNNING` or `BUSY`; `TenantDomain.assertExportStartable(Start, code, maxConcurrent)` raises 409 / 429. |
+| CHANGED | X7 AUDIT row | `CHANGES` = the stored JSON array except, for `ENTITY_TYPE = 'FILE_DOCUMENT'`, the elements whose `field` is `storageRef` or `publicSlug` (NULL when nothing remains): `SELECT jsonb_agg(e ORDER BY o) FROM jsonb_array_elements(CHANGES) WITH ORDINALITY x(e, o) WHERE e->>'field' NOT IN ('storageRef', 'publicSlug')`, applied only to a JSON array. Other columns unchanged. |
+| NOTE | X7 TENANT row | `TOKENS_INVALID_BEFORE` is not exported, but an activation or a revoke-tokens also sets `UPDATED_AT` in the same write, so the cut-off is approximately derivable from `UPDATED_AT`; it is not a secret (it only refuses older tokens), it is excluded as an internal mechanism. |
+| CHANGED | X8 configuration | + `erp.core.tenant.export.max-concurrent` · `2` · exports running at once on a node, all tenants together; must be positive; read on every export. `max-rows` bounds the number of rows, not their width: a row with large text columns (template bodies, audit `CHANGES`) makes the archive larger than the row count suggests. |
+| CHANGED | X9 | `storeAndRecord` records the PLATFORM row and the tenant's row (explicit `tenantId`) in the one PLATFORM transaction (no nested transaction any more). |
+| CHANGED | X10 Archives kept | an archive stays until a platform operator deletes it; the delete removes its bytes (RULE-FILE-012) and keeps a tombstone. No retention job in v1 — follow-up: `erp.core.tenant.export.retention` with a purge job on the `AuditRetentionJob` pattern (recorded in `docs/DEVIATIONS.md`). |
+| CHANGED | X11 | + the restricted-document design (alternative weighed: TENANT-only endpoints for re-download and delete, keeping the archive out of the FILE API altogether — rejected: it duplicates FILE's token, download and delete paths in TENANT, while a column checked by FILE protects every present and future FILE endpoint and lets another producer restrict its own documents; ADR-TENANT-006 amended). |
+| NEW (decision) | FILE cross-module lookup | `FileDocumentLookupApi.isAvailable` answers `false` for a restricted document, so no other module can reference an archive (e.g. as a NOTIF template attachment). |

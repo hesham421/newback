@@ -57,24 +57,60 @@ Event
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 04, 05, 08 (migrations V3, V8, V10, V13)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 Registry deltas only; detail in `db-script-mdl.md` → "Implementation Addendum — erp-core 1.2.0". No DBF /
-XM ids are assigned here.
+XM ids are assigned here. Migrations are under `erp-core/src/main/resources/db/migration/core/`.
 
 Tables — delta
-| Table | ENT id | Delta | Migration |
+| Kind | Table | ENT id | Delta | Migration |
+|---|---|---|---|---|
+| CHANGED | MDL_LOOKUP_TYPE | ENT-MDL-001 | + `TENANT_ID` (FK `FK_MDL_LOOKUP_TYPE_TENANT` → `CORE_TENANT`, `IDX_MDL_LOOKUP_TYPE_TENANT`), + `VERSION`; `UQ_MDL_LOOKUP_TYPE_KEY (TENANT_ID, key)`; `key VARCHAR(80)`, `name_ar` / `name_en VARCHAR(150)`, `created_at DEFAULT now()`; indexes `IDX_MDL_LOOKUP_TYPE_OWNER`, `IDX_MDL_LOOKUP_TYPE_ACTIVE` (no name indexes) | V3__mdl_schema.sql:24-35,112-113; V10__tenant_schema.sql:64,103,122,177-178 |
+| CHANGED | MDL_LOOKUP_VALUE | ENT-MDL-002 | + `TENANT_ID` (FK `FK_MDL_LOOKUP_VALUE_TENANT` → `CORE_TENANT`, `IDX_MDL_LOOKUP_VALUE_TENANT`), + `VERSION`; `UQ_MDL_LOOKUP_VALUE_TYPE_CODE (TENANT_ID, lookup_type_id, code)`; `name_ar` / `name_en VARCHAR(150)`, `sort_order NUMERIC` (entity `Integer`), `created_at DEFAULT now()`; indexes `IDX_MDL_LOOKUP_VALUE_TYPE`, `IDX_MDL_LOOKUP_VALUE_SORT` | V3:40-52,114-115; V10:65,104,123,179-180 |
+
+Sequences and PK names — delta
+| Kind | Item | Delta | Migration |
 |---|---|---|---|
-| MDL_LOOKUP_TYPE | ENT-MDL-001 | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION`; `UQ_MDL_LOOKUP_TYPE_KEY (TENANT_ID, key)` | V10__tenant_schema.sql |
-| MDL_LOOKUP_VALUE | ENT-MDL-002 | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION`; `UQ_MDL_LOOKUP_VALUE_TYPE_CODE (TENANT_ID, lookup_type_id, code)` | V10 |
+| CHANGED | `SEQ_MDL_LOOKUP_TYPE`, `SEQ_MDL_LOOKUP_VALUE` | as registered (`START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE`), drawn by Hibernate `GenerationType.SEQUENCE` (`allocationSize = 1`); the `V3` header's "IDENTITY" remark is a stale comment | V3:18-19; erp-core/src/main/java/com/erp/mdl/entity/LookupType.java:48-49 |
+| CHANGED | `PK_MDL_LOOKUP_TYPE (lookup_type_pk)`, `PK_MDL_LOOKUP_VALUE (lookup_value_pk)` | kept as recorded (`*_pk` names; renames are not additive) | V3:86-87; DEVIATIONS [05] |
 
 XM index — delta
-| Type | From | To | Consumes | Note |
-|---|---|---|---|---|
-| HARD-FK | MDL | tenant (`CORE_TENANT`, no analysis folder) | owning tenant of every row | no XM id assigned |
-XM-MDL-001 (SOFT-READ of `SEC_MODULE_REG`) is unchanged; that table is global.
+| Kind | XM | Type | From | To | Consumes | Note |
+|---|---|---|---|---|---|---|
+| CHANGED | XM-MDL-001 | SOFT-READ | MDL | SEC | `SEC_MODULE_REG.CODE` with `IS_ACTIVE_FL = TRUE` through the in-process `SecModuleRegistryApi.isModuleActive` (RULE-MDL-001: the owner must exist **and** be active); `SEC_MODULE_REG` is global | erp-core/src/main/java/com/erp/mdl/service/LookupTypeService.java:80 |
+| NEW | — | HARD-FK | MDL | tenant (`CORE_TENANT`, no analysis folder) | owning tenant of every row | no XM id assigned; V10:103-104 |
+| REMOVED | XM-FIN-001 | SOFT-READ | FIN | MDL | the one inbound row of the Cascade section | `fin` removed in step 01 (docs/steps/01-report.md) |
+| NEW | — | in-process API | FILE, NOTIF, REPORT | MDL | `com.erp.mdl.crossmodule.MdlLookupApi.readActiveValuesByKey(key)` → `LookupOptionView(code, labelAr, labelEn, sortOrder)`; no `@PreAuthorize`; 404 `MDL-404-TYPE-KEY` for an unknown or inactive type | no XM id assigned; erp-core/src/main/java/com/erp/mdl/crossmodule/MdlLookupApiImpl.java:51-66 |
 
 Lookups (rows hosted for other modules) — delta
-| Key | Added values | Owner | Migration |
+| Kind | Key | Values | Owner | Migration |
+|---|---|---|---|---|
+| NEW (seed) | NOTIF_CHANNEL | EMAIL, SMS, WHATSAPP, PUSH, INTERNAL (5) | NOTIF | V8__mdl_seed.sql:28,43-47 |
+| NEW (seed) | NOTIF_STATUS | PENDING, SENT, FAILED, CHANNEL_DISABLED (4) | NOTIF | V8:29,49-52 |
+| NEW (seed) | FILE_FILE_STATUS | ACTIVE, ARCHIVED, DELETED (3) | FILE | V8:30,54-56 |
+| NEW (seed) | FILE_FILE_TYPE | IMAGE, DOCUMENT, SPREADSHEET, ARCHIVE, OTHER (5) | FILE | V8:31,58-62 |
+| NEW (seed) | NOTIF_STATUS | + QUEUED, SKIPPED_NO_PROVIDER (every tenant holding the type) | NOTIF | V13__notif_async_inbox.sql:73-74 |
+| NEW (seed) | NOTIF_CHANNEL | + IN_APP (every tenant holding the type) | NOTIF | V13:75 |
+The "Lookups — 0" row above holds for keys MDL *owns*; the rows MDL *hosts* are seeded by raw `INSERT`
+(PLATFORM tenant, `CREATED_BY = 'SYSTEM'`), not through the API as that section states. No registration SPI exists:
+`INSERT` (core `V8` / `V13`, application `V1000+`) or `POST /api/v1/mdl/lookup-types` are the only two ways.
+
+Decisions — delta
+| Kind | ADR | Status | Note |
 |---|---|---|---|
-| NOTIF_STATUS | QUEUED, SKIPPED_NO_PROVIDER | NOTIF | V13 §3a |
-| NOTIF_CHANNEL | IN_APP | NOTIF | V13 §3a |
+| REMOVED | ADR-MDL-009 | file dropped | contradicted by `V3` (active-flag and FK indexes, no name indexes); replaced by ADR-MDL-045 |
+| REMOVED | ADR-MDL-010 | file dropped | contradicted by `V3` widths (`key` 80, names 150, `sort_order NUMERIC`); the DBF widths of `db-script-mdl.md` §1 are history |
+| NEW | ADR-MDL-045 | ACCEPTED (non-breaking) | index strategy as built (V3): active-flag and FK indexes, no name indexes |
+| NEW | ADR-MDL-046 | ACCEPTED (non-breaking) | in-process `MdlLookupApi` is ungated; VIEW gates the HTTP read only (supersedes ADR-MDL-007 in part) |
+The ADR sequence's last used number is 046 (044 was dropped in the vendoring; 009 / 010 stay dropped).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (CHANGELOG [Unreleased]); no MDL behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | consumers' read model | FILE / NOTIF front their MDL-stored keys with `com.erp.common.lookup.LookupOptionResponse` via `OwnedLookups`; no table, sequence, constraint or index of MDL changes | CHANGELOG [Unreleased] |
+| CHANGED | `LookupTypeDomain` / `LookupValueDomain` | use `com.erp.common.domain.DomainRules.assertUnique`; no schema effect | erp-core/src/main/java/com/erp/mdl/domain/ |
+No migration after `V15` touches MDL.

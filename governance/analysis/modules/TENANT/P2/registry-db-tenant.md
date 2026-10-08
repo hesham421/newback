@@ -78,3 +78,139 @@ DBF-TENANT ids above are the tenant-side register of the same columns and do not
 `CORE_NUMBER_SERIES` (sequence) and `CORE_AUDIT_EVENT` (audit) have no analysis folder; DBF-TENANT-031/032
 are their only register entry.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+Registry deltas: none. No DBS / DBF / XM ids are assigned here.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant profile and lifecycle facts on `CORE_TENANT`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0".
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| CHANGED | CORE_TENANT | ENT-TENANT-001 | global | + DBF-TENANT-033 … 042 (10 columns) | V18__tenant_profile.sql (033 … 038), V19__tenant_lifecycle.sql (039 … 042) |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-033 | CORE_TENANT.CONTACT_EMAIL | VARCHAR(255) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-034 | CORE_TENANT.CONTACT_PHONE | VARCHAR(30) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-035 | CORE_TENANT.COUNTRY_CODE | VARCHAR(2) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-036 | CORE_TENANT.DEFAULT_LOCALE | VARCHAR(5) | NULL | `CHK_CORE_TENANT_LOCALE` | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-037 | CORE_TENANT.TIMEZONE | VARCHAR(64) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-038 | CORE_TENANT.NOTES | VARCHAR(1000) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-039 | CORE_TENANT.SUSPENDED_AT | TIMESTAMPTZ | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-040 | CORE_TENANT.SUSPENDED_BY | VARCHAR(100) | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-041 | CORE_TENANT.SUSPENSION_REASON | VARCHAR(500) | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE | TIMESTAMPTZ | NULL | — | — | V19; tenant/entity/Tenant.java |
+
+Constraints — delta: `CHK_CORE_TENANT_LOCALE CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'))` (V18).
+
+Lookups — delta
+| Key | Seeded values count | Owner |
+|---|---|---|
+| `CORE_TENANT.DEFAULT_LOCALE` | 2 (CHECK-constrained `CHK_CORE_TENANT_LOCALE`, not seeded rows) | TENANT |
+
+XM index, sequences: unchanged. Last DBF: DBF-TENANT-042 · Last XM: XM-TENANT-002
+
+Event
+"P2 1.3.0 (package B): TENANT — 1 table, 1 sequence, 42 DBF (20 own + 22 discriminator), 2 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding columns on `CORE_TENANT`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package E).
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| CHANGED | CORE_TENANT | ENT-TENANT-001 | global | + DBF-TENANT-043 … 044 (2 columns) | V20__tenant_branding.sql |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-043 | CORE_TENANT.LOGO_FILE_ID | BIGINT | NULL | — (soft reference, XM-TENANT-003) | — | V20; tenant/entity/Tenant.java |
+| DBF-TENANT-044 | CORE_TENANT.BRAND_COLOR | VARCHAR(7) | NULL | `CHK_CORE_TENANT_BRAND_COLOR` | — | V20; tenant/entity/Tenant.java |
+
+Constraints — delta: `CHK_CORE_TENANT_BRAND_COLOR CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$')` (V20).
+
+XM index — delta
+| Kind | XM id | Kind | Column → target | Status |
+|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) | `CORE_TENANT.LOGO_FILE_ID` → FILE `FILE_DOCUMENT.ID` | IMPLEMENTED (1.3.0) |
+
+Cascade: none in the schema; the logo's `FILE_DOCUMENT` row (owner `CORE_TENANT` / {id}, module `TENANT`) is data
+of the tenant's own rows, discarded (DELETED + PRIVATE) on replace or remove. Sequences: unchanged.
+Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003
+
+Event
+"P2 1.3.0 (package E): TENANT — 1 table, 1 sequence, 44 DBF (22 own + 22 discriminator), 3 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — the token cut-off enforced; `TenantLookupApi.isActive`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C12).
+
+Tables, columns, constraints, sequences — delta: none (no migration; `TOKENS_INVALID_BEFORE` is V19's DBF-TENANT-042,
+now enforced by `TenantResolutionFilter` and written by revoke-tokens too).
+
+XM index — delta
+| Kind | XM id | Kind | Column → target | Status |
+|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | crossmodule read (exposed) | + `TenantLookupApi.isActive(Long)` → `CORE_TENANT.STATUS_CODE` (consumer NOTIF) | IMPLEMENTED (1.3.0) |
+
+Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003 (unchanged)
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — the idempotency table `CORE_IDEMPOTENCY_KEY` (common; first consumer tenant create)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C4).
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| NEW (owned by common, registered here) | CORE_IDEMPOTENCY_KEY | — (`com.erp.common.idempotency.IdempotencyKey`) | tenant-scoped (`TENANT_ID` FK) | DBF-TENANT-045 (its `TENANT_ID` only) | V21__core_idempotency_key.sql |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-045 | CORE_IDEMPOTENCY_KEY.TENANT_ID | BIGINT | NOT NULL | `FK_CORE_IDEMPOTENCY_KEY_TENANT`; leads `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` | `IDX_CORE_IDEMPOTENCY_KEY_TENANT` | V21; common/domain/AuditableEntity.java (`@TenantId`) |
+
+Constraints — delta: `PK_CORE_IDEMPOTENCY_KEY`, `FK_CORE_IDEMPOTENCY_KEY_TENANT`, `UQ_CORE_IDEMPOTENCY_KEY` (V21).
+Indexes — delta: `IDX_CORE_IDEMPOTENCY_KEY_TENANT`, `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` (V21).
+Sequences — delta: `SEQ_CORE_IDEMPOTENCY_KEY` (V21; owned by common).
+Counts after V21: 23 discriminator columns / FKs / indexes; 15 tenant-leading unique constraints + 2 tenant-leading
+unique indexes (`TenantSchemaIntegrationTest`).
+
+XM index — delta: none (the FK is an inbound discriminator, DBF-TENANT-045).
+Last DBF: DBF-TENANT-045 · Last XM: XM-TENANT-003
+
+Event
+"P2 1.3.0 (package C4): TENANT — 1 own table + 1 registered common table, 2 sequences, 45 DBF (22 own + 23 discriminator), 3 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (no schema change)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C5).
+Tables, DBF ids, constraints, indexes, sequences — delta: none.
+
+XM index — delta
+| Kind | XM id | Kind | Surface | Status |
+|---|---|---|---|---|
+| NEW | XM-TENANT-004 | SPI (exposed) | `TenantExportContributor` (export of a tenant's rows, module by module) | IMPLEMENTED (1.3.0) |
+Last DBF: DBF-TENANT-045 · Last XM: XM-TENANT-004
+
+Event
+"P2 1.3.0 (package C5): TENANT — no schema change, 45 DBF, 4 XM"

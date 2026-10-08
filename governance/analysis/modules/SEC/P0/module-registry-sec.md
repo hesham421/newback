@@ -71,54 +71,89 @@ POL-SEC-007, POL-SEC-008, POL-SEC-009, POL-SEC-010, POL-SEC-011
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 01, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0)
+Steps          : 01, 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Paths cited below are relative to the erp-core repository at that tag. No ENT/XM ids are minted here.
 
 ENTITIES — deltas
-| Entity | Delta | Source |
-|---|---|---|
-| CustomerVerifyToken (`SEC_CUSTOMER_VERIFY_TOKEN`) | NEW, PRIVATE, tenant-scoped: hashed single-use e-mail verification token of a CUSTOMER account | V11__sec_realms.sql; docs/steps/06-report.md |
-| User | CHANGED: carries `realm` (STAFF / CUSTOMER, immutable) and `tenantId`; unique per (tenant, realm) | V10, V11; DEVIATIONS [06] |
-| Role | CHANGED: carries `isSuper` (super role) and `tenantId` | V11 |
-| All other SEC entities except the three registries | CHANGED: tenant-scoped (extend `AuditableEntity`, Hibernate `@TenantId`) | docs/steps/05-report.md |
-| ModuleRegistry, ScreenRegistry, ActionRegistry | CHANGED: GLOBAL (no tenant; extend `GlobalAuditableEntity`): one code-defined catalog shared by all tenants | V10 §3; DEVIATIONS [05], [12] (rule 2 allow-list) |
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| NEW | CustomerVerifyToken (`SEC_CUSTOMER_VERIFY_TOKEN`) | PRIVATE, tenant-scoped: hashed single-use e-mail verification token of a CUSTOMER account | V11__sec_realms.sql; docs/steps/06-report.md |
+| CHANGED | every SEC entity | primary key `BIGINT` fed by a named `SEQ_SEC_*` sequence (14 sequences), never IDENTITY — ADR-SEC-068 | V4__sec_schema.sql:17-31; V11:64 |
+| CHANGED | User | carries `realm` (STAFF / CUSTOMER, immutable) and `tenantId`; unique per (tenant, realm); `username` immutable after creation | V10, V11; DEVIATIONS [06] |
+| CHANGED | Role | carries `isSuper` (super role) and `tenantId`; `code` upper-cased and immutable after creation | V11; sec/entity/Role.java |
+| CHANGED | All other SEC entities except the three registries | tenant-scoped (extend `AuditableEntity`, Hibernate `@TenantId`); the 8 that had no audit columns gained nullable ones (V10 §4) | docs/steps/05-report.md |
+| CHANGED | ModuleRegistry, ScreenRegistry, ActionRegistry | GLOBAL (no tenant; extend `GlobalAuditableEntity`): one code-defined catalog shared by all tenants; codes upper-cased; `IS_ACTIVE_FL` never toggled by any API (registry-row deactivate NOT IMPLEMENTED) | V10 §3; DEVIATIONS [05], [12] (rule 2 allow-list); ADR-SEC-038 |
+| CHANGED | ActiveSession | one row per login of either realm, keyed by the token's `jti` (`TOKEN_REF`); terminated by logout (new endpoint, REQ-SEC-036), administrator termination, deactivation or password reset; `lastActivityAt` is the login time | sec/service/AuthService.java; ADR-SEC-066 |
 
 LOOKUPS — deltas
-| Value set | Delta | Source |
-|---|---|---|
-| USER_STATUS | + `PENDING_VERIFICATION` (customer before e-mail verification); enforced by `CHK_SEC_USER_STATUS` | V11 §3 |
-| REALM (new) | `STAFF`, `CUSTOMER`; enforced by `CHK_SEC_USER_REALM` (a column CHECK, not an MDL lookup) | V11 §1 |
+| Kind | Value set | Delta | Source |
+|---|---|---|---|
+| CHANGED | USER_STATUS | + `PENDING_VERIFICATION` (customer before e-mail verification); enforced by `CHK_SEC_USER_STATUS` | V11 §3 |
+| NEW | REALM | `STAFF`, `CUSTOMER`; enforced by `CHK_SEC_USER_REALM` (a column CHECK, not an MDL lookup) | V11 §1 |
+| CHANGED | AUDIT_EVENT_TYPE | the 14 AUTO values above are exactly the `CHK_SEC_AUDIT_LOG_EVENT_TYPE` set and every one has a writer; `LOGOUT` is written by `POST /api/v1/sec/auth/logout`, `ROLE_REVOKED` by the role assignment that replaces a user's set. Not written for: user creation / update / status change, sign-up decisions, role create / update, registry registrations, customer-realm events (srs addendum §2, REQ-SEC-024) | V4 §5c; sec/service/*.java |
 
 DEPENDENCIES — deltas (all through the other module's root SPI or `crossmodule` package; ArchUnit
 `sec_depends_on_other_core_modules_only_through_their_crossmodule_packages`, DEVIATIONS [06])
-| Module | Kind | What is consumed | Source |
-|---|---|---|---|
-| tenant | HARD (FK `TENANT_ID` → `CORE_TENANT`) + SPI | `TenantContext`; `TenantProvisioningContributor` (SEC copies PLATFORM's catalog roles and grants, minus the `PLATFORM` module, and creates the tenant's first administrator) | DEVIATIONS [05] (provisioning entry) |
-| NOTIF | SOFT (in-core API) | `NotificationDispatchApi` for the customer verification and password-reset mails (previously "external, optional") | DEVIATIONS [06] |
-| audit | SOFT (in-core API) | `AuditApi` (LOGIN / LOGOUT / PASSWORD_RESET) and the `@Audited` listener on User and Role | DEVIATIONS [10] |
-| events | publishes | `UserCreatedEvent`, `UserStatusChangedEvent`, `CustomerRegisteredEvent`, `CustomerVerifiedEvent`, `PasswordResetRequestedEvent` | DEVIATIONS [08] (where the core events live) |
-| report | SPI | `SecUserListReport` (`ReportProvider`) | DEVIATIONS [11] |
+| Kind | Module | Kind of link | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | tenant | HARD (FK `TENANT_ID` → `CORE_TENANT`) + SPI | `TenantContext`; `TenantProvisioningContributor` (SEC, order 0: copies PLATFORM's four catalog roles `SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` and their grants, minus the `PLATFORM` module, and creates the tenant's first administrator; aborts with `INTERNAL_ERROR` when PLATFORM has no `SYS_ADMIN`) | DEVIATIONS [05] (provisioning entry); sec/tenant/SecTenantProvisioningContributor.java |
+| CHANGED | NOTIF | SOFT (in-core API) | `NotificationDispatchApi.dispatchIndependently` for the staff reset mail (`PASSWORD_RESET`, V9) and the customer verification and password-reset mails (`CUSTOMER_VERIFY_EMAIL`, `CUSTOMER_PASSWORD_RESET`, V11 §6) — previously "external, optional" | DEVIATIONS [06] |
+| NEW | audit | SOFT (in-core API) | `AuditApi` (LOGIN / LOGOUT / PASSWORD_RESET) and the `@Audited` listener on User and Role | DEVIATIONS [10] |
+| NEW | events | publishes | `UserCreatedEvent`, `UserStatusChangedEvent`, `CustomerRegisteredEvent`, `CustomerVerifiedEvent` (verify endpoint only), `PasswordResetRequestedEvent` (staff only); SEC consumes no event | DEVIATIONS [08] (where the core events live) |
+| NEW | report | SPI | `SecUserListReport` (`ReportProvider`) | DEVIATIONS [11] |
 
 EXPOSED SURFACE — deltas
-| Surface | Delta | Source |
-|---|---|---|
-| `com.erp.sec.crossmodule.SecUserDirectoryApi.findCurrentUserId()` | NEW — SEC_USER id of the authenticated caller (either realm); consumed by NOTIF's in-app inbox | DEVIATIONS [08] (inbox caller entry) |
-| `SecUserDirectoryApi.findUserIdsHoldingPermission` (REQ-SEC-035) | kept; no consumer since `fin` was removed | 01-STEP; source javadoc |
-| `com.erp.sec.permission` — `PermissionContributor`, `PermissionDef`, `PermissionModule`, `PermissionScreen` | NEW public SPI: every module (core or application) declares its own modules, screens and permissions | docs/steps/06-report.md; docs/RELEASE.md (public API) |
+| Kind | Surface | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.sec.crossmodule.SecUserDirectoryApi.findCurrentUserId()` | SEC_USER id of the authenticated caller (either realm); consumed by NOTIF's in-app inbox | DEVIATIONS [08] (inbox caller entry) |
+| CHANGED | `SecUserDirectoryApi.findUserIdsHoldingPermission` (REQ-SEC-035) | kept; no consumer since `fin` was removed | 01-STEP; source javadoc |
+| NEW | `com.erp.sec.crossmodule.SecModuleRegistryApi.isModuleActive(moduleCode)` | existence check of an active `SEC_MODULE_REG` row; consumed by MDL's `LookupTypeService` (RULE-MDL-001, XM-MDL-001) — the second inbound read surface beside `SecUserDirectoryApi` | sec/crossmodule/SecModuleRegistryApi.java; mdl/service/LookupTypeService.java:80 |
+| NEW | `com.erp.sec.permission` — `PermissionContributor`, `PermissionDef`, `PermissionModule`, `PermissionScreen` | public SPI: every module (core or application) declares its own modules, screens and permissions | docs/steps/06-report.md; docs/RELEASE.md (public API) |
+| NEW | `com.erp.sec.security.InternalCallerContext` | synthetic in-process principal (`INTERNAL_TRUSTED_CALLER`) used by the anonymous reset request to call NOTIF; never obtainable by a request | sec/security/InternalCallerContext.java |
 
 PERMISSION CATALOG — now code-defined
-- `PermissionConstants` was deleted; each module has one contributor holding its own constants:
-  `SecPermissions`, `FilePermissions`, `NotifPermissions`, `MdlPermissions`, `CuPermissions`,
-  `TenantPermissions`, `SequencePermissions`, `AuditPermissions`, `ReportPermissions` (registry-fed).
-  `PermissionCatalogSynchronizer` upserts the catalog into `SEC_MODULE_REG` / `SEC_SCREEN_REG` /
-  `SEC_ACTION_REG` at startup (runs first, as PLATFORM; never deletes, never toggles `IS_ACTIVE_FL`).
-- Authority format: the step file asked for `module:screen:action`; the existing registry format
-  `PERM_<SCREEN>_<ACTION>` was kept (the step's own "adopt the existing format" rule). A permission may
-  carry an explicit authority instead: CU `CONFIG_*`, `PLATFORM_TENANT_MANAGE`,
-  `PLATFORM_SETTINGS_MANAGE`, `FILE:DOCUMENT:PUBLISH`, `AUDIT:EVENT:READ`, report authorities
-  `<MODULE>:REPORT:<CODE>`. — DEVIATIONS [06], [07], [09], [10], [11].
-- RULE-SEC-007 still holds: every screen needs a `VIEW` action, and non-VIEW actions are effective only
-  together with it.
-- REMOVED: the 30 `PERM_FIN_*` constants and the 18 FIN migrations with their seeds (`fin` deleted) — docs/steps/01-report.md.
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | catalog source | `PermissionConstants` was deleted; each module has one contributor holding its own constants: `SecPermissions`, `FilePermissions`, `NotifPermissions`, `MdlPermissions`, `CuPermissions`, `TenantPermissions`, `SequencePermissions`, `AuditPermissions`, `ReportPermissions` (registry-fed). `PermissionCatalogSynchronizer` upserts the catalog into `SEC_MODULE_REG` / `SEC_SCREEN_REG` / `SEC_ACTION_REG` at startup (runs first, as PLATFORM; inserts, renames to the contributed names, never deletes, never toggles `IS_ACTIVE_FL`; warns for a screen without a `VIEW` gateway). | docs/steps/06-report.md; sec/service/PermissionCatalogSynchronizer.java |
+| CHANGED | registry write endpoints | `POST /api/v1/sec/registry/{modules,screens,actions}` exist and are gated by `PERM_SEC_MODULE_REGISTRY_UPDATE` (the registry above gives UPDATE "deactivate only" and treats registration as the module's own call) — ADR-SEC-067 | sec/service/RegistryService.java:72-125 |
+| CHANGED | authority format | the step file asked for `module:screen:action`; the existing registry format `PERM_<SCREEN>_<ACTION>` was kept (the step's own "adopt the existing format" rule). A permission may carry an explicit authority instead: CU `CONFIG_*`, `PLATFORM_TENANT_MANAGE`, `PLATFORM_SETTINGS_MANAGE`, `FILE:DOCUMENT:PUBLISH`, `AUDIT:EVENT:READ`, report authorities `<MODULE>:REPORT:<CODE>` | DEVIATIONS [06], [07], [09], [10], [11] |
+| CHANGED | RULE-SEC-007 | still holds, and is blocking: every screen needs a `VIEW` action, a non-VIEW action grant is refused without the role's VIEW (`SEC-409-NO-VIEW-GRANT`), and non-VIEW actions are effective only together with VIEW | sec/domain/RoleActionGrantDomain.java |
+| CHANGED | `PERM_SEC_ROLES_DELETE` | registered and granted to `SYS_ADMIN`, consumed by no gate (role deactivate NOT IMPLEMENTED — ADR-SEC-038) | sec/permission/SecPermissions.java:31-32 |
+| NEW | seeded roles | `SYS_ADMIN` (super), `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` in the PLATFORM tenant (V7: 8 module, 20 screen, 59 action grants), copied to every tenant by provisioning; the registry seed also holds the MDL, CU, NOTIF, FILE and PLATFORM rows (srs addendum §4) | V7__sec_seed.sql:141-200; V10 §6; V12 §3 |
+| REMOVED | the 30 `PERM_FIN_*` constants and the 18 FIN migrations with their seeds (`fin` deleted) | — | docs/steps/01-report.md |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — passwords, profile, photo, staff `/me` (package G changed nothing here)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `P1/srs-sec.md` → "Implementation Addendum — erp-core 1.3.0" §9.
+
+Screens, actions, permissions: unchanged (set password and photo are `PERM_SEC_USERS_UPDATE` of `SEC_USERS`;
+`/api/v1/sec/me/**` is authentication-only, STAFF chain).
+
+Consumed modules
+| Kind | Module | Kind of link | What | Source |
+|---|---|---|---|---|
+| NEW | FILE | SOFT (in-core API) | `FileImageStoreApi` (store / discard a public image), `FileDocumentLookupApi.publicUrl(s)` — `SEC_USER.PHOTO_FILE_ID` (XM-SEC-006) | srs-sec.md 1.3.0 §9.7 |
+| CHANGED | tenant | in-core API | `TenantLookupApi.summaryOf` for `/me.tenant` | same |
+| NEW (consumer of SEC) | NOTIF | event bus | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` mail | NOTIF srs.md 1.3.0 addendum |
+
+Lookups owned: unchanged. `preferredLocale` (`ar`, `en`) is a CHECK-constrained value set on the column
+(`CHK_SEC_USER_LOCALE`), not a lookup type.
+
+Package B (tenant-maturity plan §4 B.4) — exposed surface deltas; full text in `P1/srs-sec.md` 1.3.0 §10.
+| Kind | Surface | Delta | Consumer |
+|---|---|---|---|
+| CHANGED | `com.erp.sec.crossmodule.SecUserDirectoryApi` | + `countStaff()`, `countCustomers()`, `countActiveSessions()` (current tenant) | TENANT usage (REQ-SEC-090) |
+| NEW | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (+ `RecoveryTarget`) | `findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)`; gate `PLATFORM_TENANT_MANAGE` | TENANT admin-reset (REQ-SEC-091) |
+
+Package C12 (tenant-maturity plan §5 C.1, C.2) — dependency and exposed surface deltas; full text in `P1/srs-sec.md` 1.3.0 §12.
+| Kind | Module / surface | Kind of link | Delta | Source |
+|---|---|---|---|---|
+| NEW | events (TENANT publishes) | event bus (XM-SEC-007) | consumes `TenantSuspendedEvent` → ends the tenant's sessions | srs-sec.md 1.3.0 §12 |
+| CHANGED | tenant | root-package API | `JwtAuthenticationFilter` writes `TenantTokenFacts` (request attribute) for the tenant filter's cut-off check | same |
+| CHANGED | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (exposed) | in-core API | + `terminateAllSessions()`; gate `PLATFORM_TENANT_MANAGE`; consumer TENANT revoke-tokens | same |

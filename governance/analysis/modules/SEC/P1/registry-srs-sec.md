@@ -75,47 +75,209 @@ Event
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 01, 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0)
+Steps          : 01, 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Registry deltas only; full text in `srs-sec.md` → "Implementation Addendum — erp-core 1.2.0". No new ids
-are assigned here (the factory assigns ENT / REQ / AC / RULE ids when it absorbs these items).
+are assigned here except REQ-SEC-036 / AC-SEC-036 (logout), which the code already cites; every other
+delta is a CHANGED row on an existing id or a NEW row with no id.
 
 Entities
-| Entity | Kind | PRIVATE/SHARED | Delta | Source |
-|---|---|---|---|---|
-| CustomerVerifyToken | security | PRIVATE | NEW (tenant-scoped) | V11__sec_realms.sql |
-| ENT-SEC-001 User | security | SHARED (owner) | CHANGED: + realm, tenant-scoped, unique per (tenant, realm) | V10, V11 |
-| ENT-SEC-002 Role | security | PRIVATE | CHANGED: + isSuper | V11 |
-| ENT-SEC-004/005/006 registries | security | SHARED (owner) | CHANGED: global, code-defined catalog (synchronized at startup) | docs/steps/06-report.md |
-| all other ENT-SEC-* | security | PRIVATE | CHANGED: tenant-scoped, + version | V10 |
+| Kind | Entity | Kind of entity | PRIVATE/SHARED | Delta | Source |
+|---|---|---|---|---|---|
+| NEW | CustomerVerifyToken | security | PRIVATE | tenant-scoped; 14th table, `SEQ_SEC_CUSTOMER_VERIFY_TOKEN` | V11__sec_realms.sql |
+| CHANGED | all 13 analysed entities | security | — | primary keys `BIGINT` fed by `SEQ_SEC_*` sequences (`@SequenceGenerator`, `allocationSize = 1`); no IDENTITY column (ADR-SEC-068) | V4__sec_schema.sql:17-31 |
+| CHANGED | ENT-SEC-001 User | security | SHARED (owner) | + realm (immutable), tenant-scoped, unique per (tenant, realm); `username` immutable after creation | V10, V11; UserMapper |
+| CHANGED | ENT-SEC-002 Role | security | PRIVATE | + isSuper; `code` upper-cased and immutable after creation | V11; Role.java; RoleMapper |
+| CHANGED | ENT-SEC-004/005/006 registries | security | SHARED (owner) | global, code-defined catalog (synchronized at startup); codes upper-cased; `IS_ACTIVE_FL` never toggled | docs/steps/06-report.md |
+| CHANGED | ENT-SEC-010 ActiveSession | security | PRIVATE | `tokenRef` = the token's `jti`; `lastActivityAt` = login time, never refreshed; customer sessions in the same table | AuthService; SessionService |
+| CHANGED | ENT-SEC-012 PasswordResetToken | security | PRIVATE | `tokenHash` = SHA-256 hex; shared by both realms | PasswordResetService |
+| CHANGED | all other ENT-SEC-* | security | PRIVATE | tenant-scoped, + version, + nullable audit columns | V10 |
 
 Consumed (was "none — SEC is ROOT")
-| Owner | What | Kind | Source |
+| Kind | Owner | What | Kind of link | Source |
+|---|---|---|---|---|
+| NEW | tenant (`CORE_TENANT`) | FK of every `TENANT_ID`; `TenantContext`; provisioning SPI | HARD-FK + SPI | V10; docs/steps/05-report.md |
+| NEW | NOTIF | `NotificationDispatchApi` (templates `PASSWORD_RESET`, `CUSTOMER_VERIFY_EMAIL`, `CUSTOMER_PASSWORD_RESET`) | SOFT (in-core API) | DEVIATIONS [06] |
+| NEW | audit | `AuditApi`, `@Audited` | SOFT (in-core API) | DEVIATIONS [10] |
+
+Exposed (the A8 amendment above lists one inbound surface; as built there are two)
+| Kind | Surface | Consumer | Source |
 |---|---|---|---|
-| tenant (`CORE_TENANT`) | FK of every `TENANT_ID`; `TenantContext`; provisioning SPI | HARD-FK + SPI | V10; docs/steps/05-report.md |
-| NOTIF | `NotificationDispatchApi` | SOFT (in-core API) | DEVIATIONS [06] |
-| audit | `AuditApi`, `@Audited` | SOFT (in-core API) | DEVIATIONS [10] |
+| CHANGED | `SecUserDirectoryApi` — `findContact` (REQ-SEC-034, realm-neutral), `findUserIdsHoldingPermission` (REQ-SEC-035, no consumer), `findCurrentUserId()` (NEW) | NOTIF | DEVIATIONS [08], [14] |
+| NEW | `SecModuleRegistryApi.isModuleActive(moduleCode)` | MDL `LookupTypeService` (RULE-MDL-001, XM-MDL-001) | sec/crossmodule/SecModuleRegistryApi.java |
+| NEW | permission SPI `com.erp.sec.permission.*` | every module | docs/steps/06-report.md |
 
 Lookups owned
-| Key | Delta | Source |
-|---|---|---|
-| USER_STATUS | 3 → 4 values (+ `PENDING_VERIFICATION`) | V11 |
-| REALM | NEW value set `STAFF`, `CUSTOMER` (column CHECK) | V11 |
-| SIGNUP_STATUS, AUDIT_EVENT_TYPE | unchanged | — |
+| Kind | Key | Delta | Source |
+|---|---|---|---|
+| CHANGED | USER_STATUS | 3 → 4 values (+ `PENDING_VERIFICATION`) | V11 |
+| NEW | REALM | value set `STAFF`, `CUSTOMER` (column CHECK) | V11 |
+| CHANGED | AUDIT_EVENT_TYPE | 14 values, all with a writer (`LOGOUT` by `POST /auth/logout`, `ROLE_REVOKED` by the replacing role assignment); not written for user creation / update / status change, sign-up decisions, role create / update, registry registrations, customer events | srs addendum §2 (REQ-SEC-024) |
+| CHANGED | SIGNUP_STATUS | 3 values, as analysed (a non-PENDING decision → `SEC-409-INVALID-TRANSITION`) | SignupRequestDomain |
 
 Screens
-No new SEC frontend screen. Customer endpoints have no page code (customer chain, `ROLE_CUSTOMER`).
-Registry-only screen `SEC_REPORTS` (gateway `PERM_SEC_REPORTS_VIEW`) is synchronized for the users report.
+| Kind | Screen | Delta | Source |
+|---|---|---|---|
+| CHANGED | SEC_SIGNUP, SEC_PWD_RESET, SEC_MODULE_REGISTRY, SEC_DASHBOARD, SEC_SESSIONS | registered labels differ from the table above: ar "إنشاء حساب"; ar "إعادة تعيين كلمة المرور"; ar "سجل الوحدات والشاشات والإجراءات"; ar "لوحة تحكم المشرف"; ar "الجلسات النشطة" / en "Active sessions" (srs addendum §4) | SecPermissions.java; V7 |
+| NEW | SEC_REPORTS | registry-only screen (gateway `PERM_SEC_REPORTS_VIEW`) synchronized for the users report; no page | DEVIATIONS [11] |
+| NEW | customer endpoints | no page code (customer chain, `ROLE_CUSTOMER`) | docs/api-docs/sec/endpoints/customer-accounts-*.md |
 
 Requirements — new / changed items (counted from the srs addendum)
-| Group | NEW | CHANGED | REMOVED |
-|---|---|---|---|
-| Endpoints | 7 customer endpoints + users report | login, logout, reset completion, staff user / session / dashboard endpoints (STAFF-only) | — |
-| Rules | tenant confinement, realm, realm mismatch, customer verification, rate limit, super role, bootstrap admin, events | RULE-SEC-006 (realm-aware), REQ-SEC-024 (audit also in `CORE_AUDIT_EVENT`), notify-eligibility | — |
-| Error codes | `REALM_MISMATCH`, `CUSTOMER_EMAIL_TAKEN`, `CUSTOMER_NOT_VERIFIED`, `VERIFY_TOKEN_INVALID`, `CUSTOMER_LOGIN_RATE_LIMITED` | — | — |
-| Permissions | `ROLE_CUSTOMER`, `SEC:REPORT:SEC_USER_LIST`, `PERM_SEC_REPORTS_VIEW` | catalog code-defined (`SecPermissions`) | 30 `PERM_FIN_*` |
+| Kind | Group | Items |
+|---|---|---|
+| NEW | Requirements | REQ-SEC-036 / AC-SEC-036 logout (as-built; the only id minted) |
+| NEW | Endpoints | 7 customer endpoints; `POST /sec/auth/logout`; `GET /sec/users/{id}`, `GET /sec/roles/{id}`, `PUT /sec/roles/{id}`, `GET /sec/roles/{id}/grants`, `POST /sec/signup-requests/search` (ADR-SEC-038); the users report |
+| CHANGED | Endpoints | login (claims), reset request / completion (events, session termination), sign-up approval (STAFF, no audit row), the three registry registrations (gated by `PERM_SEC_MODULE_REGISTRY_UPDATE`, codes upper-cased), registry search (active rows only), grant endpoints (RULE-SEC-007 blocking, active checks, counted module revoke), role create (code upper-cased), user create (password rules, `roleIds` gate, status not settable), user update (username immutable), reactivate (no body), roles assignment (replaces the set), users / sessions / dashboard (STAFF-only), sessions search (`lastActivityAt`, `username` operators), audit export (params, CSV shape) |
+| NOT IMPLEMENTED | Endpoints | role deactivate; registry-row deactivate; per-screen / per-action grant revoke (implemented by package G in 1.3.0) |
+| NEW | Rules | tenant confinement, realm, realm mismatch, customer verification, rate limit (per JVM), super role, bootstrap admin, tenant provisioning, access-token shape and checks, 401 / 403 handling, active-only effective grants, grant-time active checks, action under a registered screen, terminate only an active session, immutability / upper-casing, `roleIds` gate, reset completion ends sessions, dashboard widget map, events |
+| CHANGED | Rules | RULE-SEC-007 (blocking at grant), REQ-SEC-010 (set replaced, `ROLE_REVOKED`), REQ-SEC-027 (`lastActivityAt` = login time), AC-SEC-007 (no staff password rule), REQ-SEC-024 (which events are written), RULE-SEC-003 (audited per grant, message never shown), RULE-SEC-006 (realm-aware), notify-eligibility, optimistic locking |
+| NEW | Error codes | the full 32-constant catalogue of `SecErrorCodes` (27 `SEC-*` + `REALM_MISMATCH`, `CUSTOMER_EMAIL_TAKEN`, `CUSTOMER_NOT_VERIFIED`, `VERIFY_TOKEN_INVALID`, `CUSTOMER_LOGIN_RATE_LIMITED`) — the analysis above has no SEC-* catalogue; `SEC-401-INVALID-CREDENTIALS` is reused for a missing / invalid bearer |
+| CHANGED | Permissions | catalog code-defined (`SecPermissions`); `PERM_SEC_ROLES_DELETE` registered, unused; `PERM_SEC_MODULE_REGISTRY_UPDATE` gates registration; 5 screen labels |
+| NEW | Permissions / roles | `ROLE_CUSTOMER`, `SEC:REPORT:SEC_USER_LIST`, `PERM_SEC_REPORTS_VIEW`; roles `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN`; the other modules' registry rows (MDL 2/4, CU 1/4, NOTIF 3/9, FILE 2/8 + PUBLISH, PLATFORM 1/2) |
+| REMOVED | Permissions | 30 `PERM_FIN_*` |
+
+Counts after this addendum: REQ 36 (001–035 + 036) · AC 36 · RULE 7 · ENT 13 (+ CustomerVerifyToken without an id) · SCR-REQ 10.
 
 Decisions
-No ADR raised by the implementation; deviations are recorded in the erp-core repository's
-`docs/DEVIATIONS.md` ([01], [04], [05], [06], [08], [10], [11], [14]).
+| Kind | ADR | Subject |
+|---|---|---|
+| CHANGED | ADR-SEC-008 | superseded in part on 2026-10-08: `POST /auth/logout` and the by-id reads exist; role / registry deactivate stay DEFERRED |
+| CHANGED | ADR-SEC-035 (pre-existing, v2) | every SEC PK from a named sequence — as built in V4; it cites ENT-SEC-014 / DBF-SEC-106, ids absent from this analysis (note appended 2026-10-08); the as-built decision is ADR-SEC-068 |
+| CHANGED | ADR-SEC-038 (pre-existing, v2) | the five as-built endpoints and the two DEFERRED deactivations; its API-SEC-032..036 / CS-SEC-001 ids are absent from this analysis (note appended 2026-10-08) |
+| NEW | ADR-SEC-066 | logout endpoint exists; a session is keyed by the token's `jti` and terminated on logout (supersedes ADR-SEC-008 in part) |
+| NEW | ADR-SEC-067 | registry registration endpoints are gated by `PERM_SEC_MODULE_REGISTRY_UPDATE` |
+| NEW | ADR-SEC-068 | sequences (`SEQ_SEC_*`) instead of IDENTITY for every SEC primary key |
+Deviations are recorded in the erp-core repository's `docs/DEVIATIONS.md` ([01], [04], [05], [06], [08], [10], [11], [14], [15]).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package G — revoke a single screen or action grant
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-sec.md` → "Implementation Addendum — erp-core 1.3.0". Unlike
+the 1.2.0 addendum, this one mints ids, continuing from the highest number ever issued for SEC (the
+pre-vendoring analysis reached REQ-SEC-079, AC-SEC-085, RULE-SEC-053; see `srs-sec.md` 1.3.0 addendum).
+
+Entities, lookups, screens, consumed modules: unchanged (no ENT, DBF, lookup value, page code or
+permission added; no migration).
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-080 / AC-SEC-086 | Revoke a screen grant from a role (its action grants cascade) | US-SEC-005; RULE-SEC-054; SCR-REQ-SEC-005 |
+| NEW | REQ-SEC-081 / AC-SEC-087 | Revoke an action grant from a role (revoking VIEW cascades the screen's other action grants) | US-SEC-005; RULE-SEC-055; SCR-REQ-SEC-005 |
+| NEW | RULE-SEC-054 | Cascade revoke on screen-grant removal (ENT-SEC-008) | REQ-SEC-080 |
+| NEW | RULE-SEC-055 | Revoking VIEW cascades the screen's other action grants (ENT-SEC-009) | REQ-SEC-081 |
+| CHANGED | SCR-REQ-SEC-005 | B5 + `DELETE /api/v1/sec/roles/{id}/screens/{screenId}`, `DELETE /api/v1/sec/roles/{id}/actions/{actionId}` | REQ-SEC-080, REQ-SEC-081 |
+
+Counts in the current analysis after this addendum (base 33 REQ/AC + REQ/AC-SEC-034/035 of the 2026-09-11
+amendment + these two): REQ 37 · AC 37 · RULE 9 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued, incl. the pre-vendoring analysis): REQ: 081 · AC: 087 · ENT: 014 ·
+RULE: 055 · SCR-REQ: 010 · DBF: 116 · XM: 005 · QR: 054 · API: 050 · ADR: 062
+
+Decisions
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-SEC-062 | Revoking VIEW cascades the screen's other action grants (plan name ADR-SEC-041; renumbered because ADR-SEC numbers up to 061 were issued historically) |
+
+Package D (tenant-maturity plan §6 D.1–D.3) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §9.
+
+Entities (package D)
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | ENT-SEC-001 User | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`, `photoFileId` (soft ref, XM-SEC-006), `passwordChangeRequired`, `passwordChangedAt` | V16__sec_user_profile.sql (DBF-SEC-117..123) |
+
+Consumed (package D)
+| Kind | Owner | What | Kind of link |
+|---|---|---|---|
+| NEW | FILE | `FileImageStoreApi` (XM-FILE-002), `FileDocumentLookupApi.publicUrl` / `publicUrls` — XM-SEC-006 | SOFT (in-core API, no FK) |
+| CHANGED | tenant | `TenantLookupApi.summaryOf` (XM-TENANT-001) | in-core API |
+| NEW (consumer) | NOTIF | reacts to `UserPasswordChangedEvent` (RULE-NOTIF-023) | event bus |
+
+Requirements — new / changed items (package D)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-082 / AC-SEC-088 | Password policy | US-SEC-001, US-SEC-002; RULE-SEC-056 |
+| NEW | REQ-SEC-083 / AC-SEC-089 | Administrator sets a staff user's password | US-SEC-002; RULE-SEC-057, RULE-SEC-058; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-084 / AC-SEC-090 | Forced password change (403 gate) | US-SEC-002; RULE-SEC-059 |
+| NEW | REQ-SEC-085 / AC-SEC-091 | A staff user changes their own password | US-SEC-001; RULE-SEC-060 |
+| NEW | REQ-SEC-086 / AC-SEC-092 | Staff profile `/me` (read, patch; no roles) | US-SEC-001; RULE-SEC-062; ADR-SEC-064 |
+| NEW | REQ-SEC-087 / AC-SEC-093 | Profile photo (own and another staff user's) | US-SEC-001, US-SEC-002; RULE-SEC-061; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-088 / AC-SEC-094 | Profile fields in user management, `passwordChangeRequired` at login | US-SEC-002; RULE-SEC-058, RULE-SEC-062; SCR-REQ-SEC-004 |
+| NEW | REQ-SEC-089 / AC-SEC-095 | Password-change event (NOTIF e-mail) | US-SEC-001 |
+| NEW | RULE-SEC-056 | Password policy (`PasswordPolicy`): 8..72 characters, ≤ 72 UTF-8 bytes (BCrypt), letter + digit; customers get the byte limit only | REQ-SEC-082 |
+| NEW | RULE-SEC-057 | No admin-set on oneself (`SEC-422-PASSWORD-SELF`) | REQ-SEC-083 |
+| NEW | RULE-SEC-058 | An administrator-chosen password must be changed (default TRUE) | REQ-SEC-083, REQ-SEC-088 |
+| NEW | RULE-SEC-059 | Forced-change gate (`SEC-403-PASSWORD-CHANGE-REQUIRED`) | REQ-SEC-084 |
+| NEW | RULE-SEC-060 | Self-change needs the current password (`SEC-403-PASSWORD-CURRENT-INVALID`) | REQ-SEC-085 |
+| NEW | RULE-SEC-061 | Profile photo: PNG/JPEG/WebP ≤ 1 MB, one per user (`SEC-400-PHOTO-INVALID`) | REQ-SEC-087 |
+| NEW | RULE-SEC-062 | Preferred locale `ar` / `en` (`CHK_SEC_USER_LOCALE`) | REQ-SEC-086, REQ-SEC-088 |
+| CHANGED | SCR-REQ-SEC-004 | B5 + set password, set / remove photo | REQ-SEC-083, REQ-SEC-087, REQ-SEC-088 |
+| CHANGED | REQ-SEC-007 (reset completion), REQ-SEC-009 (create user) | + RULE-SEC-056; reset completion clears the forced-change flag | — |
+
+Screens: no new SEC screen, page code or permission (the profile pages are authentication-only frontend routes).
+
+Counts in the current analysis after package D: REQ 45 · AC 45 · RULE 16 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued): REQ: 089 · AC: 095 · ENT: 014 · RULE: 062 · SCR-REQ: 010 ·
+DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064 (065 held spare for this run; the as-built SEC ADRs of the
+analysis-coverage session start at 066)
+
+Decisions (package D)
+| Kind | ADR | Subject |
+|---|---|---|
+| NEW | ADR-SEC-063 | An administrator-chosen password forces a change at next login (plan name ADR-SEC-039) |
+| NEW | ADR-SEC-064 | The staff `/me` payload carries no roles or permissions (plan name ADR-SEC-040) |
+
+Package B (tenant-maturity plan §4 B.4) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §10.
+
+Requirements — new items (package B)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-090 / AC-SEC-096 | Directory counts of the current tenant (`SecUserDirectoryApi.countStaff / countCustomers / countActiveSessions`) | US-SEC-002; consumer TENANT REQ-TENANT-028 |
+| NEW | REQ-SEC-091 / AC-SEC-097 | Platform recovery of a super user's password (`SecAdminRecoveryApi.findRecoveryTarget / resetSuperUserPassword`) | US-SEC-002; RULE-SEC-056, RULE-SEC-058; consumer TENANT REQ-TENANT-027, RULE-TENANT-017 |
+
+Exposed surface (package B): `SecUserDirectoryApi` + three counts (CHANGED); `SecAdminRecoveryApi` +
+`RecoveryTarget` (NEW, gate `PLATFORM_TENANT_MANAGE`). Entities, screens, permissions, error codes, schema:
+unchanged. Audit action + `ADMIN_PASSWORD_RESET` (generic audit log).
+
+Counts in the current analysis after package B: REQ 47 · AC 47 · RULE 16 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued): REQ: 091 · AC: 097 · ENT: 014 · RULE: 062 · SCR-REQ: 010 ·
+DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064 (065 held spare; 066 … 068 the analysis-coverage work's)
+
+Package E (tenant-maturity plan §7 E.2) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §11.
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | realm rule (`REALM_MISMATCH`, 1.2.0 §2) | `GET /api/v1/tenant/me` is realm-neutral on the core chain (authenticated, either realm; `GET` only — review round 1) |
+| CHANGED | RULE-SEC-059 | + `GET /api/v1/tenant/me` among the calls allowed during a pending forced change |
+No requirement, entity, endpoint, permission, error code or schema delta. Last sequence per atom unchanged (REQ: 091 ·
+AC: 097 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064; 065 held spare,
+066 … 068 the analysis-coverage work's).
+
+Package C12 (tenant-maturity plan §5 C.1, C.2) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §12.
+
+Requirements — new items (package C12)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-092 / AC-SEC-098 | End a suspended tenant's sessions (`TenantSuspendedEvent` → every open session of the tenant, both realms) | US-SEC-011; TENANT REQ-TENANT-033, RULE-TENANT-006 |
+| NEW | REQ-SEC-093 / AC-SEC-099 | Platform termination of every session of the current tenant (`SecAdminRecoveryApi.terminateAllSessions`) | US-SEC-011; TENANT REQ-TENANT-035 |
+
+Dependencies — delta
+| XM-ID | Type | Target | Module |
+|---|---|---|---|
+| XM-SEC-007 | EVENT-CONSUME | `TenantSuspendedEvent` | events (TENANT publishes) |
+
+Exposed surface (package C12): `SecAdminRecoveryApi` + `terminateAllSessions()` (CHANGED, gate `PLATFORM_TENANT_MANAGE`);
+`JwtAuthenticationFilter` writes TENANT's `TenantTokenFacts` request attribute (CHANGED). Entities, screens,
+permissions, error codes, schema: unchanged.
+
+Last sequence per atom (highest ever issued): REQ: 093 · AC: 099 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 ·
+XM: 007 · QR: 054 · API: 050 · ADR: 064 (065 held spare; 066 … 068 the analysis-coverage work's)
+
+Package C5 (tenant-maturity plan §5 C.5) — registry delta; full text in `srs-sec.md` 1.3.0 §13.
+| Kind | Item | Delta |
+|---|---|---|
+| NEW | `com.erp.sec.tenant.SecTenantExportContributor` | implements TENANT XM-TENANT-004: nine SEC files of the exported tenant; never `PASSWORD_HASH`, `TOKEN_REF` or the two token tables |
+No id minted; entities, screens, permissions, error codes, schema unchanged. Last sequence per atom unchanged.

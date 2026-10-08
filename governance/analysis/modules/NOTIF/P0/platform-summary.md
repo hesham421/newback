@@ -93,6 +93,7 @@ SRS is produced in P1 (SRS Governance Engine) — never here.
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 01–12 (plan), 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 The full description of the implemented platform (erp-core library + consuming apps, the new core
@@ -101,11 +102,25 @@ modules tenant / audit / events / sequence / report, conventions, release policy
 erp-core 1.2.0" (decision recorded there).
 
 NOTIF's own platform-relevant changes:
-| Change | Source |
-|---|---|
-| Tenant-scoped tables; templates and channel configs copied from PLATFORM to every new tenant | docs/steps/05-report.md |
-| Event-driven, asynchronous, retried delivery on the shared `com.erp.events` bus (no broker) | docs/steps/08-report.md |
-| `ChannelProvider` SPI: EMAIL and IN_APP in core; SMS / WHATSAPP / PUSH / INTERNAL need an application provider | DEVIATIONS [08] |
-| In-app inbox for staff and customers (`NOTIF_INBOX`) | docs/steps/08-report.md |
-| Delivery claim/lease and bounded attempts across requeues (1.2.0); production should enable `erp.core.notif.requeue.enabled` + scheduling | docs/steps/15-report.md; docs/CONSUMING.md §7 |
-| Reference report `NOTIF_LOG_SUMMARY` | DEVIATIONS [11] |
+| Kind | Change | Source |
+|---|---|---|
+| NEW | Tenant-scoped tables; templates and channel configs copied from PLATFORM to every new tenant (without `CONFIG_JSON` / attachment) | docs/steps/05-report.md; DEVIATIONS [05] |
+| CHANGED | Dispatch is event-driven, asynchronous and retried on the shared `com.erp.events` bus (no broker): at-least-once, claim lease and bounded attempts across requeues (1.2.0); production should enable `erp.core.notif.requeue.enabled` + scheduling | docs/steps/08-report.md, 15-report.md; docs/CONSUMING.md §7; ADR-NOTIF-002 |
+| CHANGED | DEPENDENCY MAP "Notification → HARD → File Service": the dependency is SOFT — the template attachment id is validated through `FileDocumentLookupApi.isAvailable` (no FK) and no message carries the file | erp-core/src/main/java/com/erp/notif/service/NotificationTemplateService.java:153-158 |
+| NEW | DEPENDENCY MAP gains Notification → SOFT → MDL: the `NOTIF_CHANNEL` / `NOTIF_STATUS` values are MDL lookup rows read through `MdlLookupApi` | erp-core/src/main/java/com/erp/notif/service/NotificationLookupService.java:39; ADR-NOTIF-006 |
+| REMOVED | "Notification → USES → Common Utils : events": NOTIF consumes no foreign event; other modules call `NotificationDispatchApi` directly | ADR-NOTIF-001 |
+| CHANGED | `ChannelProvider` SPI: EMAIL and IN_APP in core; SMS / WHATSAPP / PUSH / INTERNAL need an application provider **and** a channel-configuration row (none is seeded) — OPEN ITEMS "resolved inside NOTIF_CHANNEL_CONFIG" is replaced by "resolved by an application `ChannelProvider` bean"; `CONFIG_JSON` is read by nothing | DEVIATIONS [08]; ADR-NOTIF-004 |
+| NEW | In-app inbox for staff and customers (`NOTIF_INBOX`; `/api/v1/notif/inbox`, `/api/v1/customers/me/inbox`) | docs/steps/08-report.md |
+| NEW | Reference report `NOTIF_LOG_SUMMARY` | DEVIATIONS [11] |
+| NEW (decision) | Dispatch is gated by authentication only, with a caller-supplied `variables.email` — accepted risk, to be revisited | ADR-NOTIF-005 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (CHANGELOG [Unreleased]); the tenant-maturity plan packages C.1 and D.3 are documented by the implementing run as they land on main
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records only what is already on main for 1.3.0 (no behaviour change).
+
+| Kind | Change | Source |
+|---|---|---|
+| CHANGED | Shared helpers in `com.erp.common` (`lookup.LookupOptionResponse`, `lookup.OwnedLookups`, `domain.DomainRules`, `domain.StatusTransitions`, `util.*`) replace NOTIF-local copies — no behaviour change | CHANGELOG [Unreleased] |
+
+Plan packages B, C, D, E, G: documented by each package as it lands on main (analysis-first, written by the implementing run); the verified reference rows are in docs/plans/tenant-maturity-analysis-reference.md.

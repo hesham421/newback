@@ -104,34 +104,52 @@ INF-IDs
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 03, 05, 06, 08, 09, 10, 12, 15 (shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
-Paths cited below are relative to the erp-core repository at that tag. No ENTITY / XM ids are minted here.
+Paths cited below are relative to the erp-core repository at that tag (`cu/` = `erp-core/src/main/java/com/erp/cu/`).
+No ENTITY / XM ids are minted here; the rule ids cited are the ones minted in `../P1/srs-cu.md`.
 
 RESPONSIBILITIES — deltas
-| Capability | Delta | Source |
-|---|---|---|
-| Configuration | AppConfiguration becomes GLOBAL with nullable `TENANT_ID` (NULL = platform default, else tenant override); new typed, cached read API `com.erp.cu.crossmodule.SettingsApi` replaces the internal `ConfigurationService.getValue` (removed: no caller, tenant-unaware) | docs/steps/09-report.md; DEVIATIONS [09] |
-| Events | Moved out of CU into the dedicated core module `com.erp.events` (asynchronous, after commit, tenant-propagating executor) | docs/steps/08-report.md |
-| Global Exceptions (`com.erp.common`) | + `CONCURRENT_MODIFICATION` 409 (step 05), + `Status.TOO_MANY_REQUESTS` 429 (step 06), + `CommonErrorCodes.NOT_FOUND` 404 and `GlobalExceptionHandler.handleNoResource` (1.2.0), wrapped `LocalizedException` answered with its own code (1.2.0) | DEVIATIONS [05], [06], [15] |
-| Specification / Filtering | `PageableBuilder` rejects an overflowing `page` with 400 `VALIDATION_ERROR` (1.2.0); `tenantId` is never a client filter field | DEVIATIONS [15], [09] |
-| Bundle (i18n) | the library contributes a `messageSource` (application bundles first, then core `i18n/messages`; UTF-8; no system-locale fallback); English base is `messages.properties`, Arabic `messages_ar.properties` (no `messages_en`) | DEVIATIONS [03], [01] |
-| Base entities | `GlobalAuditableEntity` (audit columns + `@Version`) is the parent of `AuditableEntity` (+ `@TenantId TENANT_ID`) | DEVIATIONS [05] |
+| Kind | Capability | Delta | Source |
+|---|---|---|---|
+| CHANGED | (packaging) | The four code capabilities (Specification / Filtering, Global Exceptions, Bundle, Events) live in the foundation packages `com.erp.common` and `com.erp.events`, not in `com.erp.cu`; `com.erp.cu` holds the Configuration capability only (entity, CRUD API, `SettingsApi`, permissions) | erp-core/src/main/java/com/erp/{common,events,cu}; docs/RELEASE.md |
+| CHANGED | Configuration | AppConfiguration becomes GLOBAL with a nullable `TENANT_ID` (NULL = platform default, else tenant override); new typed, cached read API `com.erp.cu.crossmodule.SettingsApi` replaces the internal `ConfigurationService.getValue` (removed: no caller, tenant-unaware); keys are case-insensitive and stored upper-case; no settings-changed event; no provisioning of a new tenant (it inherits the defaults) | docs/steps/09-report.md; docs/DEVIATIONS.md [09]; srs-cu.md RULE-CU-004, 009, 013, 014 |
+| CHANGED | Events | Moved out of CU into the dedicated core module `com.erp.events` (asynchronous, after commit, tenant-propagating executor); CU publishes and listens to nothing | docs/steps/08-report.md |
+| CHANGED | Global Exceptions (`com.erp.common`) | + `CONCURRENT_MODIFICATION` 409 (step 05), + `CommonErrorCodes.NOT_FOUND` 404 and `GlobalExceptionHandler.handleNoResource` (1.2.0), wrapped `LocalizedException` answered with its own code (1.2.0); `DATA_INTEGRITY_VIOLATION` 409 covers the CU create race | docs/DEVIATIONS.md [05], [15] |
+| CHANGED | Specification / Filtering | list endpoints are `POST …/search` with a filter envelope; an unknown filter field → 400 `VALIDATION_ERROR` (`UNSUPPORTED_FILTER_FIELD`), an unknown sort field is ignored, page size ≤ 200; `PageableBuilder` rejects an overflowing `page` with 400 (1.2.0); `tenantId` is never a client filter | docs/DEVIATIONS.md [15], [09]; common/search/SpecBuilder.java:54-63; common/search/PageableBuilder.java:29-41 |
+| CHANGED | Bundle (i18n) | the library contributes a `messageSource` (application bundles first, then core `i18n/messages`; UTF-8; no system-locale fallback); English base is `messages.properties`, Arabic `messages_ar.properties` (no `messages_en`) | docs/DEVIATIONS.md [03], [01] |
+| NEW | Base entities | `GlobalAuditableEntity` (audit columns + `@Version`) is the parent of `AuditableEntity` (+ `@TenantId TENANT_ID`); AppConfiguration extends the global one | docs/DEVIATIONS.md [05]; cu/entity/AppConfiguration.java:41 |
+| NEW | Caching | `ErpCoreCacheAutoConfiguration` enables Spring caching for the one core cache `erpCoreSettings`; the application chooses the provider; no TTL; eviction on CU writes only | erp-core/src/main/java/com/erp/autoconfigure/ErpCoreCacheAutoConfiguration.java:30-46; srs-cu.md RULE-CU-007, 008 |
 
 ENTITIES OWNED — deltas
-| Entity | Delta | Source |
-|---|---|---|
-| AppConfiguration | CHANGED: global entity (`GlobalAuditableEntity`), nullable `tenantId`, `version`; key unique per (tenant or platform) | V10, V14__sequence_and_settings.sql |
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | AppConfiguration | global entity (`GlobalAuditableEntity`), nullable immutable `tenantId`, `version` (not on the wire); key unique per owner (platform default or one tenant); `isActiveFl` → `isActive`; `configKey` stored upper-case | V10, V14__sequence_and_settings.sql; cu/entity/AppConfiguration.java |
 
 DEPENDENCIES — deltas ("CU is ROOT" no longer holds strictly)
-| Module | Kind | What | Source |
-|---|---|---|---|
-| tenant | HARD FK + `TenantContext` | `CORE_TENANT` FK on `TENANT_ID`; the acting tenant decides override vs default | V10; DEVIATIONS [09] |
-| SEC | SPI | `CuPermissions` implements `PermissionContributor` | docs/steps/06-report.md |
-| audit | SOFT | `@Audited` on `AppConfiguration` | DEVIATIONS [10] |
+| Kind | Module | Type | What | Source |
+|---|---|---|---|---|
+| NEW | tenant | HARD FK + `TenantContext` | `CORE_TENANT` FK on `TENANT_ID` (`FK_CU_APP_CONFIGURATION_TENANT`); the acting tenant decides override vs default; `SettingsApi` needs a bound tenant | V10; docs/DEVIATIONS.md [09] |
+| NEW | SEC | SPI | `CuPermissions` implements `PermissionContributor` | docs/steps/06-report.md |
+| NEW | audit | SOFT | `@Audited` on `AppConfiguration` | docs/DEVIATIONS.md [10] |
+| NEW | (exposed) | cross-module | `SettingsApi` — no core consumer (applications consume it); `ConfigurationService.resolve` backs it (internal, cached, unauthorised) | cu/crossmodule/SettingsApi.java; cu/service/ConfigurationService.java:198-205 |
 
-PERMISSIONS (CU had "no CORE-9 permissions")
-Code-defined by `CuPermissions`: module `CU`, screen `CU_CONFIGURATIONS` with legacy literal authorities
-`CONFIG_VIEW`, `CONFIG_CREATE`, `CONFIG_UPDATE`, `CONFIG_DEACTIVATE` (registry rows pre-date erp-core —
-old `V31` seed, now in `V7__sec_seed.sql`); NEW under registry module `PLATFORM`: screen
-`PLATFORM_SETTINGS`, `PERM_PLATFORM_SETTINGS_VIEW` (gateway) and `PLATFORM_SETTINGS_MANAGE`.
-— DEVIATIONS [06], [09]; docs/steps/04-report.md (mapping)
+PERMISSIONS — deltas (CU had "no CORE-9 permissions")
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | module `CU` | registry names `الأدوات المشتركة` / `Common Utilities` (this file's header says Common Utils) | cu/permission/CuPermissions.java:52; V7__sec_seed.sql:40 |
+| CHANGED | screen `CU_CONFIGURATIONS` (`إدارة إعدادات المنصة` / `Platform Configuration`) | backend-only holder screen with the literal authorities `CONFIG_VIEW`, `CONFIG_CREATE`, `CONFIG_UPDATE`, `CONFIG_DEACTIVATE` (action codes VIEW / CREATE / UPDATE / DEACTIVATE); seeded by V7 (old `V31` seed), code-defined in `CuPermissions` | CuPermissions.java:22-28,62-66; V7:66,114-117; docs/steps/04-report.md (mapping) |
+| NEW | screen `PLATFORM_SETTINGS` (`إعدادات المنصة الافتراضية` / `Platform Default Settings`) under module `PLATFORM` | `PERM_PLATFORM_SETTINGS_VIEW` (gateway, gates no API) and `PLATFORM_SETTINGS_MANAGE` (every `scope=PLATFORM` call); inserted by the startup catalog synchroniser, not seeded; held implicitly by PLATFORM-tenant super roles only | CuPermissions.java:36-45,67-68; docs/DEVIATIONS.md [09] |
+| NEW | role `CU_ADMIN` | seeded by V7 with the `CU` module grant (screen + four actions derived); `SYS_ADMIN` holds the same | V7:151,172,175,187-200 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (commit 6b01816; CHANGELOG [Unreleased]); no CU behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | `AppConfigurationDomain` | uses the shared `com.erp.common.domain.DomainRules` (`assertNotBlank`, `assertUnique`) for RULE-CU-002 / RULE-CU-001; same codes and statuses | erp-core/src/main/java/com/erp/cu/domain/AppConfigurationDomain.java:39-40,51 |
+| CHANGED | `ConfigurationService.owner` | uses `TenantContext.isPlatform()` (new in 1.3.0) for the tenant half of RULE-CU-005; same outcome | erp-core/src/main/java/com/erp/cu/service/ConfigurationService.java:214 |
+
+No responsibility, entity, dependency or permission delta.

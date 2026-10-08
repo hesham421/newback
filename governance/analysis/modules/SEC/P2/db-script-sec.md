@@ -695,7 +695,8 @@ See `registry-db-sec.md`.
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 01, 04, 05, 06, 07, 10 (migrations V4, V7, V10, V11, V12)
+Steps          : 01, 04, 05, 06, 07, 10, 15 (migrations V4, V7, V10, V11, V12; steps 10 and 15 added no SEC migration)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` at that tag unless
@@ -713,28 +714,93 @@ stated otherwise. No DBF ids are minted here.
   constraints under the same name in composite form.
 
 ### Per-table deltas
-| Table | Delta | Migration |
-|---|---|---|
-| SEC_USER | + `TENANT_ID BIGINT NOT NULL` (backfilled 1 = PLATFORM, default dropped, `FK_SEC_USER_TENANT` → `CORE_TENANT(ID)`, `IDX_SEC_USER_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 |
-| SEC_USER | + `REALM VARCHAR(16) NOT NULL` (backfilled `STAFF`, default dropped), `CHK_SEC_USER_REALM` (STAFF, CUSTOMER) | V11 |
-| SEC_USER | `UQ_SEC_USER_USERNAME` → `(TENANT_ID, REALM, USERNAME)`; `UQ_SEC_USER_EMAIL` → `(TENANT_ID, REALM, EMAIL)` (V10 made them `(TENANT_ID, …)`, V11 added `REALM`) | V10, V11 |
-| SEC_USER | `CHK_SEC_USER_STATUS` widened: PENDING, ACTIVE, DISABLED, + `PENDING_VERIFICATION` | V11 |
-| SEC_USER (seed) | bootstrap `admin` / `admin@erp.local`, `STATUS_CODE = 'PENDING'`, `PASSWORD_HASH = 'BOOTSTRAP-PASSWORD-NOT-SET'` (no usable password; no more `admin/admin`) | V7 |
-| SEC_ROLE | + `TENANT_ID`, + `VERSION`; `UQ_SEC_ROLE_CODE` → `(TENANT_ID, CODE)` | V10 |
-| SEC_ROLE | + `IS_SUPER BOOLEAN NOT NULL DEFAULT FALSE`; every tenant's `SYS_ADMIN` set TRUE | V11 |
-| SEC_USER_ROLE | + `TENANT_ID`, + `VERSION`; + nullable `CREATED_BY/AT`, `UPDATED_BY/AT` (backfilled from `ASSIGNED_BY/AT`); `UQ_SEC_USER_ROLE_USER_ROLE` → `(TENANT_ID, USER_ID, ROLE_ID)` | V10 |
-| SEC_ROLE_MODULE_GRANT / SEC_ROLE_SCREEN_GRANT / SEC_ROLE_ACTION_GRANT | + `TENANT_ID`, + `VERSION`; + nullable audit columns (backfilled from `GRANTED_BY/AT`); uniques → `(TENANT_ID, ROLE_ID, MODULE_ID / SCREEN_ID / ACTION_ID)` | V10 |
-| SEC_ACTIVE_SESSION / SEC_AUDIT_LOG / SEC_PWD_RESET_TOKEN / SEC_SIGNUP_REQUEST | + `TENANT_ID`, + `VERSION`; + nullable audit columns (backfilled `'SYSTEM'` + `STARTED_AT` / `OCCURRED_AT` / `REQUESTED_AT` / `SUBMITTED_AT`) | V10 |
-| SEC_MODULE_REG / SEC_SCREEN_REG / SEC_ACTION_REG | + `VERSION` only — global, no `TENANT_ID` (one catalog for all tenants) | V10 |
-| SEC_MODULE_REG / SCREEN_REG / ACTION_REG (seed) | + module `PLATFORM`, screen `PLATFORM_TENANTS`, actions `PERM_PLATFORM_TENANTS_VIEW`, `PLATFORM_TENANT_MANAGE` (granted to PLATFORM's `SYS_ADMIN`) | V10 §6 |
-| SEC_ACTION_REG (seed) | + `FILE:DOCUMENT:PUBLISH` on screen `FILE_BROWSER` (granted to PLATFORM's `SYS_ADMIN`, `FILE_ADMIN`) | V12 §3 |
-| SEC_*_REG (runtime) | since step 06 the catalog is upserted from code at startup by `PermissionCatalogSynchronizer`; later permissions (sequence, settings, audit, reports) have no migration seed. V7 / V10 rows are reproduced identically. | V11 header; DEVIATIONS [06] |
-| SEC_CUSTOMER_VERIFY_TOKEN | NEW: `ID BIGINT` (`SEQ_SEC_CUSTOMER_VERIFY_TOKEN`), `TENANT_ID BIGINT NOT NULL`, `USER_ID BIGINT NOT NULL` (FK `SEC_USER(USER_PK)`), `TOKEN_HASH TEXT NOT NULL`, `EXPIRES_AT TIMESTAMPTZ NOT NULL`, `USED_AT TIMESTAMPTZ`, audit columns, `VERSION`; `UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (TENANT_ID, TOKEN_HASH)`; FK/IDX to `CORE_TENANT`; `IDX_SEC_CUSTOMER_VERIFY_TOKEN_USER` | V11 §5 |
+| Kind | Table | Delta | Migration |
+|---|---|---|---|
+| CHANGED | all 13 SEC tables (BLOCK 1 "SEQUENCES — none") | one named sequence per table, created before the tables: `SEQ_SEC_USER`, `SEQ_SEC_ROLE`, `SEQ_SEC_USER_ROLE`, `SEQ_SEC_MODULE_REG`, `SEQ_SEC_SCREEN_REG`, `SEQ_SEC_ACTION_REG`, `SEQ_SEC_ROLE_MODULE_GRANT`, `SEQ_SEC_ROLE_SCREEN_GRANT`, `SEQ_SEC_ROLE_ACTION_GRANT`, `SEQ_SEC_ACTIVE_SESSION`, `SEQ_SEC_AUDIT_LOG`, `SEQ_SEC_PWD_RESET_TOKEN`, `SEQ_SEC_SIGNUP_REQUEST` — each `START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE`; every `*_PK` column is plain `BIGINT NOT NULL` (no `GENERATED ALWAYS AS IDENTITY` anywhere; §3's PK definitions were never shipped in that form). Seeds take their keys with `nextval('SEQ_SEC_*')`. ADR-SEC-068 (ADR-SEC-035 is the v2 statement of the same decision). | V4:17-31, 321-334; V7:19 |
+| CHANGED | SEC_USER | + `TENANT_ID BIGINT NOT NULL` (backfilled 1 = PLATFORM, default dropped, `FK_SEC_USER_TENANT` → `CORE_TENANT(ID)`, `IDX_SEC_USER_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 |
+| CHANGED | SEC_USER | + `REALM VARCHAR(16) NOT NULL` (backfilled `STAFF`, default dropped), `CHK_SEC_USER_REALM` (STAFF, CUSTOMER) | V11 |
+| CHANGED | SEC_USER | `UQ_SEC_USER_USERNAME` → `(TENANT_ID, REALM, USERNAME)`; `UQ_SEC_USER_EMAIL` → `(TENANT_ID, REALM, EMAIL)` (V10 made them `(TENANT_ID, …)`, V11 added `REALM`) | V10, V11 |
+| CHANGED | SEC_USER | `CHK_SEC_USER_STATUS` widened: PENDING, ACTIVE, DISABLED, + `PENDING_VERIFICATION` | V11 |
+| CHANGED | SEC_USER (seed) | bootstrap `admin` / `admin@erp.local`, `STATUS_CODE = 'PENDING'`, `IS_ACTIVE_FL = TRUE`, `PASSWORD_HASH = 'BOOTSTRAP-PASSWORD-NOT-SET'` (no usable password; no more `admin/admin`), holding `SYS_ADMIN` through one `SEC_USER_ROLE` row | V7:202-221 |
+| CHANGED | SEC_ROLE | + `TENANT_ID`, + `VERSION`; `UQ_SEC_ROLE_CODE` → `(TENANT_ID, CODE)` | V10 |
+| CHANGED | SEC_ROLE | + `IS_SUPER BOOLEAN NOT NULL DEFAULT FALSE`; every tenant's `SYS_ADMIN` set TRUE | V11 |
+| NEW | SEC_ROLE / SEC_ROLE_*_GRANT (seed) | 4 roles `SYS_ADMIN` (description bilingual), `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN`; Tier-1 8 module grants (`SYS_ADMIN` → SEC, MDL, CU, NOTIF, FILE; each `<MOD>_ADMIN` → its module), Tier-2 20 screen grants (every granted module's screens that carry an action — the three public SEC screens excluded), Tier-3 59 action grants (every action of every granted screen); the analysis seeds only `SYS_ADMIN` | V7:141-200 |
+| NEW | SEC_MODULE_REG / SEC_SCREEN_REG / SEC_ACTION_REG (seed) | 5 modules (SEC, MDL, NOTIF, FILE, CU), 17 screens (SEC 9, MDL 2, CU 1, NOTIF 3, FILE 2), 38 actions (SEC 13, MDL 4, CU 4 with codes `CONFIG_*`, NOTIF 9, FILE 8); action names `'<screen name> - <action>'`; the three public SEC screens carry no action | V7:30-139 |
+| CHANGED | SEC_USER_ROLE | + `TENANT_ID`, + `VERSION`; + nullable `CREATED_BY/AT`, `UPDATED_BY/AT` (backfilled from `ASSIGNED_BY/AT`); `UQ_SEC_USER_ROLE_USER_ROLE` → `(TENANT_ID, USER_ID, ROLE_ID)` | V10 |
+| CHANGED | SEC_ROLE_MODULE_GRANT / SEC_ROLE_SCREEN_GRANT / SEC_ROLE_ACTION_GRANT | + `TENANT_ID`, + `VERSION`; + nullable audit columns (backfilled from `GRANTED_BY/AT`); uniques → `(TENANT_ID, ROLE_ID, MODULE_ID / SCREEN_ID / ACTION_ID)` | V10 |
+| CHANGED | SEC_ACTIVE_SESSION / SEC_AUDIT_LOG / SEC_PWD_RESET_TOKEN / SEC_SIGNUP_REQUEST | + `TENANT_ID`, + `VERSION`; + nullable audit columns (backfilled `'SYSTEM'` + `STARTED_AT` / `OCCURRED_AT` / `REQUESTED_AT` / `SUBMITTED_AT`) | V10 |
+| CHANGED | SEC_ACTIVE_SESSION (runtime) | `TOKEN_REF` holds the access token's `jti` (a random UUID); `LAST_ACTIVITY_AT` is written at insert only; customer logins write rows here too | sec/service/AuthService.java; sec/service/CustomerAccountService.java |
+| CHANGED | SEC_PWD_RESET_TOKEN (runtime) | `TOKEN_HASH` = SHA-256 hex of a random UUID; rows of both realms | sec/service/PasswordResetService.java |
+| CHANGED | SEC_MODULE_REG / SEC_SCREEN_REG / SEC_ACTION_REG | + `VERSION` only — global, no `TENANT_ID` (one catalog for all tenants) | V10 |
+| NEW | SEC_MODULE_REG / SCREEN_REG / ACTION_REG (seed) | + module `PLATFORM`, screen `PLATFORM_TENANTS`, actions `PERM_PLATFORM_TENANTS_VIEW`, `PLATFORM_TENANT_MANAGE` (granted to PLATFORM's `SYS_ADMIN`) | V10 §6 |
+| NEW | SEC_ACTION_REG (seed) | + `FILE:DOCUMENT:PUBLISH` on screen `FILE_BROWSER` (granted to PLATFORM's `SYS_ADMIN`, `FILE_ADMIN`) | V12 §3 |
+| CHANGED | SEC_*_REG (runtime) | since step 06 the catalog is upserted from code at startup by `PermissionCatalogSynchronizer`; later permissions (sequence, settings, audit, reports) have no migration seed. V7 / V10 rows are reproduced identically. | V11 header; DEVIATIONS [06] |
+| NEW | SEC_CUSTOMER_VERIFY_TOKEN | `ID BIGINT` (`SEQ_SEC_CUSTOMER_VERIFY_TOKEN`), `TENANT_ID BIGINT NOT NULL`, `USER_ID BIGINT NOT NULL` (FK `SEC_USER(USER_PK)`), `TOKEN_HASH TEXT NOT NULL`, `EXPIRES_AT TIMESTAMPTZ NOT NULL`, `USED_AT TIMESTAMPTZ`, audit columns, `VERSION`; `UQ_SEC_CUSTOMER_VERIFY_TOKEN_HASH (TENANT_ID, TOKEN_HASH)`; FK/IDX to `CORE_TENANT`; `IDX_SEC_CUSTOMER_VERIFY_TOKEN_USER` | V11 §5 |
+| NEW | NOTIF_TEMPLATE (seeded from a SEC script) | V11 §6 inserts `CUSTOMER_VERIFY_EMAIL` and `CUSTOMER_PASSWORD_RESET` (AR / EN, placeholders `{actionLink}`, `{expiresAt}`) once per tenant existing at migration time; later tenants receive them through NOTIF's provisioning contributor | V11:89-118 |
 
 ### Deviations from this analysis
+- Analysis: BLOCK 1 "SEQUENCES — none: every PK uses GENERATED ALWAYS AS IDENTITY". Implemented: 13
+  (now 14) named sequences and plain `BIGINT` keys, from the first core script on (ADR-SEC-068;
+  `implementation-notes.md` §4.1).
+- Analysis (§1 DB field traceability): the FK columns `user_id`, `role_id`, `module_id`, `screen_id`,
+  `action_id` of the user-role and grant tables are typed `NUMERIC` (13 rows), while §3 and
+  `V4__sec_schema.sql` declare them `BIGINT`. The script is right; §1's `NUMERIC` is an internal
+  inconsistency of the original, kept as recorded.
 - Analysis: append-only log/session rows carry no "created by" audit fields. Implemented: the 8 tables
   above have nullable audit columns, so every tenant-scoped entity extends `AuditableEntity` (step 04
   "Schema conventions check"; DEVIATIONS [05]).
 - Analysis: `USERNAME` / `EMAIL` unique. Implemented: unique per `(TENANT_ID, REALM, …)` (steps 05, 06).
 - Kept as recorded (renames are not additive): `*_PK` primary-key names on SEC tables and the SEC vs
   CU/FILE/NOTIF audit-column type differences (DEVIATIONS [05]).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — user profile and password facts on `SEC_USER` (package G added no schema)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration: `erp-core/src/main/resources/db/migration/core/V16__sec_user_profile.sql` (the plan expected
+`V19__sec_user_profile.sql`; numbers are re-derived at creation time, plan §1.3 / §11 — `docs/DEVIATIONS.md`
+`[TM-D]`). Additive only: seven nullable or defaulted columns and one CHECK every existing row satisfies.
+DBF ids continue from the highest ever issued (DBF-SEC-116).
+
+### Table SEC_USER (ENT-SEC-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default |
+|---|---|---|---|---|---|---|
+| DBF-SEC-117 | PHONE | VARCHAR(30) | ENT-SEC-001.phone | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-118 | JOB_TITLE_AR | VARCHAR(150) | ENT-SEC-001.jobTitleAr | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-119 | JOB_TITLE_EN | VARCHAR(150) | ENT-SEC-001.jobTitleEn | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-120 | PREFERRED_LOCALE | VARCHAR(5) | ENT-SEC-001.preferredLocale (RULE-SEC-062) | REQ-SEC-086, REQ-SEC-088 | NULL | — |
+| DBF-SEC-121 | PHOTO_FILE_ID | BIGINT | ENT-SEC-001.photoFileId — soft reference to `FILE_DOCUMENT.ID`, **no FK** (XM-SEC-006) | REQ-SEC-087 | NULL | — |
+| DBF-SEC-122 | PASSWORD_CHANGE_REQUIRED_FL | BOOLEAN | ENT-SEC-001.passwordChangeRequired (RULE-SEC-058/059) | REQ-SEC-083, REQ-SEC-084, REQ-SEC-085 | NOT NULL | FALSE |
+| DBF-SEC-123 | PASSWORD_CHANGED_AT | TIMESTAMPTZ | ENT-SEC-001.passwordChangedAt | REQ-SEC-083, REQ-SEC-085, REQ-SEC-088 | NULL | — |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_SEC_USER_LOCALE` | `CHECK (PREFERRED_LOCALE IS NULL OR PREFERRED_LOCALE IN ('ar', 'en'))` | RULE-SEC-062; every existing row has NULL |
+No index (no new filter or join column), no sequence, no FK (`PHOTO_FILE_ID` is a soft reference by the
+platform's convention for FILE references: FILE rows can be soft-deleted and live in another module).
+
+### Script (`V16__sec_user_profile.sql`)
+```sql
+ALTER TABLE SEC_USER ADD COLUMN PHONE                       VARCHAR(30);
+ALTER TABLE SEC_USER ADD COLUMN JOB_TITLE_AR                VARCHAR(150);
+ALTER TABLE SEC_USER ADD COLUMN JOB_TITLE_EN                VARCHAR(150);
+ALTER TABLE SEC_USER ADD COLUMN PREFERRED_LOCALE            VARCHAR(5);
+ALTER TABLE SEC_USER ADD COLUMN PHOTO_FILE_ID               BIGINT;
+ALTER TABLE SEC_USER ADD COLUMN PASSWORD_CHANGE_REQUIRED_FL BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE SEC_USER ADD COLUMN PASSWORD_CHANGED_AT         TIMESTAMPTZ;
+
+ALTER TABLE SEC_USER ADD CONSTRAINT CHK_SEC_USER_LOCALE
+    CHECK (PREFERRED_LOCALE IS NULL OR PREFERRED_LOCALE IN ('ar', 'en'));
+```
+plus one `COMMENT ON COLUMN` per new column. Existing rows: `PASSWORD_CHANGE_REQUIRED_FL = FALSE`
+(no account is forced into a change by the upgrade), the other columns NULL.
+
+### XM register — NEW (consume direction)
+| XM id | From (column) | To (owner · object) | Kind | Validated by |
+|---|---|---|---|---|
+| XM-SEC-006 | `SEC_USER.PHOTO_FILE_ID` | FILE · `FILE_DOCUMENT.ID` (a PUBLIC image document owned `SEC_USER` / `USER_PK`, module `SEC`) | SOFT-READ, no FK | written only from `FileImageStoreApi.storePublicImage` results (XM-FILE-002); read through `FileDocumentLookupApi.publicUrl(s)` (XM-FILE-001) — a discarded or missing document simply yields no URL |
+
+### Deviations
+- Plan §6 D.1 names `V19__sec_user_profile.sql` → `V16__sec_user_profile.sql` (execution order D before B/E).

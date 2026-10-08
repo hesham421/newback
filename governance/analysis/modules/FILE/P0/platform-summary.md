@@ -94,6 +94,7 @@ SRS is produced in P1 (SRS Governance Engine) — never here.
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 01–12 (plan), 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 The full description of the implemented platform (erp-core library + consuming apps, the new core
 modules tenant / audit / events / sequence / report, conventions, release policy) is recorded once in
@@ -101,9 +102,22 @@ modules tenant / audit / events / sequence / report, conventions, release policy
 erp-core 1.2.0" (decision recorded there).
 
 FILE's own platform-relevant changes:
-| Change | Source |
-|---|---|
-| Tenant-scoped tables; category code unique per tenant | docs/steps/05-report.md |
-| `StorageProvider` SPI — DB (default), LOCAL, S3 (optional SDK); `erp.core.files.*` properties validated at startup | docs/steps/07-report.md |
-| Public files at `/api/v1/public/files/{tenantCode}/{publicSlug}` (customer / public chain, GET and HEAD only, tenant from the path) | DEVIATIONS [07] |
-| Redis-optional single-use download tokens | DEVIATIONS [02], [03] |
+| Kind | Change | Source |
+|---|---|---|
+| NEW | Tenant-scoped tables; category code unique per tenant | docs/steps/05-report.md |
+| NEW | `StorageProvider` SPI — DB (default), LOCAL, S3 (optional SDK); keys closed to those three by a DB CHECK; `erp.core.files.*` properties validated at startup | docs/steps/07-report.md; ADR-FILE-001 |
+| NEW | Public files at `/api/v1/public/files/{tenantCode}/{publicSlug}` (customer / public chain, GET and HEAD only, tenant from the path; inline only for raster images and PDF, CSP sandbox) | DEVIATIONS [07]; ADR-FILE-002 |
+| CHANGED | Private download token: 10-minute TTL, bound to the issuing user, single use; store in-memory or Redis | DEVIATIONS [02], [03]; ADR-FILE-003 |
+| CHANGED | DEPENDENCY MAP "File Service → SOFT → Security" — FILE also consumes MDL (`MdlLookupApi`, its two lookup types live in MDL) and tenant (FK, `TenantLookupApi`); "Notification → HARD → File Service: template + attachment storage/retrieval" is an in-process existence check (`FileDocumentLookupApi.isAvailable`) plus REST uploads, not an injected `FileService` | V8__mdl_seed.sql; com/erp/notif/service/NotificationTemplateService.java:153-157; ADR-FILE-005 |
+| CHANGED | MODULES row 1.3 "Depends On: Common Utils, Security" → Common Utils, Security, MDL, tenant, events, audit | srs.md addendum §6 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (CHANGELOG [Unreleased]); the tenant-maturity plan package D.4 is documented by the implementing run when it lands on main
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records only what is already on main for 1.3.0 (no behaviour change).
+
+| Kind | Change | Source |
+|---|---|---|
+| CHANGED | FILE's Domain / lookup / hashing helpers come from `com.erp.common` (`DomainRules`, `StatusTransitions`, `OwnedLookups`, `LookupOptionResponse`, `TokenHasher`) — no behaviour change | CHANGELOG [Unreleased] |
+
+Plan packages B, C, D, E, G: documented by each package as it lands on main (analysis-first, written by the implementing run); the verified reference rows are in docs/plans/tenant-maturity-analysis-reference.md.

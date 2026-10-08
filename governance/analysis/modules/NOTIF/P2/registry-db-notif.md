@@ -65,40 +65,83 @@ Total: 25 DBF-IDs across 3 tables.
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 06, 08 (migrations V6, V9, V10, V11, V13)
+Steps          : 04, 05, 06, 08 (migrations V6, V9, V10, V11, V13), 15 (shipped in 1.2.0 — no migration)
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Registry deltas only; detail in `db-script.md` → "Implementation Addendum — erp-core 1.2.0". No DBS / DBF /
 XM ids are assigned here.
 
 ### TABLES — delta
-| Table | Delta | Migration |
-|---|---|---|
-| NOTIF_INBOX | NEW (15 columns, tenant-scoped) | V13__notif_async_inbox.sql |
-| NOTIF_LOG, NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION` | V10__tenant_schema.sql |
+| Kind | Table | Delta | Migration |
+|---|---|---|---|
+| NEW | NOTIF_INBOX (ENTITY-NOTIF-004) | 15 columns, tenant-scoped; `PK_NOTIF_INBOX`, `FK_NOTIF_INBOX_TENANT`; no link to NOTIF_LOG | V13__notif_async_inbox.sql |
+| CHANGED | NOTIF_LOG, NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG | + `TENANT_ID` (FK `CORE_TENANT`), + `VERSION`; unique keys per tenant | V10__tenant_schema.sql |
+| CHANGED | NOTIF_LOG | delivery-queue columns (below); stored status values QUEUED / SENT / FAILED / CHANNEL_DISABLED / SKIPPED_NO_PROVIDER | V13 |
 
 ### COLUMNS — delta
-| Column | DB Type | Table | Migration |
+| Kind | Column | DB Type | Table | Migration |
+|---|---|---|---|---|
+| NEW | ATTEMPTS | INT NOT NULL DEFAULT 0 | NOTIF_LOG | V13 |
+| NEW | NEXT_ATTEMPT_AT | TIMESTAMP (next retry; claim lease since 1.2.0) | NOTIF_LOG | V13 |
+| NEW | LAST_ERROR | TEXT | NOTIF_LOG | V13 |
+| NEW | VARIABLES_JSON | TEXT (cleared at final status) | NOTIF_LOG | V13 |
+| NEW | TENANT_ID | BIGINT NOT NULL | NOTIF_LOG, NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG | V10 |
+| NEW | VERSION | BIGINT NOT NULL DEFAULT 0 | NOTIF_LOG, NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG | V10 |
+| NEW | ID, TENANT_ID, RECIPIENT_USER_ID, TITLE_AR, TITLE_EN, BODY_AR, BODY_EN, READ_AT, REFERENCE_TYPE, REFERENCE_ID, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT, VERSION | BIGINT / BIGINT NOT NULL / BIGINT NOT NULL / VARCHAR(300) NOT NULL ×2 / TEXT NOT NULL ×2 / TIMESTAMP / VARCHAR(100) / BIGINT / VARCHAR(255) / TIMESTAMP / VARCHAR(255) / TIMESTAMP / BIGINT NOT NULL DEFAULT 0 | NOTIF_INBOX | V13 |
+| CHANGED | TEMPLATE_CODE, CHANNEL_TYPE_ID | stored trimmed + upper-cased (entity lifecycle callbacks) | NOTIF_TEMPLATE, NOTIF_CHANNEL_CONFIG | — (code) |
+| CHANGED | CONFIG_JSON | stored and returned; read by no provider | NOTIF_CHANNEL_CONFIG | — (code); ADR-NOTIF-004 |
+
+### SEQUENCES — delta
+| Kind | Sequence | Delta | Migration |
 |---|---|---|---|
-| ATTEMPTS | INT NOT NULL DEFAULT 0 | NOTIF_LOG | V13 |
-| NEXT_ATTEMPT_AT | TIMESTAMP | NOTIF_LOG | V13 (lease since 1.2.0) |
-| LAST_ERROR | TEXT | NOTIF_LOG | V13 |
-| VARIABLES_JSON | TEXT | NOTIF_LOG | V13 |
-| TENANT_ID | BIGINT NOT NULL | all three tables | V10 |
-| VERSION | BIGINT NOT NULL DEFAULT 0 | all three tables | V10 |
+| CHANGED | SEQ_NOTIF_LOG, SEQ_NOTIF_TEMPLATE, SEQ_NOTIF_CHANNEL_CONFIG | `CACHE 1` (analysis: `NO CACHE`) | V6 |
+| NEW | SEQ_NOTIF_INBOX | `START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE` | V13 |
 
 ### CONSTRAINTS / INDEXES — delta
-`UQ_NOTIF_TEMPLATE_CODE (TENANT_ID, TEMPLATE_CODE)`, `UQ_NOTIF_CHANNEL_CONFIG_TYPE (TENANT_ID, CHANNEL_TYPE_ID)`
-(V10); `IDX_NOTIF_LOG_STATUS_NEXT_ATTEMPT`, `IDX_NOTIF_INBOX_RECIPIENT`, `IDX_<TABLE>_TENANT` (V10, V13).
+| Kind | Name | Definition | Migration |
+|---|---|---|---|
+| CHANGED | UQ_NOTIF_TEMPLATE_CODE | `(TENANT_ID, TEMPLATE_CODE)` | V10 |
+| CHANGED | UQ_NOTIF_CHANNEL_CONFIG_TYPE | `(TENANT_ID, CHANNEL_TYPE_ID)` | V10 |
+| NEW | FK_NOTIF_TEMPLATE_TENANT, FK_NOTIF_CHANNEL_CONFIG_TENANT, FK_NOTIF_LOG_TENANT, FK_NOTIF_INBOX_TENANT | `TENANT_ID → CORE_TENANT(ID)` | V10, V13 |
+| NEW | IDX_NOTIF_TEMPLATE_TENANT, IDX_NOTIF_CHANNEL_CONFIG_TENANT, IDX_NOTIF_LOG_TENANT, IDX_NOTIF_INBOX_TENANT | `(TENANT_ID)` | V10, V13 |
+| NEW | IDX_NOTIF_LOG_STATUS_NEXT_ATTEMPT | `(NOTIFICATION_STATUS_ID, NEXT_ATTEMPT_AT)` | V13 |
+| NEW | PK_NOTIF_INBOX | `(ID)` | V13 |
+| NEW | IDX_NOTIF_INBOX_RECIPIENT | `(TENANT_ID, RECIPIENT_USER_ID, READ_AT)` | V13 |
+
+### SEEDS — delta
+| Kind | Table | Rows | Migration |
+|---|---|---|---|
+| NEW | NOTIF_CHANNEL_CONFIG | EMAIL (PLATFORM); IN_APP (every tenant) — the only two configured channels | V9; V13 §3b |
+| NEW | NOTIF_TEMPLATE | PASSWORD_RESET, ACCOUNT_ACTIVATION (PLATFORM; the latter dispatched by no core code); CUSTOMER_VERIFY_EMAIL, CUSTOMER_PASSWORD_RESET (every tenant) | V9; V11 §6 |
+| NEW | MDL_LOOKUP_VALUE | NOTIF_CHANNEL + IN_APP; NOTIF_STATUS + QUEUED, SKIPPED_NO_PROVIDER (the analysed values come from V8) | V8; V13 §3a |
 
 ### LOV DDL REGISTER — delta
-| LOV | Added code values | Migration |
-|---|---|---|
-| NOTIF_CHANNEL | IN_APP | V13 §3a |
-| NOTIF_STATUS | QUEUED, SKIPPED_NO_PROVIDER | V13 §3a |
+| Kind | LOV | Code values | Migration |
+|---|---|---|---|
+| CHANGED | NOTIF_CHANNEL | MDL lookup type (owner NOTIF): EMAIL, SMS, WHATSAPP, PUSH, INTERNAL, + IN_APP | V8; V13 §3a |
+| CHANGED | NOTIF_STATUS | MDL lookup type (owner NOTIF): PENDING (never stored), SENT, FAILED, CHANNEL_DISABLED, + QUEUED, + SKIPPED_NO_PROVIDER | V8; V13 §3a |
 
 ### XM REGISTER — delta
-| Type | Target Table | Target Module | Note |
-|---|---|---|---|
-| HARD-FK | CORE_TENANT | tenant (no analysis folder) | every `TENANT_ID` |
-| SOFT-READ | SEC_USER | SEC | `NOTIF_INBOX.RECIPIENT_USER_ID` (no FK), same pattern as XM-NOTIF-001; the physical table is `SEC_USER` |
+| Kind | XM-ID | Type | Target Table | Target Module | Note |
+|---|---|---|---|---|---|
+| CHANGED | XM-NOTIF-001 | SOFT-READ | SEC_USER | SEC | `NOTIF_LOG.RECIPIENT_ID`; the physical table is `SEC_USER` (both realms), not `SEC_USER_ACCOUNT`; no FK |
+| CHANGED | XM-NOTIF-002 | SOFT-READ | FILE_DOCUMENT | FILE | `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID`; validated at write through `FileDocumentLookupApi.isAvailable`; no FK; never sent |
+| NEW | — | HARD-FK | CORE_TENANT | tenant | every `TENANT_ID` |
+| NEW | — | SOFT-READ | SEC_USER | SEC | `NOTIF_INBOX.RECIPIENT_USER_ID` (no FK), same pattern as XM-NOTIF-001 |
+| NEW | — | SOFT-READ (data) | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE | MDL | the NOTIF lookup rows, read through `MdlLookupApi` |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D.3 — password-change e-mail (`STAFF_PASSWORD_CHANGED`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script.md` → "Implementation Addendum — erp-core 1.3.0".
+
+### TABLES / COLUMNS / CONSTRAINTS — delta
+None (seed only).
+
+### SEED — delta
+| Table | Rows | Migration |
+|---|---|---|
+| NOTIF_TEMPLATE | `STAFF_PASSWORD_CHANGED` for every existing tenant (copied to later tenants from PLATFORM) | V17__notif_seed_password_changed.sql |

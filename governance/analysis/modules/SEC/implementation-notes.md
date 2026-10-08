@@ -1,6 +1,7 @@
 > Vendored verbatim on 2026-10-07 from `erp-app-reference/governance/project-artifacts/sec-implementation-notes.md` (newback `b8ce7fa`), because eight erp-core classes cite it.
 > Paths inside are historical (`governance/shared/…`, `governance/modules/SEC/…`, a root `src/`); the decisions recorded are still current as of erp-core 1.2.0.
 > The current references are `governance/analysis/modules/SEC/` (P1 SRS, P2 DB script) and `docs/api-docs/sec/`.
+> §1 below is superseded in part since erp-core step 05 (`V10__tenant_schema.sql` §4) — see the dated note under its heading (2026-10-08).
 
 # SEC — backend implementation notes
 
@@ -25,6 +26,18 @@ module integrates with SEC today, read [platform-integration-sec.md](platform-in
 ---
 
 ## 1. AuditableEntity exemptions
+
+> **Superseded (2026-10-08).** The exemption below describes the schema before erp-core step 05.
+> `V10__tenant_schema.sql` §4 (lines 150-169) added nullable `CREATED_BY`, `CREATED_AT`, `UPDATED_BY`,
+> `UPDATED_AT` to all eight tables listed here, backfilled from each table's own lifecycle columns
+> (`ASSIGNED_BY/AT`, `GRANTED_BY/AT`, `'SYSTEM'` + `STARTED_AT` / `OCCURRED_AT` / `REQUESTED_AT` /
+> `SUBMITTED_AT`), and since then every SEC entity extends `com.erp.common.domain.AuditableEntity`
+> (the three registries `GlobalAuditableEntity`); `SEC_CUSTOMER_VERIFY_TOKEN` (V11) was created with
+> the audit columns. The table and reasoning below are kept as the record of the original decision;
+> the lifecycle fields (`*By` / `*At`) and the "Tables with no `is_active_fl`" section still hold.
+> Sources: `erp-core/src/main/resources/db/migration/core/V10__tenant_schema.sql`;
+> `docs/steps/04-report.md` ("Schema conventions check"); `docs/DEVIATIONS.md` [05];
+> `P2/db-script-sec.md` → "Implementation Addendum — erp-core 1.2.0".
 
 `build-create-entity` A.1.1 requires every entity to extend `com.erp.common.domain.AuditableEntity`.
 SH.1 exempts a table that has no `created_by / created_at / updated_by / updated_at` columns.

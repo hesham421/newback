@@ -43,3 +43,13 @@ value changes.
   realignment and `DROP IDENTITY` lines. If the client would rather accept two strategies, keep
   v1's identity columns and delete this migration's v1 half. Only the new table then follows the
   profile.
+
+## Note — 2026-10-08 (vendored analysis)
+This ADR belongs to the SEC v2 change set (CS-SEC-001, the service-account credentials), which was
+never implemented (`docs/governance-vendoring-report.md` §2). Of the ids it cites, ENT-SEC-014 and
+DBF-SEC-106 exist nowhere in the vendored analysis (`governance/analysis/modules/SEC/` ends at
+ENT-SEC-013 and DBF-SEC-104), and the `SEC_SVC_ACCOUNT_CRED` table, its sequence and the
+`DROP IDENTITY` realignment migration were never written. The decision itself matches the code from
+the first core SEC script on: `V4__sec_schema.sql` creates 13 `SEQ_SEC_*` sequences and plain
+`BIGINT` keys, `V11__sec_realms.sql` the 14th, and no SEC table ever carried an identity column. The
+as-built record of that decision is ADR-SEC-068; this file stays as the historical v2 statement.

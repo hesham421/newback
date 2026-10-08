@@ -77,3 +77,75 @@ never described as present.
 
 ## NEXT STEP
 Module registry and policies: `module-registry-tenant.md`, `business-policies-tenant.md`.
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+The platform-wide description stays in [`../../SEC/P0/platform-summary.md`](../../SEC/P0/platform-summary.md)
+→ "Implementation Addendum — erp-core 1.2.0" (tenant block L101–108, conventions L135–146); nothing is
+restated here.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| CHANGED | Tenant record | `CORE_TENANT` gains a profile (contact e-mail and phone, country, default language, time zone, notes; V18) and suspension facts + a token cut-off (V19); names become editable (`PUT /{id}`); `code` stays immutable | `../P2/db-script-tenant.md` 1.3.0 addendum |
+| CHANGED | Tenant management | `/api/v1/platform/tenants` gains update, admin-reset (recover a tenant's super administrator) and usage figures; a suspension needs a reason; still `PLATFORM_TENANT_MANAGE` + PLATFORM-tenant caller; no new permission (D5) | `../P1/srs-tenant.md` 1.3.0 B1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecUserDirectoryApi counts, SecAdminRecoveryApi)`, `──▶ FILE (FileDocumentLookupApi counts)`, `──▶ NOTIF (NotificationLogQueryApi.countDispatchedSince)` — each called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
+| CHANGED | DEFERRED | "Editing a tenant's name, a usage endpoint" leaves DEFERRED; "tenant profile, suspension facts" leave DEFERRED (the token cut-off is stored, its enforcement is package C.2); lifecycle events, branding, idempotent provisioning and export stay with packages C and E; level 2 stays deferred | plan §0 D2, §4, §5, §7 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW — FE | Branding for the UI | a tenant gets an optional logo and brand colour, set by the platform operator on `PLATFORM_TENANTS` (`PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding`); `GET /api/v1/tenant/me` (authenticated, any realm) and `GET /api/v1/public/tenants/{tenantCode}/branding` (public, path tenant, rate-limited per client address) feed the shell and the login page; the logo document lives in the tenant's own rows as a PUBLIC file | `../P1/srs-tenant.md` 1.3.0 E1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ FILE (FileImageStoreApi, FileDocumentLookupApi.publicUrl; soft reference CORE_TENANT.LOGO_FILE_ID)` | E6 |
+| CHANGED | DEFERRED | "branding" leaves DEFERRED; a tenant self-service branding screen is deferred (ADR-TENANT-005) | plan §0 D5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Lifecycle events | `TenantSuspendedEvent`, `TenantActivatedEvent` are published after commit on real transitions; SEC ends the suspended tenant's sessions, NOTIF holds its queued notifications until it is active again; core event catalogue 11 → 13 | `../P1/srs-tenant.md` 1.3.0 C6 |
+| CHANGED — FE | Tenant of a request | the resolution order is unchanged; a token whose `iat` is before its tenant's `TOKENS_INVALID_BEFORE` is refused 401 `TENANT_TOKEN_REVOKED` (both realms, `/api/v1/tenant/me` included), also when its session was already ended; a re-activation cuts off every earlier token | C3 RULE-TENANT-023 |
+| NEW — FE | Tenant management | `POST /api/v1/platform/tenants/{id}/revoke-tokens` signs every user of a tenant out (not PLATFORM) | C1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecAdminRecoveryApi.terminateAllSessions)`; `SEC ──event──▶ TenantSuspendedEvent`; `NOTIF ──crossmodule──▶ TENANT (TenantLookupApi.isActive)`, `NOTIF ──event──▶ TenantActivatedEvent` | C7 |
+| CHANGED | DEFERRED | "lifecycle events" and "token cut-off enforcement" leave DEFERRED; idempotent provisioning (C.4), export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW (spike) | Tenant context | `TenantContext` on `ScopedValue` behind the same public API (`current` / `find` / `require` / `set` / `clear` / `runAs` / `callAs`); go / no-go decided by ADR-TENANT-004 against fixed criteria (touches `events` and `notif`); may slip to 1.4.0 | `../P1/srs-tenant.md` 1.3.0 C6-1; ADR-TENANT-004 |
+| CHANGED (outcome) | Tenant context | **no-go** — `TenantContext` stays on its `ThreadLocal` (ADR-TENANT-004 REJECTED: no benefit without breaking `set` / `clear` outside a scope); "`ScopedValue` spike" leaves the package-C list | `../P1/srs-tenant.md` 1.3.0 C6-2 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Idempotency (common) | `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`) behind `com.erp.common.idempotency`; first consumer `POST /api/v1/platform/tenants` with the optional `Idempotency-Key`; replay with `Idempotent-Replayed: true`, 409 `IDEMPOTENCY_KEY_CONFLICT`, 400 `IDEMPOTENCY_KEY_INVALID`; 24 h retention (`erp.core.idempotency.*`) | `../P1/srs-tenant.md` 1.3.0 I1–I7; ADR-TENANT-003 |
+| CHANGED — FE | Tenant management | a retried create with the same key answers the first result instead of `TENANT_CODE_DUPLICATE` | I11 |
+| CHANGED | DEFERRED | idempotent provisioning leaves DEFERRED; export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Export SPI | `TenantExportContributor` beside the provisioning SPI: every core module writes its tenant rows as CSV (21 files); a tenant's data as a ZIP of per-module CSVs + `manifest.json`, a PRIVATE `FILE_DOCUMENT` of the PLATFORM tenant handed out through a single-use download token; bounded by `erp.core.tenant.export.max-rows` (422 `TENANT_EXPORT_TOO_LARGE`), one export per tenant at a time per node (409 `TENANT_EXPORT_IN_PROGRESS`) | `../P1/srs-tenant.md` 1.3.0 X1–X8; ADR-TENANT-006 |
+| NEW — FE | Tenant management | `POST /{id}/export`, then the FILE download with the returned token | X12 |
+| CHANGED | DEFERRED | tenant data export leaves DEFERRED (the `ScopedValue` spike closed as no-go in C6) | plan §5 |

@@ -150,30 +150,53 @@ Pipeline Status Grid: CU · P2 = done
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 09 (migrations V2, V10, V14)
+Steps          : 04, 05, 09 (migrations V2, V7, V10, V14; shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
-Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` at that tag unless
-stated otherwise. No DBF ids are minted here.
+Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` at that tag unless stated
+otherwise. No DBF ids are minted here.
 
 ### Migration chain
-- Squashed in step 04: `CU_APP_CONFIGURATION` is created by `V2__cu_schema.sql` (DDL verbatim from the old
-  `V1__cu_app_configuration_schema`); the CU registry rows and `CU_ADMIN` role are in `V7__sec_seed.sql`.
-  Full old → new mapping: `docs/steps/04-report.md` → "Old → new mapping".
-- Later CU changes: `V10__tenant_schema.sql` (step 05) and `V14__sequence_and_settings.sql` (step 09).
-  V14's two non-additive edits (DROP NOT NULL on `TENANT_ID`; unique constraint replaced by an expression
-  unique index) are the exception the step-09 plan prescribes.
+| Kind | Migration | What it does for CU | Source |
+|---|---|---|---|
+| CHANGED | `V2__cu_schema.sql` (step 04) | creates `SEQ_CU_APP_CONFIGURATION` and `CU_APP_CONFIGURATION` — squashed from the old `V1__cu_app_configuration_schema`; the table DDL, the comments, `PK_CU_APP_CONFIGURATION`, `UQ_CU_APP_CONFIG_CONFIG_KEY (CONFIG_KEY)` and `CHK_CU_APP_CONFIG_ACTIVE_FL` are as in §4 above; the sequence differs (`CACHE 1`, see below); no seed rows | V2:11-50; docs/steps/04-report.md → "Old → new mapping" |
+| NEW | `V7__sec_seed.sql` (step 04) | CU's registry rows in SEC's tables: module `CU` (`الأدوات المشتركة` / `Common Utilities`), screen `CU_CONFIGURATIONS` (`إدارة إعدادات المنصة` / `Platform Configuration`), actions `VIEW` / `CREATE` / `UPDATE` / `DEACTIVATE` with the literal codes `CONFIG_VIEW` / `CONFIG_CREATE` / `CONFIG_UPDATE` / `CONFIG_DEACTIVATE`; role `CU_ADMIN` (`مدير الإعدادات` / `Configuration Administrator`) with the `CU` module grant and the derived screen and action grants; `SYS_ADMIN` receives the `CU` module grant too | V7:40,66,114-117,151,172,175,187-200 |
+| NEW | `V10__tenant_schema.sql` (step 05) | `TENANT_ID` and `VERSION` columns, `FK_CU_APP_CONFIGURATION_TENANT`, `IDX_CU_APP_CONFIGURATION_TENANT`, unique constraint re-created on `(TENANT_ID, CONFIG_KEY)`; registry module `PLATFORM` (`إدارة المنصة` / `Platform Administration`) under which `PLATFORM_SETTINGS` is later inserted by the startup catalog synchroniser (no migration seeds that screen) | V10:63,83,102,121,174-175,214 |
+| NEW | `V14__sequence_and_settings.sql` (step 09) | `TENANT_ID` nullable, the unique constraint replaced by an expression unique index, column comment — the two non-additive edits are the exception the step-09 plan prescribes | V14:66-69 |
 
-### Per-table deltas
-| Table | Delta | Migration |
-|---|---|---|
-| CU_APP_CONFIGURATION | + `TENANT_ID BIGINT` (added NOT NULL, backfilled 1 = PLATFORM, default dropped, `FK_CU_APP_CONFIGURATION_TENANT` → `CORE_TENANT(ID)`, `IDX_CU_APP_CONFIGURATION_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 |
-| CU_APP_CONFIGURATION | `UQ_CU_APP_CONFIG_CONFIG_KEY` → `(TENANT_ID, CONFIG_KEY)` | V10 |
-| CU_APP_CONFIGURATION | `TENANT_ID` becomes NULLABLE (NULL = platform default, non-null = tenant override) | V14 §2 |
-| CU_APP_CONFIGURATION | `UQ_CU_APP_CONFIG_CONFIG_KEY` becomes a unique INDEX on `((COALESCE(TENANT_ID, 0)), CONFIG_KEY)` (same name), so two platform defaults with one key are impossible too | V14 §2 |
+### Per-table deltas — CU_APP_CONFIGURATION
+| Kind | Item | Delta | Migration |
+|---|---|---|---|
+| CHANGED | `SEQ_CU_APP_CONFIGURATION` | created with **`CACHE 1`** (§4 Block 1 says `NO CACHE`); same `START WITH 1 INCREMENT BY 1 NO CYCLE`; the entity's generator uses `allocationSize = 1` | V2:11-15; erp-core/src/main/java/com/erp/cu/entity/AppConfiguration.java:44-45 |
+| NEW | `TENANT_ID BIGINT` | added `NOT NULL DEFAULT 1` (existing rows backfilled to 1 = PLATFORM), default dropped; FK **`FK_CU_APP_CONFIGURATION_TENANT`** → `CORE_TENANT (ID)`; index **`IDX_CU_APP_CONFIGURATION_TENANT (TENANT_ID)`** | V10:63,83,102,121 |
+| NEW | `VERSION BIGINT NOT NULL DEFAULT 0` | optimistic lock (server-side only) | V10:63 |
+| CHANGED | `UQ_CU_APP_CONFIG_CONFIG_KEY` | `UNIQUE (CONFIG_KEY)` → constraint `UNIQUE (TENANT_ID, CONFIG_KEY)` | V10:174-175 |
+| CHANGED | `TENANT_ID` | `DROP NOT NULL` — NULL = platform default, non-null = override of that tenant (the one nullable `TENANT_ID` in core) | V14:66 |
+| CHANGED | `UQ_CU_APP_CONFIG_CONFIG_KEY` | constraint dropped; unique **index** of the same name on `((COALESCE(TENANT_ID, 0)), CONFIG_KEY)`, so two platform defaults with one key are impossible too; the JPA `@UniqueConstraint` is removed from the entity because an expression index cannot be declared there | V14:67-68; AppConfiguration.java:33-35 |
+| NEW | `COMMENT ON COLUMN CU_APP_CONFIGURATION.TENANT_ID` | `'NULL = platform default; non-null = override of that tenant (erp-core step 09).'` | V14:69 |
+| CHANGED | `CONFIG_KEY VARCHAR(150) NOT NULL` | DDL unchanged; values are stored upper-case by the entity (RULE-CU-009), and "unique" in the V2 column comment now means unique per owner (comment text unchanged) | V2:22,37 |
+| CHANGED | audit columns | `CREATED_BY` / `UPDATED_BY VARCHAR(255)`, `CREATED_AT` / `UPDATED_AT TIMESTAMP` as in §4; the entity (`GlobalAuditableEntity`) maps `length = 100` and `java.time.Instant`; no migration changes the column types — the two declarations disagree | V2:26-29; erp-core/src/main/java/com/erp/common/domain/GlobalAuditableEntity.java:34-44 |
+
+Unchanged: `PK_CU_APP_CONFIGURATION (ID)`, `CHK_CU_APP_CONFIG_ACTIVE_FL (IS_ACTIVE_FL IN (0,1))`, `ID`, `CONFIG_VALUE TEXT`,
+`NOTES VARCHAR(2000)`, `IS_ACTIVE_FL SMALLINT DEFAULT 1`.
 
 ### Deviations from this analysis
-- Analysis: `CONFIG_KEY UNIQUE` platform-wide. Implemented: unique per owner (platform default or one
-  tenant), step 09.
-- `CU_APP_CONFIGURATION` is the one core table whose `TENANT_ID` is nullable (named exception in the
-  step-09 plan; DEVIATIONS [09], [12] rule 2).
+- `CONFIG_KEY UNIQUE` platform-wide → unique per owner (platform default or one tenant), step 09.
+- `SEQ_CU_APP_CONFIGURATION NO CACHE` → `CACHE 1` (V2).
+- `CU_APP_CONFIGURATION` is the one core table whose `TENANT_ID` is nullable (named exception in the step-09
+  plan; docs/DEVIATIONS.md [09], [12] rule 2).
+- §4 Block 8 "no seed data": still no row in a CU table; CU's registry rows and `CU_ADMIN` are seeded by V7 in
+  SEC's tables, and the `PLATFORM_SETTINGS` screen by the startup synchroniser.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (commit 6b01816; CHANGELOG [Unreleased]); no CU behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | `AppConfigurationDomain` | uses `com.erp.common.domain.DomainRules` for RULE-CU-001 / RULE-CU-002; no schema effect | erp-core/src/main/java/com/erp/cu/domain/AppConfigurationDomain.java:39-40,51 |
+| CHANGED | `ConfigurationService.owner` | uses `TenantContext.isPlatform()`; no schema effect | erp-core/src/main/java/com/erp/cu/service/ConfigurationService.java:214 |
+
+No CU migration after V14; the core chain's last script is `V15__audit_schema.sql` (audit module).

@@ -52,19 +52,35 @@ US-CU-001
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 05, 09, 10
+Steps          : 05, 06, 09, 10 (shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
-Paths cited below are relative to the erp-core repository at that tag. No US ids are minted here.
+Paths cited below are relative to the erp-core repository at that tag. No US ids are minted here; rule ids are
+the ones minted in `../P1/srs-cu.md`.
 
-NEW product capabilities
-| Capability | Actor | Implemented behaviour | Source |
+Product capabilities
+| Kind | Capability | Actor | Implemented behaviour | Source |
+|---|---|---|---|---|
+| NEW | Platform default settings | platform operator (PLATFORM tenant, `PLATFORM_SETTINGS_MANAGE` — held implicitly by its super roles) | Manages defaults that apply to every tenant through the same configuration API with `?scope=PLATFORM`; reads included (defaults may hold values tenants must not see). An administrator of any other tenant is refused with 403 `ACCESS_DENIED` | docs/steps/09-report.md; docs/DEVIATIONS.md [09]; srs-cu.md RULE-CU-005 |
+| NEW | Tenant overrides | tenant administrator (`CONFIG_*`, e.g. role `CU_ADMIN`) | Overrides a default for the own tenant (`scope=TENANT`, the default); deactivating the override falls back to the default; a new tenant starts with no rows and inherits every default | docs/DEVIATIONS.md [09]; srs-cu.md RULE-CU-004, 014 |
+| NEW | Typed settings for modules | developer of a module or application | Reads a key as String / Integer / Long / Boolean / BigDecimal / Duration with tenant → platform fallback, cached (no TTL; evicted by every write through the API; a change made directly in the database is not seen until the next API write); keys are case-insensitive | docs/steps/09-report.md; srs-cu.md RULE-CU-006 … 009 |
+
+Existing story
+| Kind | Story | Delta | Source |
 |---|---|---|---|
-| Platform default settings | platform operator (PLATFORM tenant, `PLATFORM_SETTINGS_MANAGE`) | Manages defaults that apply to every tenant, through the same configuration API with `?scope=PLATFORM`; reads included (defaults may hold values tenants must not see). | docs/steps/09-report.md; DEVIATIONS [09] |
-| Tenant overrides | tenant administrator (`CONFIG_*`) | Overrides a default for the own tenant (`scope=TENANT`, the default); deactivating the override falls back to the default. | DEVIATIONS [09] |
-| Typed settings for modules | developer of a module or application | Reads a key as String / Integer / Long / Boolean / BigDecimal / Duration with tenant → platform fallback, cached. | docs/steps/09-report.md |
+| CHANGED | US-CU-001 configure platform settings at runtime | Every row is either a platform default or a tenant override; responses carry `scope`; existing rows remained overrides of PLATFORM; each change is recorded in the platform audit log (values included — secrets must not be stored as settings) | docs/DEVIATIONS.md [09], [10] |
+| CHANGED | US-CU-001 — operations | the list is a `POST …/search` with filters on key / active flag / dates; a deactivated setting is reactivated by updating it with `isActive: true` (no separate activate action); deactivate answers no content and may be repeated | srs-cu.md §1; RULE-CU-010 |
+| CHANGED | STORIES EXCLUDED — Events | the in-process bus is now the `com.erp.events` core module (asynchronous, after commit); CU raises no event when a setting changes | docs/steps/08-report.md; RULE-CU-013 |
 
-CHANGED behaviour of existing stories
-| Story | Delta | Source |
-|---|---|---|
-| US-CU-001 configure platform settings at runtime | Every row is now either a platform default or a tenant override; responses carry `scope`; existing rows remained overrides of PLATFORM; each change is recorded in the platform audit log. | DEVIATIONS [09], [10] |
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (commit 6b01816; CHANGELOG [Unreleased]); no CU behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | `AppConfigurationDomain` | uses the shared `com.erp.common.domain.DomainRules`; no product-visible change | erp-core/src/main/java/com/erp/cu/domain/AppConfigurationDomain.java:39-40,51 |
+| CHANGED | `ConfigurationService.owner` | uses `TenantContext.isPlatform()`; no product-visible change | erp-core/src/main/java/com/erp/cu/service/ConfigurationService.java:214 |
+
+No story or capability delta.

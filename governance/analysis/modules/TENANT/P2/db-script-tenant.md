@@ -189,3 +189,305 @@ See `registry-db-tenant.md`.
 **DBF-TENANT-031** — CORE_NUMBER_SERIES.TENANT_ID [ENT-TENANT-001, REQ-TENANT-016, REQ-TENANT-020]
 **DBF-TENANT-032** — CORE_AUDIT_EVENT.TENANT_ID [ENT-TENANT-001, REQ-TENANT-016, REQ-TENANT-022]
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+Migration chain owned by TENANT at 1.2.0: `V10__tenant_schema.sql` (step 05). The later discriminator
+columns (V11, V13, V14, V15) are registered above as DBF-TENANT-029 … 032; no DBF id is minted here.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant profile and lifecycle facts on `CORE_TENANT` (plan §4 B.1)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migrations (written from this entry): `erp-core/src/main/resources/db/migration/core/V18__tenant_profile.sql`
+and `V19__tenant_lifecycle.sql`. The plan expected `V16__tenant_profile.sql` / `V17__tenant_lifecycle.sql`;
+package D, executed first, took V16 / V17, so the numbers follow the execution order (plan §1.3 / §11,
+`docs/DEVIATIONS.md` `[TM-B]`). Additive only (`MigrationNamingTest`): ten nullable columns without a default
+and one CHECK every existing row satisfies (NULL); `CODE`, `STATUS_CODE` and the 1.2.0 constraints are
+untouched. DBF ids continue from DBF-TENANT-032.
+
+### Table CORE_TENANT (ENT-TENANT-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default | Constraint | Migration |
+|---|---|---|---|---|---|---|---|---|
+| DBF-TENANT-033 | CONTACT_EMAIL | VARCHAR(255) | ENT-TENANT-001.contactEmail | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-034 | CONTACT_PHONE | VARCHAR(30) | ENT-TENANT-001.contactPhone | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-035 | COUNTRY_CODE | VARCHAR(2) | ENT-TENANT-001.countryCode | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-036 | DEFAULT_LOCALE | VARCHAR(5) | ENT-TENANT-001.defaultLocale | REQ-TENANT-025 | NULL | — | `CHK_CORE_TENANT_LOCALE` | V18 |
+| DBF-TENANT-037 | TIMEZONE | VARCHAR(64) | ENT-TENANT-001.timezone | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-038 | NOTES | VARCHAR(1000) | ENT-TENANT-001.notes | REQ-TENANT-025 | NULL | — | — | V18 |
+| DBF-TENANT-039 | SUSPENDED_AT | TIMESTAMPTZ | ENT-TENANT-001.suspendedAt | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-040 | SUSPENDED_BY | VARCHAR(100) | ENT-TENANT-001.suspendedBy | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-041 | SUSPENSION_REASON | VARCHAR(500) | ENT-TENANT-001.suspensionReason | REQ-TENANT-026 | NULL | — | — | V19 |
+| DBF-TENANT-042 | TOKENS_INVALID_BEFORE | TIMESTAMPTZ | ENT-TENANT-001.tokensInvalidBefore | REQ-TENANT-026 (written on activation; enforced by package C.2) | NULL | — | — | V19 |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_CORE_TENANT_LOCALE` | `CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'))` | the `SEC_USER.PREFERRED_LOCALE` pattern (`CHK_SEC_USER_LOCALE`, V16); every existing row has NULL |
+No index (the new search fields are filters over a table of a few hundred rows at most; `CORE_TENANT` has
+none besides the PK and `UQ_CORE_TENANT_CODE`), no sequence, no FK.
+
+### Script (`V18__tenant_profile.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN CONTACT_EMAIL  VARCHAR(255);
+ALTER TABLE CORE_TENANT ADD COLUMN CONTACT_PHONE  VARCHAR(30);
+ALTER TABLE CORE_TENANT ADD COLUMN COUNTRY_CODE   VARCHAR(2);
+ALTER TABLE CORE_TENANT ADD COLUMN DEFAULT_LOCALE VARCHAR(5);
+ALTER TABLE CORE_TENANT ADD COLUMN TIMEZONE       VARCHAR(64);
+ALTER TABLE CORE_TENANT ADD COLUMN NOTES          VARCHAR(1000);
+
+ALTER TABLE CORE_TENANT ADD CONSTRAINT CHK_CORE_TENANT_LOCALE
+    CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'));
+```
+
+### Script (`V19__tenant_lifecycle.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENDED_AT          TIMESTAMPTZ;
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENDED_BY          VARCHAR(100);
+ALTER TABLE CORE_TENANT ADD COLUMN SUSPENSION_REASON     VARCHAR(500);
+ALTER TABLE CORE_TENANT ADD COLUMN TOKENS_INVALID_BEFORE TIMESTAMPTZ;
+```
+plus one `COMMENT ON COLUMN` per new column in each script. Existing rows (PLATFORM and every provisioned
+tenant) get NULL everywhere: a tenant suspended before the upgrade keeps `SUSPENDED` without facts until it is
+re-activated or suspended again.
+
+### CHECK-constrained value sets — delta
+| Key | Values | Constraint | Owner |
+|---|---|---|---|
+| `CORE_TENANT.DEFAULT_LOCALE` | `ar`, `en` (NULL allowed) | `CHK_CORE_TENANT_LOCALE` | TENANT |
+| `CORE_TENANT.STATUS_CODE` | unchanged: `ACTIVE`, `SUSPENDED` | `CHK_CORE_TENANT_STATUS` | TENANT |
+
+### DBF id definitions — delta
+**DBF-TENANT-033** — CORE_TENANT.CONTACT_EMAIL [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-034** — CORE_TENANT.CONTACT_PHONE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-035** — CORE_TENANT.COUNTRY_CODE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-036** — CORE_TENANT.DEFAULT_LOCALE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-037** — CORE_TENANT.TIMEZONE [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-038** — CORE_TENANT.NOTES [ENT-TENANT-001, REQ-TENANT-025]
+**DBF-TENANT-039** — CORE_TENANT.SUSPENDED_AT [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-040** — CORE_TENANT.SUSPENDED_BY [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-041** — CORE_TENANT.SUSPENSION_REASON [ENT-TENANT-001, REQ-TENANT-026]
+**DBF-TENANT-042** — CORE_TENANT.TOKENS_INVALID_BEFORE [ENT-TENANT-001, REQ-TENANT-026]
+
+### Deviations
+- Plan §4 B.1 / §11 `V16__tenant_profile.sql`, `V17__tenant_lifecycle.sql` → `V18__tenant_profile.sql`,
+  `V19__tenant_lifecycle.sql` (execution order D before B).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding columns on `CORE_TENANT` (plan §7 E.1)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V20__tenant_branding.sql`.
+The plan expected `V18__tenant_branding.sql`; packages D and B, executed first, took V16 … V19, so the number
+follows the execution order (plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-E]`). Additive only
+(`MigrationNamingTest`): two nullable columns without a default and one CHECK every existing row satisfies
+(NULL). **No registry rows** (plan §0 D5, ADR-TENANT-005): no module, screen, action or grant seed. DBF ids
+continue from DBF-TENANT-042.
+
+### Table CORE_TENANT (ENT-TENANT-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default | Constraint | Migration |
+|---|---|---|---|---|---|---|---|---|
+| DBF-TENANT-043 | LOGO_FILE_ID | BIGINT | ENT-TENANT-001.logoFileId | REQ-TENANT-029 | NULL | — | soft reference to `FILE_DOCUMENT.ID`, **no FK** (XM-TENANT-003; the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` / `SEC_USER.PHOTO_FILE_ID` convention: the document lives in the tenant's own `FILE_DOCUMENT` rows and is discarded, never deleted) | V20 |
+| DBF-TENANT-044 | BRAND_COLOR | VARCHAR(7) | ENT-TENANT-001.brandColor | REQ-TENANT-030 | NULL | — | `CHK_CORE_TENANT_BRAND_COLOR` | V20 |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_CORE_TENANT_BRAND_COLOR` | `CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$')` | the plan's expression verbatim; a NULL value passes (a CHECK fails only on FALSE); every existing row has NULL |
+No index (the columns are read with the row, never searched), no sequence, no FK.
+
+### Script (`V20__tenant_branding.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN LOGO_FILE_ID BIGINT;
+ALTER TABLE CORE_TENANT ADD COLUMN BRAND_COLOR  VARCHAR(7);
+
+ALTER TABLE CORE_TENANT ADD CONSTRAINT CHK_CORE_TENANT_BRAND_COLOR
+    CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$');
+```
+plus one `COMMENT ON COLUMN` per new column. Existing rows (PLATFORM and every provisioned tenant) get NULL: no
+logo, no brand colour.
+
+The logo document itself is a `FILE_DOCUMENT` row **in the target tenant's rows** (`TENANT_ID = {id}`,
+`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`, `FILE_NAME = logo.<png|jpg|webp|svg>`,
+`VISIBILITY = PUBLIC`, no category), written inside `TenantContext.callAs(id)` through FILE's image store — no
+schema change in FILE (FILE RULE-FILE-010, ADR-FILE-008).
+
+### CHECK-constrained value sets — delta
+| Key | Values | Constraint | Owner |
+|---|---|---|---|
+| `CORE_TENANT.BRAND_COLOR` | `#RRGGBB` (hexadecimal; stored upper-case by the entity), NULL allowed | `CHK_CORE_TENANT_BRAND_COLOR` | TENANT |
+
+### XM register — delta
+| Kind | XM id | Kind | Column → target | Owner of the target | Enforcement | Status |
+|---|---|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) | `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID` | FILE (`FileImageStoreApi`, `FileDocumentLookupApi.publicUrl`) | column only, no FK; written and read inside `TenantContext.callAs(id)` | IMPLEMENTED (1.3.0) |
+
+### DBF id definitions — delta
+**DBF-TENANT-043** — CORE_TENANT.LOGO_FILE_ID [ENT-TENANT-001, REQ-TENANT-029, XM-TENANT-003]
+**DBF-TENANT-044** — CORE_TENANT.BRAND_COLOR [ENT-TENANT-001, REQ-TENANT-030]
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | No registry rows for branding (D5) | ADR-TENANT-005 |
+| DEFAULT | `LOGO_FILE_ID` is a soft reference without FK | plan §6 D.1 / §7 E.1 (same convention as `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID`, XM-NOTIF-002, and `SEC_USER.PHOTO_FILE_ID`, XM-SEC-006) |
+
+### Deviations
+- Plan §7 E.1 / §11 `V18__tenant_branding.sql` → `V20__tenant_branding.sql` (execution order D, B before E).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — the token cut-off `CORE_TENANT.TOKENS_INVALID_BEFORE` enforced; `TenantLookupApi.isActive` (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+**No migration, no new column, constraint, index or sequence.** The column exists since
+`V19__tenant_lifecycle.sql` (package B, DBF-TENANT-042; the plan's §11 row `V17__tenant_lifecycle.sql` "B / C.2" was
+written by B). DBF ids are unchanged (last DBF-TENANT-044).
+
+### Columns — CHANGED use
+| DBF id | Column | Delta | Writers | Reader |
+|---|---|---|---|---|
+| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE (TIMESTAMPTZ, NULL) | now **enforced**: a token whose `iat` (whole seconds) is less than this instant truncated to the second is refused (RULE-TENANT-023, ADR-TENANT-002); still never exposed | SUSPENDED → ACTIVE (`Tenant.activate`: the application's `Instant.now()`), `POST /{id}/revoke-tokens` (`Tenant.revokeTokens`: the start of the next whole second, `TenantDomain.revocationCutOff`, review round 1) — both in a PLATFORM transaction | `TenantResolutionFilter` (as PLATFORM, every request with a token) |
+| DBF-TENANT-005 | CORE_TENANT.STATUS_CODE | + read by `TenantLookupApi.isActive` (XM-TENANT-001, NOTIF) | — | NOTIF claim / requeue |
+
+### XM register — delta
+| Kind | XM id | Kind | Column → target | Owner of the target | Enforcement | Status |
+|---|---|---|---|---|---|---|
+| CHANGED | XM-TENANT-001 | crossmodule read (exposed) | + `TenantLookupApi.isActive(Long)` → `CORE_TENANT.STATUS_CODE` (DBF-TENANT-005) by `ID` | consumer NOTIF (claim, requeue) | none (Java interface; `TenantRepository.findById`, uncached) | IMPLEMENTED (1.3.0) |
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | `TOKENS_INVALID_BEFORE` on `CORE_TENANT` instead of a token denylist table | ADR-TENANT-002 (ACCEPTED) |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — the idempotency table `CORE_IDEMPOTENCY_KEY` (owned by `com.erp.common.idempotency`; first consumer tenant create) (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V21__core_idempotency_key.sql`.
+The plan expected `V20__core_idempotency_key.sql`; packages D, B and E, executed first, took V16 … V20, so the
+number follows the execution order (plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-C4]`). Additive only
+(`MigrationNamingTest`): one new table, its sequence, constraints and indexes; no seed. The table is common's, not
+TENANT's (no ENT-TENANT id); it is registered here because tenant create is its first consumer and this repository
+has no COMMON analysis folder. DBF ids continue from DBF-TENANT-044; only its `TENANT_ID` carries one (the
+discriminator register).
+
+**AuditableEntity convention (the reference analysis' open point, decided here).** The plan lists nine columns. The
+entity is tenant-scoped, so it extends `AuditableEntity` (`TenantScopedEntityTest`, RULE-TENANT-010 — no new global
+entity) and the table carries the convention's audit columns (`db/migration/core/README.md` "Tenant columns"):
+`CREATED_BY`, `UPDATED_BY`, `UPDATED_AT` are added to the plan's list; `CREATED_AT` and `VERSION` were already in it.
+`CREATED_BY` is NOT NULL because it identifies the owner of the key (RULE-TENANT-026); the entity listener always
+fills it. **Final column list (12):** `ID`, `TENANT_ID`, `IDEMPOTENCY_KEY`, `ENDPOINT`, `REQUEST_HASH`,
+`RESPONSE_STATUS`, `RESPONSE_BODY`, `CREATED_BY`, `CREATED_AT`, `UPDATED_BY`, `UPDATED_AT`, `VERSION`.
+
+### Table CORE_IDEMPOTENCY_KEY — NEW (entity `com.erp.common.idempotency.IdempotencyKey`, extends `AuditableEntity`)
+| DBF id | Column | Type (postgresql16) | Entity field | Nullable | Default | Constraint / index | Migration |
+|---|---|---|---|---|---|---|---|
+| — (common) | ID | BIGINT | id | NOT NULL | `SEQ_CORE_IDEMPOTENCY_KEY` (`@SequenceGenerator`, allocationSize 1) | `PK_CORE_IDEMPOTENCY_KEY` | V21 |
+| DBF-TENANT-045 | TENANT_ID | BIGINT | tenantId (`AuditableEntity`, `@TenantId`) | NOT NULL | — (no default) | `FK_CORE_IDEMPOTENCY_KEY_TENANT` → `CORE_TENANT (ID)`; `IDX_CORE_IDEMPOTENCY_KEY_TENANT`; leads `UQ_CORE_IDEMPOTENCY_KEY` | V21 |
+| — (common) | IDEMPOTENCY_KEY | VARCHAR(64) | idempotencyKey | NOT NULL | — | part of `UQ_CORE_IDEMPOTENCY_KEY`; value `^[A-Za-z0-9._:-]{1,64}$` (RULE-TENANT-025, checked in code, no CHECK) | V21 |
+| — (common) | ENDPOINT | VARCHAR(200) | endpoint | NOT NULL | — | part of `UQ_CORE_IDEMPOTENCY_KEY`; the consumer's constant id, e.g. `POST /api/v1/platform/tenants` | V21 |
+| — (common) | REQUEST_HASH | VARCHAR(64) | requestHash | NOT NULL | — | lower-case hex HMAC-SHA256 of the canonical request body (RULE-TENANT-026) | V21 |
+| — (common) | RESPONSE_STATUS | INT | responseStatus | NOT NULL | — | the stored HTTP status (2xx once committed; `0` only while the claim's transaction is open, never committed) | V21 |
+| — (common) | RESPONSE_BODY | TEXT | responseBody | NULL | — | the JSON envelope as answered | V21 |
+| — (common) | CREATED_BY | VARCHAR(100) | createdBy (`GlobalAuditableEntity`) | NOT NULL | — | the key's owner (RULE-TENANT-026) | V21 |
+| — (common) | CREATED_AT | TIMESTAMPTZ | createdAt | NOT NULL | `now()` | `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` (retention scan) | V21 |
+| — (common) | UPDATED_BY | VARCHAR(100) | updatedBy | NULL | — | — | V21 |
+| — (common) | UPDATED_AT | TIMESTAMPTZ | updatedAt | NULL | — | — | V21 |
+| — (common) | VERSION | BIGINT | version (`@Version`) | NOT NULL | 0 | — | V21 |
+
+### Constraints, indexes, sequence
+| Name | Definition | Note |
+|---|---|---|
+| `PK_CORE_IDEMPOTENCY_KEY` | `PRIMARY KEY (ID)` | |
+| `FK_CORE_IDEMPOTENCY_KEY_TENANT` | `FOREIGN KEY (TENANT_ID) REFERENCES CORE_TENANT (ID)` | `FK_<TABLE>_TENANT` convention |
+| `UQ_CORE_IDEMPOTENCY_KEY` | `UNIQUE (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` | the plan's name; tenant-leading; serialises same-key requests (RULE-TENANT-026) |
+| `IDX_CORE_IDEMPOTENCY_KEY_TENANT` | `(TENANT_ID)` | `IDX_<TABLE>_TENANT` convention |
+| `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT` | `(CREATED_AT)` | the plan's "index on `CREATED_AT`"; `IDX_<TABLE>_<COLUMN>` |
+| `SEQ_CORE_IDEMPOTENCY_KEY` | `START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE` | |
+No CHECK constraint (the key format and the 2xx status are decided in code; a CHECK on the status would refuse the
+claim's in-transaction placeholder). No seed row.
+
+### Script (`V21__core_idempotency_key.sql`)
+```sql
+CREATE SEQUENCE SEQ_CORE_IDEMPOTENCY_KEY START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE;
+
+CREATE TABLE CORE_IDEMPOTENCY_KEY (
+  ID               BIGINT         NOT NULL,
+  TENANT_ID        BIGINT         NOT NULL,
+  IDEMPOTENCY_KEY  VARCHAR(64)    NOT NULL,
+  ENDPOINT         VARCHAR(200)   NOT NULL,
+  REQUEST_HASH     VARCHAR(64)    NOT NULL,
+  RESPONSE_STATUS  INT            NOT NULL,
+  RESPONSE_BODY    TEXT,
+  CREATED_BY       VARCHAR(100)   NOT NULL,
+  CREATED_AT       TIMESTAMPTZ    NOT NULL DEFAULT now(),
+  UPDATED_BY       VARCHAR(100),
+  UPDATED_AT       TIMESTAMPTZ,
+  VERSION          BIGINT         NOT NULL DEFAULT 0
+);
+
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT PK_CORE_IDEMPOTENCY_KEY PRIMARY KEY (ID);
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT FK_CORE_IDEMPOTENCY_KEY_TENANT FOREIGN KEY (TENANT_ID) REFERENCES CORE_TENANT (ID);
+ALTER TABLE CORE_IDEMPOTENCY_KEY ADD CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY UNIQUE (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT);
+
+CREATE INDEX IDX_CORE_IDEMPOTENCY_KEY_TENANT     ON CORE_IDEMPOTENCY_KEY (TENANT_ID);
+CREATE INDEX IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT ON CORE_IDEMPOTENCY_KEY (CREATED_AT);
+```
+plus `COMMENT ON TABLE` and one `COMMENT ON COLUMN` for `IDEMPOTENCY_KEY`, `ENDPOINT`, `REQUEST_HASH`,
+`RESPONSE_STATUS`, `RESPONSE_BODY`.
+
+### TENANT_ID discriminator register — delta
+| DBF id | Table (owner module, entity) | Nullable | Column added | FK | Index | Tenant-leading uniques | Traces (REQ) |
+|---|---|---|---|---|---|---|---|
+| DBF-TENANT-045 | `CORE_IDEMPOTENCY_KEY` (common, `IdempotencyKey`) | NOT NULL | created with the table V21 | `FK_CORE_IDEMPOTENCY_KEY_TENANT` V21 | `IDX_CORE_IDEMPOTENCY_KEY_TENANT` V21 | `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)` V21 | REQ-TENANT-016, -036 |
+Totals after V21: **23** `TENANT_ID` columns / FKs / `IDX_<TABLE>_TENANT` indexes (22 NOT NULL without default + 1
+nullable), **15** unique constraints containing `TENANT_ID` (+ `UQ_CORE_IDEMPOTENCY_KEY`) plus the 2 tenant-leading
+unique indexes, **22** tenant-aware entities (+ `IdempotencyKey`). `TenantSchemaIntegrationTest` asserts these
+numbers (22 → 23, 14 → 15, 21 → 22).
+
+### Retention (no schema object)
+Rows older than `erp.core.idempotency.retention` (24 h) are ignored at lookup and deleted by
+`IdempotencyKeyRetentionJob.run()`, tenant by tenant (`SELECT DISTINCT TENANT_ID FROM CORE_IDEMPOTENCY_KEY WHERE
+CREATED_AT < ?`, then `DELETE FROM CORE_IDEMPOTENCY_KEY WHERE TENANT_ID = ? AND CREATED_AT < ?` — RULE-TENANT-011);
+its trigger `erp.core.idempotency.retention-cron` (default `-`) fires only when the application enables scheduling.
+
+### DBF id definitions — delta
+**DBF-TENANT-045** — CORE_IDEMPOTENCY_KEY.TENANT_ID [ENT-TENANT-001 (FK target), REQ-TENANT-016, REQ-TENANT-036]
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | Idempotency keys in a core table behind the common mechanism, 24 h retention, first consumer tenant create | ADR-TENANT-003 |
+| DEFAULT | Audit columns per the tenant-scoped convention (entity extends `AuditableEntity`) | `db/migration/core/README.md`; RULE-TENANT-010 |
+
+### Deviations
+- Plan §5 C.4 / §11 `V20__core_idempotency_key.sql` → `V21__core_idempotency_key.sql` (execution order D, B, E before C4).
+- Plan §5 C.4's nine columns → twelve (+ `CREATED_BY` NOT NULL, `UPDATED_BY`, `UPDATED_AT`; `AuditableEntity`).
+
+Review round 1 (package C4) — no schema change. The claim row is written by plain SQL (srs I12):
+`INSERT INTO CORE_IDEMPOTENCY_KEY (ID, TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT, REQUEST_HASH, RESPONSE_STATUS, CREATED_BY,
+CREATED_AT, UPDATED_BY, UPDATED_AT, VERSION) VALUES (nextval('SEQ_CORE_IDEMPOTENCY_KEY'), ?, ?, ?, ?, 0, ?, ?, ?, ?, 0)
+ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING` — `TENANT_ID` named explicitly (RULE-TENANT-011); a lost
+claim consumes one sequence value.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5): no schema change; the export SPI in the XM register
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No migration, table, column, constraint, index or sequence. The archive is a `FILE_DOCUMENT` row of the PLATFORM
+tenant (`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`, `VISIBILITY = PRIVATE`,
+`FILE_TYPE_ID = ARCHIVE`, no category) — data, not schema. The export **reads** every tenant-scoped table with
+`TENANT_ID = {id}` (the 23 discriminator columns of this register except `CORE_IDEMPOTENCY_KEY`, `SEC_PWD_RESET_TOKEN`
+and `SEC_CUSTOMER_VERIFY_TOKEN`) and `CORE_TENANT` by `ID`; the exact file and column lists are in
+`../P1/srs-tenant.md` 1.3.0 X7.
+
+### XM REGISTER — delta
+| Kind | XM id | Kind | Surface | Counterpart | Physical link | Status |
+|---|---|---|---|---|---|---|
+| NEW | XM-TENANT-004 | SPI (exposed) | `TenantExportContributor.countRows(Long)` / `export(TenantExport)` | implementers SEC, MDL, CU, FILE, NOTIF, SEQUENCE, AUDIT, TENANT — each reads its own tables by `TENANT_ID` (RULE-TENANT-011) | none (CSV streams into a ZIP; the ZIP is a PRIVATE `FILE_DOCUMENT` of PLATFORM through FILE XM-FILE-003) | IMPLEMENTED (1.3.0) |
+Cascade: FILE `FILE_DOCUMENT` rows with `OWNER_TYPE = CORE_TENANT`, `MODULE_CODE = TENANT` in the PLATFORM tenant
+(one per export) — data, not schema; never deleted automatically.

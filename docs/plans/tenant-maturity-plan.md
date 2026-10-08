@@ -196,7 +196,7 @@ Password policy (one place, `PasswordPolicy` in `com.erp.sec.domain`, used by cr
   `StoredImage storePublicImage(ImageStoreRequest r)` where the request carries `ownerType`, `ownerId`, `moduleCode`, `bytes`, `contentType`, `fileName`, `maxBytes`, `allowedTypes`, and the result carries `documentId`, `publicUrl`; plus `void discard(Long documentId)`.
   Internally: validates type/size (`SEC-400-PHOTO-INVALID` / `TENANT_LOGO_INVALID` raised by the caller from a `FILE` validation result, never a raw exception), stores through the configured `StorageProvider`, publishes (`VISIBILITY = PUBLIC`, random slug) — reuses step 07's public-file path, no new table.
 - Image rules (both uses): `image/png`, `image/jpeg`, `image/webp`, `image/svg+xml` (SVG **logos only**, sanitised: reject `<script`, `on*=` attributes, external hrefs); photo ≤ 1 MB, logo ≤ 1 MB; the server never resizes in v1 (frontend constrains the preview).
-- ADR-FILE-001 (first FILE ADR): "Profile photos and logos are PUBLIC documents with non-guessable slugs" — alternatives: PRIVATE + per-request tokens (every avatar render would need a token round-trip). Trade-off recorded: the URL is unauthenticated; the slug is random and per tenant; `DELETE` withdraws it.
+- ADR-FILE-008 (ADR-FILE-001 … 007 record the as-built FILE decisions): "Profile photos and logos are PUBLIC documents with non-guessable slugs" — alternatives: PRIVATE + per-request tokens (every avatar render would need a token round-trip). Trade-off recorded: the URL is unauthenticated; the slug is random and per tenant; `DELETE` withdraws it.
 
 ### D.5 Tests
 `TC-CORE-SEC-*`: admin-set password → login works, flag true, other endpoints 403 until self-change; self-change wrong current 403; self-change clears flag; admin-set on self 422; photo upload png ok / exe rejected / > 1 MB rejected; `/me` has no `roles` field; PUT users accepts phone/locale; locale `fr` rejected.
@@ -311,7 +311,7 @@ Tests `TC-CORE-SEC-*`: revoke screen cascades N actions and audits N+1 rows; rev
 | ADR-TENANT-004 | `ScopedValue` go/no-go | decided by the spike (C.6) |
 | ADR-TENANT-005 | who sets a tenant's logo | **decided (D5)**: the platform administrator from `PLATFORM_TENANTS`; no tenant self-service screen in 1.3.0 (alternative recorded: a per-tenant `TENANT_BRANDING` screen — more rows in the registry and grants, deferred) |
 | ADR-SEC-041 | revoking `VIEW` cascades the screen's other actions vs. refusing while they exist | cascade with a counted response (consistent with the module revoke, RULE-SEC-003) |
-| ADR-FILE-001 | photo/logo visibility | PUBLIC non-guessable slug (reuse step 07), not PRIVATE + tokens |
+| ADR-FILE-008 | photo/logo visibility | PUBLIC non-guessable slug (reuse step 07), not PRIVATE + tokens |
 | ADR-SEC-039 | admin-set password forces a change at next login | yes, default `true`, enforced server-side by the 403 filter |
 | ADR-SEC-040 | staff `/me` payload excludes roles/permissions | yes (ADR-SEC-005) |
 | Frontend decision rows (P2_5) | authentication-only routes for `/account/*`; logo placement beside the mark; logo upload lives in the tenant detail drawer | as in §8 |

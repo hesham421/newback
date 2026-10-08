@@ -52,3 +52,17 @@ Each gap is **omitted from the frontend**, never faked and never routed to a sub
 REQ-SEC-009, REQ-SEC-012, REQ-SEC-013, REQ-SEC-014, REQ-SEC-015, REQ-SEC-016, REQ-SEC-017,
 REQ-SEC-019, REQ-SEC-024 · API-SEC-005, API-SEC-013, API-SEC-015, API-SEC-021 ·
 SCR-SEC-004, SCR-SEC-005, SCR-SEC-006
+
+## Superseded in part — 2026-10-08 (erp-core 1.2.0 as-built review)
+The "logout" row of the Context table and the "no logout affordance" bullet of the Decision are
+superseded: `POST /api/v1/sec/auth/logout` exists since erp-core 1.1.0, the first published version
+(`erp-core/src/main/java/com/erp/sec/service/AuthService.java:129-187`, `isAuthenticated()`,
+idempotent, keyed by the token's `jti`, `LOGOUT` written to `SEC_AUDIT_LOG` and `CORE_AUDIT_EVENT`;
+`docs/api-docs/sec/endpoints/authentication.md`). It is recorded as REQ-SEC-036 / AC-SEC-036 in
+`governance/analysis/modules/SEC/P1/srs-sec.md` → "Implementation Addendum — erp-core 1.2.0" and
+decided by ADR-SEC-066. The "read one user by id" row is likewise served since 1.1.0
+(`GET /api/v1/sec/users/{id}`, ADR-SEC-038), and "update a role's own fields" by
+`PUT /api/v1/sec/roles/{id}` (ADR-SEC-038). The remaining rows stand as of 1.2.0: role deactivate and
+registry-row deactivate are NOT IMPLEMENTED (ADR-SEC-038, DEFERRED; ADR-SEC-067 for the registry
+gate); the per-screen / per-action grant revoke is added by the 1.3.0 package G (ADR-SEC-062, the
+1.3.0 addendum of `srs-sec.md`).

@@ -154,35 +154,52 @@ per the ambiguity rule (shared/GOVERNANCE-CORE.md).
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0)
+Steps          : 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
 Paths cited below are relative to the erp-core repository at that tag. No US ids are minted here; the
 factory assigns them if these capabilities are adopted as stories.
 
-NEW product capabilities
-| Capability | Actor | Implemented behaviour | Source |
-|---|---|---|---|
-| Customer self-registration | prospective customer | Registers with e-mail, password (min 8) and one full name in a tenant (`X-Tenant-Code`); the username is the e-mail. The account is `PENDING_VERIFICATION` and a verification mail (`CUSTOMER_VERIFY_EMAIL`) is sent. An e-mail that already has a customer account in that tenant is refused. | docs/steps/06-report.md; DEVIATIONS [06] |
-| Customer e-mail verification | customer | Uses the single-use link (valid 24 h); the account becomes ACTIVE. | DEVIATIONS [06] |
-| Customer sign-in | customer | Signs in with e-mail and password; refused until verified; rate limited (default 10 attempts per minute); receives a CUSTOMER-realm token usable only on customer endpoints. | DEVIATIONS [06] |
-| Customer password reset | customer | Requests a reset link (`CUSTOMER_PASSWORD_RESET` mail) and completes it; completing it also verifies a still-unverified account. | DEVIATIONS [06] |
-| Customer profile | customer | Views own profile; edits only the two display names. | DEVIATIONS [06] |
-| Customer in-app inbox | customer (and staff) | Lists own in-app notifications and marks them read (owned by NOTIF; see analysis/modules/NOTIF). | DEVIATIONS [08] |
-| Tenant-scoped sign-in | every user | Every account belongs to one tenant; a sign-in names the tenant (`X-Tenant-Code`); a suspended tenant cannot sign in. | docs/steps/05-report.md |
-| First-start administrator password | platform operator | No default `admin/admin`; the operator sets the bootstrap admin password once by configuration. | docs/steps/04-report.md |
-| Users report | staff with `SEC:REPORT:SEC_USER_LIST` | Runs / exports (CSV, JSON) a list of user accounts of both realms, filterable by realm, status, active flag and creation date. | DEVIATIONS [11] |
+Product capabilities
+| Kind | Capability | Actor | Implemented behaviour | Source |
+|---|---|---|---|---|
+| NEW | Customer self-registration | prospective customer | Registers with e-mail, password (8–200 characters) and one full name in a tenant (`X-Tenant-Code`); the username is the e-mail. The account is `PENDING_VERIFICATION` and a verification mail (`CUSTOMER_VERIFY_EMAIL`) is sent. An e-mail that already has a customer account in that tenant is refused. | docs/steps/06-report.md; DEVIATIONS [06] |
+| NEW | Customer e-mail verification | customer | Uses the single-use link (valid 24 h); the account becomes ACTIVE. | DEVIATIONS [06] |
+| NEW | Customer sign-in | customer | Signs in with e-mail and password; refused until verified; rate limited (default 10 attempts per minute); receives a CUSTOMER-realm token usable only on customer endpoints. The sign-in opens a session like a staff login, but there is no customer logout. | DEVIATIONS [06]; sec/service/CustomerAccountService.java |
+| NEW | Customer password reset | customer | Requests a reset link (`CUSTOMER_PASSWORD_RESET` mail) and completes it; completing it also verifies a still-unverified account and ends every open session of the account. | DEVIATIONS [06] |
+| NEW | Customer profile | customer | Views own profile; edits only the two display names. | DEVIATIONS [06] |
+| NEW | Customer in-app inbox | customer (and staff) | Lists own in-app notifications and marks them read (owned by NOTIF; see analysis/modules/NOTIF). | DEVIATIONS [08] |
+| NEW | Tenant-scoped sign-in | every user | Every account belongs to one tenant; a sign-in names the tenant (`X-Tenant-Code`); a suspended tenant cannot sign in. | docs/steps/05-report.md |
+| NEW | First-start administrator password | platform operator | No default `admin/admin`; the operator sets the bootstrap admin password once by configuration. | docs/steps/04-report.md |
+| NEW | Staff logout | staff user | Ends the own session (`POST /api/v1/sec/auth/logout`); the token is refused from the next request; repeating the call is harmless. Not foreseen by US-SEC-001 (the SRS and ADR-SEC-008 assumed sessions end only by expiry or administrator termination). | sec/service/AuthService.java:129-187 (REQ-SEC-036); ADR-SEC-066 |
+| NEW | Users report | staff with `SEC:REPORT:SEC_USER_LIST` | Runs / exports (CSV, JSON) a list of user accounts of both realms, filterable by realm, status, active flag and creation date. | DEVIATIONS [11] |
 
-CHANGED behaviour of existing stories
-| Story | Delta | Source |
-|---|---|---|
-| US-SEC-001 Login | Staff login now needs the tenant (`X-Tenant-Code`); the token carries `realm` and `tid`. A successful login is also recorded in the platform audit log. | docs/steps/05-report.md, 06-report.md; DEVIATIONS [10] |
-| US-SEC-002 Sign-up | Unchanged flow (admin approval), now explicitly STAFF realm. | docs/steps/06-report.md |
-| US-SEC-003 Forgot / reset password | Staff flow unchanged; completion is also recorded in the platform audit log. A reset token of the other realm is refused like an unknown token. | DEVIATIONS [06], [10] |
-| US-SEC-004 Manage users | Administrators manage STAFF accounts only: a customer account is invisible to user search and answers "user not found" on every by-id operation. | DEVIATIONS [14]; CHANGELOG [1.1.0] |
-| US-SEC-005 Manage roles and grants | `SYS_ADMIN` of every tenant is a super role (all catalog permissions without grants); its grant tree no longer limits it. | DEVIATIONS [06] |
-| US-SEC-006 Module / screen / action registry | The catalog is now declared in code by each module and synchronized at startup (still visible through the registry search). | docs/steps/06-report.md |
-| US-SEC-007 Segregation of duties | No consumer declares a conflicting pair since `fin` was removed; unchanged and inert. | docs/steps/01-report.md |
-| US-SEC-009 Admin dashboard | User and session counts cover STAFF accounts only. | CHANGELOG [1.1.0] Security |
-| US-SEC-011 Active sessions | Lists and terminates STAFF sessions only. | DEVIATIONS [14] |
-| US-SEC-012 Optional notification on password reset | Delivery is asynchronous with retries (NOTIF); the customer realm has its own reset mail. | DEVIATIONS [06], [08] |
+Existing stories — deltas
+| Kind | Story | Delta | Source |
+|---|---|---|---|
+| CHANGED | US-SEC-001 Login | Staff login now needs the tenant (`X-Tenant-Code`); the token carries `realm`, `tid`, `jti` and `uid`, lasts one hour by default and is honoured only while its server-side session is open. A successful login is also recorded in the platform audit log. | docs/steps/05-report.md, 06-report.md; DEVIATIONS [10] |
+| CHANGED | US-SEC-002 Sign-up | Same flow (admin approval), now explicitly STAFF realm; the approved account's username is the e-mail and it starts with no usable password (the owner completes a reset). The decision is not written to the SEC audit log. | docs/steps/06-report.md; sec/service/SignupRequestService.java |
+| CHANGED | US-SEC-003 Forgot / reset password | Completing a reset also ends every open session of the account and is recorded in the platform audit log. A reset token of the other realm is refused like an unknown token. No password-strength rule applies to staff passwords. | DEVIATIONS [06], [10]; sec/service/PasswordResetService.java |
+| CHANGED | US-SEC-004 Manage users | Administrators manage STAFF accounts only: a customer account is invisible to user search and answers "user not found" on every by-id operation. A user's roles are set as a whole (the submitted set replaces the current one; removed roles are audited); creating a user together with roles needs the role-assignment permission as well; the username cannot be changed; reactivation takes no body. | DEVIATIONS [14]; CHANGELOG [1.1.0]; sec/service/UserRoleService.java |
+| CHANGED | US-SEC-005 Manage roles and grants | `SYS_ADMIN` of every tenant is a super role (all catalog permissions without grants); its grant tree no longer limits it. Granting a non-VIEW action before the screen's VIEW is refused (not merely flagged). The module revoke reports how many screen and action grants went with it. Role deactivation is NOT IMPLEMENTED (no endpoint; `PERM_SEC_ROLES_DELETE` is registered but unused). Revoking a single screen or action grant is NOT IMPLEMENTED in 1.2.0 — package G adds it in 1.3.0. | DEVIATIONS [06]; ADR-SEC-038; sec/domain/RoleActionGrantDomain.java |
+| CHANGED | US-SEC-006 Module / screen / action registry | The catalog is declared in code by each module and synchronized at startup (still visible through the registry search, which lists active rows only). The three registration endpoints exist and are gated by `PERM_SEC_MODULE_REGISTRY_UPDATE`; deactivating a registry row is NOT IMPLEMENTED. | docs/steps/06-report.md; ADR-SEC-067; ADR-SEC-038 |
+| CHANGED | US-SEC-007 Segregation of duties | No consumer declares a conflicting pair since `fin` was removed; kept as analysed and inert. | docs/steps/01-report.md |
+| CHANGED | US-SEC-009 Admin dashboard | User and session counts cover STAFF accounts only; each widget is shown only to a caller holding the matching VIEW permission (users, audit log, sessions, roles). | CHANGELOG [1.1.0] Security; sec/service/DashboardService.java:79-92 |
+| CHANGED | US-SEC-010 Audit log | Export shares the audit-log VIEW permission and produces a CSV with a UTF-8 BOM and a spreadsheet-formula guard. The SEC log records logins, logout, resets, role and grant changes and session terminations; user and role creation / update, sign-up decisions and registry changes are not in it (user and role field changes are in the platform audit log). | sec/service/AuditLogService.java; DEVIATIONS [10] |
+| CHANGED | US-SEC-011 Active sessions | Lists and terminates STAFF sessions only. The "last activity" shown is the login time (never refreshed). | DEVIATIONS [14]; sec/service/SessionService.java |
+| CHANGED | US-SEC-012 Optional notification on password reset | Delivery is asynchronous with retries (NOTIF); the customer realm has its own reset mail. | DEVIATIONS [06], [08] |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package D — passwords, profile, photo, staff `/me` (package G's grant revoke is described in `P1/srs-sec.md` 1.3.0 §1–§8)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Capability | Who | What it does | Source |
+|---|---|---|---|---|
+| NEW | Set a user's password | security administrator | Sets another staff user's password from the Users screen; by default the user must change it at the next sign-in, and every session of the user ends. | srs-sec.md 1.3.0 §9 (REQ-SEC-083) |
+| NEW | Forced password change | staff user | After an administrator chose the password, only the profile, the password change and sign-out work until the user picks their own. | REQ-SEC-084 |
+| NEW | Change my password | staff user | Changes the own password, giving the current one; the user's other sessions end. | REQ-SEC-085 |
+| NEW | My profile | staff user | Reads and edits names, phone, job title and preferred language; uploads or removes a photo. | REQ-SEC-086, REQ-SEC-087 |
+| NEW | Password policy | anyone choosing a staff password | 8..72 characters (at most 72 bytes) with a letter and a digit (configurable up to 72). | REQ-SEC-082 |
+| NEW | Password-change e-mail | staff user | An e-mail tells the user that their password was changed and by whom. | REQ-SEC-089; NOTIF RULE-NOTIF-023 |

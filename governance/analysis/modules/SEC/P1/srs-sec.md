@@ -1141,92 +1141,750 @@ Every action beyond VIEW additionally requires VIEW on the same screen (RULE-SEC
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 01, 04, 05, 06, 08, 10, 11, 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
-Paths cited below are relative to the erp-core repository at that tag. Endpoint paths and methods are
-taken from `docs/api-docs/sec/`. No REQ / AC / RULE / ENT ids are minted here; items are labelled
-NEW / CHANGED / REMOVED for the factory to absorb.
+Paths cited below are relative to the erp-core repository at that tag; a `Source` cell naming a Java
+file is relative to `erp-core/src/main/java/com/erp/`. Endpoint paths and methods are taken from
+`docs/api-docs/sec/` (40 operations). `Kind` is one of NEW (absent from the analysis above), CHANGED
+(the analysed item, with the concrete delta), REMOVED, NOT IMPLEMENTED (analysed, no code). No REQ /
+AC / RULE / ENT ids are minted here, with one exception: REQ-SEC-036 / AC-SEC-036 (logout), which
+`AuthService` and `SecLogoutIntegrationTest` already cite. Every other as-built rule is a CHANGED row
+on the id it refines, or a NEW row keyed by its text. A 1.2.0 fact that the 1.3.0 package G changed
+says so in its row; the 1.3.0 addendum below governs it.
 
 ### 1. Endpoints
-| Kind | Method | Path | Access | Notes | Source |
-|---|---|---|---|---|---|
-| NEW | POST | `/api/v1/public/customers/register` | public (tenant from `X-Tenant-Code`) | body `email`, `password` (min 8), `fullName` (fills `fullNameAr` and `fullNameEn`); creates a `PENDING_VERIFICATION` CUSTOMER account and dispatches `CUSTOMER_VERIFY_EMAIL` | docs/api-docs/sec/endpoints/customer-accounts-public.md; DEVIATIONS [06] |
-| NEW | POST | `/api/v1/public/customers/verify` | public | consumes the verification token (24 h, single use, stored hashed) → ACTIVE | same |
-| NEW | POST | `/api/v1/public/customers/login` | public | body `email`, `password`; rate limited; a successful login is written as `LOGIN` to `CORE_AUDIT_EVENT` | same; DEVIATIONS [10] |
-| NEW | POST | `/api/v1/public/customers/password-reset/request` | public | dispatches `CUSTOMER_PASSWORD_RESET` (reuses `SEC_PWD_RESET_TOKEN`) | same |
-| NEW | POST | `/api/v1/public/customers/password-reset/complete` | public | also verifies a `PENDING_VERIFICATION` account | same |
-| NEW | GET | `/api/v1/customers/me` | `ROLE_CUSTOMER` | own profile | docs/api-docs/sec/endpoints/customer-accounts-self.md |
-| NEW | PATCH | `/api/v1/customers/me` | `ROLE_CUSTOMER` | edits `fullNameAr`, `fullNameEn` only | same |
-| CHANGED | POST | `/api/v1/sec/auth/login` | public | needs the tenant (`X-Tenant-Code`); token carries `realm`, `tid`, `jti`; success recorded as `LOGIN` in `CORE_AUDIT_EVENT` | docs/steps/05-report.md, 06-report.md; DEVIATIONS [10] |
-| CHANGED | POST | `/api/v1/sec/auth/logout`, `/api/v1/sec/auth/password-reset/complete` | as before | also recorded as `LOGOUT` / `PASSWORD_RESET` in `CORE_AUDIT_EVENT` | DEVIATIONS [10] |
-| CHANGED | GET / PUT / PATCH / DELETE | `/api/v1/sec/users/{id}`, PUT `/api/v1/sec/users/{id}/roles` | as before | STAFF accounts only: a CUSTOMER id answers 404 `SEC-404-USER` (as an unknown id) and changes nothing | DEVIATIONS [14] |
-| CHANGED | POST | `/api/v1/sec/users/search` | as before | always restricted to `realm = STAFF`; `UserResponse` carries `realm` | DEVIATIONS [06], [14] |
-| CHANGED | POST / DELETE | `/api/v1/sec/sessions/search`, `/api/v1/sec/sessions/{id}` | as before | STAFF sessions only; a customer session id → 404 `SEC-404-SESSION` | DEVIATIONS [14] |
-| CHANGED | GET | `/api/v1/sec/dashboard` | as before | user and session counts cover STAFF accounts only | DEVIATIONS [14] |
-| CHANGED | POST | `/api/v1/sec/auth/signup`, PATCH `/api/v1/sec/signup-requests/{id}` | as before | an approved sign-up creates a STAFF account | docs/steps/06-report.md |
-| NEW (report) | POST | `/api/v1/report/SEC_USER_LIST/run`, `/api/v1/report/SEC_USER_LIST/export` | `SEC:REPORT:SEC_USER_LIST` | params `realm`, `status`, `activeOnly`, `createdFrom`, `createdTo`; never returns the password hash | DEVIATIONS [11] |
-| AS-BUILT (v2 G5) | GET | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_VIEW` | one of the five endpoints ADR-SEC-038 declared for the SRS screens (the SEC v2 service-account change set itself was never implemented); STAFF accounts only | docs/api-docs/sec/endpoints/users.md; ADR-SEC-038 |
-| AS-BUILT (v2 G5) | GET | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_VIEW` | same; role detail | docs/api-docs/sec/endpoints/roles.md; ADR-SEC-038 |
-| AS-BUILT (v2 G5) | PUT | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_UPDATE` | same; role update | docs/api-docs/sec/endpoints/roles.md; ADR-SEC-038 |
-| AS-BUILT (v2 G5) | GET | `/api/v1/sec/roles/{id}/grants` | `PERM_SEC_ROLES_VIEW` | same; a role's module/screen/action grants | docs/api-docs/sec/endpoints/role-grants.md; ADR-SEC-038 |
-| AS-BUILT (v2 G5) | POST | `/api/v1/sec/signup-requests/search` | `PERM_SEC_USERS_VIEW` | same; the list behind the "Pending sign-ups" tab | docs/api-docs/sec/endpoints/sign-up-requests.md; ADR-SEC-038 |
-All other SEC endpoints keep their analysed behaviour, now confined to the caller's tenant.
+| Kind | Method | Path | Access | Delta / as-built behaviour | Errors (HTTP · code) | Source |
+|---|---|---|---|---|---|---|
+| NEW | POST | `/api/v1/public/customers/register` | public (tenant from `X-Tenant-Code`) | body `email`, `password` (8–200), `fullName` (fills `fullNameAr` and `fullNameEn`); username = e-mail; creates a `PENDING_VERIFICATION` CUSTOMER account, dispatches `CUSTOMER_VERIFY_EMAIL` (link = `erp.core.frontend.base-url` + `customer-verify-path`), publishes `CustomerRegisteredEvent`; no `SEC_AUDIT_LOG` row | 409 · `CUSTOMER_EMAIL_TAKEN`; 400 · `VALIDATION_ERROR` | sec/service/CustomerAccountService.java:124-146; docs/api-docs/sec/endpoints/customer-accounts-public.md; DEVIATIONS [06] |
+| NEW | POST | `/api/v1/public/customers/verify` | public | consumes the verification token (24 h, single use, SHA-256 hash stored) → `ACTIVE`; publishes `CustomerVerifiedEvent` | 409 · `VERIFY_TOKEN_INVALID` | CustomerAccountService.java:149-168 |
+| NEW | POST | `/api/v1/public/customers/login` | public | body `email`, `password`; the rate limiter is consulted before the password; creates a `SEC_ACTIVE_SESSION` row exactly like staff login (`TOKEN_REF` = the token's `jti`); sets `lastLoginAt`; `LOGIN` to `CORE_AUDIT_EVENT` only — no `SEC_AUDIT_LOG` row, not even for a failure | 429 · `CUSTOMER_LOGIN_RATE_LIMITED`; 401 · `SEC-401-INVALID-CREDENTIALS`; 403 · `CUSTOMER_NOT_VERIFIED` | CustomerAccountService.java:176-213; DEVIATIONS [06], [10] |
+| NEW | POST | `/api/v1/public/customers/password-reset/request` | public | generic confirmation whether or not the e-mail resolves to a customer; reuses `SEC_PWD_RESET_TOKEN`; dispatches `CUSTOMER_PASSWORD_RESET` (link = `base-url` + `customer-password-reset-path`); publishes no event, writes no audit row | — | CustomerAccountService.java:219-236 |
+| NEW | POST | `/api/v1/public/customers/password-reset/complete` | public | sets the password; a `PENDING_VERIFICATION` account becomes `ACTIVE` (no `CustomerVerifiedEvent` on this path); terminates every open session of the account (no `SESSION_TERMINATED` rows — customer events are not written to `SEC_AUDIT_LOG`); `PASSWORD_RESET` to `CORE_AUDIT_EVENT`; a STAFF-realm token answers as invalid | 409 · `SEC-409-RESET-TOKEN-INVALID` | CustomerAccountService.java:245-272 |
+| NEW | GET | `/api/v1/customers/me` | `ROLE_CUSTOMER` | own profile | 404 · `SEC-404-USER` (the principal's row is gone) | CustomerAccountService.java:278-297; docs/api-docs/sec/endpoints/customer-accounts-self.md |
+| NEW | PATCH | `/api/v1/customers/me` | `ROLE_CUSTOMER` | edits `fullNameAr`, `fullNameEn` only | 404 · `SEC-404-USER` | CustomerAccountService.java:286 |
+| CHANGED | POST | `/api/v1/sec/auth/login` | public | needs the tenant (`X-Tenant-Code`); the token carries `sub` (username), `jti` (= `SEC_ACTIVE_SESSION.TOKEN_REF`, a random UUID), `uid` (`SEC_USER.USER_PK`), `tid`, `realm`; `expiresIn` in seconds (default 3 600); `LOGIN_SUCCESS` / `LOGIN_FAILED` in `SEC_AUDIT_LOG` (the failed row survives the 401 — `noRollbackFor`) and `LOGIN` in `CORE_AUDIT_EVENT`; staff login has no rate limiter | 401 · `SEC-401-INVALID-CREDENTIALS` (unknown username, non-ACTIVE or inactive account, wrong password: one verdict) | sec/service/AuthService.java:73-127; sec/security/JwtTokenIssuer.java:36-54; docs/steps/05-report.md, 06-report.md; DEVIATIONS [10] |
+| NEW | POST | `/api/v1/sec/auth/logout` | `isAuthenticated()` (staff chain; no permission) | REQ-SEC-036 — terminates the caller's own session, resolved from the bearer's `jti`, never from a client-supplied id; idempotent: an already-terminated session is returned as it stands (`SEC-409-ALREADY-TERMINATED` is never raised here); `LOGOUT` written to `SEC_AUDIT_LOG` and `CORE_AUDIT_EVENT`; response `SessionTerminationResponse` (`terminatedAt`). Not in the analysis above (ADR-SEC-008 recorded "no logout endpoint" — superseded in part, ADR-SEC-066). There is no customer logout endpoint | 401 · `SEC-401-INVALID-CREDENTIALS` | AuthService.java:129-187; sec/controller/AuthController.java:61-66; docs/api-docs/sec/endpoints/authentication.md; docs/steps/06-report.md; DEVIATIONS [10] |
+| CHANGED | POST | `/api/v1/sec/auth/password-reset/request` | public | STAFF-realm lookup by e-mail; generic confirmation either way; `PASSWORD_RESET_REQUESTED` row; publishes `PasswordResetRequestedEvent` (token row id + expiry, never the raw token); mails template `PASSWORD_RESET` (V9) through `NotificationDispatchApi.dispatchIndependently` under `InternalCallerContext`, link = `erp.core.frontend.base-url` + `password-reset-path`; a dispatch failure does not fail the request | — | sec/service/PasswordResetService.java:103-113, 187-268; DEVIATIONS [08] |
+| CHANGED | POST | `/api/v1/sec/auth/password-reset/complete` | public | REQ-SEC-007: besides the hash, `usedAt` and `PASSWORD_RESET_COMPLETED`, terminates every open session of the user with one `SESSION_TERMINATED` row per session (`terminatedBy` = the SYSTEM principal) and writes `PASSWORD_RESET` to `CORE_AUDIT_EVENT`; a CUSTOMER-realm token answers as invalid (RULE-SEC-006, realm-aware); the new password has no minimum length (max 200) | 409 · `SEC-409-RESET-TOKEN-INVALID` | PasswordResetService.java:116-185; sec/dto/PasswordResetCompleteRequest.java:27-29; DEVIATIONS [06], [10] |
+| CHANGED | POST | `/api/v1/sec/auth/signup` | public | creates a STAFF sign-up request; no audit row | 409 · `SEC-409-SIGNUP-DUP` (e-mail already pending or registered) | sec/service/SignupRequestService.java; docs/steps/06-report.md |
+| CHANGED | PATCH | `/api/v1/sec/signup-requests/{id}` | `PERM_SEC_USERS_UPDATE` | APPROVE creates a STAFF account (`username` = the e-mail, `ACTIVE`, a random unusable secret — the owner must complete a reset) and publishes `UserCreatedEvent`; neither decision writes a `SEC_AUDIT_LOG` row (A6 has no event type for it) | 404 · `SEC-404-SIGNUP`; 409 · `SEC-409-INVALID-TRANSITION` (not `PENDING`) | SignupRequestService.java:124-150; sec/mapper/UserMapper.java:39-57 |
+| CHANGED | POST | `/api/v1/sec/registry/modules`, `/screens`, `/actions` | `PERM_SEC_MODULE_REGISTRY_UPDATE` | gated by the UPDATE permission of `SEC_MODULE_REGISTRY` (the analysis above describes registration as "the module's own call" and gives UPDATE "deactivate only"); codes trimmed and upper-cased (`normalize`, plus `@PrePersist` / `@PreUpdate` on the entities); `/actions` requires an already registered screen and derives `PERM_<PAGE_CODE>_<ACTION_CODE>`; no audit row. In practice the catalog is upserted from code at startup (§4) — ADR-SEC-067 | 409 · `SEC-409-MODULE-DUP`; 409 · `SEC-409-MODULE-NOT-REGISTERED` (RULE-SEC-004), `SEC-409-SCREEN-DUP`; 409 · `SEC-409-SCREEN-NOT-REGISTERED`, `SEC-409-ACTION-DUP` | sec/service/RegistryService.java:72-125; sec/domain/ActionRegistryDomain.java:31-39; V7:81-83 |
+| CHANGED | POST | `/api/v1/sec/registry/search` | `PERM_SEC_MODULE_REGISTRY_VIEW` | returns only active screens and actions under each module (the `pageCode` filter matches active screens only); the only sortable field is `code` | 400 · `SEC-400-INVALID-SORT` | RegistryService.java:63, 157-185 |
+| CHANGED | POST | `/api/v1/sec/roles/{id}/actions` | `PERM_SEC_ROLES_UPDATE` | RULE-SEC-007 is enforced at grant time: a non-VIEW action for a screen on which the role holds no VIEW grant is refused (the analysis above calls the create-time check "informational"); order of checks: role → action → screen grant (RULE-SEC-002) → VIEW (RULE-SEC-007) → conflicting pair (RULE-SEC-005) → duplicate; `ACTION_GRANTED` row; neither the role nor the action is checked for `IS_ACTIVE_FL` | 404 · `SEC-404-ROLE`, `SEC-404-ACTION`; 409 · `SEC-409-NO-SCREEN-GRANT`, `SEC-409-NO-VIEW-GRANT`, `SEC-409-SOD-CONFLICT`, `SEC-409-GRANT-DUP` | sec/service/RoleGrantService.java:266-300; sec/domain/RoleActionGrantDomain.java:39-56 |
+| NEW | GET | `/api/v1/sec/roles/{id}/grants` | `PERM_SEC_ROLES_VIEW` | the three-level tree over the whole catalog with `granted` per node; a node the role holds no grant for comes back `granted = false` (as-built; declared by ADR-SEC-038 as "API-SEC-035", an id absent from this SRS) | 404 · `SEC-404-ROLE` | RoleGrantService.java:105-158; docs/api-docs/sec/endpoints/role-grants.md; ADR-SEC-038 |
+| CHANGED | POST | `/api/v1/sec/roles/{id}/modules` | `PERM_SEC_ROLES_UPDATE` | an inactive role or module resolves as not found (load-time filter, no code of its own); `MODULE_GRANTED` row | 404 · `SEC-404-ROLE`, `SEC-404-MODULE`; 409 · `SEC-409-GRANT-DUP` | RoleGrantService.java:160-190 |
+| CHANGED | POST | `/api/v1/sec/roles/{id}/screens` | `PERM_SEC_ROLES_UPDATE` | RULE-SEC-001 then the duplicate guard; `SCREEN_GRANTED` row; role and screen are not checked for `IS_ACTIVE_FL` | 404 · `SEC-404-ROLE`, `SEC-404-SCREEN`; 409 · `SEC-409-NO-MODULE-GRANT`, `SEC-409-GRANT-DUP` | RoleGrantService.java:233-264 |
+| CHANGED | DELETE | `/api/v1/sec/roles/{id}/modules/{moduleId}` | `PERM_SEC_ROLES_UPDATE` | 200 with `ModuleGrantRevokeResponse` (counts of the cascaded screen and action grants), not a bare confirmation; no role pre-check — only the grant is looked up; one `ACTION_REVOKED` row per action grant, one `SCREEN_REVOKED` per screen grant, then `MODULE_REVOKED` (RULE-SEC-003); RULE-SEC-003's message text is emitted by no bundle and no code path — the cascade is silent and counted | 404 · `SEC-404-GRANT` | RoleGrantService.java:192-231 |
+| CHANGED | POST | `/api/v1/sec/roles` | `PERM_SEC_ROLES_CREATE` | `code` is trimmed and upper-cased before the per-tenant uniqueness check; `isSuper` is never settable (`FALSE`) | 409 · `SEC-409-ROLE-DUP` | sec/service/RoleService.java:53-70; sec/entity/Role.java:80-97 |
+| NEW | GET | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_VIEW` | role detail (as-built; ADR-SEC-038 "API-SEC-033") | 404 · `SEC-404-ROLE` | RoleService.java:94-104; docs/api-docs/sec/endpoints/roles.md; ADR-SEC-038 |
+| NEW | PUT | `/api/v1/sec/roles/{id}` | `PERM_SEC_ROLES_UPDATE` | updates the bilingual names and descriptions only; `code` and `isSuper` are immutable and ignored if sent (as-built; ADR-SEC-038 "API-SEC-034") | 404 · `SEC-404-ROLE` | RoleService.java:73-91; sec/mapper/RoleMapper.java:34-42; ADR-SEC-038 |
+| NEW | POST | `/api/v1/sec/signup-requests/search` | `PERM_SEC_USERS_VIEW` | the list behind the "Pending sign-ups" tab (as-built; ADR-SEC-038 "API-SEC-036") | 400 · `SEC-400-INVALID-SORT` | docs/api-docs/sec/endpoints/sign-up-requests.md; ADR-SEC-038 |
+| NEW | GET | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_VIEW` | one STAFF account with its roles (as-built; ADR-SEC-038 "API-SEC-032"); a CUSTOMER id answers as unknown | 404 · `SEC-404-USER` | sec/service/UserService.java:198-206; docs/api-docs/sec/endpoints/users.md; ADR-SEC-038; DEVIATIONS [14] |
+| CHANGED | POST | `/api/v1/sec/users` | `PERM_SEC_USERS_CREATE` (+ `PERM_SEC_USERS_UPDATE` when `roleIds` is non-empty) | body `username`, `email`, `password` (required, max 200, no minimum, hashed server-side), `fullNameAr`, `fullNameEn`, optional `roleIds`; `statusCode` is not settable — the account starts `ACTIVE`, `isActiveFl = TRUE`, realm STAFF; a non-empty `roleIds` additionally requires `PERM_SEC_USERS_UPDATE`, checked before any write; publishes `UserCreatedEvent`; no `SEC_AUDIT_LOG` row for the creation itself (the roles produce `ROLE_ASSIGNED` rows) | 403 · `SEC-403-FORBIDDEN`; 409 · `SEC-409-USER-DUP` (with `fieldErrors[]` naming `username` / `email`) | UserService.java:79-119, 305-310; sec/dto/UserCreateRequest.java:14-54; UserMapper.java:20-36 |
+| CHANGED | PUT | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_UPDATE` | STAFF accounts only; body `email`, `fullNameAr`, `fullNameEn` — `username`, password and status are immutable through this endpoint; only e-mail uniqueness is re-checked | 404 · `SEC-404-USER`; 409 · `SEC-409-USER-DUP` | UserService.java:122-141; UserMapper.java:60-67; DEVIATIONS [14] |
+| CHANGED | PATCH | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_UPDATE` | reactivate: no request body (SCR-REQ-SEC-004 B5 gives `status = ACTIVE` as input); only `DISABLED` → `ACTIVE`; publishes `UserStatusChangedEvent`; STAFF only | 404 · `SEC-404-USER`; 409 · `SEC-409-INVALID-TRANSITION` | sec/controller/UserController.java:91-96; UserService.java:176-195; sec/domain/UserDomain.java:139-148 |
+| CHANGED | DELETE | `/api/v1/sec/users/{id}` | `PERM_SEC_USERS_UPDATE` | deactivate: `DISABLED`, every open session terminated with a `SESSION_TERMINATED` row each, `UserStatusChangedEvent`; STAFF only | 404 · `SEC-404-USER` | UserService.java:144-173; DEVIATIONS [14] |
+| CHANGED | PUT | `/api/v1/sec/users/{id}/roles` | `PERM_SEC_USERS_UPDATE` | REQ-SEC-010: the submitted set REPLACES the stored set — roles absent from the body are deleted and audited `ROLE_REVOKED`, new ones inserted and audited `ROLE_ASSIGNED`, retained ones untouched (the analysis above is add-only); RULE-SEC-005 checked per requested role; STAFF only (customers hold no roles) | 404 · `SEC-404-USER`, `SEC-404-ROLE`; 409 · `SEC-409-SOD-CONFLICT` | sec/service/UserRoleService.java:65-135; DEVIATIONS [14] |
+| CHANGED | POST | `/api/v1/sec/users/search` | `PERM_SEC_USERS_VIEW` | always restricted to `realm = STAFF` (`realm` is not a filterable field); `UserResponse` carries `realm` | 400 · `SEC-400-INVALID-SORT` | UserService.java:209-240, 295-303; DEVIATIONS [06], [14] |
+| CHANGED | POST | `/api/v1/sec/sessions/search` | `PERM_SEC_SESSIONS_VIEW` | STAFF sessions only; `lastActivityAt` is written once at login and never refreshed, so REQ-SEC-027's "last-activity time" is the login time; the `username` filter supports EQUALS, NOT_EQUALS and LIKE only | 400 · `UNSUPPORTED_FILTER_OPERATOR` (common code, any other operator on `username`); 400 · `SEC-400-INVALID-SORT` | sec/service/SessionService.java:69-140; AuthService.java:97-103; DEVIATIONS [14] |
+| CHANGED | DELETE | `/api/v1/sec/sessions/{id}` | `PERM_SEC_SESSIONS_DELETE` | STAFF sessions only (a customer session id answers as unknown); only an active session can be terminated; `SESSION_TERMINATED` row | 404 · `SEC-404-SESSION`; 409 · `SEC-409-ALREADY-TERMINATED` | SessionService.java:154-175; sec/domain/ActiveSessionDomain.java:33-37; DEVIATIONS [14] |
+| CHANGED | GET | `/api/v1/sec/dashboard` | `PERM_SEC_DASHBOARD_VIEW` (gateway) | each widget is included only when the caller also holds its permission: `usersOverview` + `onboardingFunnel` ← `PERM_SEC_USERS_VIEW`; `failedLogins24h` + `recentActivity` ← `PERM_SEC_AUDIT_LOG_VIEW`; `activeSessions` ← `PERM_SEC_SESSIONS_VIEW`; `rolesPermissionsSummary` ← `PERM_SEC_ROLES_VIEW`; user and session counts cover STAFF accounts only | — | sec/service/DashboardService.java:70-95; DEVIATIONS [14] |
+| CHANGED | GET | `/api/v1/sec/audit-log/export` | `PERM_SEC_AUDIT_LOG_VIEW` (shared with search; no separate export permission) | query params `eventTypeCode`, `actorUserId`, `occurredFrom`, `occurredTo`; CSV with a UTF-8 BOM and a spreadsheet-formula guard on every cell | — | sec/service/AuditLogService.java:50-66, 97-128 |
+| NEW | POST | `/api/v1/report/SEC_USER_LIST/run`, `/api/v1/report/SEC_USER_LIST/export` | `SEC:REPORT:SEC_USER_LIST` | report module endpoints served by `SecUserListReport`; params `realm`, `status`, `activeOnly`, `createdFrom`, `createdTo`; never returns the password hash | report module codes | sec/report/SecUserListReport.java; DEVIATIONS [11] |
+| NOT IMPLEMENTED | DELETE | role deactivate (SCR-REQ-SEC-005 B1 "deactivate (role)", B4 "DELETE (deactivate role)") | `PERM_SEC_ROLES_DELETE` (registered, consumed by no gate) | no endpoint; DEFERRED (ADR-SEC-038) | — | sec/permission/SecPermissions.java:31-32; ADR-SEC-038 |
+| NOT IMPLEMENTED | — | registry-row deactivate (SCR-REQ-SEC-006 B1 / B3 / B4 "UPDATE (deactivate only)") | `PERM_SEC_MODULE_REGISTRY_UPDATE` (gates registration instead) | no endpoint; `IS_ACTIVE_FL` of the three registries is never toggled by any API or by the synchroniser; DEFERRED (ADR-SEC-038, ADR-SEC-067) | — | RegistryService.java; sec/service/PermissionCatalogSynchronizer.java:102-220 |
+| NOT IMPLEMENTED | DELETE | revoke a single screen grant / action grant (ENT-SEC-008 / ENT-SEC-009 "delete (revoke)" in A3) | `PERM_SEC_ROLES_UPDATE` | not in 1.2.0 (only the module-level revoke above); implemented by package G in 1.3.0 — see the 1.3.0 addendum | — | ADR-SEC-008; 1.3.0 addendum §4 |
 
 ### 2. Business rules
 | Kind | Rule | Source |
 |---|---|---|
+| NEW | **REQ-SEC-036 — تسجيل الخروج / Logout** · Pattern: event · Statement: When an authenticated staff user requests logout, the system shall terminate the active session identified by the bearer token's `jti`, append a `LOGOUT` audit entry (`SEC_AUDIT_LOG` and `CORE_AUDIT_EVENT`), and answer the same confirmation when that session is already terminated (idempotent). Traces: US-SEC-001 · Entities: ENT-SEC-010, ENT-SEC-011 · Rationale: a caller ends only their own session, so no permission and no session id are involved; `SEC-409-ALREADY-TERMINATED` exists for an administrator terminating someone else's session (REQ-SEC-028), not for this path · Priority: HIGH. **AC-SEC-036** — Given a signed-in staff user holding a valid token, When they call `POST /api/v1/sec/auth/logout`, Then the session row of the token's `jti` gets `terminatedAt` / `terminatedBy`, one `LOGOUT` row is appended to each log, the response carries `terminatedAt`, and the same token is no longer accepted for any subsequent request (401); a second logout with that token answers 401 at the filter, and a concurrent repeat answers the terminated session as it stands without a second audit row. Not in the analysis above (ADR-SEC-008, superseded in part — ADR-SEC-066). | sec/service/AuthService.java:129-187; erp-core/src/test/java/com/erp/sec/SecLogoutIntegrationTest.java; docs/api-docs/sec/endpoints/authentication.md |
 | NEW | Every SEC read and write is confined to the request tenant (Hibernate `@TenantId`); an id of another tenant answers as not found. | docs/steps/05-report.md |
-| NEW | `SEC_USER.REALM` ∈ {STAFF, CUSTOMER}, immutable. Username and e-mail are unique per (tenant, realm). Staff lookups (login, reset, sign-up) are STAFF-realm queries; customer flows use realm-aware lookups. | V11; DEVIATIONS [06] |
-| NEW | A token of the other realm on a non-public path of a chain → 403 `REALM_MISMATCH` (checked from the token's `realm` claim). A token without a known `realm` no longer authenticates. | DEVIATIONS [06] |
-| NEW | A CUSTOMER principal holds only `ROLE_CUSTOMER`; no grant query is run for it. Customers hold no roles. | docs/steps/06-report.md |
+| NEW | `SEC_USER.REALM` ∈ {STAFF, CUSTOMER}, immutable (`updatable = false`). Username and e-mail are unique per (tenant, realm). Staff lookups (login, reset, sign-up) are STAFF-realm queries; customer flows use realm-aware lookups. | V11; sec/entity/User.java:100-104; DEVIATIONS [06] |
+| NEW | A token of the other realm on a non-public path of a chain → 403 `REALM_MISMATCH` (checked from the token's `realm` claim). A token without a known `realm` does not authenticate. | sec/security/RealmEnforcementFilter.java; DEVIATIONS [06] |
+| NEW | A CUSTOMER principal holds only `ROLE_CUSTOMER`; no grant query is run for it. Customers hold no roles. | sec/security/JwtAuthenticationFilter.java:149-152; docs/steps/06-report.md |
 | NEW | Customer login before verification → 403 `CUSTOMER_NOT_VERIFIED`. Verification token: 24 h, single use, SHA-256 hash stored. | DEVIATIONS [06] |
-| NEW | Customer login rate limit: in-memory buckets keyed `tenantId:realm:username` (lower-cased), default 10 per minute (`erp.core.security.customer-login-rate-limit.*`) → 429 `CUSTOMER_LOGIN_RATE_LIMITED`. Staff login has no limiter. | DEVIATIONS [06] |
-| NEW | Super role: a role with `IS_SUPER = TRUE` (every tenant's `SYS_ADMIN`) holds every active catalog authority; `PLATFORM`-module authorities only inside the PLATFORM tenant. The navigation menu is still built from grants. | DEVIATIONS [06] (super role entry) |
-| NEW | Bootstrap admin: seeded `PENDING` with a non-BCrypt placeholder; `erp.core.security.bootstrap-admin-password` is applied once on the first start (hash + activate), never again. | docs/steps/04-report.md |
-| CHANGED | RULE-NOTIF-007 interplay: a user "may receive notifications" when ACTIVE or `PENDING_VERIFICATION` (`UserContact.active`). | DEVIATIONS [06] |
-| CHANGED | RULE-SEC-006 (reset token): a token is usable only for its owner's realm; a token of the other realm answers `SEC-409-RESET-TOKEN-INVALID`. Window stays 30 min. | DEVIATIONS [06]; `PasswordResetToken.DEFAULT_VALIDITY_WINDOW` |
-| CHANGED | REQ-SEC-024 (audit append): `SEC_AUDIT_LOG` unchanged; LOGIN / LOGOUT / PASSWORD_RESET are additionally written to `CORE_AUDIT_EVENT`, and User / Role changes are recorded field by field via `@Audited` (`passwordHash`, `lastLoginAt` ignored). Customer register / login / reset are not written to `SEC_AUDIT_LOG`. | DEVIATIONS [10], [06] |
+| NEW | Customer login rate limit: bucket4j buckets keyed `tenantId:realm:username` (username lower-cased), default 10 per minute (`erp.core.security.customer-login-rate-limit.capacity` / `.period`), consumed before the password check → 429 `CUSTOMER_LOGIN_RATE_LIMITED`. The buckets are per JVM (a clustered deployment has one budget per node) and the whole map is cleared once it holds more than 10 000 keys. Staff login has no limiter. | sec/security/LoginRateLimiter.java:18-55; DEVIATIONS [06] |
+| NEW | Super role: a role with `IS_SUPER = TRUE` (every tenant's `SYS_ADMIN`) holds every active catalog authority; `PLATFORM`-module authorities only inside the PLATFORM tenant. The navigation menu is still built from grants. | sec/service/MenuService.java:136-150; DEVIATIONS [06] (super role entry) |
+| NEW | Bootstrap admin: seeded `PENDING` with a non-BCrypt placeholder; `erp.core.security.bootstrap-admin-password` is applied once on the first start (hash + activate), never again. | sec/security/BootstrapAdminPasswordRunner.java; docs/steps/04-report.md |
+| NEW | Tenant provisioning (`SecTenantProvisioningContributor`, order 0, raw SQL in the tenant insert's transaction): copies the PLATFORM tenant's four catalog roles `SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` (with `IS_SUPER`) and their module / screen / action grants minus the `PLATFORM` module, and creates the tenant's first administrator (`ACTIVE`, STAFF, BCrypt hash) holding `SYS_ADMIN`; when PLATFORM has no `SYS_ADMIN` it aborts the whole provisioning with 500 `INTERNAL_ERROR`. The provisioned administrator publishes no `UserCreatedEvent`. | sec/tenant/SecTenantProvisioningContributor.java:16-19, 62-63, 143; DEVIATIONS [05] (provisioning entry), [08] |
+| NEW | Access token: HS256 over `erp.core.security.jwt.secret`; lifetime `erp.core.security.jwt.expiration-ms`, default 3 600 000 ms (1 h), published as `expiresIn` seconds; claims `sub` = username, `jti` = `SEC_ACTIVE_SESSION.TOKEN_REF` (a random UUID per login), `uid` = `SEC_USER.USER_PK`, `tid`, `realm`. On every request the filter rejects (401) a token whose session row is missing or terminated, whose user is not `ACTIVE` / not `isActiveFl`, or whose realm is unknown, and re-reads the caller's authorities from the grants — nothing is cached in the token. | sec/security/JwtTokenIssuer.java:36-59; sec/security/JwtAuthenticationFilter.java:126-156; autoconfigure/ErpCoreProperties.java:135-143 |
+| NEW | 401 / 403 handling: a missing, malformed, expired or session-terminated bearer on a secured path → 401 `SEC-401-INVALID-CREDENTIALS` from `SecSecurityErrorHandler` (the same code as wrong credentials); a chain-level access denial → 403 `SEC-403-FORBIDDEN` from the same handler; a method-level `@PreAuthorize` denial → 403 `SEC-403-FORBIDDEN` through `SecForbiddenAdvisor`, which translates `AccessDeniedException` into a `LocalizedException`; the realm filter's refusal → 403 `REALM_MISMATCH`. | sec/security/SecSecurityErrorHandler.java:20-45; sec/security/SecForbiddenAdvisor.java:26-42 |
+| NEW | Effective permissions and menu include only grants whose role, action, screen and module are all `IS_ACTIVE_FL = TRUE`; a grant stored on an inactive row is kept but never effective. | sec/repository/RoleActionGrantRepository.java:103-110; sec/repository/ScreenRegistryRepository.java |
+| NEW | `grantModule` rejects an inactive role or module as not found; `grantScreen` and `grantAction` check neither the role nor the registry row for `IS_ACTIVE_FL`. → changed by package G only in that the 1.3.0 revokes add a role pre-check of their own (1.3.0 addendum §4). | sec/service/RoleGrantService.java:166-173, 238-244, 272-277 |
+| NEW | Action registration requires an already registered screen → 409 `SEC-409-SCREEN-NOT-REGISTERED` (the counterpart of RULE-SEC-004 one level down; no RULE id in the analysis above); decided by `ActionRegistryDomain`, then permission-code uniqueness. | sec/domain/ActionRegistryDomain.java:31-39 |
+| NEW | A session can be force-terminated only while active (`terminatedAt IS NULL`); otherwise 409 `SEC-409-ALREADY-TERMINATED` (`ActiveSessionDomain.assertCanTerminate`). Logout (REQ-SEC-036) and the reset-driven terminations are exempt. | sec/domain/ActiveSessionDomain.java:29-42 |
+| NEW | Immutability and normalisation: `username` and `realm` of a user cannot change after creation; `Role.code` cannot change after creation; role codes and registry codes (`CODE`, `PAGE_CODE`, action code → `PERMISSION_CODE`) are trimmed and upper-cased on persist and update. | sec/mapper/UserMapper.java:60-67; sec/mapper/RoleMapper.java:34-42; sec/entity/Role.java:88-97; sec/entity/ModuleRegistry.java:72-81; sec/service/RegistryService.java:76, 90, 112 |
+| NEW | Creating a user with `roleIds` needs `PERM_SEC_USERS_UPDATE` in addition to `PERM_SEC_USERS_CREATE` (the create-with-roles write is the same write as REQ-SEC-010's). | sec/service/UserService.java:83-98, 305-310 |
+| NEW | Staff password-reset completion terminates every open session of the user (one `SESSION_TERMINATED` row each); customer reset completion terminates the account's sessions silently and verifies a `PENDING_VERIFICATION` account. | sec/service/PasswordResetService.java:136, 166-185; sec/service/CustomerAccountService.java:254-265 |
+| NEW | Dashboard widget → permission map: `usersOverview`, `onboardingFunnel` ← `PERM_SEC_USERS_VIEW`; `failedLogins24h`, `recentActivity` ← `PERM_SEC_AUDIT_LOG_VIEW`; `activeSessions` ← `PERM_SEC_SESSIONS_VIEW`; `rolesPermissionsSummary` ← `PERM_SEC_ROLES_VIEW`; a widget the caller may not see is omitted, not emptied. | sec/service/DashboardService.java:79-92 |
+| CHANGED | RULE-SEC-007 (VIEW gateway): the create-time check is blocking, not informational — a non-VIEW action grant without the role's VIEW grant on that screen is refused with 409 `SEC-409-NO-VIEW-GRANT` (`RoleActionGrantDomain.create`); on evaluation `MenuService.effectiveAuthorityCodes` drops every non-VIEW code of a screen whose VIEW the caller does not hold; at startup the synchroniser warns for every screen that contributes permissions but no VIEW action. → changed by package G: revoking VIEW cascades the screen's other action grants (RULE-SEC-055, 1.3.0 addendum). | sec/domain/RoleActionGrantDomain.java:49-50; sec/service/MenuService.java:109-129; sec/service/PermissionCatalogSynchronizer.java:212-220 |
+| CHANGED | REQ-SEC-010 (role assignment): the submitted role set replaces the stored one; each removal is recorded `ROLE_REVOKED` and each addition `ROLE_ASSIGNED`; `AUDIT_EVENT_TYPE.ROLE_REVOKED` therefore has a writer (the analysis above records assignments only). | sec/service/UserRoleService.java:89-135 |
+| CHANGED | REQ-SEC-027 / DBF-SEC-079 (`lastActivityAt`): written at login only and never refreshed — the "last-activity time" shown is the session's start time. | sec/service/AuthService.java:97-103; sec/service/CustomerAccountService.java:197-203; sec/entity/ActiveSession.java:67-68, 91-92 |
+| CHANGED | AC-SEC-007 ("a new password meeting the platform's password rules"): no staff password rule exists — `password` on user creation and `newPassword` on reset completion are `@NotBlank @Size(max = 200)`; only customer registration demands 8–200. | sec/dto/UserCreateRequest.java:47-50; sec/dto/PasswordResetCompleteRequest.java:27-29; sec/dto/CustomerRegisterRequest.java:30-33 |
+| CHANGED | REQ-SEC-024 (audit append): `SEC_AUDIT_LOG` is written for `LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGOUT`, `PASSWORD_RESET_REQUESTED`, `PASSWORD_RESET_COMPLETED`, `ROLE_ASSIGNED`, `ROLE_REVOKED`, `MODULE_GRANTED`, `MODULE_REVOKED`, `SCREEN_GRANTED`, `SCREEN_REVOKED`, `ACTION_GRANTED`, `ACTION_REVOKED`, `SESSION_TERMINATED` (all 14 A6 values have a writer). NOT written for: user creation, user update, user deactivate / reactivate (status change), sign-up submission and decisions, role create / update, registry registrations, and every customer-realm event. `LOGIN` / `LOGOUT` / `PASSWORD_RESET` additionally go to `CORE_AUDIT_EVENT`, and User / Role changes are recorded field by field via `@Audited` (`passwordHash`, `lastLoginAt` ignored). | sec/service/UserService.java:79-81; sec/service/SignupRequestService.java:124-126; sec/service/RegistryService.java; DEVIATIONS [10], [06] |
+| CHANGED | RULE-SEC-003 (module revoke cascade): audited per removed grant (`ACTION_REVOKED`, `SCREEN_REVOKED`, then `MODULE_REVOKED`), and the counts are returned; the rule's message text is not in either bundle and is never shown. | sec/service/RoleGrantService.java:192-231 |
+| CHANGED | RULE-SEC-006 (reset token): a token is usable only for its owner's realm; a token of the other realm answers `SEC-409-RESET-TOKEN-INVALID`. Window stays 30 min; the stored value is the SHA-256 hex of a random UUID. | sec/domain/PasswordResetTokenDomain.java; sec/entity/PasswordResetToken.java:46-89; DEVIATIONS [06] |
+| CHANGED | RULE-NOTIF-007 interplay: a user "may receive notifications" when ACTIVE or `PENDING_VERIFICATION` (`UserContact.active`). | sec/domain/UserDomain.java:134-136; DEVIATIONS [06] |
 | CHANGED | Optimistic locking on every SEC row (`VERSION`); a concurrent update → 409 `CONCURRENT_MODIFICATION`. | DEVIATIONS [05] |
-| NEW | SEC publishes `UserCreatedEvent` (create, sign-up approval), `UserStatusChangedEvent` (deactivate / reactivate), `PasswordResetRequestedEvent` (token row id + expiry, never the raw token), `CustomerRegisteredEvent`, `CustomerVerifiedEvent`. | DEVIATIONS [08] |
+| NEW | SEC publishes `UserCreatedEvent` (create, sign-up approval), `UserStatusChangedEvent` (deactivate / reactivate), `PasswordResetRequestedEvent` (staff reset request only; token row id + expiry, never the raw token), `CustomerRegisteredEvent`, `CustomerVerifiedEvent` (the verify endpoint only). SEC consumes no event. | sec/service/*.java; DEVIATIONS [08] |
 
 ### 3. Error codes
-| Kind | Code | HTTP | Raised when | Source |
-|---|---|---|---|---|
-| NEW | `REALM_MISMATCH` | 403 | token of the other realm | docs/api-docs/sec/index.md |
-| NEW | `CUSTOMER_EMAIL_TAKEN` | 409 | register with an e-mail already holding a customer account in the tenant | same |
-| NEW | `CUSTOMER_NOT_VERIFIED` | 403 | customer login before verification | same |
-| NEW | `VERIFY_TOKEN_INVALID` | 409 | unknown, expired or used verification token | same |
-| NEW | `CUSTOMER_LOGIN_RATE_LIMITED` | 429 | customer login over the limit (new `Status.TOO_MANY_REQUESTS`) | same; DEVIATIONS [06] |
-| NEW (tenant module, surfaced on SEC paths) | `TENANT_REQUIRED` / `TENANT_NOT_FOUND` / `TENANT_SUSPENDED` | 400 / 404 / 403 | missing / unknown / suspended tenant | docs/api-docs/tenant/index.md |
-| NEW (common) | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict | DEVIATIONS [05] |
-| NEW (common, 1.2.0) | `NOT_FOUND` | 404 | unknown path (was 500) | CHANGELOG [1.2.0] |
-All analysed `SEC-*` codes are unchanged.
+The analysis above carries no `SEC-*` catalogue (it lived in the dropped P3_1 stage), so the 32
+constants of `sec/exception/SecErrorCodes.java` are recorded here in full; every one has a message in
+`erp-core/src/main/resources/i18n/messages.properties` and `messages_ar.properties`. `Serves` names the
+rule or requirement the code enforces.
+
+| Kind | Code | HTTP | Raised when | Serves | Source |
+|---|---|---|---|---|---|
+| NEW | `SEC-401-INVALID-CREDENTIALS` | 401 | staff or customer login with an unknown username, a non-`ACTIVE` / inactive account or a wrong password (one verdict, POL-SEC-004); **also reused** by `SecSecurityErrorHandler` for a missing, malformed, expired or session-terminated bearer on any secured path | REQ-SEC-001, REQ-SEC-002, REQ-SEC-028, REQ-SEC-033 | AuthService.java:90-91; CustomerAccountService.java:187, 192; SecSecurityErrorHandler.java:29-33 |
+| NEW | `SEC-409-USER-DUP` | 409 | create / update user: username or e-mail already used in (tenant, STAFF); `fieldErrors[]` names `username` and / or `email` | ENT-SEC-001 uniqueness, REQ-SEC-009 | UserDomain.java:83-92, 156 |
+| NEW | `SEC-404-USER` | 404 | unknown — or CUSTOMER — user id on every staff user endpoint; `GET` / `PATCH /customers/me` when the principal's row is gone | REQ-SEC-009, 010, 011, 031 | UserService.java:313-321; UserRoleService.java:70-72; CustomerAccountService.java:296-297 |
+| NEW | `SEC-409-SOD-CONFLICT` | 409 | assigning a role, or granting an action to a role, that would give one user both actions of a conflicting pair | RULE-SEC-005, REQ-SEC-020 | UserRoleAssignmentDomain; RoleActionGrantDomain.java:52-53 |
+| NEW | `SEC-404-ROLE` | 404 | unknown role id on get / update / roles assignment / grant endpoints; on `grantModule` also an inactive role | REQ-SEC-010, 012, 013, 014 | RoleService.java:79, 100; RoleGrantService.java:111, 169, 241, 274 |
+| NEW | `SEC-409-INVALID-TRANSITION` | 409 | reactivating a user that is not `DISABLED`; deciding a sign-up that is not `PENDING` | A7, REQ-SEC-031, REQ-SEC-004 / 005 | UserDomain.java:143-147; SignupRequestDomain |
+| NEW | `SEC-404-SIGNUP` | 404 | unknown sign-up request id | REQ-SEC-004 / 005 | SignupRequestService.java:135 |
+| NEW | `SEC-409-ROLE-DUP` | 409 | role code already used in the tenant (after trim + upper-case) | ENT-SEC-002 uniqueness | RoleDomain; RoleService.java:53-70 |
+| NEW | `SEC-409-GRANT-DUP` | 409 | the module / screen / action grant already exists for the role | REQ-SEC-012, 013, 014 | RoleModuleGrantDomain; RoleScreenGrantDomain; RoleActionGrantDomain.java:55 |
+| NEW | `SEC-404-MODULE` | 404 | unknown — or inactive — module id on `grantModule` | REQ-SEC-012 | RoleGrantService.java:170-173 |
+| NEW | `SEC-404-GRANT` | 404 | revoke module: the role holds no grant for `{moduleId}` (→ package G reuses it for the screen / action revokes, 1.3.0 addendum) | REQ-SEC-015 | RoleGrantService.java:198-200 |
+| NEW | `SEC-409-NO-MODULE-GRANT` | 409 | screen grant without the role's module grant | RULE-SEC-001, REQ-SEC-013 | RoleScreenGrantDomain |
+| NEW | `SEC-404-SCREEN` | 404 | unknown screen id on `grantScreen` | REQ-SEC-013 | RoleGrantService.java:242-244 |
+| NEW | `SEC-409-NO-SCREEN-GRANT` | 409 | action grant without the role's screen grant | RULE-SEC-002, REQ-SEC-014 | RoleActionGrantDomain.java:46-47 |
+| NEW | `SEC-409-NO-VIEW-GRANT` | 409 | non-VIEW action grant without the role's VIEW grant on that screen (blocking — §2) | RULE-SEC-007, REQ-SEC-030 | RoleActionGrantDomain.java:49-50 |
+| NEW | `SEC-404-ACTION` | 404 | unknown action id on `grantAction` | REQ-SEC-014 | RoleGrantService.java:275-277 |
+| NEW | `SEC-409-MODULE-DUP` | 409 | module code already registered | REQ-SEC-016 | ModuleRegistryDomain; RegistryService.java:76-77 |
+| NEW | `SEC-409-MODULE-NOT-REGISTERED` | 409 | screen registered under a module code that is not registered | RULE-SEC-004, REQ-SEC-018 | ScreenRegistryDomain; RegistryService.java:90-95 |
+| NEW | `SEC-409-SCREEN-DUP` | 409 | page code already registered | REQ-SEC-017 | ScreenRegistryDomain |
+| NEW | `SEC-409-SCREEN-NOT-REGISTERED` | 409 | action registered under a page code that is not registered (§2 NEW rule, no RULE id) | REQ-SEC-019 | ActionRegistryDomain.java:34-36 |
+| NEW | `SEC-409-ACTION-DUP` | 409 | derived permission code already registered | REQ-SEC-019 | ActionRegistryDomain.java:38 |
+| NEW | `SEC-409-RESET-TOKEN-INVALID` | 409 | reset completion (both realms) with an unknown, expired, used or other-realm token | RULE-SEC-006, REQ-SEC-008 | PasswordResetService.java:120-127; CustomerAccountService.java:248-251 |
+| NEW | `SEC-409-SIGNUP-DUP` | 409 | sign-up with an e-mail that is already pending or registered | REQ-SEC-003 | SignupRequestDomain |
+| NEW | `SEC-404-SESSION` | 404 | unknown — or customer — session id on terminate | REQ-SEC-028 | SessionService.java:158-160 |
+| NEW | `SEC-409-ALREADY-TERMINATED` | 409 | terminating a session that is already terminated (never on logout) | REQ-SEC-028 | ActiveSessionDomain.java:33-37 |
+| NEW | `SEC-403-FORBIDDEN` | 403 | a `@PreAuthorize` denial on any SEC service (`SecForbiddenAdvisor`); a chain-level denial (`SecSecurityErrorHandler`); `POST /sec/users` with `roleIds` by a caller without `PERM_SEC_USERS_UPDATE` | REQ-SEC-033, RULE-SEC-007 | SecForbiddenAdvisor.java:40-42; SecSecurityErrorHandler.java:36-40; UserService.java:307-308 |
+| NEW | `SEC-400-INVALID-SORT` | 400 | an unrecognised `sortField` on any SEC search (users, roles, registry, sign-up requests, sessions, audit log) | search contract | SecSearchSupport.assertSortAllowed |
+| NEW | `REALM_MISMATCH` | 403 | token of the other realm on a chain's non-public path | realm rule (§2) | RealmEnforcementFilter; docs/api-docs/sec/index.md |
+| NEW | `CUSTOMER_EMAIL_TAKEN` | 409 | customer registration with an e-mail already holding a customer account in the tenant | customer registration (§2) | UserDomain.java:76-78 |
+| NEW | `CUSTOMER_NOT_VERIFIED` | 403 | customer login before verification | customer verification (§2) | UserDomain.java:118-121 |
+| NEW | `VERIFY_TOKEN_INVALID` | 409 | unknown, expired or used verification token | customer verification (§2) | CustomerVerifyTokenDomain |
+| NEW | `CUSTOMER_LOGIN_RATE_LIMITED` | 429 | customer login over the limit (`Status.TOO_MANY_REQUESTS`) | rate limit (§2) | CustomerAccountService.java:179-182; DEVIATIONS [06] |
+| NEW | `UNSUPPORTED_FILTER_OPERATOR` (common code, surfaced on SEC paths) | 400 | sessions search: an operator other than EQUALS / NOT_EQUALS / LIKE on the `username` filter | REQ-SEC-027 | SessionService.java:131-135 |
+| NEW | `TENANT_REQUIRED` / `TENANT_NOT_FOUND` / `TENANT_SUSPENDED` (tenant module, surfaced on SEC paths) | 400 / 404 / 403 | missing / unknown / suspended tenant | tenant confinement (§2) | docs/api-docs/tenant/index.md |
+| NEW | `CONCURRENT_MODIFICATION` (common code) | 409 | optimistic-lock conflict | — | DEVIATIONS [05] |
+| NEW | `NOT_FOUND` (common code, 1.2.0) | 404 | unknown path (was 500) | — | CHANGELOG [1.2.0] |
 
 ### 4. Permissions (exact authority strings)
-| Kind | Authority | Screen / meaning | Source |
-|---|---|---|---|
-| unchanged (now code-defined in `SecPermissions`) | `PERM_SEC_USERS_VIEW`, `PERM_SEC_USERS_CREATE`, `PERM_SEC_USERS_UPDATE`, `PERM_SEC_ROLES_VIEW`, `PERM_SEC_ROLES_CREATE`, `PERM_SEC_ROLES_UPDATE`, `PERM_SEC_ROLES_DELETE`, `PERM_SEC_MODULE_REGISTRY_VIEW`, `PERM_SEC_MODULE_REGISTRY_UPDATE`, `PERM_SEC_DASHBOARD_VIEW`, `PERM_SEC_AUDIT_LOG_VIEW`, `PERM_SEC_SESSIONS_VIEW`, `PERM_SEC_SESSIONS_DELETE` | SEC screens of the access summary above | erp-core/src/main/java/com/erp/sec/permission/SecPermissions.java |
-| NEW | `ROLE_CUSTOMER` | the only authority of a CUSTOMER principal (not a catalog row) | same |
-| NEW | `SEC:REPORT:SEC_USER_LIST` + gateway `PERM_SEC_REPORTS_VIEW` (screen `SEC_REPORTS`) | users report | DEVIATIONS [11] |
-| REMOVED | 30 `PERM_FIN_*` constants (`PermissionConstants` deleted in step 06) | `fin` module deleted | docs/steps/01-report.md |
-| CHANGED | authority format stays `PERM_<SCREEN>_<ACTION>` (the step file's `module:screen:action` was not adopted, per its "keep the existing format" rule) | — | DEVIATIONS [06] |
+| Kind | Authority / item | Screen / meaning | Delta | Source |
+|---|---|---|---|---|
+| CHANGED | `PERM_SEC_USERS_VIEW`, `PERM_SEC_USERS_CREATE`, `PERM_SEC_USERS_UPDATE`, `PERM_SEC_ROLES_VIEW`, `PERM_SEC_ROLES_CREATE`, `PERM_SEC_ROLES_UPDATE`, `PERM_SEC_MODULE_REGISTRY_VIEW`, `PERM_SEC_DASHBOARD_VIEW`, `PERM_SEC_AUDIT_LOG_VIEW`, `PERM_SEC_SESSIONS_VIEW`, `PERM_SEC_SESSIONS_DELETE` | the SEC screens of the access summary above | the codes are the analysed ones; the catalog is now defined in code (`SecPermissions`, a `PermissionContributor`) and upserted into `SEC_*_REG` at startup instead of being seeded by hand (V7's rows are reproduced identically); which endpoint each gates is in §1 (`PERM_SEC_AUDIT_LOG_VIEW` covers search and export; `PERM_SEC_DASHBOARD_VIEW` is a gateway with per-widget permissions on top); `SEC_LOGIN`, `SEC_SIGNUP`, `SEC_PWD_RESET` are registered with no action | sec/permission/SecPermissions.java; docs/steps/06-report.md |
+| CHANGED | `PERM_SEC_ROLES_DELETE` | `SEC_ROLES` — analysed as "DELETE (deactivate role)" | registered (V7, `SecPermissions`: "reserved") and granted to `SYS_ADMIN`, but consumed by no gate: role deactivate is NOT IMPLEMENTED (ADR-SEC-038) | SecPermissions.java:31-32; V7:81, 101 |
+| CHANGED | `PERM_SEC_MODULE_REGISTRY_UPDATE` | `SEC_MODULE_REGISTRY` — analysed as "UPDATE (deactivate only)" | gates the three registration endpoints (`POST /registry/modules`, `/screens`, `/actions`); registry-row deactivate is NOT IMPLEMENTED — ADR-SEC-067 | SecPermissions.java:35-36; sec/service/RegistryService.java:73, 88, 110; V7:83 |
+| CHANGED | screen labels | `SEC_SIGNUP`, `SEC_PWD_RESET`, `SEC_MODULE_REGISTRY`, `SEC_DASHBOARD`, `SEC_SESSIONS` | as built: `SEC_SIGNUP` ar "إنشاء حساب" (analysis "التسجيل الذاتي"); `SEC_PWD_RESET` ar "إعادة تعيين كلمة المرور" (analysis "نسيت/إعادة تعيين كلمة المرور"); `SEC_MODULE_REGISTRY` ar "سجل الوحدات والشاشات والإجراءات" (analysis "سجل الوحدة/الشاشة/الإجراء"); `SEC_DASHBOARD` ar "لوحة تحكم المشرف" (analysis "لوحة تحكم الأمان"); `SEC_SESSIONS` ar "الجلسات النشطة" / en "Active sessions" (analysis "إدارة الجلسات النشطة / Active sessions management"). The other four screens carry the analysed names. | SecPermissions.java:54-67; V7:55-63 |
+| NEW | `ROLE_CUSTOMER` | the only authority of a CUSTOMER principal (not a catalog row) | — | SecPermissions.java:46-52 |
+| NEW | `SEC:REPORT:SEC_USER_LIST` + gateway `PERM_SEC_REPORTS_VIEW` (screen `SEC_REPORTS`) | users report | contributed by `ReportPermissions` from the registry, no migration | DEVIATIONS [11] |
+| NEW | roles `SYS_ADMIN`, `CU_ADMIN`, `NOTIF_ADMIN`, `FILE_ADMIN` | seeded in the PLATFORM tenant by V7 and copied to every new tenant by provisioning | the analysis names only the bootstrap `SYS_ADMIN`. V7: `SYS_ADMIN` holds all 5 modules (super role since V11), each `<MOD>_ADMIN` its own module — 8 module grants, 20 screen grants (every granted screen carrying an action), 59 action grants | V7:141-200; sec/tenant/SecTenantProvisioningContributor.java:16 |
+| NEW | the other modules' rows in the SEC registry | `MDL`, `CU`, `NOTIF`, `FILE`, `PLATFORM` | V7 / V10 / V12 seed (reproduced by the synchroniser from each module's contributor): MDL 2 screens (`MDL_LOOKUPS`, `MDL_TYPE_REGISTRY`) / 4 actions (`PERM_MDL_LOOKUPS_VIEW` / `_CREATE` / `_UPDATE`, `PERM_MDL_TYPE_REGISTRY_VIEW`) → `SYS_ADMIN`; CU 1 holder screen (`CU_CONFIGURATIONS`) / 4 actions `CONFIG_VIEW` / `CONFIG_CREATE` / `CONFIG_UPDATE` / `CONFIG_DEACTIVATE` (custom action code `DEACTIVATE`, codes not `PERM_*`) → `SYS_ADMIN`, `CU_ADMIN`; NOTIF 3 screens (`NOTIF_TEMPLATES`, `NOTIF_CHANNELS`, `NOTIF_LOG`) / 9 actions → `SYS_ADMIN`, `NOTIF_ADMIN`; FILE 2 screens (`FILE_CATEGORIES`, `FILE_BROWSER`) / 8 actions + `FILE:DOCUMENT:PUBLISH` (V12 §3, action code `PUBLISH`) → `SYS_ADMIN`, `FILE_ADMIN`; PLATFORM 1 screen (`PLATFORM_TENANTS`) / 2 actions (`PERM_PLATFORM_TENANTS_VIEW`, `PLATFORM_TENANT_MANAGE`) → the PLATFORM tenant's `SYS_ADMIN` only (V10 §6). Later code-only rows (sequence, settings, audit, reports) have no seed. | V7:31-139; V10:206-243; V12:57-67 |
+| NEW | `PermissionCatalogSynchronizer` behaviour | startup, as PLATFORM, one transaction | inserts missing module / screen / action rows; renames an existing row only when its contributor declares different bilingual names; never deletes a row, never toggles `IS_ACTIVE_FL`, never moves a screen to another module (warns instead); logs an error for an incomplete or doubly-contributed permission; warns for every screen that contributes permissions but no `VIEW` action (RULE-SEC-007 — its other actions could never become effective) | sec/service/PermissionCatalogSynchronizer.java:102-220; docs/steps/06-report.md |
+| REMOVED | 30 `PERM_FIN_*` constants (`PermissionConstants` deleted in step 06) | `fin` module deleted | — | docs/steps/01-report.md |
+| CHANGED | authority format | — | stays `PERM_<SCREEN>_<ACTION>` (the step file's `module:screen:action` was not adopted, per its "keep the existing format" rule); a contributor may declare an explicit authority instead (`CONFIG_*`, `PLATFORM_*`, `FILE:DOCUMENT:PUBLISH`, `AUDIT:EVENT:READ`, `<MODULE>:REPORT:<CODE>`) | DEVIATIONS [06] |
 
 ### 5. Entities, fields, lifecycle
 | Kind | Item | Delta | Source |
 |---|---|---|---|
-| CHANGED | ENT-SEC-001 User | + `realm` (STAFF / CUSTOMER), + `tenantId`, + `version`; `username` / `email` unique per (tenant, realm). Analysis said "unique" (global); implemented per (tenant, realm) because steps 05 and 06 scope users by tenant and realm. | V10, V11 |
-| CHANGED | ENT-SEC-002 Role | + `isSuper`, + `tenantId`, + `version`; `code` unique per tenant | V10, V11 |
-| CHANGED | ENT-SEC-003, 007..013 | + `tenantId`, + `version`; the 8 rows the analysis kept without audit fields now carry nullable `createdBy/At`, `updatedBy/At` (backfilled from their own lifecycle columns) | V10 §4; DEVIATIONS [05] |
-| CHANGED | ENT-SEC-004..006 (registries) | global (no tenant), + `version`; rows upserted from code at startup | V10 §3; docs/steps/06-report.md |
+| CHANGED | primary keys of all 13 analysed tables | `BIGINT NOT NULL` fed by one named sequence per table — `SEQ_SEC_USER`, `SEQ_SEC_ROLE`, `SEQ_SEC_USER_ROLE`, `SEQ_SEC_MODULE_REG`, `SEQ_SEC_SCREEN_REG`, `SEQ_SEC_ACTION_REG`, `SEQ_SEC_ROLE_MODULE_GRANT`, `SEQ_SEC_ROLE_SCREEN_GRANT`, `SEQ_SEC_ROLE_ACTION_GRANT`, `SEQ_SEC_ACTIVE_SESSION`, `SEQ_SEC_AUDIT_LOG`, `SEQ_SEC_PWD_RESET_TOKEN`, `SEQ_SEC_SIGNUP_REQUEST` (`START WITH 1 INCREMENT BY 1 CACHE 1 NO CYCLE`), mapped with `@SequenceGenerator(allocationSize = 1)`; no `GENERATED ALWAYS AS IDENTITY` anywhere (the db-script's §3 BLOCK 1 "none: IDENTITY" was never implemented). `SEC_CUSTOMER_VERIFY_TOKEN` is the 14th (`SEQ_SEC_CUSTOMER_VERIFY_TOKEN`). ADR-SEC-068 (ADR-SEC-035 was the v2-only statement of the same decision). | V4:17-31; V11:64; sec/entity/*.java (`@SequenceGenerator`); docs/steps/04-report.md |
+| CHANGED | ENT-SEC-001 User | + `realm` (STAFF / CUSTOMER, immutable), + `tenantId`, + `version`; `username` / `email` unique per (tenant, realm). Analysis said "unique" (global); implemented per (tenant, realm) because steps 05 and 06 scope users by tenant and realm. `username` is immutable after creation (the update mapper skips it); `passwordHash` and `lastLoginAt` are excluded from `@Audited`. | V10, V11; sec/entity/User.java:32, 100-104; sec/mapper/UserMapper.java:60-67 |
+| CHANGED | ENT-SEC-002 Role | + `isSuper`, + `tenantId`, + `version`; `code` unique per tenant, trimmed and upper-cased on persist / update, immutable after creation | V10, V11; sec/entity/Role.java:80-97; sec/mapper/RoleMapper.java:34-42 |
+| CHANGED | ENT-SEC-003, 007..013 | + `tenantId`, + `version`; the 8 rows the analysis kept without audit fields now carry nullable `createdBy/At`, `updatedBy/At` (backfilled from their own lifecycle columns), so every SEC entity extends `AuditableEntity` | V10 §4; DEVIATIONS [05] |
+| CHANGED | ENT-SEC-004..006 (registries) | global (no tenant), + `version`; rows upserted from code at startup; `CODE` / `PAGE_CODE` / `PERMISSION_CODE` trimmed and upper-cased on persist / update; `IS_ACTIVE_FL` is never toggled by any API | V10 §3; sec/entity/ModuleRegistry.java:72-81; docs/steps/06-report.md |
+| CHANGED | ENT-SEC-010 ActiveSession | `tokenRef` (DBF-SEC-077) is the access token's `jti` — a random UUID per login — and the only key by which the filter and logout resolve a session; `lastActivityAt` (DBF-SEC-079) is written at insert and never refreshed; customer logins also create rows (realm through `USER_ID`), hidden from the staff session API; `terminatedBy` is the acting principal (`SYSTEM` for reset-driven terminations) | sec/service/AuthService.java:95-103, 174-187; sec/entity/ActiveSession.java:59-92; sec/service/SessionService.java:103-107 |
+| CHANGED | ENT-SEC-012 PasswordResetToken | `tokenHash` (DBF-SEC-093) is the SHA-256 hex of a random UUID (the raw value exists only in the mail); 30-minute window; one table for both realms, the owner's realm checked at completion | sec/entity/PasswordResetToken.java:46-89; sec/service/PasswordResetService.java:187-192 |
 | NEW | CustomerVerifyToken | `userId`, `tokenHash`, `expiresAt`, `usedAt` (tenant-scoped) | V11 §5 |
 | CHANGED | USER_STATUS | + `PENDING_VERIFICATION` | V11 §3 |
-| CHANGED | A7 User lifecycle | added: (customer register) → `PENDING_VERIFICATION` → (verify, or customer reset completion) → `ACTIVE`; bootstrap `admin` `PENDING` → `ACTIVE` by the bootstrap runner. A staff administrator can no longer move a customer through DISABLED → ACTIVE (that bypassed verification). | DEVIATIONS [06], [04], [14] |
+| CHANGED | A7 User lifecycle | added: (customer register) → `PENDING_VERIFICATION` → (verify, or customer reset completion) → `ACTIVE`; bootstrap `admin` `PENDING` → `ACTIVE` by the bootstrap runner; a directly created or approved user starts `ACTIVE`. A staff administrator can no longer move a customer through DISABLED → ACTIVE (that bypassed verification). | sec/mapper/UserMapper.java:20-36; DEVIATIONS [06], [04], [14] |
 
 ### 6. Dependencies (A8) — deltas
-| Direction | Item | Source |
+| Kind | Direction | Item | Source |
+|---|---|---|---|
+| NEW | consumed | tenant: `CORE_TENANT` (FK of every `TENANT_ID`), `TenantContext`, provisioning SPI (`TenantProvisioningContributor`, SEC order 0) | docs/steps/05-report.md |
+| CHANGED | consumed | NOTIF `NotificationDispatchApi.dispatchIndependently` (in-core, best effort, `REQUIRES_NEW`): templates `PASSWORD_RESET` (V9, staff), `CUSTOMER_VERIFY_EMAIL` and `CUSTOMER_PASSWORD_RESET` (V11 §6, customers); links built from `erp.core.frontend.base-url` + `password-reset-path` / `customer-verify-path` / `customer-password-reset-path`; the analysis had "Notifications (ready, external), SOFT / optional" | sec/service/PasswordResetService.java:224-268; sec/service/CustomerAccountService.java; DEVIATIONS [06] |
+| NEW | consumed | audit `AuditApi` (LOGIN / LOGOUT / PASSWORD_RESET), `@Audited` on User and Role; report `ReportProvider` (`SecUserListReport`) | DEVIATIONS [10], [11] |
+| CHANGED | exposed | `SecUserDirectoryApi`: `findContact` (REQ-SEC-034) is realm-neutral and reports `active` for ACTIVE or `PENDING_VERIFICATION`; `findUserIdsHoldingPermission` (REQ-SEC-035) has no consumer since FIN's removal; `findCurrentUserId()` NEW (NOTIF inbox; resolves the caller in its own realm) | sec/service/UserService.java:242-290; DEVIATIONS [08], [14] |
+| NEW | exposed | `com.erp.sec.crossmodule.SecModuleRegistryApi.isModuleActive(moduleCode)` — true when an active `SEC_MODULE_REG` row exists; consumed by MDL `LookupTypeService.create` for RULE-MDL-001 (XM-MDL-001). A8's amendment names "one read-only inbound surface"; as built there are two | sec/crossmodule/SecModuleRegistryApi.java:14-21; sec/crossmodule/SecModuleRegistryApiImpl.java:37-38; mdl/service/LookupTypeService.java:68, 80 |
+| NEW | exposed | permission SPI `com.erp.sec.permission.*` (`PermissionContributor`, `PermissionDef`, `PermissionModule`, `PermissionScreen`) for every module | docs/steps/06-report.md |
+| NEW | internal | `InternalCallerContext` — installs a synthetic principal `internal` carrying the single authority `INTERNAL_TRUSTED_CALLER` for one in-process call (the anonymous reset request calling NOTIF's `isAuthenticated()` surface) and restores the previous context; the filter strips that authority from every request, so no client can hold it | sec/security/InternalCallerContext.java; sec/security/JwtAuthenticationFilter.java:181-186 |
+| NEW | dev only | `DevPasswordResetSupportService` (`@Profile("dev")`, `isAuthenticated()`) mints a usable reset token for an e-mail — same entity, hashing and 30-minute window as the real flow — without mail, event or audit row; its endpoint `POST /api/v1/sec/dev/password-reset-token` lives in `erp-app-reference` (`com.erp.app.dev.DevPasswordResetController`, dev profile only) and is not part of the SEC contract | sec/service/DevPasswordResetSupportService.java; erp-app-reference/src/main/java/com/erp/app/dev/DevPasswordResetController.java:30-39 |
+| CHANGED | events | publishes `UserCreatedEvent` (create, sign-up approval; not for the provisioned tenant administrator), `UserStatusChangedEvent` (deactivate / reactivate), `PasswordResetRequestedEvent` (staff reset request only — a customer reset request publishes nothing), `CustomerRegisteredEvent`, `CustomerVerifiedEvent` (the verify endpoint only — not when a customer reset completion verifies the account). SEC consumes no event. | sec/service/*.java; DEVIATIONS [08] |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package G — revoke a single screen or action grant (closes D7 of `docs/plans/tenant-maturity-plan.md`)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Gap closed. ENT-SEC-008 and ENT-SEC-009 (§A3) list "delete (revoke)" among their operations, and the
+AUDIT_EVENT_TYPE lookup (§A6) carries `SCREEN_REVOKED` and `ACTION_REVOKED`, but SCR-REQ-SEC-005 B5
+listed only the module revoke, so no endpoint ever deleted one screen or one action grant: taking a
+single screen away meant revoking the whole module and granting the rest again. The ids below
+continue the module's sequence from the highest number ever issued, not the highest in this file: the
+pre-vendoring SEC analysis (`governance-shared`, v1 and v2) issued up to REQ-SEC-079, AC-SEC-085 and RULE-SEC-053,
+and some of those ids are still cited in code (e.g. REQ-SEC-036 / AC-SEC-036 for logout in `AuthService` and
+`SecLogoutIntegrationTest`), so this addendum starts at REQ-SEC-080, AC-SEC-086, RULE-SEC-054. No ENT, DBF or
+lookup value is added, and there is **no schema change and no migration**: both grant tables, their
+`SEQ_*`/`UQ_*`/`FK_*` objects and the `CHK_SEC_AUDIT_LOG_EVENT_TYPE` value set (V4__sec_schema.sql)
+already hold everything this addendum needs.
+
+### 1. Requirements (§A4) — NEW
+
+### REQ-SEC-080 — سحب منح شاشة من دور / Revoke a screen grant from a role
+Pattern    : event
+Statement  : When an administrator revokes a role's screen grant, the system shall delete that screen grant and every action grant that role holds on that screen, in one transaction.
+Traces     : US-SEC-005
+Entities   : ENT-SEC-002, ENT-SEC-008, ENT-SEC-009
+Rationale  : RULE-SEC-054; the screen-level counterpart of REQ-SEC-015 — an action grant never outlives its screen grant (RULE-SEC-002 read in reverse, POL-SEC-002)
+Source     : docs/plans/tenant-maturity-plan.md §0 D7, §8b
+Priority   : HIGH
+#### AC-SEC-086 — [REQ-SEC-080]
+Given a role holding a screen grant and three action grants on that screen (VIEW, CREATE, UPDATE)
+When an administrator revokes that screen grant
+Then the system deletes the screen grant and the three action grants, answers `revokedActionGrants = 3`, appends one `SCREEN_REVOKED` and three `ACTION_REVOKED` SEC audit-log entries (N + 1 = 4), and leaves the role's module grant and every other screen's grants untouched
+
+### REQ-SEC-081 — سحب منح إجراء من دور / Revoke an action grant from a role
+Pattern    : event
+Statement  : When an administrator revokes a role's action grant, the system shall delete that action grant; where the revoked action is the screen's VIEW gateway action, the system shall also delete every other action grant that role holds on the same screen.
+Traces     : US-SEC-005
+Entities   : ENT-SEC-002, ENT-SEC-006, ENT-SEC-009
+Rationale  : RULE-SEC-055, the inverse of RULE-SEC-007: without VIEW the screen's other action grants have no effect (REQ-SEC-030), so leaving them would keep dormant grants that silently come back the day VIEW is granted again — ADR-SEC-062
+Source     : docs/plans/tenant-maturity-plan.md §0 D7, §8b, §9 (plan name ADR-SEC-041)
+Priority   : HIGH
+#### AC-SEC-087 — [REQ-SEC-081]
+Given a role holding VIEW, CREATE and UPDATE on one screen
+When an administrator revokes the CREATE action grant
+Then the system deletes exactly that grant, answers `revokedActionGrants = 1` and appends one `ACTION_REVOKED` entry;
+and when the administrator then revokes the VIEW action grant
+Then the system deletes VIEW and UPDATE, answers `revokedActionGrants = 2`, appends two `ACTION_REVOKED` entries, and keeps the role's screen grant (only the action level is revoked)
+
+### 2. Business rules (§A5) — NEW
+
+### RULE-SEC-054 — الإلغاء المتسلسل عند سحب منح الشاشة / Cascade revoke on screen-grant removal
+Scope      : ENT-SEC-008
+Trigger    : on delete (screen grant)
+Statement  : The system shall delete every action grant of that screen for that role when its screen grant is revoked.
+Data source: ENT-SEC-009 (the role's action grants) · ENT-SEC-006 (the screen each action belongs to)
+Message    : ar: "سيتم سحب كل منح الإجراءات ضمن هذه الشاشة لهذا الدور" · en: "Every action grant under this screen for this role will be revoked"
+Traces     : REQ-SEC-080
+Source     : docs/plans/tenant-maturity-plan.md §8b
+Decided by : `RoleScreenGrantDomain` (the cascade set), not the service
+
+### RULE-SEC-055 — سحب العرض (VIEW) يسحب بقية إجراءات الشاشة / Revoking VIEW cascades the screen's other action grants
+Scope      : ENT-SEC-009
+Trigger    : on delete (action grant whose action code is the gateway `VIEW`)
+Statement  : The system shall delete every other action grant that role holds on the same screen when the role's VIEW action grant on that screen is revoked; revoking any other action deletes that action grant only.
+Data source: ENT-SEC-009 (the role's action grants on that screen) · ENT-SEC-006 (which registered action is VIEW, and the screen it belongs to)
+Message    : ar: "سحب إجراء العرض (VIEW) يسحب بقية إجراءات هذه الشاشة لهذا الدور" · en: "Revoking VIEW also revokes this role's other actions on this screen"
+Traces     : REQ-SEC-081
+Source     : docs/plans/tenant-maturity-plan.md §8b; ADR-SEC-062
+Decided by : `RoleActionGrantDomain` (the gateway test `isGatewayAction` and the cascade set), not the service
+
+### 3. SCR-REQ-SEC-005 — CHANGED
+| Kind | Item | Delta |
 |---|---|---|
-| consumed | tenant: `CORE_TENANT` (FK of every `TENANT_ID`), `TenantContext`, provisioning SPI | docs/steps/05-report.md |
-| consumed | NOTIF `NotificationDispatchApi` (in-core, best effort, `dispatchIndependently`) | DEVIATIONS [06] |
-| consumed | audit `AuditApi`, `@Audited`; report `ReportProvider` | DEVIATIONS [10], [11] |
-| exposed | `SecUserDirectoryApi.findCurrentUserId()` NEW (NOTIF inbox); `findUserIdsHoldingPermission` (REQ-SEC-035) has no consumer since FIN's removal; `findContact` (REQ-SEC-034) is realm-neutral (customers receive notifications) | DEVIATIONS [08], [14] |
-| exposed | permission SPI `com.erp.sec.permission.*` for every module | docs/steps/06-report.md |
+| CHANGED | B1 Traces | + REQ-SEC-080, REQ-SEC-081 |
+| CHANGED | B3 Input | Unchecking a **screen** in the grant tree revokes that screen grant (REQ-SEC-080 / RULE-SEC-054: its action grants cascade). Unchecking an **action** revokes that action grant (REQ-SEC-081); unchecking the screen's **VIEW** action cascades the screen's other action grants (RULE-SEC-055). The response count lets the client name what went. |
+| unchanged | B4 Access | both revokes are grant-tree edits under UPDATE (`PERM_SEC_ROLES_UPDATE`) |
+
+B5 — API expectations, two rows added (the six existing rows are unchanged):
+| Operation | Verb | Path | Inputs | Outputs | RULEs | Traces (REQ) |
+|---|---|---|---|---|---|---|
+| revoke screen | DELETE | /api/v1/sec/roles/{id}/screens/{screenId} | — | confirmation (cascade count) | RULE-SEC-054 | REQ-SEC-080 |
+| revoke action | DELETE | /api/v1/sec/roles/{id}/actions/{actionId} | — | confirmation (cascade count) | RULE-SEC-055 | REQ-SEC-081 |
+
+### 4. Endpoints
+| Kind | Method | Path | Permission | Response (200, `ApiResponse<T>`) | Errors (HTTP · code) | Notes |
+|---|---|---|---|---|---|---|
+| NEW | DELETE | `/api/v1/sec/roles/{id}/screens/{screenId}` | `PERM_SEC_ROLES_UPDATE` | `ScreenGrantRevokeResponse { int revokedActionGrants }` — the action grants RULE-SEC-054 removed with the screen grant | 404 · `SEC-404-ROLE` (no role `{id}` in the caller's tenant — another tenant's role answers the same); 404 · `SEC-404-GRANT` (the role holds no grant for `{screenId}`, an unknown screen id included); 403 · `SEC-403-FORBIDDEN` (caller lacks the permission); 401 · `SEC-401-INVALID-CREDENTIALS` (no or invalid token) | `{screenId}` is the registry id `screenRegPk`, as in `POST /screens`. One transaction: the screen grant and its action grants. 200 with a body, not 204 — same reason as the module revoke (the cascade count). |
+| NEW | DELETE | `/api/v1/sec/roles/{id}/actions/{actionId}` | `PERM_SEC_ROLES_UPDATE` | `ActionGrantRevokeResponse { int revokedActionGrants }` — **every** action grant this call removed, the requested one included: `1` for a non-VIEW action, `1 + N` when the action is VIEW and the role held N other actions on that screen | 404 · `SEC-404-ROLE`; 404 · `SEC-404-GRANT` (the role holds no grant for `{actionId}`, an unknown action id included); 403 · `SEC-403-FORBIDDEN`; 401 · `SEC-401-INVALID-CREDENTIALS` | `{actionId}` is the registry id `actionRegPk`, as in `POST /actions`. One transaction. The role's screen grant is kept even when VIEW goes. |
+| unchanged | DELETE | `/api/v1/sec/roles/{id}/modules/{moduleId}` | `PERM_SEC_ROLES_UPDATE` | `ModuleGrantRevokeResponse` | 404 · `SEC-404-GRANT` | RULE-SEC-003 cascade exactly as before (no role pre-check added to it) |
+
+Order of checks on both new endpoints: role (`SEC-404-ROLE`) → grant (`SEC-404-GRANT`) → cascade
+decided by the Domain object → delete → audit. No new error code: `SEC-404-ROLE` and `SEC-404-GRANT`
+already exist in `SecErrorCodes` and in both message bundles (`messages.properties`,
+`messages_ar.properties`). Revoking from an inactive role is allowed (revoking only narrows access).
+
+### 5. Audit
+| Endpoint | SEC_AUDIT_LOG rows (`eventTypeCode`, `targetRef`) |
+|---|---|
+| revoke screen | one `ACTION_REVOKED` (`<roleId>/<actionRegPk>`) per cascaded action grant, then one `SCREEN_REVOKED` (`<roleId>/<screenRegPk>`) — N + 1 rows, the `revokeModule` pattern |
+| revoke action | one `ACTION_REVOKED` (`<roleId>/<actionRegPk>`) for the requested grant and one per action grant RULE-SEC-055 cascaded — `revokedActionGrants` rows |
+
+Both codes are already in the catalogue: §A6 AUDIT_EVENT_TYPE (rows `SCREEN_REVOKED`, `ACTION_REVOKED`),
+`module-registry-sec.md` AUTO-DECISIONS, and the `CHK_SEC_AUDIT_LOG_EVENT_TYPE` constraint of
+`V4__sec_schema.sql` (§5c); `RoleGrantService` already declares both constants for the module cascade.
+Actor = the calling user (`SEC_AUDIT_LOG.ACTOR_ID`), details bilingual. Grants are not `@Audited`
+entities, so nothing is written to `CORE_AUDIT_EVENT` (unchanged from 1.2.0).
+
+### 6. Behaviour notes (verified in code)
+| Kind | Note | Source |
+|---|---|---|
+| NEW (note) | **Sessions are not terminated.** A revoke takes effect on the role's users' next request: `JwtAuthenticationFilter.authenticate` re-reads the caller's authorities on every authenticated request through `MenuService.effectiveAuthorityCodes()` (QR-SEC-027, `RoleActionGrantRepository.findEffectiveGrantsForUser`), and the menu is read live by `MenuService` on each `GET /api/v1/sec/menu`. Nothing is cached in the token. | erp-core/src/main/java/com/erp/sec/security/JwtAuthenticationFilter.java (`authenticate`); erp-core/src/main/java/com/erp/sec/service/MenuService.java |
+| NEW (note) | **A super role keeps every authority.** For a role with `IS_SUPER = TRUE` (every tenant's `SYS_ADMIN`), `MenuService.withSuperRole` adds every active catalog authority on top of the grants (`RoleRepository.holdsActiveSuperRole`), so revoking its screen or action grants removes no authority; only its navigation menu changes, because the menu is built from grants (`ScreenRegistryRepository.findEffectiveScreensForUser`). Administrators find this surprising; the frontend shows it as a hint (F4). | MenuService.java (`withSuperRole`, `effectiveAuthorityCodes`); this file's 1.2.0 addendum §2 "Super role"; docs/steps/06-report.md "Super role" |
+| NEW (note) | The cascade decisions live on the Domain objects: `RoleScreenGrantDomain.cascadeOnRevoke(...)` (RULE-SEC-054) and `RoleActionGrantDomain.cascadeOnRevoke(...)` (RULE-SEC-055, gateway test `isGatewayAction`). The service loads the facts, asks the Domain object, deletes and audits. | build-create-entity "Domain Companion Object" |
+| NEW (note) | **After a VIEW revoke the screen stays in the menu.** RULE-SEC-055 keeps the screen grant, and the menu is built from module and screen grants alone (`ScreenRegistryRepository.findEffectiveScreensForUser`, QR-SEC-027's menu shape), so `GET /api/v1/sec/menu` still lists the screen while every endpoint behind it answers 403 (no VIEW, RULE-SEC-007). To remove the menu entry, revoke the screen (`DELETE /roles/{id}/screens/{screenId}`), not only its VIEW. | erp-core/src/main/java/com/erp/sec/repository/ScreenRegistryRepository.java (`findEffectiveScreensForUser`); MenuService.java (`menu`) |
+| unchanged | RULE-SEC-003 (module revoke cascade), RULE-SEC-001/002/007 on the grant side | — |
+
+### 7. Decisions
+| Kind | ADR | Decision |
+|---|---|---|
+| NEW | ADR-SEC-062 (plan name ADR-SEC-041; numbers up to 061 were issued historically, `docs/governance-vendoring-report.md` Appendix A) | Revoking VIEW **cascades** the screen's other action grants with a counted response, rather than refusing while other action grants exist — `governance/analysis/decisions/SEC/ADR-SEC-062.md` |
+
+### 8. Frontend impact (read by the frontend repository — plan §8 F4)
+| Kind | Item |
+|---|---|
+| NEW | Two endpoints above, for the grant tree's uncheck of a screen or an action. The screen revoke's confirm dialog can name the cascade from the grant tree (`GET /roles/{id}/grants`) before the call; the response count confirms it after. |
+| NEW | Unchecking VIEW warns that the screen's other actions cascade (RULE-SEC-055), and that the screen stays in the role's menu (its endpoints answer 403) until the screen itself is unchecked (§6). To remove the menu entry, revoke the screen. |
+| NEW | For a role with `isSuper = true`, the tree shows that grants only shape its menu (§6). |
+| unchanged | No new screen, page code, permission or error code. |
+
+### 9. Package D — passwords, profile fields, photo, staff `/me`
+Change         : tenant-maturity plan package D — admin-set password, forced change, own password, profile fields, photo, staff `/me` (plan §6 D.1–D.3; D.4 is FILE's)
+Statement      : Sections 1–8 above (package G) are unchanged; §9–§17 record package D's implemented deltas.
+
+Ids continue from the highest number ever issued (after package G: REQ-SEC-081, AC-SEC-087, RULE-SEC-055,
+DBF-SEC-116, XM-SEC-005, ADR-SEC-062). Package D adds REQ-SEC-082..089, AC-SEC-088..095,
+RULE-SEC-056..062, DBF-SEC-117..123 (`P2/db-script-sec.md` 1.3.0 addendum), XM-SEC-006, ADR-SEC-063 and
+ADR-SEC-064. No ENT is added: the new fields belong to ENT-SEC-001. Migration `V16__sec_user_profile.sql`
+(the plan expected `V19`; the number is re-derived at creation time, plan §1.3 / §11).
+
+#### 9.1 Requirements (§A4) — NEW
+
+### REQ-SEC-082 — سياسة كلمة المرور / Password policy
+Pattern    : ubiquitous
+Statement  : The system shall accept a new STAFF password — on user create, password-reset completion, admin-set, self-change and the first administrator of a new tenant — only when it is `min-length`..`max-length` characters long (defaults 8..72) and at most 72 UTF-8 bytes (BCrypt's limit; review round 1) and, with the default policy, contains at least one letter and one digit; otherwise it shall refuse it with 400 `SEC-400-PASSWORD-POLICY`, naming the offending field.
+Traces     : US-SEC-001, US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-056; one policy in one place (`PasswordPolicy`, `com.erp.sec.domain`), configured by `erp.core.security.password-policy.*`
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Priority   : HIGH
+#### AC-SEC-088 — [REQ-SEC-082]
+Given the default policy
+When an administrator creates a user with password `short1` (6 characters), `abcdefgh` (no digit) or `12345678` (no letter)
+Then the system answers 400 `SEC-400-PASSWORD-POLICY` with `fieldErrors[0].field = password` and creates nothing;
+and with `Passw0rd!Tc1` the user is created;
+and a password of 73 ASCII bytes or of 62 Arabic letters (122 bytes) is refused the same way on every path (create, reset completion, admin-set, own change, tenant first administrator, customer register and reset), while exactly 72 bytes is accepted
+
+### REQ-SEC-083 — تعيين كلمة مرور مستخدم من المسؤول / Administrator sets a staff user's password
+Pattern    : event
+Statement  : When an administrator holding `PERM_SEC_USERS_UPDATE` sets the password of another STAFF user of the tenant, the system shall store the new password's hash, set `passwordChangedAt`, set `passwordChangeRequired` to the request's `requireChangeAtNextLogin` (default TRUE), terminate every open session of that user, record `PASSWORD_SET_BY_ADMIN` in the generic audit log and publish `UserPasswordChangedEvent(userId, byAdmin = true)`.
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001, ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §0 D3; RULE-SEC-057, RULE-SEC-058; ADR-SEC-063
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : HIGH
+#### AC-SEC-089 — [REQ-SEC-083]
+Given a STAFF user U with one open session, and an administrator A of the same tenant
+When A calls `PUT /api/v1/sec/users/{U}/password` with `{ newPassword }` only
+Then the system answers 200 `{ userPk, passwordChangeRequired: true, passwordChangedAt, sessionsTerminated: 1 }`, U's old token answers 401, U can log in with the new password and the login answers `passwordChangeRequired = true`;
+and when A targets their own user id the system answers 422 `SEC-422-PASSWORD-SELF`; a CUSTOMER or unknown id answers 404 `SEC-404-USER`
+
+### REQ-SEC-084 — إلزام تغيير كلمة المرور / Forced password change
+Pattern    : state-driven
+Statement  : While a STAFF user's `passwordChangeRequired` is TRUE, the system shall answer every request of that user's token with 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, except `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password` and `POST /api/v1/sec/auth/logout` (and the public paths).
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-059; enforced server-side, the client only routes (ADR-SEC-063)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 "Forced change enforcement"
+Priority   : HIGH
+#### AC-SEC-090 — [REQ-SEC-084]
+Given a user whose password was set by an administrator with the default `requireChangeAtNextLogin`
+When that user logs in and calls `GET /api/v1/sec/menu`, `GET /api/v1/sec/me` and then `PUT /api/v1/sec/me/password`
+Then the menu call answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, `/me` answers 200 with `passwordChangeRequired = true`, the change answers 200, and the same token then reaches the menu (200)
+
+### REQ-SEC-085 — تغيير المستخدم كلمة مروره / A staff user changes their own password
+Pattern    : event
+Statement  : When an authenticated STAFF user submits their current password and a new one, the system shall verify the current password, store the new hash, set `passwordChangedAt`, clear `passwordChangeRequired`, terminate the user's other open sessions (the calling session stays valid), record `PASSWORD_CHANGED` and publish `UserPasswordChangedEvent(userId, byAdmin = false)`.
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001, ENT-SEC-010
+Rationale  : RULE-SEC-060
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : HIGH
+#### AC-SEC-091 — [REQ-SEC-085]
+Given a STAFF user with two open sessions S1 and S2
+When the user calls `PUT /api/v1/sec/me/password` from S1 with a wrong `currentPassword`
+Then the system answers 403 `SEC-403-PASSWORD-CURRENT-INVALID` and changes nothing;
+and when the user repeats the call with the right current password
+Then the system answers 200 `{ sessionsTerminated: 1, passwordChangeRequired: false }`, S1 keeps working and S2 answers 401
+
+### REQ-SEC-086 — الملف الشخصي للموظف / Staff profile (`/me`)
+Pattern    : event
+Statement  : When an authenticated STAFF user requests their profile, the system shall return their own account fields, profile fields, photo URL, `passwordChangeRequired`, `lastLoginAt` and their tenant's code and names — and never their roles or permissions; when the user patches their profile, the system shall update only the supplied fields among `fullNameAr`, `fullNameEn`, `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`.
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001
+Rationale  : ADR-SEC-064 (ADR-SEC-005: the effective menu stays the only client authority); e-mail and username stay administrator-only (`PUT /users/{id}`)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Priority   : MEDIUM
+#### AC-SEC-092 — [REQ-SEC-086]
+Given a STAFF user
+When the user calls `GET /api/v1/sec/me`
+Then the payload carries `userPk`, `username`, `email`, `fullNameAr/En`, `phone`, `jobTitleAr/En`, `preferredLocale`, `photoUrl`, `passwordChangeRequired`, `lastLoginAt`, `tenant { code, nameAr, nameEn }` and no `roles` / `permissions` key;
+and `PATCH /api/v1/sec/me` with `{ "preferredLocale": "fr" }` answers 400 `VALIDATION_ERROR` (`fieldErrors[0].field = preferredLocale`), with `{ "phone": "+966 50 123 4567" }` answers 200 and changes only the phone
+
+### REQ-SEC-087 — صورة المستخدم / Profile photo
+Pattern    : event
+Statement  : When a STAFF user uploads their own photo, or an administrator holding `PERM_SEC_USERS_UPDATE` uploads the photo of another STAFF user, the system shall store it through FILE's image store as a PUBLIC document with a random slug (owner `SEC_USER` / user id, module `SEC`), point `photoFileId` at it, discard the previous photo document and record `PROFILE_PHOTO_CHANGED`; removing the photo shall discard the document and clear `photoFileId`.
+Traces     : US-SEC-001, US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : RULE-SEC-061; XM-SEC-006; ADR-FILE-008 (public, non-guessable URL)
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2, D.4
+Priority   : MEDIUM
+#### AC-SEC-093 — [REQ-SEC-087]
+Given a STAFF user
+When the user uploads a PNG of 2 KB to `PUT /api/v1/sec/me/photo`
+Then the system answers 200 `{ photoUrl }` and `GET {photoUrl}` (no token) serves the PNG inline;
+and an executable, an SVG or a PNG larger than 1 MB answers 400 `SEC-400-PHOTO-INVALID` and leaves the previous photo in place;
+and a second upload answers a different `photoUrl` while the previous URL answers 404; `DELETE /api/v1/sec/me/photo` answers 204 and `/me.photoUrl` becomes null
+
+### REQ-SEC-088 — حقول الملف الشخصي في إدارة المستخدمين / Profile fields in user management and login
+Pattern    : event
+Statement  : The system shall accept `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` on user create and update (absent = unchanged, empty string = cleared), accept `requireChangeAtNextLogin` on create (default TRUE), return those fields plus `photoUrl`, `passwordChangeRequired` and `passwordChangedAt` on every user-shaped response, and return `passwordChangeRequired` on the staff login response.
+Traces     : US-SEC-002
+Entities   : ENT-SEC-001
+Rationale  : plan §0 D4; RULE-SEC-058, RULE-SEC-062
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 (CHANGED rows)
+Priority   : MEDIUM
+#### AC-SEC-094 — [REQ-SEC-088]
+Given an administrator
+When they create a user without `requireChangeAtNextLogin` and with `preferredLocale = "ar"`, `phone = "+966501234567"`
+Then the response carries those values, `passwordChangeRequired = true` and a `passwordChangedAt`; the new user's login answers `passwordChangeRequired = true`;
+and `PUT /api/v1/sec/users/{id}` with `preferredLocale = "fr"` answers 400 `VALIDATION_ERROR`
+
+### REQ-SEC-089 — إشعار تغيير كلمة المرور / Password-change event
+Pattern    : event
+Statement  : When a STAFF password is set by an administrator or changed by its owner, the system shall publish `UserPasswordChangedEvent(userId, byAdmin)` on the core event bus after commit; NOTIF reacts by e-mailing the user the `STAFF_PASSWORD_CHANGED` template (NOTIF 1.3.0 addendum, RULE-NOTIF-023).
+Traces     : US-SEC-001
+Entities   : ENT-SEC-001
+Rationale  : plan §6 D.3; the event carries ids only, never a password
+Source     : docs/plans/tenant-maturity-plan.md §6 D.3
+Priority   : LOW
+#### AC-SEC-095 — [REQ-SEC-089]
+Given an administrator sets a user's password
+When the transaction commits
+Then exactly one `UserPasswordChangedEvent` with that user's id and `byAdmin = true` is delivered, and a NOTIF log row with template `STAFF_PASSWORD_CHANGED`, channel `EMAIL` and that user as recipient exists; a rolled-back change publishes nothing
+
+#### 9.2 Business rules (§A5) — NEW
+
+### RULE-SEC-056 — سياسة كلمة المرور / Password policy
+Scope      : ENT-SEC-001
+Trigger    : on create / on password change (create, reset completion, admin-set, self-change, tenant first administrator)
+Statement  : A new password shall be `min-length`..`max-length` characters (8..72), at most 72 UTF-8 bytes whatever the characters (BCrypt hashes no more; an Arabic letter takes 2 bytes), and contain at least one letter (`require-letter`) and one digit (`require-digit`); properties `erp.core.security.password-policy.min-length|max-length|require-letter|require-digit`. A configured `max-length` above 72 fails startup (`@Max(72)`, review round 1).
+Data source: the request only
+Message    : ar: "كلمة المرور لا تستوفي سياسة كلمات المرور: من {0} إلى {1} حرفًا وبحد أقصى 72 بايت (الحرف العربي يشغل بايتين)، وتتضمن حرفًا ورقمًا على الأقل لحسابات الموظفين" · en: "The password does not meet the password policy: {0} to {1} characters and at most 72 bytes (a non-Latin letter takes 2 or 3), including at least one letter and one digit for staff accounts"
+Traces     : REQ-SEC-082
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Decided by : `PasswordPolicy` (`com.erp.sec.domain`, built from the properties by the services), error `SEC-400-PASSWORD-POLICY` (400). Not applied to the bootstrap admin password (`erp.core.security.bootstrap-admin-password`, operator configuration) The CUSTOMER realm gets only the byte limit (`PasswordPolicy.CUSTOMER`: 8..72 characters, ≤ 72 bytes, no composition rule; register and reset completion), because a longer password cannot be hashed (review round 1). The request DTOs keep `@Size(max = 200)` as a transport bound, so an over-long password answers this rule's code, not `VALIDATION_ERROR`.
+
+### RULE-SEC-057 — لا يعيّن المسؤول كلمة مروره بنفسه / No admin-set on oneself
+Scope      : ENT-SEC-001
+Trigger    : on admin-set password
+Statement  : The administrator-set endpoint shall refuse the caller's own account; one's own password changes through `PUT /api/v1/sec/me/password`, which asks for the current one.
+Data source: the caller's `SEC_USER` id (principal, STAFF realm) vs the path id
+Message    : ar: "لا يمكنك تعيين كلمة مرورك من هنا؛ استخدم تغيير كلمة المرور الخاصة بك" · en: "You cannot set your own password here; use your own password change"
+Traces     : REQ-SEC-083
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `UserDomain.assertNotSelfForAdminPasswordSet(...)`, error `SEC-422-PASSWORD-SELF` (422, BUSINESS_RULE_VIOLATION)
+
+### RULE-SEC-058 — كلمة مرور يحددها المسؤول تتطلب التغيير / An administrator-chosen password must be changed
+Scope      : ENT-SEC-001
+Trigger    : on create (POST /users) and on admin-set
+Statement  : A password chosen by an administrator marks the account `passwordChangeRequired = TRUE` unless the request says `requireChangeAtNextLogin = false`; only the owner's self-change or a completed password reset clears the flag. Accounts created by tenant provisioning, sign-up approval and the bootstrap runner are not flagged.
+Data source: request `requireChangeAtNextLogin` (null = TRUE)
+Message    : — (state, no message)
+Traces     : REQ-SEC-083, REQ-SEC-088
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2 ("decision row"), §9 (plan ADR-SEC-039)
+Decided by : `UserDomain.passwordChangeRequiredFor(Boolean requested)`; ADR-SEC-063
+
+### RULE-SEC-059 — بوابة تغيير كلمة المرور / Forced-change gate
+Scope      : every STAFF endpoint
+Trigger    : on request (after authentication)
+Statement  : While the caller's `PASSWORD_CHANGE_REQUIRED_FL` is TRUE, only `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password`, `POST /api/v1/sec/auth/logout` and the public paths are served; every other request answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` in the standard error envelope.
+Data source: the `SEC_USER` row `JwtAuthenticationFilter` already loads for the token (no extra query, no token claim)
+Message    : ar: "يجب تغيير كلمة المرور قبل المتابعة" · en: "You must change your password before you continue"
+Traces     : REQ-SEC-084
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `PasswordChangeRequiredFilter` (staff chain, after `RealmEnforcementFilter`), flag carried on the authentication details (`AuthRealm.passwordChangeRequired`); ADR-SEC-063
+
+### RULE-SEC-060 — تغيير كلمة المرور يتطلب الحالية / Self-change needs the current password
+Scope      : ENT-SEC-001, ENT-SEC-010
+Trigger    : on self-change
+Statement  : The current password must match the stored hash; then the new password replaces it, the flag clears, and every other open session of the user is terminated (the calling session stays).
+Data source: ENT-SEC-001.passwordHash; ENT-SEC-010 (open sessions of the user, minus the caller's `tokenRef` = token `jti`)
+Message    : ar: "كلمة المرور الحالية غير صحيحة" · en: "The current password is incorrect"
+Traces     : REQ-SEC-085
+Source     : docs/plans/tenant-maturity-plan.md §6 D.2
+Decided by : `UserDomain.assertCurrentPasswordMatches(...)` on the service's credential check (`PasswordEncoder.matches`, as at login — PLATFORM-STD ADR-SEC-002), error `SEC-403-PASSWORD-CURRENT-INVALID` (403)
+
+### RULE-SEC-061 — صورة المستخدم / Profile photo
+Scope      : ENT-SEC-001
+Trigger    : on photo upload / removal
+Statement  : A profile photo is a PNG, JPEG or WebP image (detected from its bytes, SVG refused) of 1 byte to 1 MB (1 048 576 bytes); a user has at most one photo; replacing or removing it discards the previous document (its public URL answers 404 at once).
+Data source: FILE's image-store validation result (RULE-FILE-008)
+Message    : ar: "يجب أن تكون الصورة بصيغة PNG أو JPEG أو WebP وبحجم لا يتجاوز 1 ميغابايت" · en: "The photo must be a PNG, JPEG or WebP image of at most 1 MB"
+Traces     : REQ-SEC-087
+Source     : docs/plans/tenant-maturity-plan.md §6 D.4
+Decided by : `UserDomain` — `PHOTO_TYPES`, `PHOTO_MAX_BYTES` (handed to FILE's image store) and `assertPhotoAccepted(...)` (a rejection → `SEC-400-PHOTO-INVALID` 400, `fieldErrors[0].field = file`); one Domain object per entity (A.0.7)
+
+### RULE-SEC-062 — اللغة المفضلة / Preferred locale
+Scope      : ENT-SEC-001
+Trigger    : on create / update / patch
+Statement  : `preferredLocale` is `ar`, `en` or empty (none); anything else is refused by validation (400 `VALIDATION_ERROR`) and by `CHK_SEC_USER_LOCALE`.
+Data source: request
+Message    : the shared `{validation.invalid}` message
+Traces     : REQ-SEC-086, REQ-SEC-088
+Source     : docs/plans/tenant-maturity-plan.md §6 D.1
+Decided by : DTO `@Pattern` + database CHECK
+
+#### 9.3 ENT-SEC-001 User — CHANGED (fields)
+| Kind | Field | Logical type | Required | Notes | Label-ar | Label-en |
+|---|---|---|---|---|---|---|
+| NEW | phone | text (≤ 30) | no | E.164-ish: optional `+`, digits, spaces, hyphens, 7..30 characters (`^\+?[0-9][0-9 -]{5,28}[0-9]$`) | الهاتف | Phone |
+| NEW | jobTitleAr / jobTitleEn | text (≤ 150) | no | bilingual like every label | المسمى الوظيفي (عربي/إنجليزي) | Job title (Arabic/English) |
+| NEW | preferredLocale | text (≤ 5) | no | `ar` / `en` (RULE-SEC-062); the frontend applies it at login | اللغة المفضلة | Preferred language |
+| NEW | photoFileId | number | no | soft reference to `FILE_DOCUMENT.ID` (XM-SEC-006), never exposed; clients get `photoUrl` | صورة المستخدم | Photo |
+| NEW | passwordChangeRequired | flag | yes (default FALSE) | RULE-SEC-058/059 | يلزم تغيير كلمة المرور | Password change required |
+| NEW | passwordChangedAt | date-time | no | set whenever a person sets a usable password (create, reset completion, admin-set, self-change, tenant first administrator, bootstrap admin) | تاريخ تغيير كلمة المرور | Password changed at |
+
+#### 9.4 SCR-REQ-SEC-004 Users — CHANGED
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | B1 Traces | + REQ-SEC-083, REQ-SEC-087, REQ-SEC-088 |
+| CHANGED | B3 Input | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` on the entry form; create also `requireChangeAtNextLogin` (default on); detail: "Set password" (second-level form) and "Photo" (upload / remove) |
+| unchanged | B4 Access | page code `SEC_USERS`; set password and photo are UPDATE (`PERM_SEC_USERS_UPDATE`) |
+
+B5 — API expectations, rows added:
+| Operation | Verb | Path | Inputs | Outputs | RULEs | Traces (REQ) |
+|---|---|---|---|---|---|---|
+| set password | PUT | /api/v1/sec/users/{id}/password | newPassword, requireChangeAtNextLogin | confirmation (flag, sessions ended) | RULE-SEC-056/057/058 | REQ-SEC-083 |
+| set photo | PUT | /api/v1/sec/users/{id}/photo | multipart `file` | photo URL | RULE-SEC-061 | REQ-SEC-087 |
+| remove photo | DELETE | /api/v1/sec/users/{id}/photo | — | 204 | RULE-SEC-061 | REQ-SEC-087 |
+
+No new SEC screen, page code or permission: the staff "my profile" and "change password" pages are
+authentication-only routes of the frontend (plan §8 F1 decision row, P2_5 addendum of the frontend).
+
+#### 9.5 Endpoints
+| Kind | Method | Path | Permission | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) |
+|---|---|---|---|---|---|---|
+| NEW | PUT | `/api/v1/sec/users/{id}/password` | `PERM_SEC_USERS_UPDATE` | `AdminPasswordSetRequest { newPassword (required, ≤ 200), requireChangeAtNextLogin (Boolean, null = true) }` | 200 `PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }` | 404 · `SEC-404-USER` (unknown or CUSTOMER id); 422 · `SEC-422-PASSWORD-SELF`; 400 · `SEC-400-PASSWORD-POLICY`; 400 · `VALIDATION_ERROR`; 403 · `SEC-403-FORBIDDEN`; 401 · `SEC-401-INVALID-CREDENTIALS` |
+| NEW | GET | `/api/v1/sec/me` | `isAuthenticated()` — STAFF chain (a customer token: 403 `REALM_MISMATCH`) | — | 200 `StaffProfileResponse { userPk, username, email, fullNameAr, fullNameEn, phone, jobTitleAr, jobTitleEn, preferredLocale, photoUrl, passwordChangeRequired, lastLoginAt, tenant { code, nameAr, nameEn } }` — no roles, no permissions | 401 |
+| NEW | PATCH | `/api/v1/sec/me` | same | `StaffProfileUpdateRequest { fullNameAr, fullNameEn, phone, jobTitleAr, jobTitleEn, preferredLocale }` — null = unchanged; empty string clears `phone`, `jobTitleAr/En`, `preferredLocale`; the names cannot be blank | 200 `StaffProfileResponse` | 400 · `VALIDATION_ERROR`; 401 |
+| NEW | PUT | `/api/v1/sec/me/password` | same | `PasswordChangeRequest { currentPassword, newPassword }` (both required, ≤ 200) | 200 `PasswordChangeResponse` | 403 · `SEC-403-PASSWORD-CURRENT-INVALID`; 400 · `SEC-400-PASSWORD-POLICY`; 400 · `VALIDATION_ERROR`; 401 |
+| NEW | PUT | `/api/v1/sec/me/photo` | same | multipart part `file` | 200 `ProfilePhotoResponse { photoUrl }` | 400 · `SEC-400-PHOTO-INVALID`; 401 |
+| NEW | DELETE | `/api/v1/sec/me/photo` | same | — | 204 (also when no photo is set) | 401 |
+| NEW | PUT | `/api/v1/sec/users/{id}/photo` | `PERM_SEC_USERS_UPDATE` | multipart part `file` | 200 `ProfilePhotoResponse { photoUrl }` | 404 · `SEC-404-USER`; 400 · `SEC-400-PHOTO-INVALID`; 403 · `SEC-403-FORBIDDEN`; 401 |
+| NEW | DELETE | `/api/v1/sec/users/{id}/photo` | `PERM_SEC_USERS_UPDATE` | — | 204 | 404 · `SEC-404-USER`; 403; 401 |
+| CHANGED | POST | `/api/v1/sec/users` | as before | `UserCreateRequest` + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` (optional), `requireChangeAtNextLogin` (Boolean, null = true) | `UserResponse` (below) | + 400 · `SEC-400-PASSWORD-POLICY` |
+| CHANGED | PUT | `/api/v1/sec/users/{id}` | as before | `UserUpdateRequest` + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale` (null = unchanged, empty string = cleared) | `UserResponse` | as before |
+| CHANGED | GET / POST search / PUT / POST | every `UserResponse` | as before | — | + `phone`, `jobTitleAr`, `jobTitleEn`, `preferredLocale`, `photoUrl` (nullable), `passwordChangeRequired`, `passwordChangedAt` | — |
+| CHANGED | POST | `/api/v1/sec/auth/login` | public | — | `LoginResponse` + `passwordChangeRequired` (the customer login answers `false`, customers are never flagged) | — |
+| CHANGED | POST | `/api/v1/sec/auth/password-reset/complete` | public | — | unchanged | + 400 · `SEC-400-PASSWORD-POLICY`; completing a reset clears `passwordChangeRequired` and sets `passwordChangedAt` |
+| CHANGED (filter) | any | every STAFF-chain path except the three of RULE-SEC-059 and the public paths | — | — | — | + 403 · `SEC-403-PASSWORD-CHANGE-REQUIRED` while the caller's flag is set |
+
+New error codes (`SecErrorCodes`, both bundles): `SEC-400-PASSWORD-POLICY` (400, args min, max),
+`SEC-422-PASSWORD-SELF` (422), `SEC-403-PASSWORD-CURRENT-INVALID` (403),
+`SEC-403-PASSWORD-CHANGE-REQUIRED` (403), `SEC-400-PHOTO-INVALID` (400). Policy and photo errors also
+carry `fieldErrors[0]` naming the field (`password`, `newPassword`, `adminPassword`, `file`).
+
+Order of checks — admin-set: user (`SEC-404-USER`) → self (`SEC-422-PASSWORD-SELF`) → policy → write.
+Self-change: current password (`SEC-403-PASSWORD-CURRENT-INVALID`) → policy → write. Photo: user (404)
+→ image validation (`SEC-400-PHOTO-INVALID`) → store new → discard previous → write.
+
+#### 9.6 Sessions, audit, events
+| Operation | Sessions | `SEC_AUDIT_LOG` | `CORE_AUDIT_EVENT` (AuditApi action) | Event |
+|---|---|---|---|---|
+| admin-set password | every open session of the target terminated | one `SESSION_TERMINATED` per session (existing event type) | `PASSWORD_SET_BY_ADMIN` (actor = administrator, entity `SEC_USER` / target id) | `UserPasswordChangedEvent(userId, byAdmin = true)` |
+| self-change | the user's other open sessions terminated (caller's own kept) | one `SESSION_TERMINATED` per session | `PASSWORD_CHANGED` (actor = the user) | `UserPasswordChangedEvent(userId, byAdmin = false)` |
+| photo set / removed (own or another's) | — | — | `PROFILE_PHOTO_CHANGED` (actor = caller, entity `SEC_USER` / target id, summary "set" / "removed") | — |
+| PATCH `/me`, PUT `/users/{id}` | — | — | `UPDATE` rows of the `@Audited` User entity (unchanged mechanism) | — |
+No secret is audited: the summaries name no password, and the global denylist drops every field whose
+name contains `password` (`passwordChangeRequired`, `passwordChangedAt` included) from `CHANGES`.
+`UserPasswordChangedEvent` (`com.erp.events`, 11th core event) carries `userId` and `byAdmin` only.
+
+#### 9.7 Cross-module (XM)
+| Kind | Id | From → to | What | Kind of link |
+|---|---|---|---|---|
+| NEW | XM-SEC-006 | SEC → FILE | `SEC_USER.PHOTO_FILE_ID` → `FILE_DOCUMENT.ID`, written through `FileImageStoreApi` (XM-FILE-002: `storePublicImage`, `discard`), URLs read through `FileDocumentLookupApi.publicUrl` / `publicUrls` (XM-FILE-001, `publicUrls` NEW) | SOFT reference, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` convention, XM-NOTIF-002) |
+| CHANGED (consumed) | — | SEC → TENANT | `TenantLookupApi.summaryOf(tenantId)` (XM-TENANT-001, CHANGED in the TENANT 1.3.0 addendum) for `/me.tenant` | in-core API |
+| NEW (consumed by) | — | NOTIF ← events | `UserPasswordChangedEvent` → `STAFF_PASSWORD_CHANGED` e-mail (NOTIF RULE-NOTIF-023, XM-NOTIF-003) | event bus |
+| CHANGED (consumed by) | — | TENANT → SEC | tenant provisioning's first administrator password now passes RULE-SEC-056 inside `SecTenantProvisioningContributor` (400 `SEC-400-PASSWORD-POLICY`, field `adminPassword`) | provisioning SPI |
+
+#### 9.8 Decisions
+| Kind | ADR | Decision |
+|---|---|---|
+| NEW | ADR-SEC-063 (plan name ADR-SEC-039) | An administrator-chosen password forces a change at next login, default TRUE, enforced server-side by a filter that reads the flag from the user row already loaded per request — `governance/analysis/decisions/SEC/ADR-SEC-063.md` |
+| NEW | ADR-SEC-064 (plan name ADR-SEC-040) | The staff `/me` payload carries no roles or permissions — `governance/analysis/decisions/SEC/ADR-SEC-064.md` |
+
+#### 9.9 Behaviour notes and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| CHANGED (plan) | Plan: admin-set answers `UserStatusResponse`. Implemented: `PasswordChangeResponse { userPk, passwordChangeRequired, passwordChangedAt, sessionsTerminated }`, shared with the self-change (whose result the plan left open): a password change does not change `statusCode`, and the session count is what the administrator needs to know (the same fact B's tenant admin-reset returns). |
+| NEW (decision) | On `PUT /users/{id}` the four new optional fields follow "absent = unchanged, empty string = cleared", like the PATCH: a client built before 1.3.0 that does not send them never wipes values the user set on `/me`. |
+| NEW (scope) | The policy also guards the tenant's first administrator (`POST /api/v1/platform/tenants`, field `adminPassword`), which is a STAFF user create; the CUSTOMER realm gets only the 72-byte limit (review round 1), not the composition rule (out of the plan's list). |
+| NEW (scope) | The bootstrap admin password (`erp.core.security.bootstrap-admin-password`) is not policy-checked and not flagged (operator configuration at startup); `Test1234` meets the default policy anyway. |
+| NEW (open) | The policy has no history / reuse rule: a forced change may set the same password again. Recorded for a later version. |
+| NEW (open, review round 1) | The current-password check of `PUT /me/password` is not throttled (a stolen token could guess the current password), and admin-set has no super-role guard (an administrator holding `PERM_SEC_USERS_UPDATE` may set a super-role user's password). Recorded for a later version; not implemented. |
+| NEW (open, review round 1) | A bootstrap admin password above 72 bytes fails startup inside BCrypt (operator configuration; not policy-checked). |
+| NEW (note) | The session-termination loop of admin-set mirrors `UserService.deactivate` and `PasswordResetService.complete` (one `SESSION_TERMINATED` row per session). |
+
+#### 9.10 Frontend impact (read by the frontend repository — plan §8 F1)
+| Kind | Item |
+|---|---|
+| NEW | `passwordChangeRequired` on the login response and on `/me`: route to the change-password page; every other STAFF call answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` until `PUT /me/password` succeeds (the same token keeps working afterwards). |
+| NEW | Endpoints of §9.5 for the users screen (set password, photo) and the authentication-only "my profile" route; the profile carries no roles (ADR-SEC-064) — the menu stays the authority. |
+| NEW | Error codes `SEC-400-PASSWORD-POLICY`, `SEC-422-PASSWORD-SELF`, `SEC-403-PASSWORD-CURRENT-INVALID`, `SEC-403-PASSWORD-CHANGE-REQUIRED`, `SEC-400-PHOTO-INVALID` (messages in both languages). |
+| NEW | `photoUrl` is a public URL (no token); a replaced photo gets a new URL, so it can be cached freely. |
+| unchanged | No new page code, permission or menu entry. |
+
+### 10. Package B — what the tenant level 1 needs from SEC (usage counts, platform recovery of a tenant administrator)
+Change         : tenant-maturity plan package B — `SecUserDirectoryApi` counts and the NEW `SecAdminRecoveryApi` (plan §4 B.4), consumed by TENANT's `GET /api/v1/platform/tenants/{id}/usage` and `POST /api/v1/platform/tenants/{id}/admin-reset`
+Statement      : Sections 1–9 above (packages G and D) are unchanged; §10 records package B's implemented deltas.
+
+Ids continue from the highest number ever issued (after package D: REQ-SEC-089, AC-SEC-095, RULE-SEC-062,
+XM-SEC-006, ADR-SEC-064; 065 held, 066 … 068 the analysis-coverage work's). Package B adds REQ-SEC-090/091
+and AC-SEC-096/097. No endpoint, entity field, table, permission, error code or migration of SEC changes; no
+XM-SEC id (in SEC's analysis an XM id is minted by the consuming module; TENANT records the consumption in
+its own 1.3.0 addendum, B7). The rule that decides the recovery target (RULE-TENANT-017) is TENANT's; SEC
+computes the facts.
+
+#### 10.1 Requirements (§A4) — NEW
+
+### REQ-SEC-090 — أعداد دليل المستخدمين للمستأجر الحالي / Directory counts of the current tenant
+Pattern    : ubiquitous
+Statement  : The system shall expose, through `com.erp.sec.crossmodule.SecUserDirectoryApi`, the current tenant's number of STAFF users (`int countStaff()`), CUSTOMER users (`int countCustomers()`) — both in any account status — and open sessions (`int countActiveSessions()`: `SEC_ACTIVE_SESSION` rows with `TERMINATED_AT` NULL, either realm); counts only, never a row.
+Traces     : US-SEC-002 (supporting TENANT US-TENANT-011)
+Entities   : ENT-SEC-001, ENT-SEC-010
+Rationale  : plan §4 B.4; the consumer counts another module's data without reading its tables (build-create-service "Cross-Module Calls")
+Source     : docs/plans/tenant-maturity-plan.md §4 B.4
+Priority   : MEDIUM
+Note       : read-only, `isAuthenticated()` like the sibling directory reads (REQ-SEC-034/035); the consuming service carries its own gate (TENANT: `PLATFORM_TENANT_MANAGE`). The tenant is the current one (`TenantContext`): TENANT calls it inside `callAs(id)`.
+#### AC-SEC-096 — [REQ-SEC-090]
+Given tenant D with its first administrator and nothing else
+When the counts are read inside D
+Then `countStaff() = 1`, `countCustomers() = 0`, `countActiveSessions() = 0`; after the administrator signs in and creates a user, `countStaff() = 2` and `countActiveSessions() = 1`; no row of another tenant is ever counted (`TenantUsageIntegrationTest`)
+
+### REQ-SEC-091 — استعادة كلمة مرور مستخدم فائق من المنصة / Platform recovery of a super user's password
+Pattern    : event
+Statement  : The system shall expose `com.erp.sec.crossmodule.SecAdminRecoveryApi` for the platform's recovery of a tenant administrator, running in the current tenant and gated by the authority `PLATFORM_TENANT_MANAGE`: `findRecoveryTarget(username)` answers, for a STAFF user of that name, `RecoveryTarget(userId, username, superRole)` where `superRole` = the user holds an ACTIVE role with `IS_SUPER = TRUE` (empty for an unknown name or a CUSTOMER account); `resetSuperUserPassword(username, rawPassword, requireChangeAtNextLogin)` applies the STAFF password policy (RULE-SEC-056, field `newPassword`), stores the new hash and `passwordChangedAt`, sets `passwordChangeRequired` per RULE-SEC-058 (`requireChangeAtNextLogin` null = TRUE), terminates every open session of the user, records `ADMIN_PASSWORD_RESET` in the generic audit log and publishes `UserPasswordChangedEvent(userId, byAdmin = true)`, and answers the number of terminated sessions.
+Traces     : US-SEC-002 (supporting TENANT US-TENANT-010)
+Entities   : ENT-SEC-001, ENT-SEC-002, ENT-SEC-003, ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §4 B.4 ("built from D's pieces": `PasswordPolicyProvider`, `User.changePassword`, `UserSessionTerminator`); ADR-SEC-063 (an administrator-chosen password forces a change by default — the caller passes the request's flag, SEC applies the default)
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.4
+Priority   : HIGH
+Note       : the operator is not a user of the target tenant: the audit row has `actorUserId` null (actor = the operator's username), and the `SESSION_TERMINATED` rows of `SEC_AUDIT_LOG` carry no actor user. A name that is not a STAFF user holding an active super role answers 404 `SEC-404-USER` from `resetSuperUserPassword` (unreachable through TENANT, which refuses first with its own codes in the same transaction).
+#### AC-SEC-097 — [REQ-SEC-091]
+Given tenant D whose administrator `td-admin` holds `SYS_ADMIN` (`IS_SUPER`) and has one open session, and a STAFF user without a role
+When `findRecoveryTarget` is asked inside D for `td-admin`, for the role-less user and for an unknown name
+Then it answers `superRole = true`, `superRole = false` and empty;
+when `resetSuperUserPassword("td-admin", "abcdefgh", null)` is called, it refuses with 400 `SEC-400-PASSWORD-POLICY` and changes nothing; with a valid password it answers 1, the old session is terminated, the new password signs in with `passwordChangeRequired = true`, one `ADMIN_PASSWORD_RESET` row (actor = the operator, entity `SEC_USER` / the user's id, no secret) and one `STAFF_PASSWORD_CHANGED` e-mail are recorded in D (`TenantAdminResetIntegrationTest`)
+
+#### 10.2 Cross-module surface (exposed) — NEW / CHANGED
+| Kind | Interface (`com.erp.sec.crossmodule`) | Method | Gate | Implemented by |
+|---|---|---|---|---|
+| CHANGED | `SecUserDirectoryApi` | + `int countStaff()`, `int countCustomers()`, `int countActiveSessions()` | `isAuthenticated()` (`UserService`) | `SecUserDirectoryApiImpl` → `UserService` |
+| NEW | `SecAdminRecoveryApi` | `Optional<RecoveryTarget> findRecoveryTarget(String username)` (read-only) | authority `PLATFORM_TENANT_MANAGE` through `SecPermissions.PLATFORM_TENANT_MANAGE` (a non-catalog constant like `ROLE_CUSTOMER`, mirrored because SEC does not depend on the tenant module's `TenantPermissions`; ArchUnit rule 5 forbids a literal) | `SecAdminRecoveryApiImpl` → `UserPasswordService` |
+| NEW | `SecAdminRecoveryApi` | `int resetSuperUserPassword(String username, String rawPassword, Boolean requireChangeAtNextLogin)` (null = TRUE, RULE-SEC-058) (write, joins the caller's transaction) | same | same |
+| NEW | `RecoveryTarget` (record) | `Long userId`, `String username`, `boolean superRole` — a read-model, never the entity | — | — |
+Consumer: TENANT (`TenantService`), always inside `TenantContext.callAs(tenantId)`; the two recovery calls
+run in one transaction opened there, so the check and the write are atomic.
+
+#### 10.3 Sessions, audit, events (admin-reset)
+| Operation | Sessions | `SEC_AUDIT_LOG` | `CORE_AUDIT_EVENT` (AuditApi action) | Event |
+|---|---|---|---|---|
+| `resetSuperUserPassword` | every open session of the user terminated (`UserSessionTerminator`, keep none) | one `SESSION_TERMINATED` per session, actor user none | `ADMIN_PASSWORD_RESET` (actor = the platform operator's username, `actorUserId` null, entity `SEC_USER` / user id, tenant = the current = the target tenant) | `UserPasswordChangedEvent(userId, byAdmin = true)` → NOTIF RULE-NOTIF-023 |
+No secret is logged, returned, audited or carried by the event (POL-SEC-004).
+
+#### 10.4 Behaviour notes
+| Kind | Note |
+|---|---|
+| CHANGED (code) | `UserSessionTerminator.terminateOpenSessions` gains an overload taking the acting `User` explicitly (null = none): inside another tenant the operator's username could match a different user of that tenant, so the recovery passes none; the existing method keeps resolving the actor by username. |
+| NEW (scope) | `ADMIN_PASSWORD_RESET` is a new generic-audit action code (`^[A-Z_]{3,64}$`); the audit module's code and analysis do not change. |
+
+### 11. Package E — what the tenant branding changes in SEC's security chains
+Change         : tenant-maturity plan package E — `GET /api/v1/tenant/me` (TENANT, plan §7 E.2) is served to a token of either realm on the core (staff) chain and during a pending forced password change
+Statement      : Sections 1–10 above (packages G, D and B) are unchanged; §11 records package E's implemented deltas.
+
+No SEC id is minted (the requirement is TENANT's REQ-TENANT-031); no SEC endpoint, entity field, table, permission,
+error code or migration changes. Two SEC rules gain one named exception each:
+
+| Kind | Rule | Delta | Source |
+|---|---|---|---|
+| CHANGED | Realm rule (1.2.0 addendum §2: "A token of the other realm on a non-public path of a chain → 403 `REALM_MISMATCH`") | + one **realm-neutral** request on the core (staff) chain: `GET /api/v1/tenant/me` (`ErpCoreSecurityAutoConfiguration.TENANT_ME_PATH`; `GET` only since review round 1 — any other method on the path still refuses a CUSTOMER token). The chain's `RealmEnforcementFilter` is built with it in its method-specific skip list, so a CUSTOMER token reaches it; unlike a public path it still needs an authenticated caller (the chain's `anyRequest().authenticated()`), and the answer only carries the token's own tenant's branding. Every other core-chain path still refuses a CUSTOMER token. | TENANT REQ-TENANT-031; srs-tenant.md 1.3.0 E1, E10 |
+| CHANGED | RULE-SEC-059 (forced-change gate) | the calls a caller with a pending forced change may still make: `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password`, `POST /api/v1/sec/auth/logout` **and `GET /api/v1/tenant/me`** (the shell's branding: it reveals nothing the anonymous public branding does not, and the change-password page can show the tenant's logo) | `PasswordChangeRequiredFilter.EXEMPTIONS`; TENANT REQ-TENANT-031 |
+
+Frontend impact: the shell may load `GET /api/v1/tenant/me` right after any login, a customer's included, and before
+a forced password change is completed.
+
+### 12. Package C12 — sessions end when a tenant is suspended or its tokens are revoked; the JWT filter exposes the token's facts
+Change         : tenant-maturity plan package C12 — `TenantSuspendedEvent` → SEC terminates the tenant's sessions (plan §5 C.1); `SecAdminRecoveryApi.terminateAllSessions()` for TENANT's `POST /api/v1/platform/tenants/{id}/revoke-tokens` and the token facts the tenant filter compares with the cut-off (plan §5 C.2)
+Statement      : Sections 1–11 above (packages G, D, B and E) are unchanged; §12 records package C12's implemented deltas.
+
+Ids continue from the highest number ever issued (REQ-SEC-091, AC-SEC-097, XM-SEC-006; ADR-SEC-065 held, 066 … 068
+the analysis-coverage work's). Package C12 adds **REQ-SEC-092/093, AC-SEC-098/099 and XM-SEC-007**. No endpoint,
+entity field, table, permission, error code or migration of SEC changes. The rules are TENANT's (RULE-TENANT-006
+CHANGED, RULE-TENANT-023, ADR-TENANT-002); SEC ends sessions and reports the token's facts.
+
+#### 12.1 Requirements (§A4) — NEW
+
+### REQ-SEC-092 — إنهاء جلسات المستأجر المعلّق / End a suspended tenant's sessions
+Pattern    : event
+Statement  : When `TenantSuspendedEvent` is delivered after the suspension commits, the system shall terminate every open session (`SEC_ACTIVE_SESSION.TERMINATED_AT` NULL) of the suspended tenant, of both realms, setting `TERMINATED_BY` to the event's actor (the platform operator) and recording one `SESSION_TERMINATED` row per session in that tenant's `SEC_AUDIT_LOG` (no actor user — the operator is not a user of that tenant; the details name the operator); a failure is logged and never undoes the suspension.
+Traces     : US-SEC-011 (supporting TENANT US-TENANT-003)
+Entities   : ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §5 C.1 ("today tokens are refused by the filter, but `SEC_ACTIVE_SESSION` rows stay open — this closes them"); REQ-SEC-028 (a terminated session's token is unusable)
+Source     : docs/plans/tenant-maturity-plan.md §5 C.1
+Priority   : HIGH
+Note       : the listener `com.erp.sec.service.TenantSuspendedSessionListener` is `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`, **synchronous** (in the operator's request, so the sessions are closed when the PATCH answers), and works inside `TenantContext.callAs(event.getTenantId())` with a `REQUIRES_NEW` `TransactionTemplate` (the original transaction has committed; its resources are still bound).
+#### AC-SEC-098 — [REQ-SEC-092]
+Given tenant T with two open staff sessions and one open customer session, and tenant U with an open session
+When the platform operator suspends T
+Then T's three sessions have `TERMINATED_AT` set and `TERMINATED_BY` = the operator, T's `SEC_AUDIT_LOG` has three new `SESSION_TERMINATED` rows without an actor user, U's session is still open, and T's old tokens are refused (403 `TENANT_SUSPENDED`, TENANT RULE-TENANT-006) (`TenantLifecycleEventsIntegrationTest`)
+
+### REQ-SEC-093 — إنهاء كل جلسات المستأجر الحالي للمنصة / Platform termination of every session of the current tenant
+Pattern    : event
+Statement  : The system shall expose `SecAdminRecoveryApi.terminateAllSessions()`, gated by the authority `PLATFORM_TENANT_MANAGE` and running in the current tenant inside the caller's transaction: it terminates every open session of the tenant, both realms (`TERMINATED_BY` = the caller's username), records one `SESSION_TERMINATED` row per session in `SEC_AUDIT_LOG` (no actor user; the details say the tenant's tokens were revoked by that platform operator) and answers how many it ended.
+Traces     : US-SEC-011 (supporting TENANT US-TENANT-015)
+Entities   : ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §5 C.2 (revoke-tokens "sets the cut-off to now() and terminates sessions"); the B recovery surface already carries the platform gate
+Source     : docs/plans/tenant-maturity-plan.md §5 C.2
+Priority   : HIGH
+#### AC-SEC-099 — [REQ-SEC-093]
+Given tenant T with one staff and one customer session
+When TENANT's revoke-tokens calls `terminateAllSessions()` inside T
+Then it answers 2, both sessions are terminated with `TERMINATED_BY` = the operator and two `SESSION_TERMINATED` rows are recorded in T; a caller without `PLATFORM_TENANT_MANAGE` is refused (`TenantTokenCutOffIntegrationTest`)
+
+#### 12.2 Cross-module (A7) — NEW / CHANGED
+| Kind | Id / interface | What | Gate | Implemented by |
+|---|---|---|---|---|
+| NEW | XM-SEC-007 (EVENT-CONSUME) | `com.erp.events.TenantSuspendedEvent` (published by TENANT) → REQ-SEC-092 | — | `TenantSuspendedSessionListener` → `UserSessionTerminator.terminateAllOpenSessions` |
+| CHANGED | `com.erp.sec.crossmodule.SecAdminRecoveryApi` | + `int terminateAllSessions()` (write, joins the caller's transaction) | authority `PLATFORM_TENANT_MANAGE` (`SecPermissions.PLATFORM_TENANT_MANAGE`) | `SecAdminRecoveryApiImpl` → `SessionService.terminateAllSessionsForPlatform` |
+| CHANGED (tenant root API, written) | `com.erp.tenant.TenantTokenFacts` | `JwtAuthenticationFilter` puts `TenantTokenFacts(tid, iat)` as request attribute `TenantTokenFacts.REQUEST_ATTRIBUTE` for **every signature-valid token** carrying a numeric `tid`, before it looks the user and the session up — so TENANT's filter can compare `iat` with the tenant's cut-off and can answer for a token SEC drops (terminated session): TENANT RULE-TENANT-023 | — | `JwtAuthenticationFilter` |
+`ActiveSessionRepository` gains `findAllNonTerminated()` (the current tenant's open sessions, both realms, tenant-filtered
+by the `@TenantId` discriminator). `UserSessionTerminator` gains `terminateAllOpenSessions(String terminatedBy,
+String detailsAr, String detailsEn)` (the per-user loop of package D, for every user).
+
+#### 12.3 Behaviour notes
+| Kind | Note |
+|---|---|
+| CHANGED (REQ-SEC-028 request half) | unchanged verdict: a token whose session is terminated (now also by a suspension or a revocation) does not authenticate. What the caller sees is decided by TENANT's filter on a non-public path: 403 `TENANT_SUSPENDED` (tenant suspended), 401 `TENANT_TOKEN_REVOKED` (issued before the tenant's cut-off), otherwise SEC's 401 `SEC-401-INVALID-CREDENTIALS` as before. A public path (login, sign-up, password reset, customer public paths) ignores a stale token. |
+| NEW (decision) | The plan said "the JWT filter exposes `iat` on the authentication details": a request attribute typed by the tenant module is used instead (`AuthRealm` is SEC-internal, and the token SEC drops has no authentication at all) — TENANT ADR-TENANT-002. `AuthRealm` is unchanged. |
+| NEW (scope) | No SEC endpoint changes: a staff administrator still terminates single sessions with API-SEC-026; tenant-wide termination is the platform's (`PLATFORM_TENANT_MANAGE`). |
+
+### 13. Package C5 — SEC's part of a tenant data export (tenant-maturity plan §5 C.5)
+Change         : tenant-maturity plan package C5 — `SecTenantExportContributor` implements TENANT's export SPI (XM-TENANT-004) for `POST /api/v1/platform/tenants/{id}/export`
+Statement      : Sections 1–12 above (packages G, D, B, E and C12) are unchanged; §13 records package C5's implemented deltas.
+
+No SEC id is minted (no SEC rule: the export rules are TENANT's RULE-TENANT-027 / -028; the SPI is TENANT's
+XM-TENANT-004). No endpoint, entity field, table, permission, error code or migration of SEC changes.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.sec.tenant.SecTenantExportContributor` (`moduleCode` `SEC`) | writes nine files of the exported tenant — `SEC/SEC_USER`, `SEC_ROLE`, `SEC_USER_ROLE`, `SEC_ROLE_MODULE_GRANT`, `SEC_ROLE_SCREEN_GRANT`, `SEC_ROLE_ACTION_GRANT`, `SEC_ACTIVE_SESSION`, `SEC_AUDIT_LOG`, `SEC_SIGNUP_REQUEST` — with plain SQL naming `TENANT_ID` on every tenant-scoped table (RULE-TENANT-011), ordered by the primary key; the grant files resolve the global registry references to `MODULE_CODE` / `PAGE_CODE` / `PERMISSION_CODE` | TENANT srs-tenant.md 1.3.0 X5, X7 |
+| NEW (rule applied) | never exported | `SEC_USER.PASSWORD_HASH` (POL-SEC-004), `SEC_ACTIVE_SESSION.TOKEN_REF` (the token's `jti`), the token tables `SEC_PWD_RESET_TOKEN` and `SEC_CUSTOMER_VERIFY_TOKEN` (short-lived credentials), every `TENANT_ID` / `VERSION` | TENANT RULE-TENANT-027 |
+Exact column lists: `../../TENANT/P1/srs-tenant.md` 1.3.0 X7 (one place for every module).

@@ -58,16 +58,30 @@ INSTRUCTIONS.md's dependency rule).
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 01–12 (plan), 14 (shipped in 1.1.0), 15 (shipped in 1.2.0)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 The full description of the implemented platform (erp-core library + consuming apps, the new core
 modules tenant / audit / events / sequence / report, conventions, release policy) is recorded once in
 [`../../SEC/P0/platform-summary.md`](../../SEC/P0/platform-summary.md) → "Implementation Addendum —
-erp-core 1.2.0" (decision recorded there). The "SEC → MDL → FIN" batch above no longer applies: `fin`
-was removed from erp-core (step 01).
+erp-core 1.2.0" (decision recorded there).
 
 MDL's own platform-relevant changes:
-| Change | Source |
-|---|---|
-| Tenant-scoped lookup catalog; PLATFORM's catalog copied to every new tenant | docs/steps/05-report.md |
-| Permissions declared in code (`MdlPermissions`) | docs/steps/06-report.md |
-| Lookup values used as report LOOKUP parameters | DEVIATIONS [11] |
+| Kind | Change | Source |
+|---|---|---|
+| REMOVED | The "SEC → MDL → FIN" batch and the `FIN → HARD → MDL` dependency: `fin` was removed from erp-core in step 01; no FIN-owned lookup type and no XM-FIN-001 exist. | docs/steps/01-report.md |
+| CHANGED | MODULES row 1.3 MDL: status "built, shipped in erp-core 1.1.0 / 1.2.0"; depends on SEC (SOFT-READ through the in-process `SecModuleRegistryApi.isModuleActive` — the owner module must exist **and** be active), tenant (`CORE_TENANT` FK + provisioning SPI) and audit (`@Audited`). | erp-core/src/main/java/com/erp/mdl/service/LookupTypeService.java:80; V10__tenant_schema.sql |
+| CHANGED | DEPENDENCY MAP: the consumers of MDL are FILE and NOTIF (their lookup lists moved into MDL — `V8__mdl_seed.sql` — and are read through `com.erp.mdl.crossmodule.MdlLookupApi`) and REPORT (LOOKUP report parameters); the in-process API carries no permission gate (ADR-MDL-046). | erp-core/src/main/java/com/erp/file/service/FileLookupService.java; erp-core/src/main/java/com/erp/notif/service/NotificationLookupService.java; DEVIATIONS [11] |
+| NEW | Tenant-scoped lookup catalog; PLATFORM's catalog (types and values, inactive rows included) is copied to every new tenant by `MdlTenantProvisioningContributor` (order 10). | docs/steps/05-report.md |
+| NEW | Permissions declared in code (`MdlPermissions`): `PERM_MDL_LOOKUPS_VIEW` / `_CREATE` / `_UPDATE` (UPDATE also gates deactivation — no DELETE authority), `PERM_MDL_TYPE_REGISTRY_VIEW`; screens «قوائم البيانات المرجعية» / "Master data lookups" and «سجل أنواع البيانات المرجعية» / "Master data type registry"; only `SYS_ADMIN` seeded. | docs/steps/06-report.md; V7__sec_seed.sql:64-65,108-112,171 |
+| CHANGED | DEFERRED row "Migrating SEC's USER_STATUS / SIGNUP_STATUS / AUDIT_EVENT_TYPE into MDL": still deferred (SEC keeps its CHECK-constrained columns); what did move into MDL are FILE's and NOTIF's lists (`V8`). | V8__mdl_seed.sql; governance/analysis/decisions/SEC/ADR-SEC-001.md |
+| NEW | Seven MDL error codes exist (`MDL-409-MODULE-NOT-REGISTERED`, `MDL-409-TYPE-DUP`, `MDL-409-VALUE-DUP`, `MDL-404-TYPE`, `MDL-404-VALUE`, `MDL-400-REORDER-MISMATCH`, `MDL-404-TYPE-KEY`); an unknown or inactive type is refused with the last one on every consumer read. | erp-core/src/main/java/com/erp/mdl/exception/MdlErrorCodes.java |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (CHANGELOG [Unreleased]); no MDL behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Change | Source |
+|---|---|---|
+| CHANGED | The MDL-backed lookup endpoints of FILE and NOTIF share one read model, `com.erp.common.lookup.LookupOptionResponse`, served through `com.erp.common.lookup.OwnedLookups` (same JSON shape); `MdlLookupApi` is unchanged. | erp-core/src/main/java/com/erp/common/lookup/; CHANGELOG [Unreleased] |
+| CHANGED | MDL's Domain objects raise their uniqueness refusals through `com.erp.common.domain.DomainRules.assertUnique`; same codes, no behaviour change. | erp-core/src/main/java/com/erp/mdl/domain/ |

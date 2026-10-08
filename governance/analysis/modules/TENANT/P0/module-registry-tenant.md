@@ -80,3 +80,169 @@ POLICIES OWNED (full text in business-policies-tenant.md)
 POL-TENANT-001, POL-TENANT-002, POL-TENANT-003, POL-TENANT-004, POL-TENANT-005, POL-TENANT-006,
 POL-TENANT-007, POL-TENANT-008, POL-TENANT-009, POL-TENANT-010, POL-TENANT-011
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.2.0
+Source version : erp-core 1.2.0 (tag v1.2.0)
+Steps          : 05, 07, 15
+Statement      : This artifact was written from the implemented code on 2026-10-07 (as-built); there is no earlier analysis, so the body above IS the implemented state and this addendum records no delta.
+
+Registry deltas: none. No ENTITY / XM ids are minted here.
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | المستأجر / Tenant (`CORE_TENANT`) | + profile columns (V18), suspension facts + `TOKENS_INVALID_BEFORE` (V19); still global, still SHARED (owner); names editable | `../P2/db-script-tenant.md` 1.3.0 addendum |
+
+LOOKUPS OWNED — delta
+| Kind | Lookup key | Values | Source |
+|---|---|---|---|
+| NEW | (value set of `CORE_TENANT.DEFAULT_LOCALE`) | `ar`, `en` — CHECK `CHK_CORE_TENANT_LOCALE` (NULL allowed), not an MDL lookup | V18__tenant_profile.sql |
+| unchanged | `STATUS_CODE` | `ACTIVE`, `SUSPENDED` (no `ARCHIVED`, plan §0 D2) | — |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | SEC | crossmodule (in-core API) | `SecUserDirectoryApi.countStaff()`, `countCustomers()`, `countActiveSessions()`; NEW `SecAdminRecoveryApi.findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)` — called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
+| NEW | FILE | crossmodule (in-core API) | `FileDocumentLookupApi.countDocuments()`, `sumBytes()` | same |
+| NEW | NOTIF | crossmodule (in-core API) | `NotificationLogQueryApi.countDispatchedSince(Instant)` | same |
+| CHANGED | audit | SOFT | + actions `ADMIN_PASSWORD_RESET` (recorded by SEC's recovery in the target tenant) and `TENANT_ADMIN_RESET` (recorded by TENANT in PLATFORM through `AuditApi`) | same, B8 |
+
+EXPOSED SURFACE, PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, screen, permission
+or grant seed; every new endpoint sits behind `PLATFORM_TENANT_MANAGE` on `PLATFORM_TENANTS`).
+
+POLICIES OWNED — delta: + POL-TENANT-012, POL-TENANT-013 (`business-policies-tenant.md` 1.3.0 addendum).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | المستأجر / Tenant (`CORE_TENANT`) | + `LOGO_FILE_ID` (soft reference to `FILE_DOCUMENT.ID`, no FK) and `BRAND_COLOR` (V20); still global. "ROOT for data" no longer holds strictly: one column points into FILE (XM-TENANT-003) | `../P2/db-script-tenant.md` 1.3.0 addendum |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | FILE | SOFT (crossmodule, XM-TENANT-003) | `FileImageStoreApi.storePublicImage`, `discard`; `FileDocumentLookupApi.publicUrl` — inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 E6 |
+| CHANGED | audit | SOFT | + action `TENANT_LOGO_CHANGED` (target tenant and PLATFORM) | same, E8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| NEW | `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) | the frontend shell and login page (plan §8 F2) | HTTP | plan §7 E.2 |
+
+CONFIGURATION — delta
+| Kind | Property | Delta | Source |
+|---|---|---|---|
+| CHANGED | `erp.core.tenant.path-tenant-paths` | default + `/api/v1/public/tenants/{tenantCode}/branding` | plan §7 E.2 |
+| NEW | `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | 60 / 1 min per client address (RULE-TENANT-022), like the customer login's bucket4j limiter | plan §7 E.2 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, screen, permission or grant seed).
+
+RESOLVED DECISIONS — delta: 5 · who sets a tenant's logo → the platform administrator from `PLATFORM_TENANTS`
+(decision D5, ADR-TENANT-005). POLICIES OWNED — delta: + POL-TENANT-014.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta: `CORE_TENANT.TOKENS_INVALID_BEFORE` (V19) is now enforced and also written by revoke-tokens; no
+new column, no migration.
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | SEC | crossmodule (in-core API) | `SecAdminRecoveryApi.terminateAllSessions()` — inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 C7 |
+| NEW | events | publishes | `TenantSuspendedEvent(tenantId, tenantCode, reason, actor)`, `TenantActivatedEvent(tenantId, tenantCode, actor)` — after commit | C6 |
+| NEW (consumer of TENANT) | SEC | listener | `TenantSuspendedEvent` → terminates the tenant's sessions (SEC REQ-SEC-092) | C6 |
+| NEW (consumer of TENANT) | NOTIF | crossmodule + listener | `TenantLookupApi.isActive` (claim, requeue) and `TenantActivatedEvent` → re-dispatch (NOTIF RULE-NOTIF-024) | C7 |
+| CHANGED | audit | SOFT | + action `TOKENS_REVOKED` (target tenant and PLATFORM) | C8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| CHANGED | `TenantLookupApi` + `boolean isActive(Long tenantId)` (XM-TENANT-001) | NOTIF | crossmodule | C7 |
+| NEW | `com.erp.tenant.TenantTokenFacts` (root package) | SEC `JwtAuthenticationFilter` | request attribute | C7; ADR-TENANT-002 |
+| NEW | `POST /api/v1/platform/tenants/{id}/revoke-tokens` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | C1 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5).
+
+RESOLVED DECISIONS — delta: 2 · token cut-off vs `jti` denylist → per-tenant cut-off (ADR-TENANT-002). POLICIES
+OWNED — delta: + POL-TENANT-015.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+EXPOSED SURFACE — delta: none; `TenantContext` keeps its public API and behaviour (`current`, `find`, `require`,
+`isPlatform`, `set`, `clear`, `runAs`, `callAs`) and its `ThreadLocal` binding.
+
+RESOLVED DECISIONS — delta: 4 · `ScopedValue` for `TenantContext` → no-go after the spike (ADR-TENANT-004 REJECTED;
+`../P1/srs-tenant.md` 1.3.0 C6-2).
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Table | Note | Source |
+|---|---|---|---|
+| NEW (owned by common, registered here) | `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`) | mechanism of `com.erp.common.idempotency`; tenant create is its first consumer; tenant-scoped (`TENANT_ID` FK, DBF-TENANT-045; entity extends `AuditableEntity`) | `../P1/srs-tenant.md` 1.3.0 I5; ADR-TENANT-003 |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | common | mechanism | `com.erp.common.idempotency.IdempotentResponses` (`Idempotency-Key`, `Idempotent-Replayed`, `IDEMPOTENCY_KEY_INVALID`, `IDEMPOTENCY_KEY_CONFLICT`) | I6, I8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| CHANGED | `POST /api/v1/platform/tenants` + optional `Idempotency-Key` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | I1 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged.
+
+AUTO-DECISIONS — delta: `AUTO: CORE_IDEMPOTENCY_KEY is registered in TENANT's P2 although common owns it — FROM:
+plan §5 C.4 ("lives in com.erp.common.idempotency (mechanism) + tenant (first consumer)") and the absence of a
+COMMON analysis folder in this repository — IF WRONG: move the rows to a COMMON folder when one is created; the
+physical names do not change.`
+
+RESOLVED DECISIONS — delta: 3 · where idempotency keys live → `CORE_IDEMPOTENCY_KEY` (common), 24 h (ADR-TENANT-003).
+POLICIES OWNED — delta: + POL-TENANT-016.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Owned runtime surface — delta: + SPI `TenantExportContributor` / `TenantExport` / `TenantExportJdbc` (root package);
++ `TenantExportService`, `TenantExportArchive` (the ZIP and CSV writer), the in-memory export guard keyed by tenant id
+(`TenantExportGuard`, per node) and TENANT's own contributor (`CORE_TENANT` row) in `com.erp.tenant.export`.
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | FILE | crossmodule (XM-FILE-003) | `FilePrivateStoreApi.storePrivateFile`, `issueDownloadToken` — the archive as a PRIVATE PLATFORM document and its single-use token | `../P1/srs-tenant.md` 1.3.0 X9 |
+| NEW | every core module | SPI implemented (XM-TENANT-004) | each module's `TenantExportContributor` writes its own tables | X5, X7 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| NEW | `com.erp.tenant.TenantExportContributor { String moduleCode(); long countRows(Long tenantId); void export(TenantExport export) }` | every core module (CSV streams of its tenant rows; never password hashes, tokens, credentials or file bytes); applications | SPI (XM-TENANT-004) | X5 |
+| NEW | `POST /api/v1/platform/tenants/{id}/export` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | X1 |
+
+CONFIGURATION — delta
+| Kind | Property | Default | Source |
+|---|---|---|---|
+| NEW | `erp.core.tenant.export.max-rows` | 200 000 | X8 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (`PLATFORM_TENANT_MANAGE`).
+RESOLVED DECISIONS — delta: 6 · tenant data export → synchronous, bounded, PRIVATE PLATFORM document + single-use token (ADR-TENANT-006).
+POLICIES OWNED — delta: + POL-TENANT-017.
+
+Review round 1 (package C5) — CONFIGURATION delta: + `erp.core.tenant.export.max-concurrent` (2, node-wide; 429
+`TENANT_EXPORT_BUSY`). DEPENDENCIES delta: XM-FILE-003 request + `requiredAuthority` (the archive is a restricted FILE
+document, RULE-FILE-012).

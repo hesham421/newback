@@ -32,3 +32,11 @@ that does not hide the inactive ones.
   the type whose deactivation hides them (RULE-MDL-004) is deactivated there too.
 - The frontend of every **consuming** module reaches this endpoint through its own
   cross-module dependency, not through MDL's screens — as FIN's `UXD-FIN-001..012` do.
+
+## Superseded in part — erp-core 1.2.0 (2026-10-07)
+The binding decision above stands. The authorization sentence of the Context — "gated by
+`PERM_MDL_LOOKUPS_VIEW` granted to the calling module's service principal" — is superseded by
+ADR-MDL-046: in erp-core every in-core consumer (FILE, NOTIF, REPORT) reads lookups through the
+in-process `com.erp.mdl.crossmodule.MdlLookupApi`, which carries no permission gate; `PERM_MDL_
+LOOKUPS_VIEW` gates the HTTP read `GET /api/v1/mdl/lookups` only, and no service-account role is
+seeded. FIN (`UXD-FIN-001..012`) was removed from erp-core in step 01.

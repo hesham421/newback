@@ -299,34 +299,64 @@ See `registry-db-mdl.md`.
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 04, 05, 08 (migrations V3, V8, V10, V13)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 Paths cited below are relative to `erp-core/src/main/resources/db/migration/core/` at that tag unless
-stated otherwise. No DBF ids are minted here.
+stated otherwise; `mdl/` abbreviates `erp-core/src/main/java/com/erp/mdl/`. No DBF or XM ids are minted
+here. Every row is labelled NEW / CHANGED / REMOVED / NOT IMPLEMENTED.
 
-### Migration chain
-- Squashed in step 04: `MDL_LOOKUP_TYPE` and `MDL_LOOKUP_VALUE` are created by `V3__mdl_schema.sql` (DDL
-  verbatim from the old `V18__mdl_sequences`); the 4 lookup types and 17 values (`NOTIF_CHANNEL`,
-  `NOTIF_STATUS`, `FILE_FILE_STATUS`, `FILE_FILE_TYPE`) are seeded by `V8__mdl_seed.sql` (from the old
-  `V20__notif_file_lookup_data_migration`); the MDL registry rows and grants are in `V7__sec_seed.sql`.
-  Full old → new mapping: `docs/steps/04-report.md` → "Old → new mapping".
-- Later MDL changes are additive: `V10__tenant_schema.sql` (step 05) and seed rows in
-  `V13__notif_async_inbox.sql` (step 08).
+### Migration chain — سلسلة الترحيل
+| Kind | Script | What it does to MDL | Source |
+|---|---|---|---|
+| CHANGED | `V3__mdl_schema.sql` | creates `SEQ_MDL_LOOKUP_TYPE`, `SEQ_MDL_LOOKUP_VALUE`, `MDL_LOOKUP_TYPE`, `MDL_LOOKUP_VALUE`, the PK / UNIQUE / FK constraints and four indexes (squashed in step 04 from the old `V18__mdl_sequences`, DDL verbatim). Its header still says the db-script declares `GENERATED ALWAYS AS IDENTITY`; this script (§4 PROFILE row) says `sequence`, and the migration itself builds sequence-fed `BIGINT NOT NULL` PKs — the header comment is stale, the DDL agrees with this script. | V3__mdl_schema.sql:8-12,18-19,86-97 |
+| NEW (seed) | `V8__mdl_seed.sql` | 4 lookup types / 17 values inserted raw (from the old `V20__notif_file_lookup_data_migration`); the owners' `SEC_MODULE_REG` rows and the MDL registry / grants are in `V7__sec_seed.sql`, which runs first. | V8__mdl_seed.sql:25-65; V7__sec_seed.sql:37,64-65,108-112 |
+| CHANGED | `V10__tenant_schema.sql` | tenant and version columns, FKs, indexes, composite uniques (step 05). | V10__tenant_schema.sql:64-65,84-85,103-104,122-123,177-180 |
+| NEW (seed) | `V13__notif_async_inbox.sql` §3a | three NOTIF-owned values for every tenant that holds the type (step 08). | V13__notif_async_inbox.sql:66-80 |
+Full old → new mapping: `docs/steps/04-report.md` → "Old → new mapping".
 
-### Per-table deltas
-| Table | Delta | Migration |
-|---|---|---|
-| MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE | + `TENANT_ID BIGINT NOT NULL` (backfilled 1 = PLATFORM, default dropped, `FK_<TABLE>_TENANT` → `CORE_TENANT(ID)`, `IDX_<TABLE>_TENANT`); + `VERSION BIGINT NOT NULL DEFAULT 0` | V10 |
-| MDL_LOOKUP_TYPE | `UQ_MDL_LOOKUP_TYPE_KEY` → `(TENANT_ID, key)` | V10 |
-| MDL_LOOKUP_VALUE | `UQ_MDL_LOOKUP_VALUE_TYPE_CODE` → `(TENANT_ID, lookup_type_id, code)` | V10 |
-| MDL_LOOKUP_VALUE (seed) | + `NOTIF_STATUS` `QUEUED` (sort 5), `SKIPPED_NO_PROVIDER` (sort 6); + `NOTIF_CHANNEL` `IN_APP` (sort 6), for every tenant that has those types | V13 §3a |
+### Per-table deltas — فروق الجداول
+| Kind | Table | Delta (exact physical names) | Migration |
+|---|---|---|---|
+| CHANGED | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE | + `TENANT_ID BIGINT NOT NULL` (added `DEFAULT 1` = PLATFORM for the backfill, default dropped), `FK_MDL_LOOKUP_TYPE_TENANT` / `FK_MDL_LOOKUP_VALUE_TENANT` → `CORE_TENANT (ID)`, `IDX_MDL_LOOKUP_TYPE_TENANT` / `IDX_MDL_LOOKUP_VALUE_TENANT (TENANT_ID)`; + `VERSION BIGINT NOT NULL DEFAULT 0` | V10:64-65,84-85,103-104,122-123 |
+| CHANGED | MDL_LOOKUP_TYPE | `UQ_MDL_LOOKUP_TYPE_KEY` → `UNIQUE (TENANT_ID, key)` (dropped and re-created under the same name) | V10:177-178 |
+| CHANGED | MDL_LOOKUP_VALUE | `UQ_MDL_LOOKUP_VALUE_TYPE_CODE` → `UNIQUE (TENANT_ID, lookup_type_id, code)` | V10:179-180 |
+| CHANGED | MDL_LOOKUP_TYPE | `key VARCHAR(80)` (DBF-MDL-002, planned 50); `name_ar` / `name_en VARCHAR(150)` (DBF-MDL-004/005, planned 200); `created_at TIMESTAMPTZ NOT NULL DEFAULT now()` (DBF-MDL-008, planned no default). `owner_module_code VARCHAR(10)`, `created_by` / `updated_by VARCHAR(100)`, `is_active_fl BOOLEAN NOT NULL DEFAULT TRUE` as planned. | V3:24-35 |
+| CHANGED | MDL_LOOKUP_VALUE | `name_ar` / `name_en VARCHAR(150)` (DBF-MDL-014/015, planned 200); `sort_order NUMERIC NOT NULL DEFAULT 0` (DBF-MDL-016, planned INTEGER) — the entity maps it to `Integer`; `created_at TIMESTAMPTZ NOT NULL DEFAULT now()` (DBF-MDL-019). `code VARCHAR(50)` as planned. | V3:40-52; mdl/entity/LookupValue.java:80-87 |
+| CHANGED | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE | BLOCK 4 comments reduced to the DBF id (`'DBF-MDL-0NN'`), with a rule pointer on `key`, `owner_module_code` and `code`; the bilingual text of this script's BLOCK 4 is not in the catalog. | V3:57-80 |
+| NEW | MDL_LOOKUP_TYPE | `IDX_MDL_LOOKUP_TYPE_ACTIVE ON MDL_LOOKUP_TYPE (is_active_fl)` — BLOCK 7 said neither flag is indexed. | V3:113; mdl/entity/LookupType.java:41 |
+| NEW | MDL_LOOKUP_VALUE | `IDX_MDL_LOOKUP_VALUE_TYPE ON MDL_LOOKUP_VALUE (lookup_type_id)` — BLOCK 7 said no third index over the leading column. | V3:114; mdl/entity/LookupValue.java:44 |
+| CHANGED | MDL_LOOKUP_VALUE | `IDX_MDL_LOOKUP_VALUE_SORT ON MDL_LOOKUP_VALUE (lookup_type_id, sort_order)` — the BLOCK 7 index exists under this name, not `IDX_MDL_LOOKUP_VALUE_TYPE_SORT`. | V3:115; mdl/entity/LookupValue.java:45 |
+| REMOVED | MDL_LOOKUP_TYPE | `IDX_MDL_LOOKUP_TYPE_NAME_AR`, `IDX_MDL_LOOKUP_TYPE_NAME_EN` — never created. `IDX_MDL_LOOKUP_TYPE_OWNER (owner_module_code)` exists as planned. | V3:112-115 |
+| NEW (seed) | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE | BLOCK 8 ("none, anywhere … never by an INSERT") is not what shipped: `V8` inserts, for the PLATFORM tenant (`TENANT_ID` 1 after the `V10` backfill), `CREATED_BY = 'SYSTEM'`, `CREATED_AT = CURRENT_TIMESTAMP`, PKs from the sequences, values linked by `KEY`: `NOTIF_CHANNEL` (owner NOTIF — EMAIL 1, SMS 2, WHATSAPP 3, PUSH 4, INTERNAL 5), `NOTIF_STATUS` (owner NOTIF — PENDING 1, SENT 2, FAILED 3, CHANNEL_DISABLED 4), `FILE_FILE_STATUS` (owner FILE — ACTIVE 1, ARCHIVED 2, DELETED 3), `FILE_FILE_TYPE` (owner FILE — IMAGE 1, DOCUMENT 2, SPREADSHEET 3, ARCHIVE 4, OTHER 5). | V8:25-65 |
+| NEW (seed) | MDL_LOOKUP_VALUE | + `NOTIF_STATUS` `QUEUED` (sort 5), `SKIPPED_NO_PROVIDER` (sort 6); + `NOTIF_CHANNEL` `IN_APP` (sort 6), for every tenant that has those types, skipping codes already present. | V13:66-80 |
 
-### Deviations from this analysis
-- Analysis: `UNIQUE (key)` and `UNIQUE (lookup_type_id, code)` platform-wide. Implemented: both lead with
-  `TENANT_ID` under the same constraint names (step 05; plan-sanctioned V10 exception).
-- Kept as recorded (renames are not additive): `*_pk` primary-key names on MDL tables (DEVIATIONS [05]).
-- Physical widths (ADR-MDL-010 planned `key VARCHAR(50)`, `name_ar`/`name_en VARCHAR(200)`, `sort_order INTEGER`).
-  Implemented in `V3__mdl_schema.sql:26-29,43-46`: `MDL_LOOKUP_TYPE.key VARCHAR(80)`, `name_ar`/`name_en VARCHAR(150)`
-  on both tables, `MDL_LOOKUP_VALUE.sort_order NUMERIC`. `owner_module_code VARCHAR(10)`, `code VARCHAR(50)` and
-  `created_by`/`updated_by VARCHAR(100)` are as planned. The DBF tables above keep the planned widths; the migration
-  is the current truth, and ADR-MDL-010 was dropped from `decisions/MDL/` for that reason.
+### XM register deltas — فروق سجل التقاطع
+| Kind | XM | Delta | Source |
+|---|---|---|---|
+| CHANGED | XM-MDL-001 (SOFT-READ → SEC_MODULE_REG) | the read is `SEC_MODULE_REG.CODE` **with** `IS_ACTIVE_FL = TRUE` (§2.1 says `module_code` and existence only), performed in-process through `SecModuleRegistryApi.isModuleActive(String)`; still no FK, no constraint. `SEC_MODULE_REG` stays global (no `TENANT_ID`), upserted from code at startup. | mdl/service/LookupTypeService.java:80; erp-core/src/main/java/com/erp/sec/crossmodule/SecModuleRegistryApiImpl.java:36-39; V10 §3 |
+| NEW | HARD-FK → CORE_TENANT | `TENANT_ID` on both tables (no analysis folder for the tenant module; no XM id assigned). | V10:103-104 |
+| REMOVED | inbound XM-FIN-001 | `fin` was removed from erp-core in step 01; no module joins MDL's tables. | docs/steps/01-report.md |
+| NEW | inbound, in-process | FILE (`FileLookupService`), NOTIF (`NotificationLookupService`) and REPORT (`ReportService`) read MDL through `com.erp.mdl.crossmodule.MdlLookupApi.readActiveValuesByKey` (`LookupOptionView(code, labelAr, labelEn, sortOrder)`, no `@PreAuthorize`, 404 `MDL-404-TYPE-KEY` for an unknown or inactive type) — a Java call, never a SQL join on MDL's tables. | mdl/crossmodule/MdlLookupApiImpl.java:51-66 |
+| NEW | registration | there is no registration SPI: a consuming module's types and values are seeded by its own Flyway `INSERT` (core `V8` / `V13`, application `V1000+`) or created through `POST /api/v1/mdl/lookup-types` — BLOCK 8's "seeded through this module's own API" is one of the two ways. A raw `INSERT` must itself respect RULE-MDL-001 (owner row in `SEC_MODULE_REG` first). | V8:5-9 |
 
+### Decisions applied — deltas — القرارات
+| Kind | Decision | Delta | Source |
+|---|---|---|---|
+| REMOVED | ADR-MDL-009 (cited ACCEPTED in BLOCK 7 and §4) | file dropped in the vendoring: the migration creates `IDX_MDL_LOOKUP_TYPE_ACTIVE` and `IDX_MDL_LOOKUP_VALUE_TYPE` and no name index, contradicting it. `V3` BLOCK 7 is the current truth; the strategy as built is ADR-MDL-045 (ACCEPTED). | docs/governance-vendoring-report.md; governance/analysis/decisions/MDL/ADR-MDL-045.md |
+| REMOVED | ADR-MDL-010 (cited ACCEPTED in §4) | file dropped in the vendoring: planned `key 50`, names `200`, `sort_order INTEGER`; built `key 80`, names `150`, `sort_order NUMERIC`. The DBF tables of §1 keep the planned widths as history; `V3` is the current truth (row "Physical widths" above). | docs/governance-vendoring-report.md; V3:26-29,43-46 |
+| CHANGED | §4 DEFAULT "no database DEFAULT on `created_at` / `created_by`" | `created_at` carries `DEFAULT now()` on both tables; `created_by` has none. | V3:32,49 |
+| CHANGED | §4 DEFAULT "no seed data in this script and none in any other module's script" | `V8` (core) seeds four NOTIF / FILE types; `V13` adds values. | V8; V13 §3a |
+| NOT IMPLEMENTED | §4.2 alignment note (P3.1 plan BINDINGS `IDENTITY`) | the P3.1 plan is not vendored; the `V3` header comment carries the same stale "IDENTITY" wording while its DDL is sequence-fed. | V3:8-12 |
+| CHANGED | `*_pk` primary-key names | kept as recorded (renames are not additive): `PK_MDL_LOOKUP_TYPE (lookup_type_pk)`, `PK_MDL_LOOKUP_VALUE (lookup_value_pk)`. | DEVIATIONS [05]; V3:86-87 |
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0-SNAPSHOT (main, in progress)
+Change         : shared helpers moved to com.erp.common (CHANGELOG [Unreleased]); no MDL behaviour change
+Statement      : The body and the 1.2.0 addendum above are unchanged; this addendum records the deltas being implemented for 1.3.0. Every row is verified against the code before the 1.3.0 tag.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| CHANGED | consumers' read model | FILE / NOTIF answer their MDL-stored keys with `com.erp.common.lookup.LookupOptionResponse` through `OwnedLookups.read` — a Java-level change on the consumer side; MDL's tables, sequences, constraints and indexes are untouched. | erp-core/src/main/java/com/erp/common/lookup/; CHANGELOG [Unreleased] |
+| CHANGED | `LookupTypeDomain` / `LookupValueDomain` | uniqueness refusals raised through `com.erp.common.domain.DomainRules.assertUnique`; same codes, same 409. No migration. | mdl/domain/LookupTypeDomain.java:48; mdl/domain/LookupValueDomain.java:34 |
+
+No migration after `V15` touches MDL (`git diff v1.2.0 -- erp-core/src/main/resources/db/migration/core` is empty).

@@ -61,9 +61,11 @@ mandated order.
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
 Steps          : 01–12 (plan), 14 (Phase D fixes, shipped in 1.1.0), 15 (hardening, shipped in 1.2.0)
+Revised        : 2026-10-08 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
 
-Paths cited below are relative to the erp-core repository at that tag.
+Paths cited below are relative to the erp-core repository at that tag. Each row is labelled NEW /
+CHANGED / REMOVED against the analysis above.
 
 ### Decision — where the platform description lives
 `platform-summary.md` exists once per module folder. To avoid five diverging copies, the FULL
@@ -74,29 +76,30 @@ each carry a short addendum that references this file by relative path and lists
 platform-relevant changes.
 
 ### Platform shape (as implemented)
-| Aspect | Implemented | Source |
-|---|---|---|
-| Delivery form | `com.erp:erp-core` — a versioned, auto-configured Spring Boot library (Java 21, Spring Boot 4.0.1, PostgreSQL 16, Flyway, `ddl-auto=none`), consumed as a Maven dependency from GitHub Packages. Everything arrives through `AutoConfiguration.imports`; an application never scans `com.erp.*` and never copies or patches a core class. | 00-README-EXECUTION-PLAN.md §2, §4; docs/CONSUMING.md; docs/steps/03-report.md |
-| Reference consumer | `erp-app-reference` (runnable app, `com.erp.app`) proves consumption; CI builds it against the published artifact on every release tag. | docs/RELEASE.md; DEVIATIONS [12] (CI) |
-| Business modules | None in core. The `fin` module was deleted completely (code, 18 migrations, seeds, 30 `PERM_FIN_*` permissions, OpenAPI group, i18n) and is never restored. Business modules (Phase 4) come later through the Governance Factory. The batch order "SEC → MDL → FIN" above no longer applies to erp-core. | 01-STEP; docs/steps/01-report.md; plan README §6 |
-| Core packages | `com.erp.{common, cu, mdl, sec, file, notif, tenant, events, sequence, audit, report}` + `autoconfigure` (wiring only) | DEVIATIONS [10] (rebase, `CORE_PACKAGES`), [11] |
-| Configuration | All core keys are `erp.core.*`, bound by `ErpCoreProperties` (old `app.*` / `file.*` keys renamed). Required: DB, `erp.core.security.jwt.secret`, `erp.core.files.access-token-secret`. Redis, SMTP, the S3 SDK and springdoc are optional. | docs/steps/03-report.md; DEVIATIONS [03] |
+| Kind | Aspect | Implemented | Source |
+|---|---|---|---|
+| CHANGED | Delivery form | `com.erp:erp-core` — a versioned, auto-configured Spring Boot library (Java 21 at 1.2.0, Spring Boot 4.0.1, PostgreSQL 16, Flyway, `ddl-auto=none`), consumed as a Maven dependency from GitHub Packages. Everything arrives through `AutoConfiguration.imports`; an application never scans `com.erp.*` and never copies or patches a core class. | 00-README-EXECUTION-PLAN.md §2, §4; docs/CONSUMING.md; docs/steps/03-report.md |
+| CHANGED | Toolchain | JDK 25 is required since `1.3.0-SNAPSHOT` (`maven.compiler.release=25`, enforced at `validate`; `.sdkmanrc` = `java=25-tem`, CI = Temurin 25). The "Java 21" of the Delivery form row describes the 1.2.0 tag. | pom.xml; CLAUDE.md (Versions) |
+| NEW | Reference consumer | `erp-app-reference` (runnable app, `com.erp.app`) proves consumption; CI builds it against the published artifact on every release tag. | docs/RELEASE.md; DEVIATIONS [12] (CI) |
+| REMOVED | Business modules | None in core. The `fin` module was deleted completely (code, 18 migrations, seeds, 30 `PERM_FIN_*` permissions, OpenAPI group, i18n) and is never restored. Business modules (Phase 4) come later through the Governance Factory. The batch order "SEC → MDL → FIN" above no longer applies to erp-core. | 01-STEP; docs/steps/01-report.md; plan README §6 |
+| CHANGED | Core packages | `com.erp.{common, cu, mdl, sec, file, notif, tenant, events, sequence, audit, report}` + `autoconfigure` (wiring only) | DEVIATIONS [10] (rebase, `CORE_PACKAGES`), [11] |
+| CHANGED | Configuration | All core keys are `erp.core.*`, bound by `ErpCoreProperties` (old `app.*` / `file.*` keys renamed). Required: DB, `erp.core.security.jwt.secret`, `erp.core.files.access-token-secret`. Redis, SMTP, the S3 SDK and springdoc are optional. | docs/steps/03-report.md; DEVIATIONS [03] |
 
 ### Core modules — analysis coverage
-| Module | Package | Analysis folder | Notes |
-|---|---|---|---|
-| SEC | `com.erp.sec` | `analysis/modules/SEC` | + realms, permission SPI, super role |
-| MDL | `com.erp.mdl` | `analysis/modules/MDL` | tenant-scoped catalog |
-| CU | `com.erp.cu` (+ `com.erp.common` foundation) | `analysis/modules/CU` | + settings: platform default / tenant override |
-| FILE | `com.erp.file` | `analysis/modules/FILE` | + storage SPI, public files |
-| NOTIF | `com.erp.notif` | `analysis/modules/NOTIF` | + async delivery, channel SPI, in-app inbox |
-| Tenant | `com.erp.tenant` | none | NEW — described below |
-| Audit | `com.erp.audit` | none | NEW — described below |
-| Events | `com.erp.events` | none | NEW — described below |
-| Sequence | `com.erp.sequence` | none | NEW — described below |
-| Report | `com.erp.report` | none | NEW — described below |
+| Kind | Module | Package | Analysis folder | Notes |
+|---|---|---|---|---|
+| CHANGED | SEC | `com.erp.sec` | `analysis/modules/SEC` | + realms, permission SPI, super role, logout, sequences (see the SEC addenda) |
+| CHANGED | MDL | `com.erp.mdl` | `analysis/modules/MDL` | tenant-scoped catalog |
+| CHANGED | CU | `com.erp.cu` (+ `com.erp.common` foundation) | `analysis/modules/CU` | + settings: platform default / tenant override |
+| CHANGED | FILE | `com.erp.file` | `analysis/modules/FILE` | + storage SPI, public files |
+| CHANGED | NOTIF | `com.erp.notif` | `analysis/modules/NOTIF` | + async delivery, channel SPI, in-app inbox |
+| NEW | Tenant | `com.erp.tenant` | `analysis/modules/TENANT` (added 2026-10-07, as-built) | described below |
+| NEW | Audit | `com.erp.audit` | none | described below |
+| NEW | Events | `com.erp.events` | none | described below |
+| NEW | Sequence | `com.erp.sequence` | none | described below |
+| NEW | Report | `com.erp.report` | none | described below |
 
-### New core modules without an analysis folder
+### New core modules without an analysis folder at 1.2.0
 
 **Tenant (`com.erp.tenant`) — step 05.** Row-level multi-tenancy in one shared schema.
 - `CORE_TENANT` (global): `CODE` `^[A-Z0-9_]{3,32}$` (immutable), bilingual name, `STATUS_CODE` ACTIVE | SUSPENDED. PLATFORM = id 1, cannot be suspended.
@@ -105,7 +108,7 @@ platform-relevant changes.
 - API `/api/v1/platform/tenants`: `POST` (provision a tenant and its first administrator), `GET` (paged), `GET /{id}`, `POST /search`, `PATCH /{id}/status`. Requires `PLATFORM_TENANT_MANAGE` (+ gateway `PERM_PLATFORM_TENANTS_VIEW`) and an authenticated caller of the PLATFORM tenant.
 - Provisioning SPI `TenantProvisioningContributor`, run in the same transaction as the tenant insert: SEC (roles, grants, first admin), MDL (lookup catalog), NOTIF (channel configs without credentials, templates without attachment), sequence (series, counter back to 1). Cross-module read `TenantLookupApi.codeOf(tenantId)`.
 - Errors: `TENANT_REQUIRED` 400, `TENANT_NOT_FOUND` 404, `TENANT_SUSPENDED` 403, `TENANT_CONTEXT_MISSING` 500, `TENANT_CODE_INVALID` 400, `TENANT_CODE_DUPLICATE` 409, `TENANT_PLATFORM_PROTECTED` 422.
-- Sources: 05-STEP; docs/steps/05-report.md; DEVIATIONS [05], [07] (path tenant), [09] (sequence contributor), [15]; docs/api-docs/tenant/index.md.
+- Sources: 05-STEP; docs/steps/05-report.md; DEVIATIONS [05], [07] (path tenant), [09] (sequence contributor), [15]; docs/api-docs/tenant/index.md. The module's own analysis (`analysis/modules/TENANT/`) was written as-built on 2026-10-07 and is the current reference for it.
 
 **Audit (`com.erp.audit`) — step 10.** One cross-module "who changed what, when" store.
 - `CORE_AUDIT_EVENT` (tenant-scoped): actor, actor realm (STAFF | CUSTOMER | SYSTEM), action (`^[A-Z_]{3,64}$`), entity type / id, bilingual summary, `CHANGES` JSONB (`[{field, old, new}]`), IP, user agent, reference.
@@ -133,17 +136,17 @@ platform-relevant changes.
 - Sources: 11-STEP; docs/steps/11-report.md; DEVIATIONS [11]; docs/api-docs/report/index.md.
 
 ### Platform conventions (as implemented)
-| Convention | Rule | Source |
-|---|---|---|
-| Tenant column | Every tenant-scoped table: `TENANT_ID BIGINT NOT NULL` (no default), FK `FK_<TABLE>_TENANT` → `CORE_TENANT(ID)`, index `IDX_<TABLE>_TENANT`; every unique constraint starts with `TENANT_ID`. Global tables only where a step names them: `CORE_TENANT`, `SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG`, and `CU_APP_CONFIGURATION` (nullable `TENANT_ID`, NULL = platform default). | db/migration/core/README.md; DEVIATIONS [12] (rule 2) |
-| Base entities | `AuditableEntity` (tenant-scoped, `@TenantId`) extends `GlobalAuditableEntity` (audit columns + `@Version`). | DEVIATIONS [05] |
-| Optimistic lock | `VERSION BIGINT NOT NULL DEFAULT 0` on every core table; a lost update answers 409 `CONCURRENT_MODIFICATION`. | V10__tenant_schema.sql; DEVIATIONS [05] |
-| Response envelope | `ApiResponse<T>` (`success`, `data`, `error{code, message, fieldErrors}`, `timestamp`); unchanged. | docs/api-docs/*/index.md |
-| Errors | `LocalizedException` with a registered code; message AR (`messages_ar.properties`) + EN (base `messages.properties`). Since 1.2.0: unknown path → 404 `NOT_FOUND`; page-offset overflow → 400 `VALIDATION_ERROR`; a wrapped `LocalizedException` answers with its own code and status. | docs/CHANGELOG.md [1.2.0]; DEVIATIONS [01], [15] |
-| Migrations | Core owns `V1..V999` in `classpath:db/migration/core` (chain `V2..V15`; `V1` unused), applications own `V1000+`. The historical chain was squashed into `V2..V9` in step 04 (old → new mapping in docs/steps/04-report.md). After `V9` core scripts are additive only, enforced by `MigrationNamingTest`. | docs/steps/04-report.md; db/migration/core/README.md |
-| Naming | Tables `<MODULE>_<NAME>`; new core tables `CORE_*`; new tables use `ID BIGINT` + per-table sequence; new booleans `BOOLEAN`. | plan README §4 |
-| Endpoints | `/api/v1/<module>/...`; unauthenticated endpoints under `/api/v1/public/...`. Two security chains: customer chain (`/api/v1/public/**`, `/api/v1/customers/**`) and staff chain (everything else). | docs/CONSUMING.md §4 |
-| Module boundaries | ArchUnit: `CrossModuleBoundaryArchTest` (cross-module access only through `crossmodule` / root SPI packages) and `CoreLibraryRulesArchTest` (no dependency on `com.erp.app..`, global-entity allow-list, `@PreAuthorize` must name its own module's `*Permissions` class, raw JDBC only in tenant / sequence / audit / provisioning contributors / requeue job). | DEVIATIONS [12] |
+| Kind | Convention | Rule | Source |
+|---|---|---|---|
+| NEW | Tenant column | Every tenant-scoped table: `TENANT_ID BIGINT NOT NULL` (no default), FK `FK_<TABLE>_TENANT` → `CORE_TENANT(ID)`, index `IDX_<TABLE>_TENANT`; every unique constraint starts with `TENANT_ID`. Global tables only where a step names them: `CORE_TENANT`, `SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG`, and `CU_APP_CONFIGURATION` (nullable `TENANT_ID`, NULL = platform default). | db/migration/core/README.md; DEVIATIONS [12] (rule 2) |
+| NEW | Base entities | `AuditableEntity` (tenant-scoped, `@TenantId`) extends `GlobalAuditableEntity` (audit columns + `@Version`). | DEVIATIONS [05] |
+| NEW | Optimistic lock | `VERSION BIGINT NOT NULL DEFAULT 0` on every core table; a lost update answers 409 `CONCURRENT_MODIFICATION`. | V10__tenant_schema.sql; DEVIATIONS [05] |
+| CHANGED | Response envelope | `ApiResponse<T>` (`success`, `data`, `error{code, message, fieldErrors}`, `timestamp`); the same shape as analysed. | docs/api-docs/*/index.md |
+| CHANGED | Errors | `LocalizedException` with a registered code; message AR (`messages_ar.properties`) + EN (base `messages.properties`). Since 1.2.0: unknown path → 404 `NOT_FOUND`; page-offset overflow → 400 `VALIDATION_ERROR`; a wrapped `LocalizedException` answers with its own code and status. | docs/CHANGELOG.md [1.2.0]; DEVIATIONS [01], [15] |
+| CHANGED | Migrations | Core owns `V1..V999` in `classpath:db/migration/core` (chain `V2..V15`; `V1` unused), applications own `V1000+`. The historical chain was squashed into `V2..V9` in step 04 (old → new mapping in docs/steps/04-report.md). After `V9` core scripts are additive only, enforced by `MigrationNamingTest`. | docs/steps/04-report.md; db/migration/core/README.md |
+| CHANGED | Naming | Tables `<MODULE>_<NAME>`; new core tables `CORE_*`; every table uses `ID BIGINT` (SEC: `<TABLE>_PK`) + a per-table named sequence, never IDENTITY; new booleans `BOOLEAN`. | plan README §4; V4__sec_schema.sql:17-31 |
+| CHANGED | Endpoints | `/api/v1/<module>/...`; unauthenticated endpoints under `/api/v1/public/...`. Two security chains: customer chain (`/api/v1/public/**`, `/api/v1/customers/**`) and staff chain (everything else). | docs/CONSUMING.md §4 |
+| NEW | Module boundaries | ArchUnit: `CrossModuleBoundaryArchTest` (cross-module access only through `crossmodule` / root SPI packages) and `CoreLibraryRulesArchTest` (no dependency on `com.erp.app..`, global-entity allow-list, `@PreAuthorize` must name its own module's `*Permissions` class, raw JDBC only in tenant / sequence / audit / provisioning contributors / requeue job). | DEVIATIONS [12] |
 
 ### Release and versioning
 - Semantic versioning (`docs/RELEASE.md`): MINOR = additive only (modules, tables, nullable or defaulted columns, endpoints, events, SPI methods with a default, permissions, error codes); MAJOR expected never. Public API = `crossmodule` packages, the SPIs, `com.erp.events`, `TenantContext`, `com.erp.common.*`, REST contracts, `erp.core.*` keys, core tables.

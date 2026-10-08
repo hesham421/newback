@@ -56,31 +56,56 @@ Total: 18 DBF-IDs across 2 tables.
 
 ## Implementation Addendum — erp-core 1.2.0
 Source version : erp-core 1.2.0 (tag v1.2.0, https://github.com/hesham421/newback)
-Steps          : 04, 05, 07 (migrations V5, V10, V12)
+Steps          : 04, 05, 06, 07 (migrations V5, V7, V8, V10, V12)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+Revised        : 2026-10-07 — rows corrected and completed against the code (docs/plans/analysis-coverage-review.md)
 
 Registry deltas only; detail in `db-script.md` → "Implementation Addendum — erp-core 1.2.0". No DBS / DBF /
 XM ids are assigned here.
 
 ### COLUMNS — delta
-| Column | DB Type | Table | Migration |
-|---|---|---|---|
-| TENANT_ID | BIGINT NOT NULL (FK `CORE_TENANT`) | FILE_CATEGORY, FILE_DOCUMENT | V10 |
-| VERSION | BIGINT NOT NULL DEFAULT 0 | FILE_CATEGORY, FILE_DOCUMENT | V10 |
-| ALLOW_PUBLIC | BOOLEAN NOT NULL DEFAULT FALSE | FILE_CATEGORY | V12 |
-| STORAGE_PROVIDER | VARCHAR(8) NOT NULL DEFAULT 'DB' | FILE_DOCUMENT | V12 |
-| STORAGE_REF | VARCHAR(512) | FILE_DOCUMENT | V12 |
-| VISIBILITY | VARCHAR(8) NOT NULL DEFAULT 'PRIVATE' | FILE_DOCUMENT | V12 |
-| PUBLIC_SLUG | VARCHAR(64) | FILE_DOCUMENT | V12 |
-| CONTENT_HASH | VARCHAR(64) | FILE_DOCUMENT | V12 |
-| FILE_CONTENT | BYTEA, now NULLABLE | FILE_DOCUMENT | V12 |
+| Kind | Column | DB Type | Table | Migration |
+|---|---|---|---|---|
+| NEW | TENANT_ID | BIGINT NOT NULL (FK `CORE_TENANT`) | FILE_CATEGORY, FILE_DOCUMENT | V10 |
+| NEW | VERSION | BIGINT NOT NULL DEFAULT 0 | FILE_CATEGORY, FILE_DOCUMENT | V10 |
+| NEW | ALLOW_PUBLIC | BOOLEAN NOT NULL DEFAULT FALSE (native boolean, not SMALLINT 0/1) | FILE_CATEGORY | V12 |
+| CHANGED | CATEGORY_CODE | VARCHAR(50), stored trimmed + upper-cased (application-level normalisation) | FILE_CATEGORY | V5 (type unchanged); entity `@PrePersist` / `@PreUpdate` |
+| NEW | STORAGE_PROVIDER | VARCHAR(8) NOT NULL DEFAULT 'DB', CHECK IN (DB, LOCAL, S3) | FILE_DOCUMENT | V12 |
+| NEW | STORAGE_REF | VARCHAR(512) | FILE_DOCUMENT | V12 |
+| NEW | VISIBILITY | VARCHAR(8) NOT NULL DEFAULT 'PRIVATE', CHECK IN (PRIVATE, PUBLIC) | FILE_DOCUMENT | V12 |
+| NEW | PUBLIC_SLUG | VARCHAR(64) | FILE_DOCUMENT | V12 |
+| NEW | CONTENT_HASH | VARCHAR(64) | FILE_DOCUMENT | V12 |
+| CHANGED | FILE_CONTENT | BYTEA, now NULLABLE | FILE_DOCUMENT | V12 |
 
 ### CONSTRAINTS — delta
-`UQ_FILE_CATEGORY_CATEGORY_CODE (TENANT_ID, CATEGORY_CODE)` (V10); `CHK_FILE_DOCUMENT_STORAGE_PROVIDER`,
-`CHK_FILE_DOCUMENT_VISIBILITY`, `CHK_FILE_DOCUMENT_PUBLIC_SLUG`, partial unique index
-`UQ_FILE_DOCUMENT_PUBLIC_SLUG (TENANT_ID, PUBLIC_SLUG) WHERE PUBLIC_SLUG IS NOT NULL` (V12).
+| Kind | Constraint / index | Definition | Migration |
+|---|---|---|---|
+| CHANGED | UQ_FILE_CATEGORY_CATEGORY_CODE | UNIQUE (TENANT_ID, CATEGORY_CODE) | V10 |
+| NEW | FK_FILE_CATEGORY_TENANT, FK_FILE_DOCUMENT_TENANT | FOREIGN KEY (TENANT_ID) → CORE_TENANT (ID) | V10 |
+| NEW | IDX_FILE_CATEGORY_TENANT, IDX_FILE_DOCUMENT_TENANT | (TENANT_ID) | V10 |
+| NEW | CHK_FILE_DOCUMENT_STORAGE_PROVIDER | STORAGE_PROVIDER IN ('DB', 'LOCAL', 'S3') — closes the storage SPI's keys | V12 |
+| NEW | CHK_FILE_DOCUMENT_VISIBILITY | VISIBILITY IN ('PRIVATE', 'PUBLIC') | V12 |
+| NEW | CHK_FILE_DOCUMENT_PUBLIC_SLUG | (VISIBILITY = 'PUBLIC') = (PUBLIC_SLUG IS NOT NULL) | V12 |
+| NEW | UQ_FILE_DOCUMENT_PUBLIC_SLUG | partial unique index (TENANT_ID, PUBLIC_SLUG) WHERE PUBLIC_SLUG IS NOT NULL | V12 |
+
+### LOV DDL REGISTER — delta
+| Kind | LOV-ID | Table/Type name | Delta |
+|---|---|---|---|
+| CHANGED | LOV-FILE-001 | FILE_FILE_TYPE — row of `MDL_LOOKUP_TYPE` (owner FILE) with 5 `MDL_LOOKUP_VALUE` rows (IMAGE, DOCUMENT, SPREADSHEET, ARCHIVE, OTHER) | MDL-backed, seeded by V8 — not "runtime-loaded, no DDL table"; `FILE_TYPE_ID` remains a plain code column (no FK, no CHECK) |
+| CHANGED | LOV-FILE-002 | FILE_FILE_STATUS — row of `MDL_LOOKUP_TYPE` (owner FILE) with 3 `MDL_LOOKUP_VALUE` rows (ACTIVE, ARCHIVED, DELETED) | same; `FILE_STATUS_ID` remains a plain code column |
+
+### SEED — delta
+| Kind | Rows | Migration |
+|---|---|---|
+| NEW | SEC registry: module FILE, screens FILE_CATEGORIES / FILE_BROWSER, 8 PERM_FILE_* actions, role FILE_ADMIN, grants to SYS_ADMIN and FILE_ADMIN | V7 |
+| NEW | SEC action `FILE:DOCUMENT:PUBLISH` (screen FILE_BROWSER) + grants to PLATFORM's SYS_ADMIN and FILE_ADMIN | V12 |
+| NEW | MDL lookup types and values for the two FILE LOVs | V8 |
 
 ### XM REGISTER — delta
-| Type | Target Table | Target Module | Note |
-|---|---|---|---|
-| HARD-FK | CORE_TENANT | tenant (no analysis folder) | every `TENANT_ID` |
+| Kind | Type | Target Table | Target Module | Note |
+|---|---|---|---|---|
+| NEW | HARD-FK | CORE_TENANT | tenant | every `TENANT_ID` |
+| NEW | SOFT-READ (application) | MDL_LOOKUP_TYPE / MDL_LOOKUP_VALUE via `MdlLookupApi` | MDL | lookup values for API-FILE-008; no physical FK; no XM id minted here |
+
+Package C5 review round 1 — COLUMNS delta: `REQUIRED_AUTHORITY` · VARCHAR(100) NULL · FILE_DOCUMENT ·
+`V22__file_document_required_authority.sql` (RULE-FILE-012; detail in `db-script.md` 1.3.0 package C5).
