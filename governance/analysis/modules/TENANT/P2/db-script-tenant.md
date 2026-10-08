@@ -459,3 +459,9 @@ its trigger `erp.core.idempotency.retention-cron` (default `-`) fires only when 
 ### Deviations
 - Plan §5 C.4 / §11 `V20__core_idempotency_key.sql` → `V21__core_idempotency_key.sql` (execution order D, B, E before C4).
 - Plan §5 C.4's nine columns → twelve (+ `CREATED_BY` NOT NULL, `UPDATED_BY`, `UPDATED_AT`; `AuditableEntity`).
+
+Review round 1 (package C4) — no schema change. The claim row is written by plain SQL (srs I12):
+`INSERT INTO CORE_IDEMPOTENCY_KEY (ID, TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT, REQUEST_HASH, RESPONSE_STATUS, CREATED_BY,
+CREATED_AT, UPDATED_BY, UPDATED_AT, VERSION) VALUES (nextval('SEQ_CORE_IDEMPOTENCY_KEY'), ?, ?, ?, ?, 0, ?, ?, ?, ?, 0)
+ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING` — `TENANT_ID` named explicitly (RULE-TENANT-011); a lost
+claim consumes one sequence value.

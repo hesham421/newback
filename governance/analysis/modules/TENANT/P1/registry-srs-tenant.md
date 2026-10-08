@@ -381,3 +381,11 @@ Decisions — delta
 
 Counts after this addendum: REQ 36 · AC 36 · RULE 22 · ENT 1 · SCR-REQ 1 · XM 3.
 Last sequence per atom: REQ: 036 · AC: 036 · ENT: 001 · RULE: 026 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 015 · POL: 016 · DBF: 045 · ADR: 005 (002, 003 used; 004 reserved for C.6)
+
+Review round 1 (package C4) — registry deltas
+| Kind | Id | Delta | Code location | Verified by |
+|---|---|---|---|---|
+| CHANGED | RULE-TENANT-026 | the claim is `INSERT … ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING` with explicit `TENANT_ID` (0 rows = lost; nothing logged, the key never in a log line) | common/idempotency/IdempotencyKeyClaims.java; IdempotentResponses.java | `TenantIdempotentProvisioningIntegrationTest.twoSimultaneousFirstRequestsWithOneKey_…` (captured output has no key), `IdempotentResponsesTest` |
+| NEW (note) | REQ-TENANT-036 | a replay precedes the service's `@PreAuthorize`: a consumer authorizes its path in the security chain too (srs I12) | docs/CONSUMING.md §3; ADR-TENANT-003 | — |
+| NEW | — | ArchUnit: `com.erp.common` depends on no module and not on `com.erp.autoconfigure` | architecture/CoreLibraryRulesArchTest.java | the rule itself |
+Error codes, ids and counts unchanged (last REQ 036 · RULE 026 · POL 016 · DBF 045).
