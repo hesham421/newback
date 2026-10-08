@@ -191,7 +191,7 @@
       "worktree": ".worktrees/tm-c4",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "a8b906cdb8e688079",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-c4-report.md",
@@ -211,7 +211,7 @@
       "worktree": ".worktrees/tm-c6",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "a565847c451d8db0c",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-c6-report.md",
@@ -518,6 +518,18 @@
       "step": "C6",
       "event": "START",
       "note": "wave 6 (C6 spike parallel with C4)"
+    },
+    {
+      "at": "2026-10-08T03:37:29Z",
+      "step": "C4",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T03:37:30Z",
+      "step": "C6",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
     }
   ]
 }
