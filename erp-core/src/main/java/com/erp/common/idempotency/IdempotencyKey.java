@@ -34,7 +34,7 @@ import lombok.experimental.SuperBuilder;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
 public class IdempotencyKey extends AuditableEntity {
 
-    /** {@code RESPONSE_STATUS} of a claimed row whose answer is not known yet; never committed. */
+    /** {@code RESPONSE_STATUS} of a claimed row ({@link IdempotencyKeyClaims}) whose answer is not known yet; never committed. */
     public static final int CLAIMED_STATUS = 0;
 
     @Id
@@ -57,16 +57,6 @@ public class IdempotencyKey extends AuditableEntity {
 
     @Column(name = "RESPONSE_BODY", columnDefinition = "TEXT")
     private String responseBody;
-
-    /** A claim: inserted before the work it protects, in the same transaction. */
-    public static IdempotencyKey claim(String idempotencyKey, String endpoint, String requestHash) {
-        return IdempotencyKey.builder()
-            .idempotencyKey(idempotencyKey)
-            .endpoint(endpoint)
-            .requestHash(requestHash)
-            .responseStatus(CLAIMED_STATUS)
-            .build();
-    }
 
     /** Records the answer of the claimed request. */
     public void answer(int status, String body) {

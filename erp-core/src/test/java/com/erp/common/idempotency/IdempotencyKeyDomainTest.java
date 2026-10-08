@@ -73,7 +73,8 @@ class IdempotencyKeyDomainTest {
     }
 
     private static IdempotencyKeyDomain domain(String hash, String owner, Instant createdAt) {
-        IdempotencyKey row = IdempotencyKey.claim("k", "POST /x", hash);
+        IdempotencyKey row = IdempotencyKey.builder().idempotencyKey("k").endpoint("POST /x").requestHash(hash)
+            .responseStatus(IdempotencyKey.CLAIMED_STATUS).build();
         row.setCreatedBy(owner);
         row.setCreatedAt(createdAt);
         return IdempotencyKeyDomain.from(row);

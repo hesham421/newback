@@ -186,10 +186,14 @@ class CodeHelpers:
     - params: (Class, method) -> [(parameter index carrying the code, Status)]
     - bound:  Class -> (constructor parameter index carrying the code, {method: Status})
     - fixed:  Class -> [(code, Status)] thrown with a constant, reached by instantiating the class
+    - injected: Class -> {method: [(code, Status)]} -- a shared (package segment "common") @Component held in a field:
+      the constant throws its method reaches through its own private methods and static calls into other shared
+      classes (tenant-maturity C4 review round 1: IdempotentResponses -> IdempotencyKeyDomain)
     """
     params: dict[tuple[str, str], list[tuple[int, str]]] = field(default_factory=dict)
     bound: dict[str, tuple[int, dict[str, str]]] = field(default_factory=dict)
     fixed: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    injected: dict[str, dict[str, list[tuple[str, str]]]] = field(default_factory=dict)
 
 
 def _param_names(params_raw: str) -> list[str]:
@@ -230,13 +234,52 @@ def _call_args(text: str, open_index: int) -> list[str]:
     return args
 
 
+INJECTED_MAX_DEPTH = 4
+
+
+def _is_shared_component(info: ClassInfo) -> bool:
+    return "common" in info.package.split(".") and re.search(r"@(?:Component|Service)\b", info.clean) is not None
+
+
+def _reachable_constant_throws(info: ClassInfo, method: MethodInfo, shared: dict[str, ClassInfo],
+                               seen: set[tuple[str, int]], depth: int) -> list[tuple[str, str]]:
+    """Constant throws in `method`, its own class's methods it calls, and static (also chained-factory) calls into
+    other shared classes -- never a field's or a module's method."""
+    key = (info.name, method.body_start)
+    if key in seen or depth > INJECTED_MAX_DEPTH:
+        return []
+    seen.add(key)
+    found = [(m.group(2), m.group(1)) for m in THROW_RE.finditer(method.body)]
+    targets: list[tuple[ClassInfo, str]] = []
+    for m in CALL_RE.finditer(method.body):
+        if m.group(3) and m.group(3) in info.methods and m.group(3) not in JAVA_KEYWORDS:
+            targets.append((info, m.group(3)))
+    for m in STATIC_CALL_RE.finditer(method.body):
+        holder, name = m.groups()
+        if holder in shared and holder != info.name:
+            targets.append((shared[holder], name))
+    for m in CHAINED_STATIC_RE.finditer(method.body):
+        holder, _, name = m.groups()
+        if holder in shared:
+            targets.append((shared[holder], name))
+    for target_info, name in targets:
+        for target in target_info.methods.get(name, []):
+            for entry in _reachable_constant_throws(target_info, target, shared, seen, depth + 1):
+                if entry not in found:
+                    found.append(entry)
+    return found
+
+
 def index_code_helpers(roots: list[Path]) -> CodeHelpers:
     helpers = CodeHelpers()
+    shared: dict[str, ClassInfo] = {}
     for root in roots:
         for path in sorted(Path(root).rglob("*.java")):
             info = _parse_class(path)
             if not info:
                 continue
+            if "common" in info.package.split("."):
+                shared.setdefault(info.name, info)
             for name in sorted(info.methods):
                 for mi in info.methods[name]:
                     names = _param_names(mi.params_raw)
@@ -260,6 +303,19 @@ def index_code_helpers(roots: list[Path]) -> CodeHelpers:
                         entry = (m.group(2), m.group(1))
                         if entry not in helpers.fixed.setdefault(info.name, []):
                             helpers.fixed[info.name].append(entry)
+    for name, info in shared.items():
+        if not _is_shared_component(info):
+            continue
+        for method_name, overloads in info.methods.items():
+            if method_name == CONSTRUCTOR:
+                continue
+            reached: list[tuple[str, str]] = []
+            for mi in overloads:
+                for entry in _reachable_constant_throws(info, mi, shared, set(), 0):
+                    if entry not in reached:
+                        reached.append(entry)
+            if reached:
+                helpers.injected.setdefault(name, {})[method_name] = reached
     return helpers
 
 
@@ -287,6 +343,9 @@ def _helper_throws(cls: ClassInfo, body: str, site: str, helpers: Optional[CodeH
     for m in INSTANCE_CALL_RE.finditer(body):
         receiver, name = m.groups()
         holder = cls.fields.get(receiver)
+        if holder not in classes:
+            for code, status in helpers.injected.get(holder, {}).get(name, []):
+                found.append(BusinessError(code=code, value=code, throw_site=site, kind="thrown", status=status))
         if holder not in helpers.bound:
             continue
         index, methods = helpers.bound[holder]

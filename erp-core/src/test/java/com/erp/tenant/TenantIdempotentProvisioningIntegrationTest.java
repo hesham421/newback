@@ -2,6 +2,7 @@ package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.erp.common.idempotency.IdempotencyKeyClaims;
 import com.erp.common.idempotency.IdempotencyKeyRetentionJob;
 import com.erp.common.idempotency.IdempotentResponses;
 import com.erp.testsupport.AbstractIntegrationTest;
@@ -18,10 +19,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * tenant-maturity C4 — {@code Idempotency-Key} on {@code POST /api/v1/platform/tenants} over real HTTP (REQ-TENANT-036,
@@ -43,6 +49,10 @@ class TenantIdempotentProvisioningIntegrationTest extends AbstractIntegrationTes
     private PasswordEncoder passwordEncoder;
     @Autowired
     private IdempotencyKeyRetentionJob retentionJob;
+    @Autowired
+    private IdempotencyKeyClaims claims;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private TenantHttp http;
     private String operator;
@@ -138,8 +148,11 @@ class TenantIdempotentProvisioningIntegrationTest extends AbstractIntegrationTes
         assertThat(TenantHttp.errorCode(withoutKey)).isEqualTo("TENANT_CODE_DUPLICATE");
     }
 
+    /** Review round 1: the lost claim is "0 rows" of {@code ON CONFLICT DO NOTHING}, so no log line carries the key. */
     @Test
-    void twoSimultaneousFirstRequestsWithOneKey_provisionExactlyOnce_andBothAnswerTheSameTenant() throws Exception {
+    @ExtendWith(OutputCaptureExtension.class)
+    void twoSimultaneousFirstRequestsWithOneKey_provisionExactlyOnce_andBothAnswerTheSameTenant(CapturedOutput output)
+            throws Exception {
         String code = TenantHttp.unique("IDF");
         String key = newKey();
         String body = TenantHttp.createTenantBody(code);
@@ -166,7 +179,73 @@ class TenantIdempotentProvisioningIntegrationTest extends AbstractIntegrationTes
                 .distinct()).hasSize(1);
             assertThat(count("SELECT COUNT(*) FROM CORE_TENANT WHERE CODE = ?", code)).isEqualTo(1);
             assertThat(count("SELECT COUNT(*) FROM CORE_IDEMPOTENCY_KEY WHERE IDEMPOTENCY_KEY = ?", key)).isEqualTo(1);
+            assertThat(output.getAll()).as("no log line names the key or the constraint")
+                .doesNotContain(key).doesNotContainIgnoringCase("uq_core_idempotency_key");
         } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * Review round 1, deterministic: a request whose key is claimed by an uncommitted transaction waits on the unique
+     * index; after that commit its claim inserts nothing (no error, no log line) and it answers the stored row (here a
+     * conflict: another body); after a rollback it claims the key itself and provisions.
+     */
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void aRequestWaitsForAnUncommittedClaim_thenAnswersTheCommittedRow_orRunsAfterARollback(CapturedOutput output)
+            throws Exception {
+        String committedKey = newKey();
+        HttpResponse<String> afterCommit = createWhileClaimedElsewhere(committedKey, TenantHttp.unique("IDM"), true);
+        assertThat(afterCommit.statusCode()).as(afterCommit.body()).isEqualTo(409);
+        assertThat(TenantHttp.errorCode(afterCommit)).isEqualTo("IDEMPOTENCY_KEY_CONFLICT");
+
+        String rolledBackKey = newKey();
+        String code = TenantHttp.unique("IDN");
+        HttpResponse<String> afterRollback = createWhileClaimedElsewhere(rolledBackKey, code, false);
+        assertThat(afterRollback.statusCode()).as(afterRollback.body()).isEqualTo(201);
+        assertThat(afterRollback.headers().firstValue(REPLAYED)).isEmpty();
+        assertThat(count("SELECT COUNT(*) FROM CORE_TENANT WHERE CODE = ?", code)).isEqualTo(1);
+
+        assertThat(output.getAll()).doesNotContain(committedKey).doesNotContain(rolledBackKey)
+            .doesNotContainIgnoringCase("uq_core_idempotency_key");
+    }
+
+    /** Holds an uncommitted claim of {@code key} in PLATFORM while a create with that key waits on it, then ends it. */
+    private HttpResponse<String> createWhileClaimedElsewhere(String key, String code, boolean commit) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch claimed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            Future<?> holder = pool.submit(() -> TenantContext.runAs(TenantConstants.PLATFORM_TENANT_ID,
+                () -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    assertThat(claims.claim(key, ENDPOINT, "0".repeat(64))).isTrue();
+                    claimed.countDown();
+                    try {
+                        assertThat(release.await(60, TimeUnit.SECONDS)).isTrue();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    if (commit) {
+                        jdbcTemplate.update("UPDATE CORE_IDEMPOTENCY_KEY SET RESPONSE_STATUS = 201 WHERE IDEMPOTENCY_KEY = ?", key);
+                    } else {
+                        status.setRollbackOnly();
+                    }
+                })));
+            assertThat(claimed.await(60, TimeUnit.SECONDS)).isTrue();
+            Future<HttpResponse<String>> request = pool.submit(() -> create(key, TenantHttp.createTenantBody(code)));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (count("SELECT COUNT(*) FROM pg_locks WHERE NOT granted") == 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+            }
+            assertThat(count("SELECT COUNT(*) FROM pg_locks WHERE NOT granted")).as("the request waits on the claim")
+                .isPositive();
+            assertThat(request.isDone()).isFalse();
+            release.countDown();
+            holder.get(60, TimeUnit.SECONDS);
+            return request.get(60, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
             pool.shutdownNow();
         }
     }

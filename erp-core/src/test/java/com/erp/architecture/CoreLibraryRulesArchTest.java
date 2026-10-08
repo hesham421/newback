@@ -84,13 +84,15 @@ class CoreLibraryRulesArchTest {
      *   <li>{@code com.erp.autoconfigure..} — wiring only (passes a {@code JdbcTemplate} into a bean);</li>
      *   <li>{@code NotificationRequeueJob} — step 08's cross-tenant stale-QUEUED scan, tenant by tenant;</li>
      *   <li>{@code IdempotencyKeyRetentionJob} — tenant-maturity C4's cross-tenant purge of expired idempotency keys,
-     *       tenant by tenant (RULE-TENANT-011; DEVIATIONS [TM-C4]).</li>
+     *       tenant by tenant (RULE-TENANT-011; DEVIATIONS [TM-C4]);</li>
+     *   <li>{@code IdempotencyKeyClaims} — C4's claim, {@code INSERT … ON CONFLICT DO NOTHING} with an explicit
+     *       {@code TENANT_ID} (review round 1).</li>
      * </ul>
      */
     static final List<String> RAW_JDBC_PACKAGES = List.of(
             "com.erp.tenant..", "com.erp.sequence..", "com.erp.audit..", "com.erp.*.tenant..", "com.erp.autoconfigure..");
     static final Set<String> RAW_JDBC_CLASSES = Set.of("com.erp.notif.service.NotificationRequeueJob",
-            "com.erp.common.idempotency.IdempotencyKeyRetentionJob");
+            "com.erp.common.idempotency.IdempotencyKeyRetentionJob", "com.erp.common.idempotency.IdempotencyKeyClaims");
 
     // ── Rule 1 ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -250,6 +252,18 @@ class CoreLibraryRulesArchTest {
             }
         }
     }
+
+    /**
+     * tenant-maturity C4 review round 1: {@code com.erp.common} is the foundation every module consumes, so it depends on
+     * no module and not on the composition root ({@code events} uses common, never the reverse).
+     */
+    @ArchTest
+    static final ArchRule common_depends_on_no_module_and_not_on_autoconfigure =
+            noClasses().that().resideInAPackage("com.erp.common..")
+                    .should().dependOnClassesThat().resideInAnyPackage("com.erp.sec..", "com.erp.tenant..", "com.erp.mdl..",
+                            "com.erp.cu..", "com.erp.file..", "com.erp.notif..", "com.erp.sequence..", "com.erp.audit..",
+                            "com.erp.report..", "com.erp.events..", "com.erp.autoconfigure..")
+                    .as("com.erp.common depends on no module package and not on com.erp.autoconfigure");
 
     // ── Rule 6 ────────────────────────────────────────────────────────────────────────────────────────────
 

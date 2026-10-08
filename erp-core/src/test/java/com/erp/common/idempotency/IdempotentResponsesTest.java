@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -24,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -43,15 +41,21 @@ class IdempotentResponsesTest {
     }
 
     private final IdempotencyKeyRepository repository = mock(IdempotencyKeyRepository.class);
+    private final IdempotencyKeyClaims claims = mock(IdempotencyKeyClaims.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final AtomicInteger runs = new AtomicInteger();
     private SimpleTransactionStatus lastTransaction;
+    private String claimedHash;
 
     @BeforeEach
     void transactions() {
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> lastTransaction = new SimpleTransactionStatus());
         when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(repository.findByIdempotencyKeyAndEndpoint(anyString(), anyString())).thenReturn(Optional.empty());
+        when(claims.claim(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
+            claimedHash = invocation.getArgument(2);
+            return true;
+        });
     }
 
     @Test
@@ -65,7 +69,7 @@ class IdempotentResponsesTest {
         assertThat(disabled.getStatusCode().value()).isEqualTo(201);
         assertThat(disabled.getHeaders().containsHeader(IdempotentResponses.REPLAYED_HEADER)).isFalse();
         assertThat(runs).hasValue(2);
-        verifyNoInteractions(repository, transactionManager);
+        verifyNoInteractions(repository, claims, transactionManager);
     }
 
     @Test
@@ -75,25 +79,26 @@ class IdempotentResponsesTest {
             .extracting(e -> ((LocalizedException) e).getErrorCode())
             .isEqualTo(IdempotencyErrorCodes.IDEMPOTENCY_KEY_INVALID);
         assertThat(runs).hasValue(0);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, claims);
     }
 
     @Test
     void a2xxAnswer_isStoredInTheClaimsTransaction_andReplayedForTheSameBody_withoutRunningAgain() {
+        IdempotencyKey row = row();
+        when(repository.findByIdempotencyKeyAndEndpoint(KEY, ENDPOINT)).thenReturn(Optional.empty(), Optional.of(row));
         IdempotentResponses responses = responses(true);
         ResponseEntity<ApiResponse<Payload>> first = responses.craftResponse(KEY, ENDPOINT, new Payload("same"),
             Payload.class, this::created);
 
         ArgumentCaptor<IdempotencyKey> saved = ArgumentCaptor.forClass(IdempotencyKey.class);
-        verify(repository, times(2)).saveAndFlush(saved.capture());
-        IdempotencyKey row = saved.getValue();
+        verify(repository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue()).isSameAs(row);
         assertThat(row.getResponseStatus()).isEqualTo(201);
         assertThat(row.getResponseBody()).contains("\"name\":\"thing\"");
-        assertThat(row.getRequestHash()).matches("[0-9a-f]{64}");
+        assertThat(claimedHash).matches("[0-9a-f]{64}");
         assertThat(lastTransaction.isRollbackOnly()).isFalse();
 
-        row.setCreatedBy(SecurityContextHelper.getCurrentUsername());
-        row.setCreatedAt(Instant.now());
+        row.setRequestHash(claimedHash);
         when(repository.findByIdempotencyKeyAndEndpoint(KEY, ENDPOINT)).thenReturn(Optional.of(row));
         ResponseEntity<ApiResponse<Payload>> replay = responses.craftResponse(KEY, ENDPOINT, new Payload("same"),
             Payload.class, this::created);
@@ -117,31 +122,46 @@ class IdempotentResponsesTest {
 
         assertThat(answer.getStatusCode().value()).isEqualTo(409);
         assertThat(lastTransaction.isRollbackOnly()).isTrue();
-        verify(repository, times(1)).saveAndFlush(any(IdempotencyKey.class));
+        verify(claims).claim(any(), any(), any());
+        verify(repository, never()).saveAndFlush(any(IdempotencyKey.class));
     }
 
     @Test
-    void aClaimLostToAConcurrentRequest_readsAndReplaysItsAnswer() {
-        IdempotentResponses responses = responses(true);
-        responses.craftResponse(KEY, ENDPOINT, "body", Payload.class, this::created);
-        ArgumentCaptor<IdempotencyKey> saved = ArgumentCaptor.forClass(IdempotencyKey.class);
-        verify(repository, times(2)).saveAndFlush(saved.capture());
-        IdempotencyKey winner = saved.getValue();
-        winner.setCreatedBy(SecurityContextHelper.getCurrentUsername());
-        winner.setCreatedAt(Instant.now());
+    void aClaimLostToAConcurrentRequest_readsAndReplaysItsAnswer_withoutRunningTheAction() {
+        when(claims.claim(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
+            claimedHash = invocation.getArgument(2);
+            return false;
+        });
+        IdempotencyKey winner = row();
+        winner.answer(201, "{\"success\":true,\"data\":{\"name\":\"winner\"},\"timestamp\":\"2026-10-08T08:00:00Z\"}");
+        when(repository.findByIdempotencyKeyAndEndpoint(KEY, ENDPOINT))
+            .thenReturn(Optional.empty())
+            .thenAnswer(invocation -> {
+                winner.setRequestHash(claimedHash);
+                return Optional.of(winner);
+            });
 
-        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenThrow(new DataIntegrityViolationException("UQ_CORE_IDEMPOTENCY_KEY"));
-        when(repository.findByIdempotencyKeyAndEndpoint(KEY, ENDPOINT)).thenReturn(Optional.empty(), Optional.of(winner));
-        ResponseEntity<ApiResponse<Payload>> answer = responses.craftResponse(KEY, ENDPOINT, "body", Payload.class,
+        ResponseEntity<ApiResponse<Payload>> answer = responses(true).craftResponse(KEY, ENDPOINT, "body", Payload.class,
             this::created);
 
         assertThat(answer.getHeaders().getFirst(IdempotentResponses.REPLAYED_HEADER)).isEqualTo("true");
-        assertThat(runs).as("the loser never ran the action").hasValue(1);
+        assertThat(answer.getBody().getData()).isEqualTo(new Payload("winner"));
+        assertThat(runs).as("the loser never ran the action").hasValue(0);
+        verify(repository, never()).saveAndFlush(any(IdempotencyKey.class));
         verify(repository, never()).deleteExpired(any());
     }
 
+    private static IdempotencyKey row() {
+        IdempotencyKey row = IdempotencyKey.builder().idempotencyKey(KEY).endpoint(ENDPOINT).requestHash("pending")
+            .responseStatus(IdempotencyKey.CLAIMED_STATUS).build();
+        row.setCreatedBy(SecurityContextHelper.getCurrentUsername());
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
     private IdempotentResponses responses(boolean enabled) {
-        return new IdempotentResponses(repository, new OperationCode(), transactionManager, JsonMapper.builder().build(),
+        return new IdempotentResponses(repository, claims, new OperationCode(), transactionManager,
+            JsonMapper.builder().build(),
             IdempotencySettings.of(enabled, Duration.ofHours(24), "test-only-secret-0123456789abcdef0123456789"));
     }
 

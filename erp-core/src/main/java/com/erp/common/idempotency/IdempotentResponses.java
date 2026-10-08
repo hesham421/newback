@@ -10,12 +10,10 @@ import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,6 +46,7 @@ public class IdempotentResponses {
         .build();
 
     private final IdempotencyKeyRepository repository;
+    private final IdempotencyKeyClaims claims;
     private final OperationCode operationCode;
     private final PlatformTransactionManager transactionManager;
     private final JsonMapper jsonMapper;
@@ -100,29 +99,25 @@ public class IdempotentResponses {
      */
     private <T> Optional<ResponseEntity<ApiResponse<T>>> runClaimed(String idempotencyKey, String endpoint,
                                                                     String requestHash, Supplier<ServiceResult<T>> action) {
-        AtomicBoolean claimed = new AtomicBoolean();
-        try {
-            return Optional.ofNullable(new TransactionTemplate(transactionManager).execute(status -> {
-                IdempotencyKey claim = repository.saveAndFlush(IdempotencyKey.claim(idempotencyKey, endpoint, requestHash));
-                claimed.set(true);
-                ResponseEntity<ApiResponse<T>> response = operationCode.craftResponse(action.get());
-                int httpStatus = response.getStatusCode().value();
-                if (IdempotencyKeyDomain.isStorable(httpStatus)) {
-                    claim.answer(httpStatus, jsonMapper.writeValueAsString(response.getBody()));
-                    repository.saveAndFlush(claim);
-                    log.info("Stored the answer of {} ({})", endpoint, httpStatus);
-                } else {
-                    status.setRollbackOnly();
-                }
-                return response;
-            }));
-        } catch (DataIntegrityViolationException e) {
-            if (claimed.get()) {
-                throw e;
+        return Optional.ofNullable(new TransactionTemplate(transactionManager).execute(status -> {
+            if (!claims.claim(idempotencyKey, endpoint, requestHash)) {
+                log.info("The idempotency key of {} was claimed by a concurrent request; reading its answer", endpoint);
+                return null;
             }
-            log.info("The idempotency key of {} was claimed by a concurrent request; reading its answer", endpoint);
-            return Optional.empty();
-        }
+            ResponseEntity<ApiResponse<T>> response = operationCode.craftResponse(action.get());
+            int httpStatus = response.getStatusCode().value();
+            if (IdempotencyKeyDomain.isStorable(httpStatus)) {
+                IdempotencyKey claim = repository.findByIdempotencyKeyAndEndpoint(idempotencyKey, endpoint)
+                    .orElseThrow(() -> new IllegalStateException("The claimed idempotency key row of " + endpoint
+                        + " is missing from its own transaction"));
+                claim.answer(httpStatus, jsonMapper.writeValueAsString(response.getBody()));
+                repository.saveAndFlush(claim);
+                log.info("Stored the answer of {} ({})", endpoint, httpStatus);
+            } else {
+                status.setRollbackOnly();
+            }
+            return response;
+        }));
     }
 
     /** The stored status and envelope ({@code data} and {@code timestamp} of the first answer), marked as a replay. */
