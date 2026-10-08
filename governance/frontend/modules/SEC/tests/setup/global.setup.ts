@@ -191,17 +191,24 @@ async function ensureUser(api: Api, username: string, fullNameEn: string, roleId
       fullNameEn,
       password,
       roleIds: [roleId],
+      /* tm-F1: 1.3.0 forces a change at the first sign-in by default; harness users never wait on it. */
+      requireChangeAtNextLogin: false,
     },
     ['SEC-409-USER-DUP']
   )
-  const found = await api.expectOk<Page<{ userPk: number; username: string }>>('POST', '/api/v1/sec/users/search', {
-    filters: [{ field: 'username', operator: 'LIKE', value: username }],
-    page: 0,
-    size: 5,
-  })
+  const found = await api.expectOk<Page<{ userPk: number; username: string; passwordChangeRequired?: boolean }>>(
+    'POST',
+    '/api/v1/sec/users/search',
+    { filters: [{ field: 'username', operator: 'LIKE', value: username }], page: 0, size: 5 }
+  )
   const user = found.content.find((row) => row.username === username)
   expect(user, `user ${username}`).toBeDefined()
-  await api.expectOk('PUT', `/api/v1/sec/users/${(user as { userPk: number }).userPk}/roles`, { roleIds: [roleId] })
+  const userPk = (user as { userPk: number }).userPk
+  /* tm-F1: heal a user an earlier run left with a pending forced change. */
+  if (user?.passwordChangeRequired) {
+    await api.expectOk('PUT', `/api/v1/sec/users/${userPk}/password`, { newPassword: password, requireChangeAtNextLogin: false })
+  }
+  await api.expectOk('PUT', `/api/v1/sec/users/${userPk}/roles`, { roleIds: [roleId] })
 }
 
 /** Ends the session a previous run stored, so live sessions do not pile up across runs (best effort). */

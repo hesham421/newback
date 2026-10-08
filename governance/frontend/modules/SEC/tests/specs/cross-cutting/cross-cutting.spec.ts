@@ -70,7 +70,14 @@ test('TC-FE-XCUT-002 X-Tenant-Code rides only on public auth calls (never with A
   await expect(page.getByRole('heading', { name: 'Notification templates' })).toBeVisible()
 
   const publicCalls = seen.filter((r) => PUBLIC_AUTH.test(new URL(r.url()).pathname))
-  const privateCalls = seen.filter((r) => !PUBLIC_AUTH.test(new URL(r.url()).pathname))
+  /* tm-F1 / tm-F2: a public file (photo, logo) and the sign-in page's tenant branding are anonymous reads — no token, no tenant header. */
+  const isPublicRead = (r: Request) => /^\/api\/v1\/public\/(files|tenants)\//.test(new URL(r.url()).pathname)
+  const privateCalls = seen.filter((r) => !PUBLIC_AUTH.test(new URL(r.url()).pathname) && !isPublicRead(r))
+  expect(seen.filter(isPublicRead).length).toBeGreaterThan(0)
+  for (const request of seen.filter(isPublicRead)) {
+    expect(request.headers()['authorization'], request.url()).toBeUndefined()
+    expect(request.headers()['x-tenant-code'], request.url()).toBeUndefined()
+  }
   expect(publicCalls.length).toBeGreaterThan(0)
   expect(privateCalls.length).toBeGreaterThan(2)
   for (const request of publicCalls) {

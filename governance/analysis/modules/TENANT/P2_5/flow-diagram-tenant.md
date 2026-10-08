@@ -166,6 +166,11 @@ Trigger   : a slow network while provisioning
 Priority  : MEDIUM (REQ-TENANT-036)
 ```
 
+TM-FZ as built (`ui-ux-spec-tenant.md` TEN-U148): in the revoke flow above, a customer-realm session of the tenant
+(the customer portal, `/customer/*`) ends the same way on its next call — 401 `TENANT_TOKEN_REVOKED` → the customer
+session and its cache are cleared (the staff session is untouched) → the customer sign-in page with the warning
+"Your session was ended by the organisation. Please sign in again." (`customerPortal.errTenantTokenRevoked`).
+
 ## Story coverage (addendum)
 
 | US | Flow | SCR |

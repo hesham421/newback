@@ -1,4 +1,4 @@
-/** PLATFORM_TENANTS on erp-core 1.2.0 (steps 09, 12): create E2E_T9 + t9admin, inline duplicate/invalid code, suspend (confirmed) → login refused, activate → login works without the screen, PLATFORM never suspendable. */
+/** PLATFORM_TENANTS on erp-core 1.2.0 (steps 09, 12; 1.3.0 suspension reason, TM-F3): create E2E_T9 + t9admin, inline duplicate/invalid code, suspend (confirmed) → login refused, activate → login works without the screen, PLATFORM never suspendable. */
 import { expect, test } from '@playwright/test'
 import { backendUrl, hasPassword, MISSING_ENV_REASON, password, PLATFORM, USERS } from '../../pom/env.ts'
 import { LoginPage } from '../../pom/LoginPage.ts'
@@ -8,6 +8,7 @@ const TENANT = 'E2E_T9'
 const ADMIN = 't9admin'
 const TENANTS_API = /\/api\/v1\/platform\/tenants$/
 const STATUS_API = /\/api\/v1\/platform\/tenants\/\d+\/status$/
+const SUSPENSION_REASON = 'E2E suspension (TC-FE-PLATFORM-004)'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -96,17 +97,18 @@ test.describe('PLATFORM_TENANTS', () => {
     await expect(page.getByTestId('tenant-link-platform-settings')).toHaveAttribute('href', '/platform/settings')
   })
 
-  test('TC-FE-PLATFORM-004 Suspend E2E_T9 behind a ConfirmDialog → SUSPENDED; t9admin is then refused inline with TENANT_SUSPENDED', async ({ page }) => {
+  test('TC-FE-PLATFORM-004 Suspend E2E_T9 behind a ConfirmDialog with the mandatory reason → SUSPENDED; t9admin is then refused inline with TENANT_SUSPENDED', async ({ page }) => {
     await signInViaUi(page, PLATFORM, USERS.admin)
     await openTenant(page, TENANT)
     await page.getByTestId('tenant-action-suspend').click()
     const dialog = page.getByRole('alertdialog')
     await expect(dialog).toContainText(`Are you sure you want to suspend the tenant ${TENANT}?`)
+    await dialog.getByTestId('tenant-suspend-reason').fill(SUSPENSION_REASON)
     const patched = page.waitForResponse((r) => r.request().method() === 'PATCH' && STATUS_API.test(r.url()))
     await dialog.getByTestId('confirm-dialog-confirm').click()
     const response = await patched
     expect(response.status()).toBe(200)
-    expect(response.request().postDataJSON()).toEqual({ statusCode: 'SUSPENDED' })
+    expect(response.request().postDataJSON()).toEqual({ statusCode: 'SUSPENDED', reason: SUSPENSION_REASON })
     await expect(page.getByTestId('toast-container')).toContainText(`Tenant ${TENANT} is now Suspended.`)
     await expect(page.getByTestId('tenant-detail-drawer').getByTestId('tenant-status-badge')).toHaveAttribute('data-status', 'SUSPENDED')
     await signOutViaUi(page)
