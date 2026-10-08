@@ -10,6 +10,7 @@
 - [PUT /api/v1/platform/tenants/{id}](#put-apiv1platformtenantsid)
 - [POST /api/v1/platform/tenants/{id}/admin-reset](#post-apiv1platformtenantsidadmin-reset)
 - [PATCH /api/v1/platform/tenants/{id}/branding](#patch-apiv1platformtenantsidbranding)
+- [POST /api/v1/platform/tenants/{id}/export](#post-apiv1platformtenantsidexport)
 - [PUT /api/v1/platform/tenants/{id}/logo](#put-apiv1platformtenantsidlogo)
 - [DELETE /api/v1/platform/tenants/{id}/logo](#delete-apiv1platformtenantsidlogo)
 - [POST /api/v1/platform/tenants/{id}/revoke-tokens](#post-apiv1platformtenantsidrevoke-tokens)
@@ -728,6 +729,76 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 |---|---|---|
 | 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
 | 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## POST /api/v1/platform/tenants/{id}/export
+
+**Export a tenant's data (ZIP of CSV files, PRIVATE PLATFORM document, single-use download token)**
+
+Synchronous: every module writes the tenant's rows as CSV (UTF-8 with BOM) into a ZIP with manifest.json, never password or token hashes, credentials or file bytes; the ZIP is stored as a PRIVATE file document of the PLATFORM tenant and downloaded once with GET /api/v1/files/download?token={downloadToken} (10 minutes, same user). 422 TENANT_EXPORT_TOO_LARGE above erp.core.tenant.export.max-rows; 409 TENANT_EXPORT_IN_PROGRESS while an export of the same tenant runs - تصدير بيانات المستأجر
+
+Operation ID: `exportTenant`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantExportService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Response `200` — OK
+
+Shape: `TenantExportResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| tenantId | integer (int64) | No |  | Exported tenant ID - معرّف المستأجر المصدَّر | 2 |
+| tenantCode | string | No |  | Exported tenant code - رمز المستأجر المصدَّر | ACME |
+| fileId | integer (int64) | No |  | ID of the PRIVATE file document of the PLATFORM tenant holding the ZIP - معرّف مستند الملف المضغوط | 41 |
+| fileName | string | No |  | Name of the ZIP - اسم الملف المضغوط | tenant-export-ACME-20261008T093000Z.zip |
+| sizeBytes | integer (int64) | No |  | Size of the ZIP in bytes - حجم الملف بالبايت | 48213 |
+| rowCount | integer (int64) | No |  | Rows exported, all CSV files together - عدد السجلات المصدَّرة | 1520 |
+| downloadToken | string | No |  | Single-use download token (10 minutes, bound to the caller) for GET /api/v1/files/download?token= - رمز تنزيل يُستخدم مرة واحدة | q2c3... |
+| downloadTokenExpiresAt | string (date-time) | No |  | When the download token expires (UTC) - انتهاء صلاحية رمز التنزيل | 2026-10-08T09:40:00.000Z |
+
+**Response Example**
+
+```json
+{
+  "tenantId": 2,
+  "tenantCode": "ACME",
+  "fileId": 41,
+  "fileName": "tenant-export-ACME-20261008T093000Z.zip",
+  "sizeBytes": 48213,
+  "rowCount": 1520,
+  "downloadToken": "q2c3...",
+  "downloadTokenExpiresAt": "2026-10-08T09:40:00.000Z"
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.exportTenant`, `TenantExportService.export`, `TenantDomain.assertExportStartable`, `TenantExportGuard.tryStart`, `TenantExportService.createArchiveFile`, `TenantExportService.orderedContributors`, `TenantContext.callAs`, `TenantExportService.snapshot`, `TenantExportService.writeArchive`, `TenantExportService.requiresNew`, `TenantExportService.storeAndRecord`, `TenantMapper.toExportResponse`, `TenantExportGuard.finish`, `TenantExportService.deleteQuietly`, `TenantExportService.internalError`, `TenantDomain.assertExportWithinLimit`, `TenantExportArchive.startModule`, `TenantExportArchive.finish`, `TenantExportService.erpCoreVersion`, `TenantExportArchive.rowCount`, `new TenantExportArchive()`, `TenantContext.runAs`, `TenantExportArchive.internal`, `TenantExportArchive.openEntry`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantExportService.export |
+| 409 CONFLICT | `TENANT_EXPORT_IN_PROGRESS` | TENANT_EXPORT_IN_PROGRESS | TenantDomain.assertExportStartable |
+| 422 UNPROCESSABLE_CONTENT | `TENANT_EXPORT_TOO_LARGE` | TENANT_EXPORT_TOO_LARGE | TenantDomain.assertExportWithinLimit |
+| 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | TenantExportArchive.internal |
+| 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | TenantExportService.internalError |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
 
 ## PUT /api/v1/platform/tenants/{id}/logo
 
