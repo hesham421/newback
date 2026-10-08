@@ -109,7 +109,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب سجل إشعار حسب المعرف
 
-Operation ID: `getById_7`
+Operation ID: `getById_6`
 
 **Authentication**
 

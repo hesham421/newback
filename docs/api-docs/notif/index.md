@@ -137,7 +137,7 @@ Shared, module-independent mapping every business error code's `Status` resolves
 |---|---|---|---|
 | POST | `/api/v1/notifications/channels` | Create notification channel config | [create_5](endpoints/notification-channels.md#post-apiv1notificationschannels) |
 | POST | `/api/v1/notifications/channels/search` | Search notification channel configs | [search_10](endpoints/notification-channels.md#post-apiv1notificationschannelssearch) |
-| GET | `/api/v1/notifications/channels/{id}` | Get notification channel config by ID | [getById_5](endpoints/notification-channels.md#get-apiv1notificationschannelsid) |
+| GET | `/api/v1/notifications/channels/{id}` | Get notification channel config by ID | [getById_4](endpoints/notification-channels.md#get-apiv1notificationschannelsid) |
 | PUT | `/api/v1/notifications/channels/{id}` | Update notification channel config | [update_4](endpoints/notification-channels.md#put-apiv1notificationschannelsid) |
 | DELETE | `/api/v1/notifications/channels/{id}` | Disable notification channel config | [disable](endpoints/notification-channels.md#delete-apiv1notificationschannelsid) |
 
@@ -161,7 +161,7 @@ Shared, module-independent mapping every business error code's `Status` resolves
 | Method | Path | Summary | Doc |
 |---|---|---|---|
 | POST | `/api/v1/notifications/logs/search` | Search notification logs | [search_9](endpoints/notification-logs.md#post-apiv1notificationslogssearch) |
-| GET | `/api/v1/notifications/logs/{id}` | Get notification log by ID | [getById_7](endpoints/notification-logs.md#get-apiv1notificationslogsid) |
+| GET | `/api/v1/notifications/logs/{id}` | Get notification log by ID | [getById_6](endpoints/notification-logs.md#get-apiv1notificationslogsid) |
 
 ### Notification Lookups
 
@@ -175,6 +175,6 @@ Shared, module-independent mapping every business error code's `Status` resolves
 |---|---|---|---|
 | POST | `/api/v1/notifications/templates` | Create notification template | [create_4](endpoints/notification-templates.md#post-apiv1notificationstemplates) |
 | POST | `/api/v1/notifications/templates/search` | Search notification templates | [search_8](endpoints/notification-templates.md#post-apiv1notificationstemplatessearch) |
-| GET | `/api/v1/notifications/templates/{id}` | Get notification template by ID | [getById_4](endpoints/notification-templates.md#get-apiv1notificationstemplatesid) |
+| GET | `/api/v1/notifications/templates/{id}` | Get notification template by ID | [getById_3](endpoints/notification-templates.md#get-apiv1notificationstemplatesid) |
 | PUT | `/api/v1/notifications/templates/{id}` | Update notification template | [update_3](endpoints/notification-templates.md#put-apiv1notificationstemplatesid) |
 | DELETE | `/api/v1/notifications/templates/{id}` | Deactivate notification template | [deactivate_2](endpoints/notification-templates.md#delete-apiv1notificationstemplatesid) |

@@ -316,7 +316,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 جلب مستأجر حسب المعرف
 
-Operation ID: `getById_3`
+Operation ID: `getTenantById`
 
 **Authentication**
 
@@ -381,7 +381,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.getById`, `TenantService.getById`, `TenantMapper.toResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.getTenantById`, `TenantService.getById`, `TenantMapper.toResponse`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -571,13 +571,14 @@ Shape: `TenantAdminResetResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.resetAdministratorPassword`, `TenantService.resetAdministratorPassword`, `TenantDomain.from`, `TenantContext.callAs`, `TenantService.resetInsideTenant`, `TenantMapper.toAdminResetResponse`, `new TenantDomain()`, `TenantDomain.assertCanResetAdministrator`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.resetAdministratorPassword`, `TenantService.resetAdministratorPassword`, `TenantDomain.from`, `TenantDomain.assertAdminResetAllowed`, `TenantContext.callAs`, `TenantService.resetInsideTenant`, `TenantMapper.toAdminResetResponse`, `new TenantDomain()`, `TenantDomain.assertCanResetAdministrator`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `TENANT_ADMIN_NOT_FOUND` | TENANT_ADMIN_NOT_FOUND | TenantDomain.assertCanResetAdministrator |
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.resetAdministratorPassword |
 | 422 UNPROCESSABLE_CONTENT | `TENANT_ADMIN_NOT_SUPER` | TENANT_ADMIN_NOT_SUPER | TenantDomain.assertCanResetAdministrator |
+| 422 UNPROCESSABLE_CONTENT | `TENANT_ADMIN_RESET_PLATFORM` | TENANT_ADMIN_RESET_PLATFORM | TenantDomain.assertAdminResetAllowed |
 
 ### Other Possible Responses
 
