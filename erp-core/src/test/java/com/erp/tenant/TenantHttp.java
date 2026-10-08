@@ -51,6 +51,11 @@ final class TenantHttp {
         return PLATFORM_OPERATOR.updateAndGet(existing -> existing != null ? existing : createOperator(jdbc, encoder));
     }
 
+    /** tenant-maturity C4 — one more PLATFORM operator (SYS_ADMIN), distinct from {@link #platformOperator}. */
+    static String anotherPlatformOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
+        return createOperator(jdbc, encoder);
+    }
+
     private static String createOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
         String username = "platform-op-" + UUID.randomUUID().toString().substring(0, 8);
         jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
@@ -86,10 +91,7 @@ final class TenantHttp {
 
     /** Provisions a tenant whose administrator is {@code admin} / {@link #PASSWORD}. */
     HttpResponse<String> createTenant(String token, String code) {
-        return post(token, "/api/v1/platform/tenants", "{\"code\":\"" + code + "\",\"nameAr\":\"مستأجر " + code
-            + "\",\"nameEn\":\"Tenant " + code + "\",\"adminUsername\":\"admin\",\"adminEmail\":\"admin@"
-            + code.toLowerCase() + ".test\",\"adminPassword\":\"" + PASSWORD
-            + "\",\"adminFullNameAr\":\"مدير\",\"adminFullNameEn\":\"Administrator\"}");
+        return post(token, "/api/v1/platform/tenants", createTenantBody(code));
     }
 
     /** Creates a tenant and returns its id (fails the test on any other answer than 201). */
@@ -124,6 +126,23 @@ final class TenantHttp {
     HttpResponse<String> post(String token, String tenantCode, String path, String jsonBody) {
         return send(authorized(json(path), token).header(TenantConstants.TENANT_CODE_HEADER, tenantCode)
             .POST(body(jsonBody)));
+    }
+
+    /** tenant-maturity C4 — POST with one extra request header ({@code Idempotency-Key}); {@code null} sends none. */
+    HttpResponse<String> post(String token, String path, String jsonBody, String headerName, String headerValue) {
+        HttpRequest.Builder request = authorized(json(path), token);
+        if (headerValue != null) {
+            request.header(headerName, headerValue);
+        }
+        return send(request.POST(body(jsonBody)));
+    }
+
+    /** The JSON body of {@link #createTenant}, for a request sent with headers of the caller's choice. */
+    static String createTenantBody(String code) {
+        return "{\"code\":\"" + code + "\",\"nameAr\":\"مستأجر " + code
+            + "\",\"nameEn\":\"Tenant " + code + "\",\"adminUsername\":\"admin\",\"adminEmail\":\"admin@"
+            + code.toLowerCase() + ".test\",\"adminPassword\":\"" + PASSWORD
+            + "\",\"adminFullNameAr\":\"مدير\",\"adminFullNameEn\":\"Administrator\"}";
     }
 
     HttpResponse<String> patch(String token, String path, String jsonBody) {
