@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "C12",
+  "current_step": "C4,C6",
   "steps": [
     {
       "id": "A",
@@ -161,19 +161,19 @@
       ],
       "wave": "5",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/c12-tenant-events-token-cutoff",
-      "worktree": ".worktrees/tm-c12",
+      "worktree": null,
       "attempts": 2,
       "deviations": 9,
       "implementer_agent": "ad223efb12f48d324",
       "reviewer_agent": "a5f9d987dd2e0d394",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-c12-report.md",
-      "merged_commit": null
+      "merged_commit": "381d000"
     },
     {
       "id": "C4",
@@ -186,9 +186,9 @@
       "migrations": [
         "V21__core_idempotency_key.sql"
       ],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/c4-idempotent-provisioning",
-      "worktree": null,
+      "worktree": ".worktrees/tm-c4",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -206,9 +206,9 @@
       ],
       "wave": "6",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/c6-scoped-value-spike",
-      "worktree": null,
+      "worktree": ".worktrees/tm-c6",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -500,6 +500,24 @@
       "step": "C12",
       "event": "REVIEW",
       "note": "fix round 1 done 1fdc861 (revoke cut-off ceil to next second, audited retryable failure path, ids, deviations; mvn 623/10, P-LIVE 196/196); focused re-review"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C12",
+      "event": "COMPLETE",
+      "note": "merged 381d000; verify 623/10; P-LIVE 196/196"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C4",
+      "event": "START",
+      "note": "wave 6 (C4 parallel with C6)"
+    },
+    {
+      "at": "2026-10-08T03:36:43Z",
+      "step": "C6",
+      "event": "START",
+      "note": "wave 6 (C6 spike parallel with C4)"
     }
   ]
 }
