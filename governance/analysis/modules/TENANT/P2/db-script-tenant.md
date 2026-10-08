@@ -268,3 +268,65 @@ re-activated or suspended again.
 ### Deviations
 - Plan §4 B.1 / §11 `V16__tenant_profile.sql`, `V17__tenant_lifecycle.sql` → `V18__tenant_profile.sql`,
   `V19__tenant_lifecycle.sql` (execution order D before B).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding columns on `CORE_TENANT` (plan §7 E.1)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V20__tenant_branding.sql`.
+The plan expected `V18__tenant_branding.sql`; packages D and B, executed first, took V16 … V19, so the number
+follows the execution order (plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-E]`). Additive only
+(`MigrationNamingTest`): two nullable columns without a default and one CHECK every existing row satisfies
+(NULL). **No registry rows** (plan §0 D5, ADR-TENANT-005): no module, screen, action or grant seed. DBF ids
+continue from DBF-TENANT-042.
+
+### Table CORE_TENANT (ENT-TENANT-001) — NEW columns
+| DBF id | Column | Type (postgresql16) | Traces (ENT.field) | Traces (REQ) | Nullable | Default | Constraint | Migration |
+|---|---|---|---|---|---|---|---|---|
+| DBF-TENANT-043 | LOGO_FILE_ID | BIGINT | ENT-TENANT-001.logoFileId | REQ-TENANT-029 | NULL | — | soft reference to `FILE_DOCUMENT.ID`, **no FK** (XM-TENANT-003; the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` / `SEC_USER.PHOTO_FILE_ID` convention: the document lives in the tenant's own `FILE_DOCUMENT` rows and is discarded, never deleted) | V20 |
+| DBF-TENANT-044 | BRAND_COLOR | VARCHAR(7) | ENT-TENANT-001.brandColor | REQ-TENANT-030 | NULL | — | `CHK_CORE_TENANT_BRAND_COLOR` | V20 |
+
+### Constraints
+| Name | Definition | Note |
+|---|---|---|
+| `CHK_CORE_TENANT_BRAND_COLOR` | `CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$')` | the plan's expression verbatim; a NULL value passes (a CHECK fails only on FALSE); every existing row has NULL |
+No index (the columns are read with the row, never searched), no sequence, no FK.
+
+### Script (`V20__tenant_branding.sql`)
+```sql
+ALTER TABLE CORE_TENANT ADD COLUMN LOGO_FILE_ID BIGINT;
+ALTER TABLE CORE_TENANT ADD COLUMN BRAND_COLOR  VARCHAR(7);
+
+ALTER TABLE CORE_TENANT ADD CONSTRAINT CHK_CORE_TENANT_BRAND_COLOR
+    CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$');
+```
+plus one `COMMENT ON COLUMN` per new column. Existing rows (PLATFORM and every provisioned tenant) get NULL: no
+logo, no brand colour.
+
+The logo document itself is a `FILE_DOCUMENT` row **in the target tenant's rows** (`TENANT_ID = {id}`,
+`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`, `FILE_NAME = logo.<png|jpg|webp|svg>`,
+`VISIBILITY = PUBLIC`, no category), written inside `TenantContext.callAs(id)` through FILE's image store — no
+schema change in FILE (FILE RULE-FILE-010, ADR-FILE-008).
+
+### CHECK-constrained value sets — delta
+| Key | Values | Constraint | Owner |
+|---|---|---|---|
+| `CORE_TENANT.BRAND_COLOR` | `#RRGGBB` (hexadecimal; stored upper-case by the entity), NULL allowed | `CHK_CORE_TENANT_BRAND_COLOR` | TENANT |
+
+### XM register — delta
+| Kind | XM id | Kind | Column → target | Owner of the target | Enforcement | Status |
+|---|---|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) | `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID` | FILE (`FileImageStoreApi`, `FileDocumentLookupApi.publicUrl`) | column only, no FK; written and read inside `TenantContext.callAs(id)` | IMPLEMENTED (1.3.0) |
+
+### DBF id definitions — delta
+**DBF-TENANT-043** — CORE_TENANT.LOGO_FILE_ID [ENT-TENANT-001, REQ-TENANT-029, XM-TENANT-003]
+**DBF-TENANT-044** — CORE_TENANT.BRAND_COLOR [ENT-TENANT-001, REQ-TENANT-030]
+
+### Decisions
+| Kind | Decision | Source |
+|---|---|---|
+| ADR | No registry rows for branding (D5) | ADR-TENANT-005 |
+| DEFAULT | `LOGO_FILE_ID` is a soft reference without FK | plan §6 D.1 / §7 E.1 (same convention as `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID`, XM-NOTIF-002, and `SEC_USER.PHOTO_FILE_ID`, XM-SEC-006) |
+
+### Deviations
+- Plan §7 E.1 / §11 `V18__tenant_branding.sql` → `V20__tenant_branding.sql` (execution order D, B before E).

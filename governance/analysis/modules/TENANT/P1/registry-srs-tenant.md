@@ -202,3 +202,66 @@ the target tenant) and `TENANT_ADMIN_RESET` (written by TENANT in PLATFORM, revi
 
 Counts after this addendum: REQ 28 · AC 28 · RULE 13 · ENT 1 · SCR-REQ 1 · XM 2.
 Last sequence per atom: REQ: 028 · AC: 028 · ENT: 001 · RULE: 017 (012 … 015 reserved) · SCR-REQ: 001 · XM: 002 · US: 011 · POL: 013 · DBF: 042
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package E
+block, E1–E11). Ids continue from the highest ever issued (REQ / AC 028, RULE 017, XM 002; RULE-TENANT-012 … 015
+reserved for the analysis-coverage work's as-built rules).
+
+Entities — delta
+| Kind | ENT id | Delta | Code location |
+|---|---|---|---|
+| CHANGED | ENT-TENANT-001 Tenant | + `logoFileId` (soft reference, XM-TENANT-003), `brandColor` (V20) — DBF-TENANT-043, -044 | tenant/entity/Tenant.java; V20__tenant_branding.sql |
+
+Consumed — delta (TENANT still reads no other module's table)
+| Kind | Id | Owner | Surface | Used by |
+|---|---|---|---|---|
+| NEW | XM-TENANT-003 | FILE | SOFT-REF `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID` (no FK); `FileImageStoreApi.storePublicImage` / `discard` (XM-FILE-002), `FileDocumentLookupApi.publicUrl` (XM-FILE-001), inside `TenantContext.callAs(id)` | logo endpoints, `logoUrl` of every tenant response |
+
+Exposed — delta
+| Kind | Surface | Consumers |
+|---|---|---|
+| NEW | HTTP `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) | frontend shell and login page (plan §8 F2) |
+
+Screens — delta
+| Kind | SCR-REQ id | Delta |
+|---|---|---|
+| CHANGED | SCR-REQ-TENANT-001 PLATFORM_TENANTS | B1 + logo and brand colour; B3 branding row (file input, preview, remove, colour); B5 + `PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding`; B4 unchanged (D5) |
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-029 / AC-TENANT-029 | Tenant logo set by the platform administrator (`PUT` / `DELETE /{id}/logo`) | US-TENANT-012; POL-TENANT-014; RULE-TENANT-018, -019, -020; ADR-TENANT-005 | tenant/service/TenantService.java (`setLogo`, `removeLogo`); tenant/service/TenantLogoUrls.java | `TenantBrandingIntegrationTest`; TC-CORE-TENANT-038, -040, -041, -044, -045, TC-CORE-PLATFORM-005 |
+| NEW | REQ-TENANT-030 / AC-TENANT-030 | Brand colour (`PATCH /{id}/branding`) | US-TENANT-012; POL-TENANT-014; RULE-TENANT-020, -021 | tenant/service/TenantService.java (`updateBranding`) | `TenantBrandingIntegrationTest`, `TenantDomainTest`; TC-CORE-TENANT-042 |
+| NEW | REQ-TENANT-031 / AC-TENANT-031 | Branding of the token's tenant (`GET /api/v1/tenant/me`, any realm) | US-TENANT-013; POL-TENANT-007, -014 | tenant/service/TenantBrandingService.java; autoconfigure/ErpCoreSecurityAutoConfiguration.java (`TENANT_ME_PATH`) | `TenantBrandingIntegrationTest`; TC-CORE-TENANT-039 |
+| NEW | REQ-TENANT-032 / AC-TENANT-032 | Public branding by tenant code (`GET /api/v1/public/tenants/{tenantCode}/branding`) | US-TENANT-014; POL-TENANT-008; RULE-TENANT-006, -012, -022 | tenant/service/TenantBrandingService.java; autoconfigure/ErpCoreProperties.java (`DEFAULT_PATH_TENANT_PATHS`) | `TenantBrandingIntegrationTest`; TC-CORE-TENANT-043, -046 |
+| NEW | RULE-TENANT-018 | Tenant logo: PUBLIC, ≤ 1 MB, PNG / JPEG / WebP / plain SVG, in the tenant's own rows, one per tenant, discard on replace / remove | REQ-TENANT-029 | tenant/domain/TenantDomain.java (`assertLogoAccepted`, `LOGO_*`) | `TenantDomainTest`, `TenantBrandingIntegrationTest` |
+| NEW | RULE-TENANT-019 | PLATFORM may carry a logo; the platform mark is a static frontend asset | REQ-TENANT-029 | — (no refusal) | `TenantBrandingIntegrationTest` |
+| NEW | RULE-TENANT-020 | Branding is written by the platform only (D5) | REQ-TENANT-029, -030 | autoconfigure/ErpCoreSecurityAutoConfiguration.java (`PLATFORM_PATHS`); tenant/service/TenantService.java (`@PreAuthorize`) | `TenantBrandingIntegrationTest`; TC-CORE-PLATFORM-005 |
+| NEW | RULE-TENANT-021 | Brand colour `^#[0-9A-Fa-f]{6}$` or null, stored upper-case; `CHK_CORE_TENANT_BRAND_COLOR` | REQ-TENANT-030 | tenant/domain/TenantDomain.java (`assertBrandColorValid`); tenant/entity/Tenant.java (normalisation) | `TenantDomainTest`; TC-CORE-TENANT-042 |
+| NEW | RULE-TENANT-022 | Public branding rate limit per client address (IPv6 by /64), counted before the tenant lookup (`erp.core.tenant.public-branding-rate-limit.*`, 60 / 1 min), `Retry-After` on 429, buckets expire after `period` unused, ≤ 10 000 keys (review round 1) | REQ-TENANT-032 | tenant/security/PublicBrandingRateLimitFilter.java | `PublicBrandingRateLimitFilterTest`, `TenantBrandingIntegrationTest.publicBranding_isRateLimitedPerClientAddress_unknownCodesIncluded`; TC-CORE-TENANT-046 |
+| CHANGED | RULE-TENANT-012, RULE-TENANT-006 | + the public branding path (path tenant; suspended → 403) | REQ-TENANT-032 | autoconfigure/ErpCoreProperties.java; tenant/domain/TenantDomain.java (`assertServed`) | `TenantBrandingIntegrationTest` |
+| CHANGED | US-TENANT-005 | a second path-tenant path (public branding) | — | — | — |
+
+Error codes — delta
+| Code | HTTP | Code location |
+|---|---|---|
+| `TENANT_LOGO_INVALID` | 400 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_BRAND_COLOR_INVALID` | 400 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_BRANDING_RATE_LIMITED` | 429 | tenant/security/PublicBrandingRateLimitFilter.java; tenant/exception/TenantErrorCodes.java |
+i18n: one `tenant-maturity E` block in both bundles.
+
+Permissions — delta: none (plan §0 D5). Audit actions — delta: `TENANT_LOGO_CHANGED` (written by TENANT in the
+target tenant and in PLATFORM). Configuration — delta: `erp.core.tenant.public-branding-rate-limit.capacity` /
+`period` (NEW); `erp.core.tenant.path-tenant-paths` default (CHANGED).
+
+Decisions — delta
+| Kind | ADR | Subject | Status |
+|---|---|---|---|
+| NEW | ADR-TENANT-005 | The tenant logo is set by the platform administrator from `PLATFORM_TENANTS`; no tenant self-service screen in 1.3.0 | ACCEPTED (decision D5) |
+
+Counts after this addendum: REQ 32 · AC 32 · RULE 18 · ENT 1 · SCR-REQ 1 · XM 3.
+Last sequence per atom: REQ: 032 · AC: 032 · ENT: 001 · RULE: 022 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 014 · POL: 014 · DBF: 044 · ADR: 005

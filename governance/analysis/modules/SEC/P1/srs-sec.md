@@ -1719,3 +1719,18 @@ No secret is logged, returned, audited or carried by the event (POL-SEC-004).
 |---|---|
 | CHANGED (code) | `UserSessionTerminator.terminateOpenSessions` gains an overload taking the acting `User` explicitly (null = none): inside another tenant the operator's username could match a different user of that tenant, so the recovery passes none; the existing method keeps resolving the actor by username. |
 | NEW (scope) | `ADMIN_PASSWORD_RESET` is a new generic-audit action code (`^[A-Z_]{3,64}$`); the audit module's code and analysis do not change. |
+
+### 11. Package E — what the tenant branding changes in SEC's security chains
+Change         : tenant-maturity plan package E — `GET /api/v1/tenant/me` (TENANT, plan §7 E.2) is served to a token of either realm on the core (staff) chain and during a pending forced password change
+Statement      : Sections 1–10 above (packages G, D and B) are unchanged; §11 records package E's implemented deltas.
+
+No SEC id is minted (the requirement is TENANT's REQ-TENANT-031); no SEC endpoint, entity field, table, permission,
+error code or migration changes. Two SEC rules gain one named exception each:
+
+| Kind | Rule | Delta | Source |
+|---|---|---|---|
+| CHANGED | Realm rule (1.2.0 addendum §2: "A token of the other realm on a non-public path of a chain → 403 `REALM_MISMATCH`") | + one **realm-neutral** request on the core (staff) chain: `GET /api/v1/tenant/me` (`ErpCoreSecurityAutoConfiguration.TENANT_ME_PATH`; `GET` only since review round 1 — any other method on the path still refuses a CUSTOMER token). The chain's `RealmEnforcementFilter` is built with it in its method-specific skip list, so a CUSTOMER token reaches it; unlike a public path it still needs an authenticated caller (the chain's `anyRequest().authenticated()`), and the answer only carries the token's own tenant's branding. Every other core-chain path still refuses a CUSTOMER token. | TENANT REQ-TENANT-031; srs-tenant.md 1.3.0 E1, E10 |
+| CHANGED | RULE-SEC-059 (forced-change gate) | the calls a caller with a pending forced change may still make: `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password`, `POST /api/v1/sec/auth/logout` **and `GET /api/v1/tenant/me`** (the shell's branding: it reveals nothing the anonymous public branding does not, and the change-password page can show the tenant's logo) | `PasswordChangeRequiredFilter.EXEMPTIONS`; TENANT REQ-TENANT-031 |
+
+Frontend impact: the shell may load `GET /api/v1/tenant/me` right after any login, a customer's included, and before
+a forced password change is completed.

@@ -174,3 +174,36 @@ SCOPE EXCEPTIONS — delta
 |---|---|---|
 | CHANGED | Rename / delete a tenant | renaming the names leaves the exceptions (POL-TENANT-001 CHANGED); delete stays excluded (POL-TENANT-005) |
 | unchanged | Quotas, `ARCHIVED` status, per-tenant self-signup switch, per-tenant rate limits | level 2, later version (plan §0 D2) |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-013. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package E block.
+
+POL-TENANT-014 — العلامة التجارية يضبطها مدير المنصة فقط / Branding is set by the platform administrator only
+  Statement (ar) : يجب على النظام قصر ضبط شعار المستأجر ولون علامته على مشغّل المنصة من شاشة `PLATFORM_TENANTS`؛ لا شاشة ذاتية للمستأجر في 1.3.0، والشعار ملف عام في صفوف المستأجر نفسه، ويقرأ كل مستخدم للمستأجر علامته دون صلاحية، ويقرؤها الزائر المجهول برمز المستأجر قبل الدخول.
+  Statement (en) : The system shall let only a platform operator, from the `PLATFORM_TENANTS` screen, set a tenant's logo and brand colour; there is no tenant self-service screen in 1.3.0, the logo is a PUBLIC document in the tenant's own rows, every user of the tenant reads the branding without a permission, and an anonymous visitor reads it by tenant code before signing in.
+  Pattern   : ubiquitous
+  Trigger   : the logo / branding endpoints; `GET /api/v1/tenant/me`; `GET /api/v1/public/tenants/{tenantCode}/branding`
+  Rationale : decision D5 — branding belongs to the onboarding the platform operator performs; no new module, screen, permission or grant for one attribute (ADR-TENANT-005)
+  Source    : docs/plans/tenant-maturity-plan.md §0 D5, §7 E.1–E.3; ADR-TENANT-005; RULE-TENANT-018 … 022; REQ-TENANT-029 … 032
+  Status    : CONFIRMED (erp-core 1.3.0, package E)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-006 | unchanged: the branding writes are platform-only like every tenant operation (`PLATFORM_TENANT_MANAGE`); the two branding reads are not tenant management and need no permission | srs-tenant.md 1.3.0 E1 |
+| POL-TENANT-008 | the public branding is a second path whose tenant comes from the path (after the public files) | REQ-TENANT-032 |
+
+SCOPE EXCEPTIONS — delta
+| Kind | Excluded / Deferred | Delta |
+|---|---|---|
+| NEW | Tenant self-service branding screen (`TENANT_BRANDING`) | deferred: the alternative recorded in ADR-TENANT-005 |
+| NEW | Server-side resizing of logos; per-tenant theme beyond one accent colour | out of scope (plan §6 D.4, §8 F2) |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 5 | Who sets a tenant's logo | the platform administrator from `PLATFORM_TENANTS` | decision D5 (2026-10-07) | ADR-TENANT-005 |

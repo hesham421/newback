@@ -265,6 +265,34 @@ class ImageValidationDomainServiceTest {
         assertThat(ImageValidationDomainService.isSafeSvg(wide.append("</svg>").toString())).as("wide, 1 MB").isTrue();
     }
 
+    /**
+     * Package D review round 3, fixed in E: browsers resolve a duplicated id to the first element in tree order;
+     * flat decoys placed after the real targets must not hide a nested {@code <use>} chain (91 uses, 10^9 instances).
+     */
+    @Test
+    void duplicateIds_areRefused_soNoDecoyHidesANestedUseChain() {
+        StringBuilder decoy = new StringBuilder("<svg " + NS + "><defs><rect id=\"g0\" width=\"1\" height=\"1\"/>");
+        for (int level = 1; level <= 9; level++) {
+            decoy.append("<g id=\"g").append(level).append("\">");
+            for (int j = 0; j < 10; j++) {
+                decoy.append("<use href=\"#g").append(level - 1).append("\"/>");
+            }
+            decoy.append("</g>");
+        }
+        for (int level = 1; level <= 9; level++) {
+            decoy.append("<rect id=\"g").append(level).append("\"/>");
+        }
+        decoy.append("</defs><use href=\"#g9\"/></svg>");
+        assertThat(ImageValidationDomainService.isSafeSvg(decoy.toString())).as("decoy chain").isFalse();
+        assertThat(ImageValidationDomainService.check(utf8(decoy.toString()), 1_048_576L, WITH_SVG).rejection())
+            .isEqualTo(ImageRejection.UNSAFE_SVG);
+
+        assertThat(ImageValidationDomainService.isSafeSvg("<svg " + NS + "><rect id=\"a\"/><circle id=\"a\" r=\"1\"/></svg>"))
+            .as("any duplicate id, even without <use>").isFalse();
+        assertThat(ImageValidationDomainService.isSafeSvg("<svg " + NS + "><rect id=\"a\"/><circle id=\"b\" r=\"1\"/>"
+            + "<use href=\"#a\"/><use href=\"#b\"/></svg>")).as("unique ids").isTrue();
+    }
+
     /** {@code count} flat {@code <use>} references to one rectangle. */
     private static String uses(int count) {
         return "<svg " + NS + "><defs><rect id=\"r\" width=\"1\" height=\"1\"/></defs>"

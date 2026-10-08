@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * A tenant, as every platform-tenant endpoint returns it (business fields + audit). The profile and the
- * suspension facts since tenant-maturity B; the token cut-off is not exposed.
+ * suspension facts since tenant-maturity B, the logo URL and brand colour since E; the token cut-off is not exposed.
  */
 @Data
 @Builder
@@ -61,6 +61,14 @@ public class TenantResponse {
 
     @Schema(description = "Reason of the suspension - سبب التعليق", example = "Unpaid invoice")
     private String suspensionReason;
+
+    @Schema(description = "Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر",
+        example = "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e", nullable = true)
+    private String logoUrl;
+
+    @Schema(description = "Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة", example = "#1A2B3C",
+        nullable = true)
+    private String brandColor;
 
     @Schema(description = "Created timestamp - تاريخ الإنشاء")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")

@@ -116,3 +116,34 @@ XM index, sequences: unchanged. Last DBF: DBF-TENANT-042 · Last XM: XM-TENANT-0
 
 Event
 "P2 1.3.0 (package B): TENANT — 1 table, 1 sequence, 42 DBF (20 own + 22 discriminator), 2 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding columns on `CORE_TENANT`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package E).
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| CHANGED | CORE_TENANT | ENT-TENANT-001 | global | + DBF-TENANT-043 … 044 (2 columns) | V20__tenant_branding.sql |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-043 | CORE_TENANT.LOGO_FILE_ID | BIGINT | NULL | — (soft reference, XM-TENANT-003) | — | V20; tenant/entity/Tenant.java |
+| DBF-TENANT-044 | CORE_TENANT.BRAND_COLOR | VARCHAR(7) | NULL | `CHK_CORE_TENANT_BRAND_COLOR` | — | V20; tenant/entity/Tenant.java |
+
+Constraints — delta: `CHK_CORE_TENANT_BRAND_COLOR CHECK (BRAND_COLOR ~ '^#[0-9A-Fa-f]{6}$')` (V20).
+
+XM index — delta
+| Kind | XM id | Kind | Column → target | Status |
+|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) | `CORE_TENANT.LOGO_FILE_ID` → FILE `FILE_DOCUMENT.ID` | IMPLEMENTED (1.3.0) |
+
+Cascade: none in the schema; the logo's `FILE_DOCUMENT` row (owner `CORE_TENANT` / {id}, module `TENANT`) is data
+of the tenant's own rows, discarded (DELETED + PRIVATE) on replace or remove. Sequences: unchanged.
+Last DBF: DBF-TENANT-044 · Last XM: XM-TENANT-003
+
+Event
+"P2 1.3.0 (package E): TENANT — 1 table, 1 sequence, 44 DBF (22 own + 22 discriminator), 3 XM"

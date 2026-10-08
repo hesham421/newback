@@ -9,6 +9,9 @@
 - [GET /api/v1/platform/tenants/{id}](#get-apiv1platformtenantsid)
 - [PUT /api/v1/platform/tenants/{id}](#put-apiv1platformtenantsid)
 - [POST /api/v1/platform/tenants/{id}/admin-reset](#post-apiv1platformtenantsidadmin-reset)
+- [PATCH /api/v1/platform/tenants/{id}/branding](#patch-apiv1platformtenantsidbranding)
+- [PUT /api/v1/platform/tenants/{id}/logo](#put-apiv1platformtenantsidlogo)
+- [DELETE /api/v1/platform/tenants/{id}/logo](#delete-apiv1platformtenantsidlogo)
 - [PATCH /api/v1/platform/tenants/{id}/status](#patch-apiv1platformtenantsidstatus)
 - [GET /api/v1/platform/tenants/{id}/usage](#get-apiv1platformtenantsidusage)
 
@@ -53,6 +56,8 @@ Shape: `paginated list of TenantResponse (see Pagination Envelope in index.md)`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -77,6 +82,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -84,7 +91,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `PlatformTenantController.list`, `TenantService.list`, `TenantService.search`, `TenantMapper.toResponse` and found no throw site naming a module error code.
+None reached — walked `PlatformTenantController.list`, `TenantService.list`, `TenantService.search`, `TenantLogoUrls.of`, `TenantMapper.toResponse`, `TenantContext.current`, `TenantContext.callAs` and found no throw site naming a module error code.
 
 ### Other Possible Responses
 
@@ -160,6 +167,8 @@ Shape: `TenantResponse`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -184,6 +193,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -268,6 +279,8 @@ Shape: `paginated list of TenantResponse (see Pagination Envelope in index.md)`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -292,6 +305,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -299,7 +314,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-None reached — walked `PlatformTenantController.search`, `TenantService.search`, `TenantMapper.toResponse` and found no throw site naming a module error code.
+None reached — walked `PlatformTenantController.search`, `TenantService.search`, `TenantLogoUrls.of`, `TenantMapper.toResponse`, `TenantContext.current`, `TenantContext.callAs` and found no throw site naming a module error code.
 
 ### Other Possible Responses
 
@@ -350,6 +365,8 @@ Shape: `TenantResponse`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -374,6 +391,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -381,7 +400,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.getTenantById`, `TenantService.getById`, `TenantMapper.toResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.getTenantById`, `TenantService.getById`, `TenantMapper.toResponse`, `TenantLogoUrls.of`, `TenantContext.current`, `TenantContext.callAs`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -465,6 +484,8 @@ Shape: `TenantResponse`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -489,6 +510,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -496,7 +519,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateTenant`, `TenantService.update`, `TenantMapper.updateEntityFromRequest`, `TenantMapper.toResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateTenant`, `TenantService.update`, `TenantMapper.updateEntityFromRequest`, `TenantMapper.toResponse`, `TenantLogoUrls.of`, `TenantContext.current`, `TenantContext.callAs`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -589,6 +612,253 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 | 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
 | 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
 
+## PATCH /api/v1/platform/tenants/{id}/branding
+
+**Set or clear a tenant's brand colour**
+
+brandColor #RRGGBB (stored upper case), null or blank clears it; otherwise 400 TENANT_BRAND_COLOR_INVALID - ضبط لون علامة المستأجر
+
+Operation ID: `updateTenantBranding`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+Schema: `TenantBrandingUpdateRequest` (application/json)
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| brandColor | string | No |  | Accent colour #RRGGBB (stored upper case); null or blank clears it - لون العلامة | #1A2B3C |
+
+**Request Example**
+
+```json
+{
+  "brandColor": "#1A2B3C"
+}
+```
+
+### Response `200` — OK
+
+Shape: `TenantResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| id | integer (int64) | No |  | Unique identifier - المعرف الفريد | 2 |
+| code | string | No |  | Tenant code (X-Tenant-Code) - رمز المستأجر | ACME |
+| nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
+| nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
+| statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
+| createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
+| createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
+| updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
+| updatedBy | string | No |  | Updated by - حُدّث بواسطة | admin |
+
+**Response Example**
+
+_(partial — only fields with a documented example are shown)_
+
+```json
+{
+  "id": 2,
+  "code": "ACME",
+  "nameAr": "شركة أكمي",
+  "nameEn": "Acme Ltd",
+  "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
+  "createdBy": "admin",
+  "updatedBy": "admin"
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateTenantBranding`, `TenantService.updateBranding`, `TenantDomain.assertBrandColorValid`, `TenantMapper.updateBrandingFromRequest`, `TenantMapper.toResponse`, `TenantLogoUrls.of`, `TenantContext.current`, `TenantContext.callAs`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 400 BAD_REQUEST | `TENANT_BRAND_COLOR_INVALID` | TENANT_BRAND_COLOR_INVALID | TenantDomain.assertBrandColorValid — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | TenantDomain.assertBrandColorValid |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.updateBranding |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## PUT /api/v1/platform/tenants/{id}/logo
+
+**Set or replace a tenant's logo**
+
+Multipart part file: a PNG, JPEG, WebP or plain SVG image of at most 1 MB, detected from its bytes (SVG without scripts, event attributes, external references, editor metadata, DOCTYPE or duplicate ids: export it as plain or optimised SVG); otherwise 400 TENANT_LOGO_INVALID (fieldErrors[0].field = file). Stored as a PUBLIC document of that tenant; the previous logo is discarded and its URL answers 404 - تعيين شعار المستأجر أو استبداله
+
+Operation ID: `setTenantLogo`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Request Body
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| file | string (binary) | Yes |  |  |
+
+### Response `200` — OK
+
+Shape: `TenantResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| id | integer (int64) | No |  | Unique identifier - المعرف الفريد | 2 |
+| code | string | No |  | Tenant code (X-Tenant-Code) - رمز المستأجر | ACME |
+| nameAr | string | No |  | Tenant name (Arabic) - اسم المستأجر بالعربية | شركة أكمي |
+| nameEn | string | No |  | Tenant name (English) - اسم المستأجر بالإنجليزية | Acme Ltd |
+| statusCode | string | No |  | Status: ACTIVE or SUSPENDED - الحالة | ACTIVE |
+| contactEmail | string | No |  | Contact e-mail - بريد التواصل | contact@acme.example |
+| contactPhone | string | No |  | Contact phone - هاتف التواصل | +966 11 555 0100 |
+| countryCode | string | No |  | ISO 3166-1 alpha-2 country code - رمز الدولة | SA |
+| defaultLocale | string | No |  | Default UI language: ar or en - اللغة الافتراضية | ar |
+| timezone | string | No |  | IANA time-zone id - المنطقة الزمنية | Asia/Riyadh |
+| notes | string | No |  | Operator's notes - ملاحظات | Pilot customer, invoiced yearly |
+| suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
+| suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
+| suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
+| createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
+| createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
+| updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
+| updatedBy | string | No |  | Updated by - حُدّث بواسطة | admin |
+
+**Response Example**
+
+_(partial — only fields with a documented example are shown)_
+
+```json
+{
+  "id": 2,
+  "code": "ACME",
+  "nameAr": "شركة أكمي",
+  "nameEn": "Acme Ltd",
+  "statusCode": "ACTIVE",
+  "contactEmail": "contact@acme.example",
+  "contactPhone": "+966 11 555 0100",
+  "countryCode": "SA",
+  "defaultLocale": "ar",
+  "timezone": "Asia/Riyadh",
+  "notes": "Pilot customer, invoiced yearly",
+  "suspendedBy": "admin",
+  "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
+  "createdBy": "admin",
+  "updatedBy": "admin"
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.setTenantLogo`, `TenantService.setLogo`, `TenantService.readBytes`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.replaceLogo`, `TenantDomain.assertLogoAccepted`, `TenantService.recordLogoChange`, `TenantMapper.toResponse`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 400 BAD_REQUEST | `TENANT_LOGO_INVALID` | TENANT_LOGO_INVALID | TenantDomain.assertLogoAccepted — as a `fieldErrors[]` entry |
+| 400 BAD_REQUEST | `of` | of | TenantDomain.assertLogoAccepted |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.replaceLogo |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.setLogo |
+| 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | TenantService.readBytes |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+| 400 BAD_REQUEST | VALIDATION_ERROR | Endpoint accepts a JSON request body; GlobalExceptionHandler maps a malformed or invalid body (HttpMessageNotReadableException / MethodArgumentNotValidException) to this status. |
+
+## DELETE /api/v1/platform/tenants/{id}/logo
+
+**Remove a tenant's logo**
+
+The document is discarded and its URL answers 404; a tenant without a logo is not an error - إزالة شعار المستأجر
+
+Operation ID: `removeTenantLogo`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Response `204` — No Content
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.removeTenantLogo`, `TenantService.removeLogo`, `TenantContext.runAs`, `TenantService.writeInTenant`, `TenantService.clearLogo`, `TenantContext.callAs`, `TenantService.recordLogoChange`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.clearLogo |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.removeLogo |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+
 ## PATCH /api/v1/platform/tenants/{id}/status
 
 **Activate or suspend a tenant**
@@ -647,6 +917,8 @@ Shape: `TenantResponse`
 | suspendedAt | string (date-time) | No |  | When the tenant was suspended; null while ACTIVE - تاريخ التعليق |  |
 | suspendedBy | string | No |  | Platform operator who suspended the tenant - من علّق المستأجر | admin |
 | suspensionReason | string | No |  | Reason of the suspension - سبب التعليق | Unpaid invoice |
+| logoUrl | string | No |  | Public URL of the tenant's logo; null when none (tenant-maturity E) - رابط شعار المستأجر | /api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e |
+| brandColor | string | No |  | Brand accent colour #RRGGBB, or null (tenant-maturity E) - لون العلامة | #1A2B3C |
 | createdAt | string (date-time) | No |  | Created timestamp - تاريخ الإنشاء |  |
 | createdBy | string | No |  | Created by - أنشئ بواسطة | admin |
 | updatedAt | string (date-time) | No |  | Updated timestamp - تاريخ التحديث |  |
@@ -671,6 +943,8 @@ _(partial — only fields with a documented example are shown)_
   "notes": "Pilot customer, invoiced yearly",
   "suspendedBy": "admin",
   "suspensionReason": "Unpaid invoice",
+  "logoUrl": "/api/v1/public/files/ACME/3f9c2a7d0b4e4c1a9d8e7f6a5b4c3d2e",
+  "brandColor": "#1A2B3C",
   "createdBy": "admin",
   "updatedBy": "admin"
 }
@@ -678,7 +952,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateStatus`, `TenantService.updateStatus`, `TenantDomain.from`, `TenantDomain.assertCanChangeStatusTo`, `TenantDomain.assertSuspensionReasonGiven`, `TenantDomain.changesStatusTo`, `Tenant.suspend`, `Tenant.activate`, `TenantMapper.toResponse`, `new TenantDomain()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.updateStatus`, `TenantService.updateStatus`, `TenantDomain.from`, `TenantDomain.assertCanChangeStatusTo`, `TenantDomain.assertSuspensionReasonGiven`, `TenantDomain.changesStatusTo`, `Tenant.suspend`, `Tenant.activate`, `TenantMapper.toResponse`, `TenantLogoUrls.of`, `new TenantDomain()`, `TenantContext.current`, `TenantContext.callAs`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

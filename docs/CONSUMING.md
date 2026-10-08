@@ -143,13 +143,14 @@ should be `false`.
 | `erp.core.security.password-policy.min-length` / `max-length` / `require-letter` / `require-digit` | `8` / `72` / `true` / `true` | The STAFF password policy (1.3.0); `max-length` above 72 fails startup and every password is also limited to 72 UTF-8 bytes (BCrypt; an Arabic letter takes 2): user create, reset completion, an administrator setting a password, the own change and a new tenant's first administrator answer 400 `SEC-400-PASSWORD-POLICY` otherwise. The message names the default composition; override the key in your bundle if you disable a requirement. Customer passwords get only the 72-byte limit. |
 | `erp.core.frontend.base-url`, `password-reset-path`, `customer-verify-path`, `customer-password-reset-path` | — / `/reset` / `/customer/verify` / `/customer/reset` | Links in e-mails. |
 | `erp.core.security.public-paths`, `customer-public-paths` | see `ErpCoreProperties.Security.DEFAULT_*` | Unauthenticated paths of the staff and customer chains. **Setting one replaces the whole list**, so start from the defaults. |
-| `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable. |
+| `erp.core.tenant.exempt-paths`, `path-tenant-paths` | see `ErpCoreProperties.Tenant.DEFAULT_*` | Paths served without a tenant, and paths whose tenant comes from a `{tenantCode}` path variable (since 1.3.0 also the public branding `/api/v1/public/tenants/{tenantCode}/branding`: keep it when you replace the list). |
 | `erp.core.files.storage` | `DB` | `DB`, `LOCAL` (`erp.core.files.local.root`) or `S3` (`erp.core.files.s3.*`). |
 | `erp.core.files.max-content-bytes` / `max-request-bytes` / `public-base-url` | 5 MB / 10 MB / empty | Upload limits and the origin of public file URLs. |
 | `erp.core.notif.retry.*` | 5 attempts, 2 s doubling, 32 s maximum | Asynchronous delivery retries. |
 | `erp.core.notif.requeue.enabled` / `stale-after-minutes` / `interval-ms` | `false` / `10` / `60000` | Requeue job for stale `QUEUED` notifications. It runs only if the application enables scheduling. **Enable it in production** (see §7). |
 | `erp.core.events.executor.*` | 4 / 16 / 500 / `erp-event-` | Event worker pool. |
 | `erp.core.security.customer-login-rate-limit.capacity` / `period` | `10` / `1m` | Customer login limit per `tenant:realm:username`. |
+| `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | `60` / `1m` | (1.3.0) Requests to the anonymous `GET /api/v1/public/tenants/{tenantCode}/branding` per client address (`getRemoteAddr()`; an IPv6 address counts by its /64), counted before the tenant is looked up (unknown codes included); over it 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` (seconds). Idle buckets expire after `period`, at most 10 000 addresses are tracked. Per JVM. Behind a reverse proxy see "Client address behind a proxy" below. |
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
 | `erp.core.report.max-export-rows` | `100000` | Export cap. Above it the export answers 422 `REPORT_EXPORT_TOO_LARGE`. |
 
@@ -318,6 +319,24 @@ optimised SVG: SVGO, Inkscape "Optimized SVG", Figma or Illustrator export, no e
 without a category and published at once under a random slug (ADR-FILE-008). Keep
 `spring.servlet.multipart.max-file-size` above the image limits (the reference app uses 15 MB): Spring's default
 1 MB ceiling answers an over-size upload before the image rule can (400 `VALIDATION_ERROR` instead of the image error).
+
+Tenant branding (1.3.0): the platform operator sets a tenant's logo (`PUT` / `DELETE
+/api/v1/platform/tenants/{id}/logo`, ≤ 1 MB PNG / JPEG / WebP / plain SVG) and brand colour (`PATCH …/{id}/branding`);
+the UI reads them through `GET /api/v1/tenant/me` (any signed-in user, staff or customer) and, before login,
+`GET /api/v1/public/tenants/{tenantCode}/branding` (anonymous, rate-limited per address). `logoUrl` is a public file
+URL: show it with `<img>` only — an SVG logo is served as an attachment with `nosniff` and a sandbox CSP. On 429
+from the public branding show the platform mark alone (no error toast) and do not ask again before `Retry-After`.
+Public files are cached for a day (`Cache-Control: max-age=86400, public`): every upload gets a new URL (new random
+slug), but a removed or replaced logo's old URL can still be served from a browser or CDN cache for up to 24 h — always
+take `logoUrl` from the branding answer, never from a remembered URL.
+
+**Client address behind a proxy.** The branding rate limit (and the audit log's IP) use
+`HttpServletRequest.getRemoteAddr()`. Behind a reverse proxy or load balancer that is the proxy's address, so every
+visitor would share one budget. Set `server.forward-headers-strategy=native` together with
+`server.tomcat.remoteip.internal-proxies` (a regular expression matching only your proxies' addresses): Tomcat then takes
+the client from `X-Forwarded-For` only when the request comes from a listed proxy. Do not use
+`server.forward-headers-strategy=framework` unless the proxy always overwrites `X-Forwarded-For`: Spring's
+`ForwardedHeaderFilter` trusts the header from any client, so a caller could pick its own address and escape the limit.
 
 ## 9. Audit
 

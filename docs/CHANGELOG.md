@@ -66,8 +66,29 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 - [TM-B] Cross-module: `SecUserDirectoryApi.countStaff / countCustomers / countActiveSessions`, the new
   `SecAdminRecoveryApi` (`findRecoveryTarget`, `resetSuperUserPassword`), `FileDocumentLookupApi.countDocuments /
   sumBytes`, `NotificationLogQueryApi.countDispatchedSince(Instant)`.
+- [TM-E] TENANT: tenant branding, set by the platform operator only (decision D5, ADR-TENANT-005):
+  `PUT /api/v1/platform/tenants/{id}/logo` (multipart `file`: PNG, JPEG, WebP or plain SVG of at most 1 MB, stored as a
+  PUBLIC document in that tenant's own rows and served at `/api/v1/public/files/{tenantCode}/{slug}`; the previous logo
+  is discarded; 400 `TENANT_LOGO_INVALID`), `DELETE /api/v1/platform/tenants/{id}/logo` (204) and
+  `PATCH /api/v1/platform/tenants/{id}/branding` (`brandColor` `#RRGGBB`, null clears; 400
+  `TENANT_BRAND_COLOR_INVALID`); every change audited as `TENANT_LOGO_CHANGED` in the tenant and in PLATFORM. Two
+  reads return `TenantBrandingResponse { code, nameAr, nameEn, logoUrl, brandColor, defaultLocale }`:
+  `GET /api/v1/tenant/me` (any authenticated caller, staff or customer, the token's tenant) and the anonymous
+  `GET /api/v1/public/tenants/{tenantCode}/branding` (tenant from the path; 404 `TENANT_NOT_FOUND`, 403
+  `TENANT_SUSPENDED`; rate-limited per client address, `erp.core.tenant.public-branding-rate-limit.capacity` /
+  `period`, default 60 per minute, IPv6 counted by /64, 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After`).
+  Migration `V20__tenant_branding.sql`
+  (`LOGO_FILE_ID`, `BRAND_COLOR`, `CHK_CORE_TENANT_BRAND_COLOR`; no registry rows).
 
 ### Changed
+- [TM-E] TENANT: `TenantResponse` carries `logoUrl` and `brandColor`; the `erp.core.tenant.path-tenant-paths` default
+  adds `/api/v1/public/tenants/{tenantCode}/branding` (an application that replaces the list keeps the public branding
+  only if it lists the path). SEC: `GET /api/v1/tenant/me` (GET only) is served to a CUSTOMER token on the core chain
+  and stays reachable during a pending forced password change (RULE-SEC-059).
+- [TM-E] Tests only: every cached Spring test context now uses a Hikari pool of 4 (`application-test.properties`),
+  so the contexts fit the test database's 100 connections with headroom (with the default 10 each, one more context
+  failed with "too many clients"). The api-doc generator no longer reads string literals as code when it looks for a
+  mapping's Java method.
 - [TM-B] TENANT: suspending a tenant (`PATCH /api/v1/platform/tenants/{id}/status`, `SUSPENDED`) now needs a
   `reason` of 3 to 500 characters (400 `TENANT_SUSPENSION_REASON_REQUIRED` otherwise; PLATFORM still answers 422
   first); the response records `suspendedAt`, `suspendedBy`, `suspensionReason`, cleared again on activation.
@@ -84,6 +105,9 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
 
 ### Fixed
+- [TM-E] FILE: an SVG whose elements repeat an `id` is refused (RULE-FILE-009): a flat decoy placed after the real
+  target hid a nested `<use>` chain from the renderer-amplification guard (browsers resolve the first element of an
+  id, the guard looked at the last). Found in package D's review round 3.
 - [TM-D] A multipart request without its `file` part, a non-multipart request to a multipart endpoint, and an upload
   above `spring.servlet.multipart.*` now answer 400 `VALIDATION_ERROR` (the part named in `fieldErrors` when known)
   instead of 500. This also fixes the pre-existing 500 of `POST /api/v1/files` without a `file` part.

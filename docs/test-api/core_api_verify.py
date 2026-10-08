@@ -2859,6 +2859,222 @@ def test_tenant_037_admin_reset_platform_refused_and_traced(ctx):
 
 
 # =============================================================================================
+# Phase 11c — TM-E tenant branding (logo, brand colour, /tenant/me, public branding) on tenant D
+# =============================================================================================
+BRANDING_KEYS = ["brandColor", "code", "defaultLocale", "logoUrl", "nameAr", "nameEn"]
+PLAIN_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#1A2B3C"/></svg>'
+
+
+def e_logo(ctx, tid, fname, content, ctype="application/octet-stream", token=None):
+    return api("PUT", f"/api/v1/platform/tenants/{tid}/logo", t=token if token is not None else ctx.T_PLAT,
+               multipart=[("file", (fname, ctype, content))])
+
+
+def e_branding(ctx, tid, body, token=None):
+    return api("PATCH", f"/api/v1/platform/tenants/{tid}/branding", t=token if token is not None else ctx.T_PLAT,
+               body=body)
+
+
+def e_public(code):
+    return api("GET", f"/api/v1/public/tenants/{code}/branding")
+
+
+@tc("TC-CORE-TENANT-038")
+def test_tenant_038_logo_upload_shown_and_served(ctx):
+    content = png_bytes(38)
+    r = e_logo(ctx, ctx.D_ID, "brand.png", content, "image/png")
+    st(r, 200)
+    d = r.data or {}
+    url = d.get("logoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TD}/"), "data.logoUrl on the public file path of D", "prefix", url)
+    eq((d.get("code"), d.get("brandColor")), (ctx.TD, None), "data.code / brandColor")
+    ctx.D_LOGO_URL = url
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), url, "GET /{id} logoUrl")
+    s = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT,
+            body={"filters": [{"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("logoUrl") for x in s.content], [url], "search content[*].logoUrl")
+    g = api("GET", url)
+    eq((g.status, g.body), (200, content), "anonymous GET serves the bytes under D's code")
+    eq(g.headers.get("content-type"), "image/png", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("inline"), "Content-Disposition inline", "inline",
+          g.headers.get("content-disposition"))
+    owner = f"/api/v1/files?ownerType=CORE_TENANT&moduleCode=TENANT&ownerId={ctx.D_ID}"
+    own = api("GET", owner, t=ctx.T_D)
+    st(own, 200, what="D lists its logo document")
+    eq([(x.get("fileName"), x.get("publicUrl")) for x in own.content], [("logo.png", url)], "one document logo.png in D")
+    eq(api("GET", owner, t=ctx.T_A).content, [], "tenant A sees no document of that owner")
+
+
+@tc("TC-CORE-TENANT-039")
+def test_tenant_039_tenant_me_any_realm_and_forced_change(ctx):
+    r = api("GET", "/api/v1/tenant/me", t=ctx.T_D)
+    st(r, 200)
+    d = r.data or {}
+    eq(sorted(d), BRANDING_KEYS, "exactly the six branding keys (no contact, profile, status or audit field)")
+    eq((d.get("code"), d.get("nameEn"), d.get("logoUrl"), d.get("defaultLocale")),
+       (ctx.TD, f"Tenant D {ctx.RUN}", ctx.D_LOGO_URL, "ar"), "D's code, name, logo and language")
+    fresh = login_staff(ctx.TB, f"fresh-{ctx.run}", PW)
+    st(fresh, 200, what="SEC-050's user, forced change still pending")
+    t_fresh = (fresh.data or {}).get("accessToken")
+    eq((fresh.data or {}).get("passwordChangeRequired"), True, "passwordChangeRequired")
+    st(api("GET", "/api/v1/sec/menu", t=t_fresh), 403, "SEC-403-PASSWORD-CHANGE-REQUIRED", what="the gate still holds")
+    m = api("GET", "/api/v1/tenant/me", t=t_fresh)
+    st(m, 200, what="/tenant/me is allowed during a pending change")
+    eq((m.data or {}).get("code"), ctx.TB, "the token's tenant (B)")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_PLAT).data or {}).get("code"), "PLATFORM", "a PLATFORM token → PLATFORM")
+    st(api("GET", "/api/v1/tenant/me"), 401, "SEC-401-INVALID-CREDENTIALS", what="no token")
+
+
+@tc("TC-CORE-TENANT-040")
+def test_tenant_040_logo_refusals_keep_the_current_one(ctx):
+    exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff" + b"\x00" * 64
+    script = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="1" height="1"/></svg>'
+    dup = b'<svg xmlns="http://www.w3.org/2000/svg"><rect id="a"/><circle id="a" r="1"/></svg>'
+    big = png_bytes(40) + b"\x00" * 1_048_576
+    for fname, ctype, content in (("x.svg", "image/svg+xml", script), ("tool.exe", "application/octet-stream", exe),
+                                  ("big.png", "image/png", big), ("dup.svg", "image/svg+xml", dup)):
+        r = e_logo(ctx, ctx.D_ID, fname, content, ctype)
+        st(r, 400, "TENANT_LOGO_INVALID", what=f"PUT logo {fname}")
+        eq([f.get("field") for f in r.field_errors], ["file"], f"{fname}: fieldErrors[*].field")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT, body={}), 400, "VALIDATION_ERROR",
+       what="no file part")
+    st(e_logo(ctx, 999999999, "a.png", png_bytes(1), "image/png"), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), ctx.D_LOGO_URL,
+       "the current logo is kept")
+    eq(api("GET", ctx.D_LOGO_URL).status, 200, "and still served")
+
+
+@tc("TC-CORE-TENANT-041")
+def test_tenant_041_logo_replace_discards_and_svg_attachment(ctx):
+    r = e_logo(ctx, ctx.D_ID, "brand.svg", PLAIN_SVG, "image/svg+xml")
+    st(r, 200)
+    url = (r.data or {}).get("logoUrl") or ""
+    check(url.startswith(f"/api/v1/public/files/{ctx.TD}/") and url != ctx.D_LOGO_URL, "a new URL under D's code",
+          "new", url)
+    st(api("GET", ctx.D_LOGO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the replaced logo is withdrawn")
+    g = api("GET", url)
+    eq((g.status, g.body), (200, PLAIN_SVG), "the SVG is served")
+    eq(g.headers.get("content-type"), "image/svg+xml", "Content-Type")
+    check((g.headers.get("content-disposition") or "").startswith("attachment"), "Content-Disposition attachment",
+          "attachment", g.headers.get("content-disposition"))
+    eq(g.headers.get("x-content-type-options"), "nosniff", "X-Content-Type-Options")
+    check("sandbox" in (g.headers.get("content-security-policy") or ""), "CSP sandbox", "sandbox",
+          g.headers.get("content-security-policy"))
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("logoUrl"), url, "/tenant/me follows")
+    ctx.D_LOGO_URL = url
+
+
+@tc("TC-CORE-TENANT-042")
+def test_tenant_042_brand_colour(ctx):
+    r = e_branding(ctx, ctx.D_ID, {"brandColor": "#1a2b3c"})
+    st(r, 200)
+    eq((r.data or {}).get("brandColor"), "#1A2B3C", "stored upper case")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("brandColor"), "#1A2B3C", "/tenant/me brandColor")
+    for wrong in ("red", "#12345", "#1234567", "1A2B3C"):
+        w = e_branding(ctx, ctx.D_ID, {"brandColor": wrong})
+        st(w, 400, "TENANT_BRAND_COLOR_INVALID", what=f"brandColor={wrong!r}")
+        eq([f.get("field") for f in w.field_errors], ["brandColor"], f"{wrong!r}: fieldErrors[*].field")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("brandColor"), "#1A2B3C",
+       "unchanged by the refusals")
+    c = e_branding(ctx, ctx.D_ID, {"brandColor": None})
+    st(c, 200, what="null clears")
+    eq((c.data or {}).get("brandColor"), None, "cleared")
+    st(e_branding(ctx, 999999999, {"brandColor": "#000000"}), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    eq((e_branding(ctx, ctx.D_ID, {"brandColor": "#0A0B0C"}).data or {}).get("brandColor"), "#0A0B0C",
+       "set again for the public branding")
+
+
+@tc("TC-CORE-TENANT-043")
+def test_tenant_043_public_branding_path_tenant(ctx):
+    r = e_public(ctx.TD.lower())
+    st(r, 200, what="the code in lower case, no token, no header")
+    d = r.data or {}
+    eq(sorted(d), BRANDING_KEYS, "exactly the six branding keys")
+    me = api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}
+    eq(d, me, "the same branding as D's /tenant/me")
+    eq((d.get("logoUrl"), d.get("brandColor")), (ctx.D_LOGO_URL, "#0A0B0C"), "logo and colour")
+    st(e_public(f"NOSUCH{ctx.RUN}"), 404, "TENANT_NOT_FOUND", what="unknown code")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+           body={"statusCode": "SUSPENDED", "reason": f"TM-E branding {ctx.RUN}"}), 200, what="suspend D")
+    st(e_public(ctx.TD), 403, "TENANT_SUSPENDED", what="a suspended tenant's branding")
+    st(api("GET", ctx.D_LOGO_URL), 403, "TENANT_SUSPENDED", what="and its logo URL")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"}), 200,
+       what="re-activate D")
+    st(e_public(ctx.TD), 200, what="served again")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="td-admin signs in again (tokens of a re-activated tenant may be cut off, package C.2)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+
+
+@tc("TC-CORE-TENANT-044")
+def test_tenant_044_logo_remove_and_platform_logo(ctx):
+    st(api("DELETE", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT), 204, what="DELETE logo")
+    eq((api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT).data or {}).get("logoUrl"), None, "GET logoUrl null")
+    eq((api("GET", "/api/v1/tenant/me", t=ctx.T_D).data or {}).get("logoUrl"), None, "/tenant/me logoUrl null")
+    st(api("GET", ctx.D_LOGO_URL), 404, "FILE_DOCUMENT_NOT_FOUND", what="the removed logo is withdrawn")
+    st(api("DELETE", f"/api/v1/platform/tenants/{ctx.D_ID}/logo", t=ctx.T_PLAT), 204, what="DELETE again (no logo)")
+    st(api("DELETE", "/api/v1/platform/tenants/999999999/logo", t=ctx.T_PLAT), 404, "TENANT_NOT_FOUND",
+       what="unknown tenant")
+    p = e_logo(ctx, 1, "platform.png", png_bytes(44), "image/png")
+    st(p, 200, what="PLATFORM may carry a logo")
+    purl = (p.data or {}).get("logoUrl") or ""
+    check(purl.startswith("/api/v1/public/files/PLATFORM/"), "on PLATFORM's public path", "prefix", purl)
+    eq(api("GET", purl).status, 200, "served")
+    st(api("DELETE", "/api/v1/platform/tenants/1/logo", t=ctx.T_PLAT), 204, what="and removed")
+
+
+@tc("TC-CORE-TENANT-045")
+def test_tenant_045_logo_changes_audited(ctx):
+    expected = [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))] * 3
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("D", ctx.T_D)):
+        a = audit(token, action="TENANT_LOGO_CHANGED", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows], expected,
+           f"{who}: three TENANT_LOGO_CHANGED rows (TENANT-038 set, TENANT-041 replace, TENANT-044 remove)")
+        check(all(ctx.TD in (x.get("summaryEn") or "") for x in rows), f"{who}: summaries name {ctx.TD}", ctx.TD,
+              [x.get("summaryEn") for x in rows])
+    pa = audit(ctx.T_PLAT, action="TENANT_LOGO_CHANGED", entityType="CORE_TENANT", entityId=1, size=50)
+    eq(len(pa.content), 2, "PLATFORM's own logo: one row per change (set, remove)")
+
+
+@tc("TC-CORE-PLATFORM-005")
+def test_platform_005_branding_writes_platform_only(ctx):
+    for who, token, tid in (("tenant A's administrator", ctx.T_A, ctx.A_ID), ("tenant D's administrator", ctx.T_D, ctx.D_ID)):
+        st(e_logo(ctx, tid, "a.png", png_bytes(5), "image/png", token=token), 403, "SEC-403-FORBIDDEN", what=f"{who}: PUT logo")
+        st(api("DELETE", f"/api/v1/platform/tenants/{tid}/logo", t=token), 403, "SEC-403-FORBIDDEN",
+           what=f"{who}: DELETE logo")
+        st(e_branding(ctx, tid, {"brandColor": "#000000"}, token=token), 403, "SEC-403-FORBIDDEN",
+           what=f"{who}: PATCH branding")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.A_ID}/logo", multipart=[("file", ("a.png", "image/png", png_bytes(5)))]),
+       401, "SEC-401-INVALID-CREDENTIALS", what="anonymous PUT logo")
+    a = api("GET", f"/api/v1/platform/tenants/{ctx.A_ID}", t=ctx.T_PLAT).data or {}
+    eq((a.get("logoUrl"), a.get("brandColor")), (None, None), "tenant A unchanged")
+
+
+@tc("TC-CORE-TENANT-046")
+def test_tenant_046_public_branding_rate_limit(ctx):
+    # last case of the run that calls the public branding: its bucket (per client address) is spent here
+    limited, calls = None, 0
+    for calls in range(1, 301):
+        r = e_public(ctx.TD if calls % 2 else f"NOSUCH{ctx.RUN}")
+        if r.status == 429:
+            limited = r
+            break
+        if r.status not in (200, 404):
+            break
+    check(limited is not None, "429 reached within the budget", "429 after <= capacity (default 60) calls",
+          f"{calls} calls, last {r.status} E({r.code})")
+    if limited is not None:
+        st(limited, 429, "TENANT_BRANDING_RATE_LIMITED", what=f"call {calls}")
+        ra = limited.headers.get("retry-after") or ""
+        check(ra.isdigit() and int(ra) >= 1, "Retry-After header (whole seconds, >= 1)", ">= 1", ra)
+        observe("calls before 429 (this run's earlier public-branding calls share the budget)", calls - 1)
+    st(e_public(f"NOSUCH{ctx.RUN}"), 429, "TENANT_BRANDING_RATE_LIMITED", what="an unknown code is counted too (no 404)")
+    st(api("GET", "/api/v1/tenant/me", t=ctx.T_D), 200, what="/tenant/me is not rate-limited")
+
+
+# =============================================================================================
 # Phase 12 — profile runs
 # =============================================================================================
 SINK = {"sink": None}
@@ -3238,7 +3454,8 @@ ORDER = {
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
-                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37)),
+                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
