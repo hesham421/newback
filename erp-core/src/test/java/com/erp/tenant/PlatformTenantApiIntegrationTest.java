@@ -144,8 +144,12 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(TenantHttp.errorCode(missing)).isEqualTo("TENANT_NOT_FOUND");
     }
 
+    /**
+     * tenant-maturity C12 (REQ-TENANT-034): re-activation no longer brings an earlier token back — it answers 401
+     * {@code TENANT_TOKEN_REVOKED}; login works again at once. Before C12 the old token worked again.
+     */
     @Test
-    void suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresThem() {
+    void suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresLoginButNotTheOldTokens() {
         String code = TenantHttp.unique("SUSP");
         long id = http.provisionTenant(platformToken, code);
         String issuedBeforeSuspension = http.token(code, "admin");
@@ -164,11 +168,16 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(withOldToken.statusCode()).isEqualTo(403);
         assertThat(TenantHttp.errorCode(withOldToken)).isEqualTo("TENANT_SUSPENDED");
 
+        TenantHttp.awaitSecondAfterIssueOf(issuedBeforeSuspension);
         HttpResponse<String> activated = http.patch(platformToken, TENANTS + "/" + id + "/status",
             "{\"statusCode\":\"ACTIVE\"}");
         assertThat(activated.statusCode()).isEqualTo(200);
         assertThat(http.login(code, "admin", TenantHttp.PASSWORD).statusCode()).isEqualTo(200);
-        assertThat(http.post(issuedBeforeSuspension, "/api/v1/sec/users/search", "{}").statusCode()).isEqualTo(200);
+        HttpResponse<String> oldTokenAfterActivation = http.post(issuedBeforeSuspension, "/api/v1/sec/users/search", "{}");
+        assertThat(oldTokenAfterActivation.statusCode()).isEqualTo(401);
+        assertThat(TenantHttp.errorCode(oldTokenAfterActivation)).isEqualTo("TENANT_TOKEN_REVOKED");
+        assertThat(http.post(http.token(code, "admin"), "/api/v1/sec/users/search", "{}").statusCode())
+            .as("a token issued after the activation is served").isEqualTo(200);
     }
 
     @Test

@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -190,6 +191,28 @@ final class TenantHttp {
     static long tenantIdOf(String token) {
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);
         return ((Number) JsonPath.read(payload, "$." + TenantConstants.TENANT_ID_CLAIM)).longValue();
+    }
+
+    /** tenant-maturity C12 — the {@code iat} claim (whole seconds) of an access token, decoded without verification. */
+    static long issuedAtOf(String token) {
+        String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);
+        return ((Number) JsonPath.read(payload, "$.iat")).longValue();
+    }
+
+    /**
+     * tenant-maturity C12 — waits until the clock is past the second {@code token} was issued in, so a cut-off written
+     * now lies in a later second than the token's {@code iat} (RULE-TENANT-023 compares whole seconds).
+     */
+    static void awaitSecondAfterIssueOf(String token) {
+        long issuedAt = issuedAtOf(token);
+        while (Instant.now().getEpochSecond() <= issuedAt) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
     }
 
     static String errorCode(HttpResponse<String> response) {

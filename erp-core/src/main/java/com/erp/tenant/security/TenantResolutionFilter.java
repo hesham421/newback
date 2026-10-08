@@ -100,15 +100,19 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
                 reject(request, response, HttpServletResponse.SC_FORBIDDEN, TenantErrorCodes.TENANT_SUSPENDED);
                 return;
             }
-            if (token != null && TenantDomain.isTokenRevoked(token.issuedAt(), tenant.get().getTokensInvalidBefore())) {
-                SecurityContextHolder.clearContext();
+            if (token == null || !TenantDomain.isTokenRevoked(token.issuedAt(), tenant.get().getTokensInvalidBefore())) {
+                chain.doFilter(request, response);
+                return;
+            }
+            SecurityContextHolder.clearContext();
+            TenantContext.clear();
+            if (!matchesAny(publicPaths, pathOf(request))) {
                 reject(request, response, HttpServletResponse.SC_UNAUTHORIZED, TenantErrorCodes.TENANT_TOKEN_REVOKED);
                 return;
             }
-            chain.doFilter(request, response);
-            return;
-        }
-        if (token != null && !matchesAny(publicPaths, pathOf(request)) && refusedDroppedToken(token, request, response)) {
+            // RULE-TENANT-023: a public path ignores a revoked token, so its holder can sign in again
+        } else if (token != null && !matchesAny(publicPaths, pathOf(request))
+            && refusedDroppedToken(token, request, response)) {
             return;
         }
 
