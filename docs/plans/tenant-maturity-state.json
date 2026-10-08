@@ -111,14 +111,18 @@
         "V18__tenant_profile.sql",
         "V19__tenant_lifecycle.sql"
       ],
-      "status": "REVIEW",
+      "status": "FIXING",
       "branch": "tm/b-tenant-level-1",
       "worktree": ".worktrees/tm-b",
       "attempts": 1,
       "deviations": 11,
       "implementer_agent": "ae63a19e09096e36c",
       "reviewer_agent": "a62a12a6ee8762b83",
-      "review": null,
+      "review": {
+        "verdict": "PASS-with-findings",
+        "round": 1,
+        "findings": 5
+      },
       "report": "docs/steps/tm-b-report.md",
       "merged_commit": null
     },
@@ -413,6 +417,12 @@
       "step": "B",
       "event": "REVIEW",
       "note": "implementer COMPLETE e7806e4 (mvn 572/10, P-LIVE 181/181, api-docs 118 ops); reviewer dispatched"
+    },
+    {
+      "at": "2026-10-08T00:18:03Z",
+      "step": "B",
+      "event": "FIXING",
+      "note": "reviewer PASS with 5 LOW (PLATFORM self-target admin-reset, no PLATFORM audit row, op-id churn, untested 409, username logging); fixing before merge"
     }
   ]
 }
