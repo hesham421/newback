@@ -3,7 +3,7 @@
 All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer). Versioning policy:
 `docs/RELEASE.md`. Per-step details: `docs/steps/NN-report.md`; deviations: `docs/DEVIATIONS.md`.
 
-## [Unreleased]
+## [1.3.0] — 2026-10-08
 
 Everything since 1.2.0, chiefly the tenant-maturity plan (packages TM-A … TM-C5; per-package reports
 `docs/steps/tm-*-report.md`, overview `docs/steps/tm-plan-report.md`). Core migrations `V16` … `V22` (additive).
