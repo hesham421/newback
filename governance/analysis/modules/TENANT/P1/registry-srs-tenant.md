@@ -183,7 +183,7 @@ Requirements — new / changed items
 | NEW | REQ-TENANT-027 / AC-TENANT-027 | Reset a tenant administrator's password (`/{id}/admin-reset`) | US-TENANT-010; POL-TENANT-013; RULE-TENANT-017 | tenant/service/TenantService.java (`resetAdministratorPassword`); sec/crossmodule/SecAdminRecoveryApi.java | `TenantAdminResetIntegrationTest`; TC-CORE-TENANT-033 … 035 |
 | NEW | REQ-TENANT-028 / AC-TENANT-028 | Tenant usage figures (`/{id}/usage`) | US-TENANT-011; POL-TENANT-006, -007 | tenant/service/TenantService.java (`getUsage`) | `TenantUsageIntegrationTest`; TC-CORE-TENANT-027, -036 |
 | NEW | RULE-TENANT-016 | Suspension requires a reason (3..500); activation clears the facts and sets `TOKENS_INVALID_BEFORE` | REQ-TENANT-026 | tenant/domain/TenantDomain.java | `TenantDomainTest` |
-| NEW | RULE-TENANT-017 | Admin-reset target: a STAFF user of that tenant holding an active super role | REQ-TENANT-027 | tenant/domain/TenantDomain.java | `TenantDomainTest`, `TenantAdminResetIntegrationTest` |
+| NEW | RULE-TENANT-017 | Admin-reset target: a STAFF user of that tenant holding an active super role; never the PLATFORM tenant (review round 1) | REQ-TENANT-027 | tenant/domain/TenantDomain.java | `TenantDomainTest`, `TenantAdminResetIntegrationTest` |
 | CHANGED | RULE-TENANT-003, RULE-TENANT-004 | names editable (code still immutable); re-applying a status leaves the facts and the cut-off | REQ-TENANT-025, -026 | — | — |
 | CHANGED | REQ-TENANT-007 | search / sort allow-list + `contactEmail`, `countryCode`, `suspendedAt` | — | tenant/service/TenantService.java (`ALLOWED_SORT_FIELDS`) | `TenantProfileIntegrationTest` |
 
@@ -191,12 +191,13 @@ Error codes — delta
 | Code | HTTP | Code location |
 |---|---|---|
 | `TENANT_SUSPENSION_REASON_REQUIRED` | 400 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_ADMIN_RESET_PLATFORM` | 422 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java (review round 1) |
 | `TENANT_ADMIN_NOT_FOUND` | 404 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
 | `TENANT_ADMIN_NOT_SUPER` | 422 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
 Referenced: SEC `SEC-400-PASSWORD-POLICY` (400, admin-reset). i18n: one `tenant-maturity B` block in both bundles.
 
-Permissions — delta: none (plan §0 D5). Audit action — delta: `ADMIN_PASSWORD_RESET` (written by SEC inside
-the target tenant). Decisions — delta: none (no alternative was weighed that needs an ADR; the choices are in
+Permissions — delta: none (plan §0 D5). Audit actions — delta: `ADMIN_PASSWORD_RESET` (written by SEC inside
+the target tenant) and `TENANT_ADMIN_RESET` (written by TENANT in PLATFORM, review round 1). Decisions — delta: none (no alternative was weighed that needs an ADR; the choices are in
 `srs-tenant.md` B10).
 
 Counts after this addendum: REQ 28 · AC 28 · RULE 13 · ENT 1 · SCR-REQ 1 · XM 2.

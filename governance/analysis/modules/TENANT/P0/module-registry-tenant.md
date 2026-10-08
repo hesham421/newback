@@ -103,7 +103,7 @@ DEPENDENCIES — delta (TENANT still reads no other module's table)
 | NEW | SEC | crossmodule (in-core API) | `SecUserDirectoryApi.countStaff()`, `countCustomers()`, `countActiveSessions()`; NEW `SecAdminRecoveryApi.findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)` — called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
 | NEW | FILE | crossmodule (in-core API) | `FileDocumentLookupApi.countDocuments()`, `sumBytes()` | same |
 | NEW | NOTIF | crossmodule (in-core API) | `NotificationLogQueryApi.countDispatchedSince(Instant)` | same |
-| CHANGED | audit | SOFT | + action `ADMIN_PASSWORD_RESET` (recorded by SEC's recovery in the target tenant) | same, B8 |
+| CHANGED | audit | SOFT | + actions `ADMIN_PASSWORD_RESET` (recorded by SEC's recovery in the target tenant) and `TENANT_ADMIN_RESET` (recorded by TENANT in PLATFORM through `AuditApi`) | same, B8 |
 
 EXPOSED SURFACE, PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, screen, permission
 or grant seed; every new endpoint sits behind `PLATFORM_TENANT_MANAGE` on `PLATFORM_TENANTS`).

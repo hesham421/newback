@@ -682,12 +682,12 @@ Every row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the servic
 |---|---|---|---|---|---|---|
 | NEW | PUT | `/{id}` | `TenantUpdateRequest { nameAr*, nameEn*, contactEmail, contactPhone, countryCode, defaultLocale, timezone, notes }` (formats in B5) — no `code`, no `statusCode`, no `version`; a JSON field of another name is ignored (`fail-on-unknown-properties: false`) | 200 `TenantResponse` | 404 · `TENANT_NOT_FOUND`; 400 · `VALIDATION_ERROR` (field named); 409 · `CONCURRENT_MODIFICATION` (a concurrent write between read and flush, the `VERSION` lock) | REQ-TENANT-025; RULE-TENANT-003 |
 | CHANGED | PATCH | `/{id}/status` | `TenantStatusUpdateRequest { statusCode*, reason }` — `reason` required for `SUSPENDED` (3..500 characters after trimming), ignored for `ACTIVE` | 200 `TenantResponse` | + 400 · `TENANT_SUSPENSION_REASON_REQUIRED`; as before 404 · `TENANT_NOT_FOUND`, 422 · `TENANT_PLATFORM_PROTECTED` (checked first), 400 · `VALIDATION_ERROR`, 409 · `CONCURRENT_MODIFICATION` | REQ-TENANT-026; RULE-TENANT-004, -005, -016 |
-| NEW | POST | `/{id}/admin-reset` | `TenantAdminResetRequest { username* (≤ 100), newPassword* (≤ 200, raw, never logged), requireChangeAtNextLogin (Boolean, null = true) }` | 200 `TenantAdminResetResponse { username, sessionsTerminated }` | 404 · `TENANT_NOT_FOUND`; 404 · `TENANT_ADMIN_NOT_FOUND`; 422 · `TENANT_ADMIN_NOT_SUPER`; 400 · `SEC-400-PASSWORD-POLICY` (`fieldErrors[0].field = newPassword`, SEC RULE-SEC-056); 400 · `VALIDATION_ERROR` | REQ-TENANT-027; RULE-TENANT-017 |
+| NEW | POST | `/{id}/admin-reset` | `TenantAdminResetRequest { username* (≤ 100), newPassword* (≤ 200, raw, never logged), requireChangeAtNextLogin (Boolean, null = true) }` | 200 `TenantAdminResetResponse { username, sessionsTerminated }` | 404 · `TENANT_NOT_FOUND`; 422 · `TENANT_ADMIN_RESET_PLATFORM` (`{id}` = PLATFORM; review round 1); 404 · `TENANT_ADMIN_NOT_FOUND`; 422 · `TENANT_ADMIN_NOT_SUPER`; 400 · `SEC-400-PASSWORD-POLICY` (`fieldErrors[0].field = newPassword`, SEC RULE-SEC-056); 400 · `VALIDATION_ERROR` | REQ-TENANT-027; RULE-TENANT-017 |
 | NEW | GET | `/{id}/usage` | — | 200 `TenantUsageResponse { id, staffUsers, customerUsers, activeSessions, fileDocuments, fileBytes, notificationsLast30Days, collectedAt }` | 404 · `TENANT_NOT_FOUND` | REQ-TENANT-028 |
 | CHANGED | GET / POST / GET / PATCH / PUT | `/{id}`, `/search`, list, `/{id}/status`, `/{id}` | — | `TenantResponse` + `contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`, `timezone`, `notes`, `suspendedAt`, `suspendedBy`, `suspensionReason` (`tokensInvalidBefore` is not exposed) | — | REQ-TENANT-025, -026 |
 | CHANGED | POST | `/search` | filters / sorts | + `contactEmail`, `countryCode`, `suspendedAt` (ISO-8601 instant; a malformed value 400 `VALIDATION_ERROR`) on the allow-list `id, code, nameAr, nameEn, statusCode, createdAt` | as before | REQ-TENANT-007 |
 
-Order of checks — admin-reset: tenant (`TENANT_NOT_FOUND`) → target exists (`TENANT_ADMIN_NOT_FOUND`) →
+Order of checks — admin-reset: tenant (`TENANT_NOT_FOUND`) → not PLATFORM (`TENANT_ADMIN_RESET_PLATFORM`) → target exists (`TENANT_ADMIN_NOT_FOUND`) →
 target super (`TENANT_ADMIN_NOT_SUPER`) → password policy → write. Status change: request validation →
 tenant → PLATFORM protection (RULE-TENANT-005) → reason (RULE-TENANT-016) → write.
 
@@ -726,7 +726,7 @@ and suspending PLATFORM without a reason still answers 422 `TENANT_PLATFORM_PROT
 
 ### REQ-TENANT-027 — إعادة تعيين كلمة مرور مدير المستأجر / Reset a tenant administrator's password
 Pattern    : event
-Statement  : When a platform operator posts a username and a new password to `POST /api/v1/platform/tenants/{id}/admin-reset`, the system shall, in one transaction of tenant {id}, verify that the username is a STAFF user of that tenant holding an active super role (RULE-TENANT-017), apply the STAFF password policy, store the new password's hash, require a change at the next sign-in unless `requireChangeAtNextLogin` is false, terminate every open session of that user, record `ADMIN_PASSWORD_RESET` in that tenant's generic audit log (actor = the platform operator) and answer the username and the number of terminated sessions; a refusal changes nothing.
+Statement  : When a platform operator posts a username and a new password to `POST /api/v1/platform/tenants/{id}/admin-reset`, the system shall, in one transaction of tenant {id}, verify that the username is a STAFF user of that tenant holding an active super role (RULE-TENANT-017), apply the STAFF password policy, store the new password's hash, require a change at the next sign-in unless `requireChangeAtNextLogin` is false, terminate every open session of that user, record `ADMIN_PASSWORD_RESET` in that tenant's generic audit log (actor = the platform operator), then record `TENANT_ADMIN_RESET` in the PLATFORM tenant's audit log (entity `CORE_TENANT` / {id}), and answer the username and the number of terminated sessions; it shall refuse the reset when {id} is the PLATFORM tenant itself; a refusal changes nothing.
 Traces     : US-TENANT-010
 Entities   : ENT-TENANT-001; SEC ENT-SEC-001 (through `SecAdminRecoveryApi`)
 Rationale  : POL-TENANT-013, POL-TENANT-006, POL-TENANT-011; SEC ADR-SEC-063 (an administrator-chosen password forces a change by default)
@@ -734,9 +734,9 @@ Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.4
 Priority   : HIGH
 #### AC-TENANT-027 — [REQ-TENANT-027]
 Given tenant D whose administrator `td-admin` (role `SYS_ADMIN`, `IS_SUPER`) has one open session, and a STAFF user of D without a role
-When the operator posts an unknown username → 404 `TENANT_ADMIN_NOT_FOUND`; the role-less user → 422 `TENANT_ADMIN_NOT_SUPER`; `td-admin` with `abcdefgh` → 400 `SEC-400-PASSWORD-POLICY` (`newPassword`); an unknown tenant id → 404 `TENANT_NOT_FOUND`
+When the operator posts an unknown username → 404 `TENANT_ADMIN_NOT_FOUND`; any username to the PLATFORM tenant (id 1), the operator's own included → 422 `TENANT_ADMIN_RESET_PLATFORM`; the role-less user → 422 `TENANT_ADMIN_NOT_SUPER`; `td-admin` with `abcdefgh` → 400 `SEC-400-PASSWORD-POLICY` (`newPassword`); an unknown tenant id → 404 `TENANT_NOT_FOUND`
 Then nothing changed (the old password still signs in);
-when the operator posts `td-admin` with a valid password, the system answers 200 `{ username: td-admin, sessionsTerminated: 1 }`, the old token answers 401, the old password 401, the new password signs in with `passwordChangeRequired = true` (false when the request said `requireChangeAtNextLogin: false`), and D's audit log has one `ADMIN_PASSWORD_RESET` row for that user whose actor is the operator and which contains no password
+when the operator posts `td-admin` with a valid password, the system answers 200 `{ username: td-admin, sessionsTerminated: 1 }`, the old token answers 401, the old password 401, the new password signs in with `passwordChangeRequired = true` (false when the request said `requireChangeAtNextLogin: false`), and D's audit log has one `ADMIN_PASSWORD_RESET` row for that user whose actor is the operator and which contains no password, and PLATFORM's audit log has one `TENANT_ADMIN_RESET` row for `CORE_TENANT` / D's id naming `td-admin` and the terminated-session count, without a secret
 
 ### REQ-TENANT-028 — أرقام استخدام المستأجر / Tenant usage figures
 Pattern    : event
@@ -767,25 +767,27 @@ Decided by : `TenantDomain` (`assertSuspensionReasonGiven`, `changesStatusTo`); 
 ### RULE-TENANT-017 — هدف إعادة تعيين كلمة مرور المدير / Admin-reset target
 Scope      : ENT-TENANT-001; SEC ENT-SEC-001
 Trigger    : on `/{id}/admin-reset`
-Statement  : The system shall reset a password through `/{id}/admin-reset` only for a STAFF user of tenant {id} (any account status) holding at least one ACTIVE role with `IS_SUPER = TRUE`. The facts "exists" and "holds an active super role" are computed by SEC (`SecAdminRecoveryApi.findRecoveryTarget`, inside tenant {id}) and passed into `TenantDomain` by the service; a CUSTOMER account of that name is not a target.
+Statement  : The system shall reset a password through `/{id}/admin-reset` only for a STAFF user of tenant {id} (any account status) holding at least one ACTIVE role with `IS_SUPER = TRUE`, and never when {id} is the PLATFORM tenant (id 1): platform operators set each other's passwords through SEC's `PUT /api/v1/sec/users/{id}/password`, where RULE-SEC-057 refuses one's own account (review round 1). The facts "exists" and "holds an active super role" are computed by SEC (`SecAdminRecoveryApi.findRecoveryTarget`, inside tenant {id}) and passed into `TenantDomain` by the service; a CUSTOMER account of that name is not a target.
 Data source: SEC — `SEC_USER` (realm STAFF), `SEC_USER_ROLE`, `SEC_ROLE.IS_SUPER` / `IS_ACTIVE_FL` of tenant {id}
-Message    : `TENANT_ADMIN_NOT_FOUND` ar: "لا يوجد مستخدم موظف باسم ''{0}'' في المستأجر ''{1}''" · en: "No staff user ''{0}'' exists in tenant ''{1}''"; `TENANT_ADMIN_NOT_SUPER` ar: "المستخدم ''{0}'' في المستأجر ''{1}'' لا يحمل دورًا فائقًا؛ لا يُستعاد هنا إلا مدير المستأجر" · en: "User ''{0}'' of tenant ''{1}'' holds no super role; only a tenant administrator can be recovered here"
+Message    : `TENANT_ADMIN_RESET_PLATFORM` ar: "لا يُستعاد مستأجر المنصة ''{0}'' من هنا: تُعيَّن كلمة مرور مشغّل المنصة من شاشة المستخدمين" · en: "The platform tenant ''{0}'' is not recovered here: a platform operator's password is set on the users screen"; `TENANT_ADMIN_NOT_FOUND` ar: "لا يوجد مستخدم موظف باسم ''{0}'' في المستأجر ''{1}''" · en: "No staff user ''{0}'' exists in tenant ''{1}''"; `TENANT_ADMIN_NOT_SUPER` ar: "المستخدم ''{0}'' في المستأجر ''{1}'' لا يحمل دورًا فائقًا؛ لا يُستعاد هنا إلا مدير المستأجر" · en: "User ''{0}'' of tenant ''{1}'' holds no super role; only a tenant administrator can be recovered here"
 Traces     : REQ-TENANT-027
 Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.3
-Decided by : `TenantDomain.assertCanResetAdministrator`
+Decided by : `TenantDomain.assertAdminResetAllowed` (PLATFORM), `TenantDomain.assertCanResetAdministrator` (target)
 
 | Kind | Rule | Delta |
 |---|---|---|
 | CHANGED | RULE-TENANT-003 (code immutability) | the names and the profile become editable (`PUT /{id}`); the code still never changes (`updatable = false`, not in `TenantUpdateRequest`) |
 | CHANGED | RULE-TENANT-004 (status values) | re-applying the current status also leaves the suspension facts and the cut-off untouched (RULE-TENANT-016) |
+| CHANGED (review round 1) | RULE-TENANT-017 (admin-reset target) | + never on the PLATFORM tenant (422 `TENANT_ADMIN_RESET_PLATFORM`): the first version let a platform operator reset their own password there without the current one, bypassing SEC RULE-SEC-057 |
 
 ### B4. Error codes — NEW
 | Code | HTTP | `Status` | Raised by | Message args |
 |---|---|---|---|---|
 | `TENANT_SUSPENSION_REASON_REQUIRED` | 400 | `VALIDATION_ERROR` | `TenantDomain.assertSuspensionReasonGiven` | — |
+| `TENANT_ADMIN_RESET_PLATFORM` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertAdminResetAllowed` (review round 1) | tenant code |
 | `TENANT_ADMIN_NOT_FOUND` | 404 | `NOT_FOUND` | `TenantDomain.assertCanResetAdministrator` | username, tenant code |
 | `TENANT_ADMIN_NOT_SUPER` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertCanResetAdministrator` | username, tenant code |
-Referenced (SEC): `SEC-400-PASSWORD-POLICY` (400). Every new code has an entry in `messages.properties` and
+`TENANT_PLATFORM_PROTECTED` is not reused for the PLATFORM refusal: its message says the platform tenant "cannot be suspended". Referenced (SEC): `SEC-400-PASSWORD-POLICY` (400). Every new code has an entry in `messages.properties` and
 `messages_ar.properties` (one `tenant-maturity B` block each); the seven 1.2.0 codes are unchanged.
 
 ### B5. ENT-TENANT-001 Tenant — CHANGED (fields)
@@ -826,7 +828,7 @@ packages only (ArchUnit `CrossModuleBoundaryArchTest`):
 | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (NEW) | SEC (REQ-SEC-091) | `Optional<RecoveryTarget> findRecoveryTarget(String username)` → `RecoveryTarget(Long userId, String username, boolean superRole)`; `int resetSuperUserPassword(String username, String rawPassword, Boolean requireChangeAtNextLogin)` (null = TRUE, applied by SEC: RULE-SEC-058) → terminated-session count; throws `SEC-400-PASSWORD-POLICY` | admin-reset |
 | `com.erp.file.crossmodule.FileDocumentLookupApi` | FILE (XM-FILE-001, CHANGED) | `long countDocuments()`, `long sumBytes()` — current tenant, documents not `DELETED` | usage |
 | `com.erp.notif.crossmodule.NotificationLogQueryApi` | NOTIF (1.3.0 addendum) | `long countDispatchedSince(Instant since)` — current tenant's `NOTIF_LOG` rows created at or after `since` | usage |
-| `com.erp.audit.crossmodule` | audit | `ADMIN_PASSWORD_RESET` is written by SEC's recovery inside tenant {id} (B8) | admin-reset |
+| `com.erp.audit.crossmodule.AuditApi` | audit | `ADMIN_PASSWORD_RESET` is written by SEC's recovery inside tenant {id}; `TENANT_ADMIN_RESET` by `TenantService` in PLATFORM (B8) | admin-reset |
 The admin-reset and usage service methods are deliberately not `@Transactional`: a transaction opened in
 the PLATFORM request would bind the PLATFORM Hibernate session (REQ-TENANT-018, `TenantContext` Javadoc),
 so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (the
@@ -837,7 +839,7 @@ so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (t
 |---|---|---|---|
 | `PUT /{id}` | `UPDATE` row of `CORE_TENANT` (`@Audited`, in PLATFORM) with the changed fields | — | — |
 | suspend / activate | `UPDATE` row of `CORE_TENANT` (`statusCode` + the suspension facts; `tokensInvalidBefore` is dropped by the audit denylist word `token`) | — (package C.1 terminates them on suspension) | — (package C.1 adds the lifecycle events) |
-| admin-reset | `ADMIN_PASSWORD_RESET` in tenant {id}: actor = the operator's username, realm `STAFF`, `actorUserId` null (the operator is not a user of {id}), entity `SEC_USER` / the user's id, summaries name the user and say "by the platform operator", no secret | every open session of the user terminated, one SEC `SESSION_TERMINATED` row each (no actor user: the operator is not a user of {id}) | `UserPasswordChangedEvent(userId, byAdmin = true)` in tenant {id} → NOTIF e-mails `STAFF_PASSWORD_CHANGED` to the administrator (RULE-NOTIF-023) |
+| admin-reset | (1) `ADMIN_PASSWORD_RESET` in tenant {id}: actor = the operator's username, realm `STAFF`, `actorUserId` null (the operator is not a user of {id}), entity `SEC_USER` / the user's id, summaries name the user and say "by the platform operator", no secret; (2) review round 1: after the reset committed, `TENANT_ADMIN_RESET` in the PLATFORM tenant (outside `callAs`, its own commit): actor = the operator, entity `CORE_TENANT` / {id}, summaries name the tenant code, the target username and `sessionsTerminated`, no secret — so a PLATFORM auditor sees every recovery | every open session of the user terminated, one SEC `SESSION_TERMINATED` row each (no actor user: the operator is not a user of {id}) | `UserPasswordChangedEvent(userId, byAdmin = true)` in tenant {id} → NOTIF e-mails `STAFF_PASSWORD_CHANGED` to the administrator (RULE-NOTIF-023) |
 | usage | — | — | — |
 
 ### B9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
@@ -859,7 +861,7 @@ so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (t
 | CHANGED (plan) | NOTIF "existing dispatch API + `countDispatchedSince`" → `NotificationLogQueryApi.countDispatchedSince`: `NotificationDispatchApi` is NOTIF's write surface; the dispatch-history read surface is `NotificationLogQueryApi`. |
 | NEW (decision) | What each figure counts: `staffUsers` / `customerUsers` = `SEC_USER` rows of realm STAFF / CUSTOMER in any status; `activeSessions` = `SEC_ACTIVE_SESSION` rows with `TERMINATED_AT` NULL, either realm; `fileDocuments` / `fileBytes` = `FILE_DOCUMENT` rows not `DELETED` (ACTIVE, ARCHIVED) and the sum of their `FILE_SIZE`; `notificationsLast30Days` = `NOTIF_LOG` rows (one per channel, any status) created in the 30 days before `collectedAt`. |
 | NEW (decision) | `TenantUsageResponse` is a figures DTO, not build-create-dto's eligibility `UsageResponse` (`canDelete` / `canDeactivate`): a tenant is never deleted (POL-TENANT-005) and its suspension is never blocked by data. |
-| NEW (open) | Admin-reset on PLATFORM may name the caller's own account (no current password is asked, unlike SEC's own change). Only PLATFORM operators can call it; recorded for a later version. |
+| NEW (review round 1) | Admin-reset refuses the PLATFORM tenant (RULE-TENANT-017 CHANGED, 422 `TENANT_ADMIN_RESET_PLATFORM`, a dedicated code because `TENANT_PLATFORM_PROTECTED`'s message is about suspension); every successful reset is also audited in PLATFORM (`TENANT_ADMIN_RESET`, B8). Logs of the admin-reset path name the tenant id and the user id, never the username (plan §1.7). |
 | NEW (note) | `TOKENS_INVALID_BEFORE` is written on activation but enforced only by package C.2; until then an activation does not invalidate tokens issued before it. |
 
 ### B11. Frontend impact (read by the frontend repository — plan §8 F3)
@@ -867,4 +869,4 @@ so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (t
 |---|---|
 | NEW | `PUT /{id}`, `POST /{id}/admin-reset`, `GET /{id}/usage` on the `PLATFORM_TENANTS` screen (no new page code, permission or menu entry). |
 | CHANGED | The suspend action must send a `reason` (3..500); without it 400 `TENANT_SUSPENSION_REASON_REQUIRED`. `TenantResponse` carries the profile and the suspension facts. |
-| NEW | Error codes `TENANT_SUSPENSION_REASON_REQUIRED`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER` (both languages); admin-reset may also answer `SEC-400-PASSWORD-POLICY`. |
+| NEW | Error codes `TENANT_SUSPENSION_REASON_REQUIRED`, `TENANT_ADMIN_RESET_PLATFORM`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER` (both languages); the admin-reset form is not offered for the PLATFORM row; admin-reset may also answer `SEC-400-PASSWORD-POLICY`. |

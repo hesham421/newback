@@ -148,8 +148,8 @@ POL-TENANT-012 — التعليق بسبب مسجَّل / Suspension carries a r
   Status    : CONFIRMED (erp-core 1.3.0, package B)
 
 POL-TENANT-013 — استعادة مدير المستأجر من المنصة / Platform-side recovery of a tenant administrator
-  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تعيين كلمة مرور جديدة لمستخدم موظف يحمل دورًا فائقًا في مستأجر معيّن، مع إنهاء جلساته وإلزامه افتراضيًا بتغييرها عند الدخول التالي وتسجيل العملية في سجل تدقيق ذلك المستأجر دون كلمة المرور.
-  Statement (en) : The system shall let a platform operator set a new password for a staff user holding a super role in a given tenant, terminating that user's sessions, requiring by default a change at the next sign-in, and recording the operation in that tenant's audit log without the secret.
+  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تعيين كلمة مرور جديدة لمستخدم موظف يحمل دورًا فائقًا في مستأجر معيّن غير مستأجر المنصة، مع إنهاء جلساته وإلزامه افتراضيًا بتغييرها عند الدخول التالي وتسجيل العملية في سجل تدقيق ذلك المستأجر وسجل تدقيق المنصة دون كلمة المرور.
+  Statement (en) : The system shall let a platform operator set a new password for a staff user holding a super role in a given tenant other than PLATFORM, terminating that user's sessions, requiring by default a change at the next sign-in, and recording the operation in that tenant's and in PLATFORM's audit logs without the secret.
   Pattern   : event
   Trigger   : `POST /api/v1/platform/tenants/{id}/admin-reset`
   Rationale : a tenant whose only administrator is locked out cannot repair itself from inside (POL-TENANT-004's rationale); the recovery must not become a way to take over ordinary users (super role only)
