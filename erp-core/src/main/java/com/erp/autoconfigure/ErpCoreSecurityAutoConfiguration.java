@@ -107,9 +107,9 @@ public class ErpCoreSecurityAutoConfiguration {
     public static final String PUBLIC_TENANT_BRANDING_PATHS = "/api/v1/public/tenants/*/branding";
 
     /**
-     * tenant-maturity E (REQ-TENANT-031) — the branding of the caller's tenant: authenticated, but realm-neutral on the
-     * core chain (a CUSTOMER token is not refused with {@code REALM_MISMATCH} there) and allowed during a pending
-     * forced password change (RULE-SEC-059).
+     * tenant-maturity E (REQ-TENANT-031) — the branding of the caller's tenant: authenticated, but its {@code GET} is
+     * realm-neutral on the core chain (a CUSTOMER token is not refused with {@code REALM_MISMATCH} there) and allowed
+     * during a pending forced password change (RULE-SEC-059).
      */
     public static final String TENANT_ME_PATH = "/api/v1/tenant/me";
 
@@ -155,9 +155,8 @@ public class ErpCoreSecurityAutoConfiguration {
                 .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantResolutionFilter, JwtAuthenticationFilter.class)
-            .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF,
-                realmNeutralPaths(properties.getSecurity().getPublicPaths()), securityErrorHandler),
-                TenantResolutionFilter.class)
+            .addFilterAfter(new RealmEnforcementFilter(User.REALM_STAFF, properties.getSecurity().getPublicPaths(),
+                List.of(TENANT_ME_PATH), securityErrorHandler), TenantResolutionFilter.class)
             // tenant-maturity D (RULE-SEC-059): a pending forced password change blocks all but three calls
             .addFilterAfter(new PasswordChangeRequiredFilter(properties.getSecurity().getPublicPaths(),
                 securityErrorHandler), RealmEnforcementFilter.class);
@@ -215,13 +214,6 @@ public class ErpCoreSecurityAutoConfiguration {
             .addFilterAfter(new RealmEnforcementFilter(User.REALM_CUSTOMER, unauthenticatedPaths, securityErrorHandler),
                 TenantResolutionFilter.class);
         return http.build();
-    }
-
-    /** The core chain's public paths plus {@link #TENANT_ME_PATH}: the paths its realm filter does not check. */
-    private static List<String> realmNeutralPaths(List<String> publicPaths) {
-        List<String> paths = new ArrayList<>(publicPaths);
-        paths.add(TENANT_ME_PATH);
-        return paths;
     }
 
     /**
