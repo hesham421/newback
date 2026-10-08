@@ -161,17 +161,16 @@
       ],
       "wave": "5",
       "migrations": [],
-      "status": "FIXING",
+      "status": "REVIEW",
       "branch": "tm/c12-tenant-events-token-cutoff",
       "worktree": ".worktrees/tm-c12",
-      "attempts": 1,
+      "attempts": 2,
       "deviations": 9,
       "implementer_agent": "ad223efb12f48d324",
       "reviewer_agent": "a5f9d987dd2e0d394",
       "review": {
-        "verdict": "PASS-with-findings",
-        "round": 1,
-        "findings": 3
+        "verdict": "pending",
+        "round": 2
       },
       "report": "docs/steps/tm-c12-report.md",
       "merged_commit": null
@@ -495,6 +494,12 @@
       "step": "C12",
       "event": "FIXING",
       "note": "reviewer PASS; fixing: revoke cut-off rounded up to next second + audited retryable failure path (cut-off alone sufficient), dangling RULE-TENANT-012/015 cites, ErpCoreEvents deviation line"
+    },
+    {
+      "at": "2026-10-08T03:26:48Z",
+      "step": "C12",
+      "event": "REVIEW",
+      "note": "fix round 1 done 1fdc861 (revoke cut-off ceil to next second, audited retryable failure path, ids, deviations; mvn 623/10, P-LIVE 196/196); focused re-review"
     }
   ]
 }
