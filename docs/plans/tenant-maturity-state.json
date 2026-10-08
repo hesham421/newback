@@ -137,17 +137,16 @@
       "migrations": [
         "V20__tenant_branding.sql"
       ],
-      "status": "FIXING",
+      "status": "REVIEW",
       "branch": "tm/e-tenant-branding",
       "worktree": ".worktrees/tm-e",
-      "attempts": 1,
+      "attempts": 2,
       "deviations": 14,
       "implementer_agent": "a9fbad2c773b21602",
       "reviewer_agent": "a6978d31d755e3c2e",
       "review": {
-        "verdict": "PASS-with-findings",
-        "round": 1,
-        "findings": 6
+        "verdict": "pending",
+        "round": 2
       },
       "report": "docs/steps/tm-e-report.md",
       "merged_commit": null
@@ -456,6 +455,12 @@
       "step": "E",
       "event": "FIXING",
       "note": "reviewer PASS; fixing MEDIUM test-pool exhaustion (Hikari 10x~10 contexts = PG max_connections), method-aware realm skip, proxy docs, IPv6 /64 + expiring buckets, generator string-literal bug"
+    },
+    {
+      "at": "2026-10-08T01:59:45Z",
+      "step": "E",
+      "event": "REVIEW",
+      "note": "fix round 1 done 324953c (test pool 4/1, GET-only realm skip, /64 + LRU-expiry buckets + Retry-After, generator literal fix, MockMvc test; mvn 607/10, P-LIVE 192/192); focused re-review"
     }
   ]
 }
