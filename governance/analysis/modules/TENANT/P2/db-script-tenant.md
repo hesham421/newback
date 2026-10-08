@@ -342,7 +342,7 @@ written by B). DBF ids are unchanged (last DBF-TENANT-044).
 ### Columns — CHANGED use
 | DBF id | Column | Delta | Writers | Reader |
 |---|---|---|---|---|
-| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE (TIMESTAMPTZ, NULL) | now **enforced**: a token whose `iat` (whole seconds) is less than this instant truncated to the second is refused (RULE-TENANT-023, ADR-TENANT-002); still never exposed | SUSPENDED → ACTIVE (`Tenant.activate`), `POST /{id}/revoke-tokens` (`Tenant.revokeTokens`) — both the application's `Instant.now()`, in a PLATFORM transaction | `TenantResolutionFilter` (as PLATFORM, every request with a token) |
+| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE (TIMESTAMPTZ, NULL) | now **enforced**: a token whose `iat` (whole seconds) is less than this instant truncated to the second is refused (RULE-TENANT-023, ADR-TENANT-002); still never exposed | SUSPENDED → ACTIVE (`Tenant.activate`: the application's `Instant.now()`), `POST /{id}/revoke-tokens` (`Tenant.revokeTokens`: the start of the next whole second, `TenantDomain.revocationCutOff`, review round 1) — both in a PLATFORM transaction | `TenantResolutionFilter` (as PLATFORM, every request with a token) |
 | DBF-TENANT-005 | CORE_TENANT.STATUS_CODE | + read by `TenantLookupApi.isActive` (XM-TENANT-001, NOTIF) | — | NOTIF claim / requeue |
 
 ### XM register — delta

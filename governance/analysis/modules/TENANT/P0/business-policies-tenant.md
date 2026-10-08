@@ -233,4 +233,4 @@ CHANGED policies
 RESOLVED DECISIONS — delta
 | # | Question | Answer | Decided | ADR |
 |---|---|---|---|---|
-| 2 | Token cut-off vs `jti` denylist | per-tenant cut-off `TOKENS_INVALID_BEFORE`, compared in whole seconds (a token of the cut-off's own second is served); PLATFORM not revocable | plan §9 (recommendation), package C12 | ADR-TENANT-002 |
+| 2 | Token cut-off vs `jti` denylist | per-tenant cut-off `TOKENS_INVALID_BEFORE`, compared in whole seconds (activation: a token of the activation's own second is served; revoke-tokens: the cut-off is the next whole second, so the revoke's own second is refused); PLATFORM not revocable | plan §9 (recommendation), package C12 | ADR-TENANT-002 |

@@ -372,7 +372,7 @@ entity field, status, error code, permission or migration changes (the status se
 | RULE-NOTIF-024 | ENTITY-NOTIF-001 | a delivery attempt (`NotificationDeliveryProcessor.prepare`), the requeue job (`NotificationRequeueJob`), `TenantActivatedEvent` | The system shall not claim, attempt or re-dispatch a `QUEUED` row whose tenant is not ACTIVE (`TenantLookupApi.isActive(tenantId)`, XM-NOTIF-004): the attempt ends without touching the row (no claim, `ATTEMPTS` and `NEXT_ATTEMPT_AT` unchanged — the outcome `NOT_QUEUED`, "nothing was done") and the requeue job skips the tenant. The row keeps `QUEUED`; once the tenant is ACTIVE again it is delivered: on `TenantActivatedEvent` (XM-NOTIF-005) NOTIF re-dispatches that tenant's `QUEUED` rows that are not claimed (`NEXT_ATTEMPT_AT` null or past) and not pending on this node, and the requeue job (when enabled) picks any later stale one. A send already under way when the suspension commits is finished and recorded normally. This covers a dispatch made just before the suspension (its after-commit delivery finds the tenant suspended), a retry falling due during the suspension, and dispatches made inside a suspended tenant by system code. | TENANT REQ-TENANT-033; plan §5 C.1 |
 
 Decided by `NotificationLogDomain.isDeliverable(boolean tenantActive)` (a `QUEUED` row of an ACTIVE tenant) in
-`prepare`; the job's per-tenant skip reads the same fact before it loads any row.
+`prepare`; the job's per-tenant skip reads the same fact (`TenantLookupApi.isActive`) before it loads any row.
 
 #### 5.2 Cross-module (A7) — NEW
 | XM-ID | Type | From | To | What |
@@ -380,10 +380,12 @@ Decided by `NotificationLogDomain.isDeliverable(boolean tenantActive)` (a `QUEUE
 | XM-NOTIF-004 | CROSSMODULE-READ | NOTIF | TENANT | `com.erp.tenant.crossmodule.TenantLookupApi.isActive(Long tenantId)` (TENANT XM-TENANT-001 CHANGED) — uncached, so a status change is seen by the next attempt |
 | XM-NOTIF-005 | EVENT-CONSUME | NOTIF | events (published by TENANT) | `com.erp.events.TenantActivatedEvent(tenantId, tenantCode, actor)` → RULE-NOTIF-024 re-dispatch |
 
-The listener is `com.erp.notif.service.NotificationTenantActivationListener` (`@Async(ErpCoreEvents.EXECUTOR)` +
-`@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`, the step-08 pattern of
-`StaffPasswordChangedNotifier`), reading inside `TenantContext.callAs(event.getTenantId())` and publishing one
-`NotificationRequestedEvent` per row outside a transaction, as the requeue job does. NOTIF registers no listener for
+The listener is `com.erp.notif.service.NotificationTenantActivationListener`
+(`@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`) which submits the re-dispatch to the core event
+executor itself, as `NotificationDeliveryListener` does, so a rejected task is logged at WARN (the held rows stay
+`QUEUED` for the requeue job or a later activation) instead of failing silently (review round 1); the task reads inside
+`TenantContext.callAs(event.getTenantId())` and publishes one `NotificationRequestedEvent` per row outside a
+transaction, as the requeue job does. NOTIF registers no listener for
 `TenantSuspendedEvent`: the claim-time check is the mechanism (a status read per attempt is enough; no state to keep).
 `NotificationRequeueJob` gains a constructor taking `TenantLookupApi` (used by `ErpCoreNotifAutoConfiguration`); the
 existing constructors keep working without the job-level skip (the claim still refuses).

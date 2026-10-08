@@ -1,7 +1,8 @@
 # ADR-TENANT-002 — Per-tenant token cut-off (`TOKENS_INVALID_BEFORE`) instead of a `jti` denylist
 
 Module  : TENANT     Version : erp-core 1.3.0 (tenant-maturity plan, package C.2)     Stage raised : P1 (SRS) — before the code
-Status  : ACCEPTED (erp-core 1.3.0, package C12; checked against the code in its check commit)
+Status  : ACCEPTED (erp-core 1.3.0, package C12; written PROPOSED-before-code in the analysis commit, accepted after the
+          code check, commit 6bfe756; amended in review round 1)
 
 ## Context
 Since erp-core 1.2.0 a suspended tenant's tokens stop working at once, because `TenantResolutionFilter`
@@ -47,13 +48,21 @@ still sends an old `Authorization` header can sign in again.
 **Precision.** `iat` has whole-second precision (JWT NumericDate, `JwtTokenIssuer` writes seconds);
 the cut-off is a `TIMESTAMPTZ` of microsecond precision. The comparison is made in whole seconds:
 a token is refused when `iat` (seconds) **<** the cut-off truncated to the second. So a token issued in
-the cut-off's own second is **accepted** — a fresh login right after an activation or a revocation must
-work (the HTTP suite signs in again within the same second, TC-CORE-TENANT-032 / -043) — and a token
-issued in that second just *before* the cut-off is still refused through its terminated session (C.1 and
-revoke-tokens end the sessions in the same operation), with SEC's 401 `SEC-401-INVALID-CREDENTIALS`
-rather than `TENANT_TOKEN_REVOKED`. The alternative "`iat` ≤ cut-off second" refuses a fresh login for up
+the cut-off's own second is **accepted** — a fresh login right after an activation must work (the HTTP
+suite signs in again within the same second, TC-CORE-TENANT-032 / -043), and no token of a suspended tenant
+can exist in that second before the activation. For revoke-tokens the stored cut-off is itself the next whole
+second (below), so the revoke's own second is refused. The alternative "`iat` ≤ cut-off second" refuses a fresh login for up
 to one second after every activation and was rejected; so was a sub-second claim of our own (`iat` is
 the standard claim every JWT library reads).
+
+**Revoke-tokens' cut-off (review round 1).** Activation stores the activation instant (no token can be issued for a
+suspended tenant, so a token of that second is a fresh login and is served). Revoke-tokens stores **the start of the
+next whole second** after now: every token issued up to and including the revoke's own second is refused by the
+cut-off alone — whatever happens to the sessions (a failed session step, a session re-opened, a login whose session
+commits after the termination query). A login later in that second is refused too and simply signs in again a moment
+later. If the session step fails after the cut-off committed, the failure is caught, `TOKENS_REVOKED` is recorded in
+PLATFORM saying the sessions were not terminated, and the call answers 500 `TENANT_REVOKE_SESSIONS_FAILED`, retryable:
+a repeated call moves the cut-off forward and ends the sessions.
 
 **PLATFORM.** `revoke-tokens` refuses the PLATFORM tenant (422 `TENANT_REVOKE_TOKENS_PLATFORM`,
 RULE-TENANT-024): it would sign every platform operator out, the caller included, and PLATFORM can never
@@ -62,8 +71,8 @@ session API; a compromised operator account is deactivated there.
 
 Reasons:
 1. **No per-request store.** The check rides on the `CORE_TENANT` row the filter already reads for every
-   authenticated request (RULE-TENANT-015: nothing is cached, so a cut-off is effective on the next
-   request, like a suspension).
+   authenticated request (REQ-TENANT-010 / -012: the filter re-reads the row and caches nothing, so a cut-off is
+   effective on the next request, like a suspension).
 2. **Tenant-wide by construction.** The platform's cases are tenant-wide (re-activation, "sign everyone
    out"); single-token revocation is already SEC's session termination.
 3. **Nothing to expire or clean.** One nullable instant per tenant, no retention job, no Redis
@@ -71,8 +80,9 @@ Reasons:
 4. **Additive.** No migration (V19 has the column); one filter branch; a tenant whose cut-off is NULL
    behaves as in 1.2.0.
 5. **Defence in depth with C.1.** Session termination and the cut-off cover each other: a session row
-   that survives (a failed after-commit listener) is still cut off on re-activation, and a token issued
-   in the cut-off's second is still refused through its session.
+   that survives (a failed after-commit listener) is still cut off on re-activation. For revoke-tokens the
+   cut-off is complete on its own (next whole second, review round 1); ending the sessions is a clean-up
+   whose failure is reported and retryable, never a gap.
 
 ## Consequences
 - **Behaviour change:** a token issued before a tenant's re-activation is refused (401
@@ -90,6 +100,7 @@ Reasons:
   endpoint — the TENANT addendum does.
 
 ## Traces
-ENT-TENANT-001 · REQ-TENANT-026, REQ-TENANT-034, REQ-TENANT-035 · RULE-TENANT-006, RULE-TENANT-016,
+Accepted after the code check (commit 6bfe756); review round 1 amended Decision and Reason 5.
+ENT-TENANT-001 · REQ-TENANT-010, REQ-TENANT-012, REQ-TENANT-026, REQ-TENANT-034, REQ-TENANT-035 · RULE-TENANT-006, RULE-TENANT-016,
 RULE-TENANT-023, RULE-TENANT-024 · POL-TENANT-015 · DBF-TENANT-042 · SEC REQ-SEC-028, REQ-SEC-092,
 REQ-SEC-093 · plan §5 C.1, C.2, §9
