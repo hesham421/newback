@@ -1,9 +1,10 @@
-package com.erp.tenant;
+package com.erp.events.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.erp.events.support.TenantAndSecurityContextTaskDecorator;
+import com.erp.tenant.TenantConstants;
+import com.erp.tenant.TenantContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
