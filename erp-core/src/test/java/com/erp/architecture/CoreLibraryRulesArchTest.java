@@ -80,7 +80,8 @@ class CoreLibraryRulesArchTest {
      * Rule 7 (raw JDBC half): besides the three modules above, where plain JDBC is a documented exception.
      * <ul>
      *   <li>{@code com.erp.<module>.tenant..} — the {@code TenantProvisioningContributor}s (step 05: JDBC, explicit
-     *       TENANT_ID, copying from the source tenant inside the provisioning transaction);</li>
+     *       TENANT_ID, copying from the source tenant inside the provisioning transaction) and the
+     *       {@code TenantExportContributor}s (tenant-maturity C5: streamed reads naming TENANT_ID, RULE-TENANT-011);</li>
      *   <li>{@code com.erp.autoconfigure..} — wiring only (passes a {@code JdbcTemplate} into a bean);</li>
      *   <li>{@code NotificationRequeueJob} — step 08's cross-tenant stale-QUEUED scan, tenant by tenant;</li>
      *   <li>{@code IdempotencyKeyRetentionJob} — tenant-maturity C4's cross-tenant purge of expired idempotency keys,

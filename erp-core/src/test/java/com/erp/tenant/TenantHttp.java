@@ -206,6 +206,19 @@ final class TenantHttp {
         }
     }
 
+    /** tenant-maturity C5 — a GET answered as bytes (a private download), with the caller's bearer token. */
+    HttpResponse<byte[]> getBytes(String token, String path) {
+        try {
+            return http.send(authorized(HttpRequest.newBuilder(URI.create(baseUrl + path)), token)
+                .header("Accept-Language", "en").GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** The {@code tid} claim of an access token (payload decoded without verification — test only). */
     static long tenantIdOf(String token) {
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);

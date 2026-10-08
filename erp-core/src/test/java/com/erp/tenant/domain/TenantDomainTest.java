@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021; C12: RULE-TENANT-023/024). */
+/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021; C12: RULE-TENANT-023/024; C5: RULE-TENANT-027/028). */
 class TenantDomainTest {
 
     @ParameterizedTest
@@ -267,6 +267,25 @@ class TenantDomainTest {
 
         assertThat(entity.getTokensInvalidBefore()).isEqualTo(at);
         assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_ACTIVE);
+    }
+
+    @Test
+    void export_isRefusedAboveTheRowLimit_andWhileTheTenantsExportRuns() {
+        assertThatCode(() -> TenantDomain.assertExportWithinLimit(5, 5)).as("the limit itself is allowed")
+            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertExportWithinLimit(6, 5))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_TOO_LARGE);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.assertExportStartable(true, "ACME")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertExportStartable(false, "ACME"))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_EXPORT_IN_PROGRESS);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.CONFLICT);
+            });
     }
 
     private static Tenant tenant(Long id, String status) {
