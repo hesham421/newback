@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "E",
+  "current_step": "C12",
   "steps": [
     {
       "id": "A",
@@ -137,19 +137,19 @@
       "migrations": [
         "V20__tenant_branding.sql"
       ],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/e-tenant-branding",
-      "worktree": ".worktrees/tm-e",
+      "worktree": null,
       "attempts": 2,
       "deviations": 14,
       "implementer_agent": "a9fbad2c773b21602",
       "reviewer_agent": "a6978d31d755e3c2e",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-e-report.md",
-      "merged_commit": null
+      "merged_commit": "ee74409"
     },
     {
       "id": "C12",
@@ -161,9 +161,9 @@
       ],
       "wave": "5",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/c12-tenant-events-token-cutoff",
-      "worktree": null,
+      "worktree": ".worktrees/tm-c12",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -461,6 +461,18 @@
       "step": "E",
       "event": "REVIEW",
       "note": "fix round 1 done 324953c (test pool 4/1, GET-only realm skip, /64 + LRU-expiry buckets + Retry-After, generator literal fix, MockMvc test; mvn 607/10, P-LIVE 192/192); focused re-review"
+    },
+    {
+      "at": "2026-10-08T02:10:36Z",
+      "step": "E",
+      "event": "COMPLETE",
+      "note": "merged ee74409; verify 607/10; P-LIVE 192/192; review fixes: test pool 4/1, GET-only realm skip, /64+LRU buckets, Retry-After, generator literal fix"
+    },
+    {
+      "at": "2026-10-08T02:10:36Z",
+      "step": "C12",
+      "event": "START",
+      "note": "wave 5 (C1+C2) dispatched"
     }
   ]
 }
