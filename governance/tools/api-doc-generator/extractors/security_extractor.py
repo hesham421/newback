@@ -112,6 +112,21 @@ def strip_comments(source: str) -> str:
     return _COMMENT_RE.sub(blank, source)
 
 
+# Text blocks, string and char literals, left to right (a quote inside a char literal never opens a string).
+_LITERAL_RE = re.compile(r'"""[\s\S]*?"""|"(?:[^"\\\n]|\\.)*"|' + r"'(?:[^'\\\n]|\\.)'")
+
+
+def blank_string_literals(source: str) -> str:
+    """Every literal's content becomes spaces (quotes and newlines kept), so offsets survive and no regex can read
+    prose inside an annotation value as code: an @Operation text saying "the public branding ... path (" once made
+    the method-name lookup below return "path" (tenant-maturity E review round 1)."""
+    def blank(m: re.Match) -> str:
+        text = m.group(0)
+        q = 3 if text.startswith('"""') else 1
+        return text[:q] + re.sub(r"[^\n]", " ", text[q:-q]) + text[-q:]
+    return _LITERAL_RE.sub(blank, source)
+
+
 def _combine_path(base: str, sub: str) -> str:
     base = (base or "").rstrip("/")
     sub = sub or ""
@@ -128,6 +143,7 @@ def find_controller_for_endpoint(source_root: Path, http_method: str, path: str)
     "create"/"search" repeat across every controller in this codebase."""
     for controller_file in sorted(source_root.rglob("*Controller.java")):
         text = strip_comments(controller_file.read_text(encoding="utf-8"))
+        code_only = blank_string_literals(text)
         class_match = CLASS_REQUEST_MAPPING_RE.search(text)
         base_path = class_match.group(1) if class_match else ""
 
@@ -138,7 +154,7 @@ def find_controller_for_endpoint(source_root: Path, http_method: str, path: str)
             full_path = _combine_path(base_path, m.group(2) or "")
             if full_path != path:
                 continue
-            name_match = METHOD_NAME_AFTER_ANNOTATION_RE.search(text[m.end():])
+            name_match = METHOD_NAME_AFTER_ANNOTATION_RE.search(code_only[m.end():])
             if name_match:
                 return controller_file, name_match.group(1)
 
