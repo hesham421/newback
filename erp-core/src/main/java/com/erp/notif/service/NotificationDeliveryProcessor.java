@@ -11,6 +11,7 @@ import com.erp.notif.entity.NotificationLog;
 import com.erp.notif.entity.NotificationTemplate;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.tenant.TenantContext;
+import com.erp.tenant.crossmodule.TenantLookupApi;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -62,7 +63,10 @@ public class NotificationDeliveryProcessor {
         REJECTED,
         /** The last allowed attempt failed: {@code FAILED} after this attempt (erp-core 1.2.0). */
         EXHAUSTED,
-        /** The row is unknown, no longer {@code QUEUED}, or claimed by another attempt: nothing was done. */
+        /**
+         * The row is unknown, no longer {@code QUEUED}, claimed by another attempt, or its tenant is not ACTIVE
+         * (RULE-NOTIF-024): nothing was done.
+         */
         NOT_QUEUED
     }
 
@@ -72,6 +76,7 @@ public class NotificationDeliveryProcessor {
     private final NotificationLogRepository logRepository;
     private final DomainEventPublisher eventPublisher;
     private final ErpCoreProperties properties;
+    private final TenantLookupApi tenantLookup;
 
     /**
      * Starts an attempt: empty when the row is unknown or no longer {@code QUEUED} (e.g. already
@@ -105,6 +110,11 @@ public class NotificationDeliveryProcessor {
         NotificationLog row = logRepository.findWithTemplateById(logId).orElse(null);
         if (row == null || !NotificationLogDomain.from(row).isAwaitingDelivery()) {
             log.debug("Notification {} is not queued (unknown or already final) — attempt skipped", logId);
+            return Optional.empty();
+        }
+        if (!NotificationLogDomain.from(row).isDeliverable(tenantLookup.isActive(TenantContext.require()))) {
+            // tenant-maturity C12 (RULE-NOTIF-024): left QUEUED and unclaimed until the tenant is active again
+            log.debug("Notification {} belongs to a tenant that is not ACTIVE — attempt skipped, row left QUEUED", logId);
             return Optional.empty();
         }
         Instant now = Instant.now();

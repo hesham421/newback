@@ -54,4 +54,10 @@ public final class TenantErrorCodes {
 
     /** 429 — tenant-maturity E (RULE-TENANT-022): too many public branding requests from one client address. */
     public static final String TENANT_BRANDING_RATE_LIMITED = "TENANT_BRANDING_RATE_LIMITED";
+
+    /** 401 — tenant-maturity C12 (RULE-TENANT-023): the token was issued before its tenant's token cut-off. */
+    public static final String TENANT_TOKEN_REVOKED = "TENANT_TOKEN_REVOKED";
+
+    /** 422 — tenant-maturity C12 (RULE-TENANT-024): revoke-tokens never targets the PLATFORM tenant. */
+    public static final String TENANT_REVOKE_TOKENS_PLATFORM = "TENANT_REVOKE_TOKENS_PLATFORM";
 }

@@ -101,7 +101,7 @@ public class Tenant extends GlobalAuditableEntity {
     @Column(name = "SUSPENSION_REASON", length = 500)
     private String suspensionReason;
 
-    /** Tokens issued before this instant are refused (set on activation; enforced by tenant-maturity C.2). */
+    /** Tokens issued before this instant are refused (RULE-TENANT-023: set on activation and by revoke-tokens). */
     @Column(name = "TOKENS_INVALID_BEFORE")
     private Instant tokensInvalidBefore;
 
@@ -165,6 +165,11 @@ public class Tenant extends GlobalAuditableEntity {
         this.suspendedAt = null;
         this.suspendedBy = null;
         this.suspensionReason = null;
+        this.tokensInvalidBefore = at;
+    }
+
+    /** Field mutation only — whether the revocation is allowed is decided by {@code TenantDomain} (RULE-TENANT-024). */
+    public void revokeTokens(Instant at) {
         this.tokensInvalidBefore = at;
     }
 

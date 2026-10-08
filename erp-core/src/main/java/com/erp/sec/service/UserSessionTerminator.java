@@ -61,4 +61,25 @@ public class UserSessionTerminator {
         activeSessionRepository.saveAll(ended);
         return ended.size();
     }
+
+    /**
+     * REQ-SEC-092 / -093 (tenant-maturity C12) — ends every open session of the current tenant, both realms, as
+     * {@code terminatedBy} (the platform operator, who is no user of this tenant: no actor user on the audit rows).
+     */
+    public int terminateAllOpenSessions(String terminatedBy, String detailsAr, String detailsEn) {
+        Instant now = Instant.now();
+        List<ActiveSession> ended = activeSessionRepository.findAllNonTerminated();
+        for (ActiveSession session : ended) {
+            session.terminate(terminatedBy);
+            auditLogEntryRepository.save(AuditLogEntry.builder()
+                .eventTypeCode(EVENT_SESSION_TERMINATED)
+                .occurredAt(now)
+                .targetRef(String.valueOf(session.getActiveSessionPk()))
+                .detailsAr(detailsAr)
+                .detailsEn(detailsEn)
+                .build());
+        }
+        activeSessionRepository.saveAll(ended);
+        return ended.size();
+    }
 }

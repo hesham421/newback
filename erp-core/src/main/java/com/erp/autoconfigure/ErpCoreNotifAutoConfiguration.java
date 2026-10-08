@@ -5,6 +5,7 @@ import com.erp.notif.channel.EmailChannelProvider;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.notif.service.NotificationDeliveryTracker;
 import com.erp.notif.service.NotificationRequeueJob;
+import com.erp.tenant.crossmodule.TenantLookupApi;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -45,10 +46,11 @@ public class ErpCoreNotifAutoConfiguration {
                                                          DomainEventPublisher eventPublisher,
                                                          JdbcTemplate jdbcTemplate,
                                                          ErpCoreProperties properties,
-                                                         ObjectProvider<NotificationDeliveryTracker> tracker) {
+                                                         ObjectProvider<NotificationDeliveryTracker> tracker,
+                                                         ObjectProvider<TenantLookupApi> tenantLookup) {
         // the delivery listener's tracker; a fresh one only when the notif components are not scanned
         return new NotificationRequeueJob(logRepository, eventPublisher, jdbcTemplate, properties,
-            tracker.getIfAvailable(NotificationDeliveryTracker::new));
+            tracker.getIfAvailable(NotificationDeliveryTracker::new), tenantLookup.getIfAvailable());
     }
 
     /** Spring Mail is optional: everything that names its classes lives behind this class check. */

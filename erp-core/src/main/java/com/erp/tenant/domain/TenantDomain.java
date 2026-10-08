@@ -7,6 +7,7 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -14,7 +15,8 @@ import java.util.regex.Pattern;
 /**
  * The tenant's business rules: code format and uniqueness on create, which status transitions are
  * allowed and with which reason (RULE-TENANT-016), who may be recovered by the platform's admin-reset
- * (RULE-TENANT-017), and the branding rules (RULE-TENANT-018, -021; tenant-maturity E). No Spring/JPA
+ * (RULE-TENANT-017), the branding rules (RULE-TENANT-018, -021; tenant-maturity E) and the token cut-off and its
+ * revocation (RULE-TENANT-023, -024; C12). No Spring/JPA
  * annotations, no repository; the service passes every fact in.
  */
 public final class TenantDomain {
@@ -114,6 +116,29 @@ public final class TenantDomain {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 TenantErrorCodes.TENANT_ADMIN_RESET_PLATFORM, code);
         }
+    }
+
+    /**
+     * RULE-TENANT-024 (tenant-maturity C12) — revoke-tokens never runs on the PLATFORM tenant: it would sign every
+     * platform operator out, the caller included. Any other tenant, ACTIVE or SUSPENDED, may be revoked.
+     */
+    public void assertTokenRevocationAllowed() {
+        if (Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(id)) {
+            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
+                TenantErrorCodes.TENANT_REVOKE_TOKENS_PLATFORM, code);
+        }
+    }
+
+    /**
+     * RULE-TENANT-023 (ADR-TENANT-002) — a token is revoked when the tenant has a cut-off and the token's {@code iat}
+     * (whole seconds) lies before the cut-off truncated to the second: a token of the cut-off's own second is served,
+     * one without {@code iat} is not.
+     */
+    public static boolean isTokenRevoked(Instant issuedAt, Instant tokensInvalidBefore) {
+        if (tokensInvalidBefore == null) {
+            return false;
+        }
+        return issuedAt == null || issuedAt.getEpochSecond() < tokensInvalidBefore.getEpochSecond();
     }
 
     /**

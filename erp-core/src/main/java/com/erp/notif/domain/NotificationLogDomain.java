@@ -64,6 +64,19 @@ public final class NotificationLogDomain {
     }
 
     /**
+     * RULE-NOTIF-024 (tenant-maturity C12) — whether an attempt may claim the row: it is {@code QUEUED} and its tenant is
+     * ACTIVE. A suspended tenant's row is left exactly as it is (still {@code QUEUED}) until the tenant is active again.
+     */
+    public boolean isDeliverable(boolean tenantActive) {
+        return isAwaitingDelivery() && deliversFor(tenantActive);
+    }
+
+    /** RULE-NOTIF-024 — nothing of a tenant that is not ACTIVE is claimed or re-dispatched. */
+    public static boolean deliversFor(boolean tenantActive) {
+        return tenantActive;
+    }
+
+    /**
      * Whether another attempt is allowed after {@code attemptsMade} failed ones, given the configured
      * ceiling (RULE-NOTIF-002, default 5).
      */

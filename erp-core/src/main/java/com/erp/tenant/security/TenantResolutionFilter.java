@@ -3,6 +3,8 @@ package com.erp.tenant.security;
 import com.erp.common.web.FilterErrorResponseWriter;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
+import com.erp.tenant.TenantTokenFacts;
+import com.erp.tenant.domain.TenantDomain;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
 import com.erp.tenant.repository.TenantRepository;
@@ -28,7 +30,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <ol>
  *   <li><b>Token</b> — when the JWT filter has authenticated the caller it has already set
  *       {@link TenantContext} from the token's {@code tid} claim; this filter only checks that the
- *       tenant still exists and is ACTIVE (a suspended tenant's tokens stop working at once).</li>
+ *       tenant still exists and is ACTIVE (a suspended tenant's tokens stop working at once) and, tenant-maturity C12
+ *       (RULE-TENANT-023), that the token was not issued before the tenant's cut-off (401 {@code TENANT_TOKEN_REVOKED}).
+ *       On a non-public path the same two checks apply to a signature-valid token the JWT filter did not authenticate
+ *       (e.g. its session was ended by the suspension), read from its {@link TenantTokenFacts}.</li>
  *   <li><b>Header</b> — otherwise {@code X-Tenant-Code} is resolved (trimmed, upper-cased) via
  *       {@code CORE_TENANT}: unknown → 404 {@code TENANT_NOT_FOUND}, suspended → 403
  *       {@code TENANT_SUSPENDED}, else it becomes the request's tenant.</li>
@@ -87,6 +92,7 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
         }
 
         Long tokenTenant = TenantContext.current();
+        TenantTokenFacts token = tokenFacts(request);
         if (tokenTenant != null) {
             Optional<Tenant> tenant = findTenant(() -> tenantRepository.get().findById(tokenTenant));
             if (tenant.isEmpty() || !isActive(tenant.get())) {
@@ -94,7 +100,15 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
                 reject(request, response, HttpServletResponse.SC_FORBIDDEN, TenantErrorCodes.TENANT_SUSPENDED);
                 return;
             }
+            if (token != null && TenantDomain.isTokenRevoked(token.issuedAt(), tenant.get().getTokensInvalidBefore())) {
+                SecurityContextHolder.clearContext();
+                reject(request, response, HttpServletResponse.SC_UNAUTHORIZED, TenantErrorCodes.TENANT_TOKEN_REVOKED);
+                return;
+            }
             chain.doFilter(request, response);
+            return;
+        }
+        if (token != null && !matchesAny(publicPaths, pathOf(request)) && refusedDroppedToken(token, request, response)) {
             return;
         }
 
@@ -125,6 +139,32 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * tenant-maturity C12 — a signature-valid token the JWT filter dropped (terminated session, inactive user) on a
+     * non-public path: its tenant suspended → 403, issued before the cut-off → 401; otherwise the request goes on
+     * unauthenticated as before (an unknown tenant included).
+     */
+    private boolean refusedDroppedToken(TenantTokenFacts token, HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        Optional<Tenant> tenant = findTenant(() -> tenantRepository.get().findById(token.tenantId()));
+        if (tenant.isEmpty()) {
+            return false;
+        }
+        if (!isActive(tenant.get())) {
+            reject(request, response, HttpServletResponse.SC_FORBIDDEN, TenantErrorCodes.TENANT_SUSPENDED);
+            return true;
+        }
+        if (TenantDomain.isTokenRevoked(token.issuedAt(), tenant.get().getTokensInvalidBefore())) {
+            reject(request, response, HttpServletResponse.SC_UNAUTHORIZED, TenantErrorCodes.TENANT_TOKEN_REVOKED);
+            return true;
+        }
+        return false;
+    }
+
+    private static TenantTokenFacts tokenFacts(HttpServletRequest request) {
+        return request.getAttribute(TenantTokenFacts.REQUEST_ATTRIBUTE) instanceof TenantTokenFacts facts ? facts : null;
     }
 
     /** erp-core step 07 — the tenant of a path-tenant path is the one named in the path. */

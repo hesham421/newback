@@ -28,6 +28,13 @@ public interface ActiveSessionRepository
     List<ActiveSession> findNonTerminatedByUser(@Param("userPk") Long userPk);
 
     /**
+     * REQ-SEC-092 / -093 (tenant-maturity C12) — every still-open session of the current tenant, both realms (the
+     * {@code @TenantId} discriminator restricts it), the set a tenant suspension or a token revocation ends.
+     */
+    @Query("SELECT s FROM ActiveSession s WHERE s.terminatedAt IS NULL")
+    List<ActiveSession> findAllNonTerminated();
+
+    /**
      * REQ-SEC-028's request-time half: the access token's {@code jti} IS this {@code tokenRef}
      * (DBF-SEC-077), so {@code JwtAuthenticationFilter} resolves the row to see whether the session
      * behind a signature-valid token is still live. Returns the FACT; the filter takes the verdict.
