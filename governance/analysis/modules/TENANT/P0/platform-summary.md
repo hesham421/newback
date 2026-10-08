@@ -120,6 +120,7 @@ Statement      : Original analysis above is unchanged; this addendum records the
 |---|---|---|---|
 | NEW (spike) | Tenant context | `TenantContext` on `ScopedValue` behind the same public API (`current` / `find` / `require` / `set` / `clear` / `runAs` / `callAs`); go / no-go decided by ADR-TENANT-004 against fixed criteria (touches `events` and `notif`); may slip to 1.4.0 | `../P1/srs-tenant.md` 1.3.0 C6-1; ADR-TENANT-004 |
 | CHANGED (outcome) | Tenant context | **no-go** — `TenantContext` stays on its `ThreadLocal` (ADR-TENANT-004 REJECTED: no benefit without breaking `set` / `clear` outside a scope); "`ScopedValue` spike" leaves the package-C list | `../P1/srs-tenant.md` 1.3.0 C6-2 |
+
 Source version : erp-core 1.3.0 (unreleased, main)
 Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.

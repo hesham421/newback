@@ -912,7 +912,7 @@ Wiring (`ErpCoreSecurityAutoConfiguration`, `ErpCoreProperties`):
 - `/api/v1/public/tenants/{tenantCode}/branding` lies under `/api/v1/public/**`, so the customer chain serves it
   (constant `PUBLIC_TENANT_BRANDING_PATHS` = `/api/v1/public/tenants/*/branding`): `GET` permitted, public for the
   realm and tenant filters, its tenant taken from the path — the `erp.core.tenant.path-tenant-paths` default gains
-  `/api/v1/public/tenants/{tenantCode}/branding` (RULE-TENANT-012 source 1, the step-07 mechanism of the public
+  `/api/v1/public/tenants/{tenantCode}/branding` (REQ-TENANT-011, the path source, the step-07 mechanism of the public
   files). An application that replaces the list and leaves the path out gets 400 `TENANT_REQUIRED` there. A
   `PublicBrandingRateLimitFilter` runs first on that chain, for that path only (RULE-TENANT-022).
 
@@ -963,7 +963,7 @@ Then each answers 200 with exactly the keys `code, nameAr, nameEn, logoUrl, bran
 
 ### REQ-TENANT-032 — علامة عامة برمز المستأجر / Public branding by tenant code
 Pattern    : event
-Statement  : When an anonymous caller asks for `GET /api/v1/public/tenants/{tenantCode}/branding`, the system shall resolve the tenant from the path (trimmed, upper-cased; RULE-TENANT-012 source 1) and return its `TenantBrandingResponse`; if the code is unknown the system shall answer 404 `TENANT_NOT_FOUND`, if the tenant is suspended 403 `TENANT_SUSPENDED`, and if the caller's address exceeded its budget 429 `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022).
+Statement  : When an anonymous caller asks for `GET /api/v1/public/tenants/{tenantCode}/branding`, the system shall resolve the tenant from the path (trimmed, upper-cased; REQ-TENANT-011, the path source) and return its `TenantBrandingResponse`; if the code is unknown the system shall answer 404 `TENANT_NOT_FOUND`, if the tenant is suspended 403 `TENANT_SUSPENDED`, and if the caller's address exceeded its budget 429 `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022).
 Traces     : US-TENANT-014; US-TENANT-005 (CHANGED: a second path-tenant path)
 Entities   : ENT-TENANT-001
 Rationale  : POL-TENANT-008; the login page needs the logo before a token exists (plan §8 F2); the rate limit bounds tenant-code enumeration
@@ -1029,7 +1029,7 @@ Decided by : `PublicBrandingRateLimitFilter` (`com.erp.tenant.security`, first f
 
 | Kind | Rule | Delta |
 |---|---|---|
-| CHANGED | RULE-TENANT-012 (request-tenant resolution order, source 1: path) | the `path-tenant-paths` default gains `/api/v1/public/tenants/{tenantCode}/branding` (still the customer chain only) |
+| CHANGED | REQ-TENANT-011 (tenant from the path; resolution order source 1) | the `path-tenant-paths` default gains `/api/v1/public/tenants/{tenantCode}/branding` (still the customer chain only) |
 | CHANGED | RULE-TENANT-006 (a suspended tenant is not served) | also refuses the public branding (403 `TENANT_SUSPENDED` from the filter, and from `TenantDomain.assertServed` in the service) and `/tenant/me`; a suspended tenant's logo URL answers 403 like its other public files |
 
 ### E4. Error codes — NEW
@@ -1059,7 +1059,7 @@ Physical names, widths, constraint: `../P2/db-script-tenant.md` 1.3.0 addendum (
 |---|---|---|---|---|
 | NEW | XM-TENANT-003 | SOFT-REF (consumed) `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID`, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` / `SEC_USER.PHOTO_FILE_ID` convention) — written through `FileImageStoreApi.storePublicImage` / `discard` (FILE XM-FILE-002), read through `FileDocumentLookupApi.publicUrl` (XM-FILE-001), always inside `TenantContext.callAs(id)` | FILE | logo endpoints; every `TenantResponse` / `TenantBrandingResponse` |
 | CHANGED | — | `com.erp.audit.crossmodule.AuditApi` — + action `TENANT_LOGO_CHANGED` (E8) | audit | logo endpoints |
-| CONFIG | — | NEW `erp.core.tenant.public-branding-rate-limit.capacity` (60) / `period` (1m); CHANGED `erp.core.tenant.path-tenant-paths` default + `/api/v1/public/tenants/{tenantCode}/branding` | — | RULE-TENANT-012, -022 |
+| CONFIG | — | NEW `erp.core.tenant.public-branding-rate-limit.capacity` (60) / `period` (1m); CHANGED `erp.core.tenant.path-tenant-paths` default + `/api/v1/public/tenants/{tenantCode}/branding` | — | REQ-TENANT-011, RULE-TENANT-022 |
 | EXPOSED | — | `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) — HTTP, for the frontend shell and login page (plan §8 F2) | — | frontend |
 The write runs like package B's admin-reset: `TenantService.setLogo` / `removeLogo` are not `@Transactional` (a
 transaction of the PLATFORM request would bind the PLATFORM Hibernate session, and the image would land in PLATFORM's
@@ -1324,6 +1324,7 @@ reserved for C.6); no other id.
 | NEW (decision) | ADR-TENANT-004 → **REJECTED** | H1 (final API), H3 (`mvn verify` 631 + 10, the named tests under virtual threads 65 / 65, P-LIVE 196 / 196) and H4 (p95 of the tenant filter equal within noise) met; H2 only with a `ThreadLocal` fallback for `set` / `clear` outside a scope (refusing it breaks 56 test classes — the Spring test listener cannot hold a bounded scope — and any application calling `set`: MAJOR); so neither B1 (the leak class remains) nor B2 (no latency gain; `callAs` ≈ 2× slower in-process at nanosecond scale). The `ThreadLocal` stays; the spike code is reverted; item 11 closes for 1.3.0. | ADR-TENANT-004 Decision |
 | UNCHANGED | REQ-TENANT-023, `TenantContext` public API | as written; no production file differs from main | ADR-TENANT-004 |
 | NEW (test) | `TenantContextLeakTest` (`com.erp.events.support`) | pins the `ThreadLocal`: no next-task leak on a reused pooled platform thread after a failing / nested `callAs` or a decorated task; in-task semantics on virtual threads (never reused, so no next-task check there): the decorator with a nested PLATFORM `callAs` (C12 listeners), no inheritance, 2 000 concurrent virtual threads; the raw-`set` leak REQ-TENANT-023 guards | measurement M1 |
+
 Source version : erp-core 1.3.0 (unreleased, main)
 Change         : tenant-maturity plan package C4 — idempotent provisioning: the optional `Idempotency-Key` header on `POST /api/v1/platform/tenants`, the common mechanism `com.erp.common.idempotency` and its table `CORE_IDEMPOTENCY_KEY` (plan §5 C.4, item 13)
 Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.

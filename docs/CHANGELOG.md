@@ -5,6 +5,50 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 
 ## [Unreleased]
 
+Everything since 1.2.0, chiefly the tenant-maturity plan (packages TM-A … TM-C5; per-package reports
+`docs/steps/tm-*-report.md`, overview `docs/steps/tm-plan-report.md`). Core migrations `V16` … `V22` (additive).
+**Read "Behaviour changes" before upgrading**: some requests that were accepted before are now refused, and some
+answers change status.
+
+### Behaviour changes — read before upgrading
+1.3.0 is released as a **MINOR by exception** to `docs/RELEASE.md`'s "additive only, upgrade cost none": the items below
+tighten behaviour on existing endpoints (a suspension without a reason → 400, old tokens → 401 after a re-activation,
+administrator-created users → 403 until they change their password, …). It stays a MINOR because no public Java API
+(`crossmodule` types, SPIs, events, `TenantContext`, `com.erp.common`), no `erp.core.*` property key and no migration
+semantic was removed, renamed or changed, and because the only REST client of these endpoints, the in-house frontend,
+ships its matching package F together with this release (`docs/RELEASE.md`, "Behaviour tightening" row).
+- **JDK 25** is required to build and run a consuming application (see Changed).
+- **[TM-B] Suspending a tenant needs a `reason`** (3 to 500 characters): `PATCH /api/v1/platform/tenants/{id}/status`
+  with `SUSPENDED` and no reason now answers 400 `TENANT_SUSPENSION_REASON_REQUIRED` (it was accepted before).
+- **[TM-C12] Old tokens are refused after a re-activation or a revoke-tokens call**: 401 `TENANT_TOKEN_REVOKED` on every
+  non-public path of both realms; before, a re-activated tenant's old tokens worked again — clients sign in again.
+  Suspending a tenant now also ends every open session of the tenant, and NOTIF holds its queued notifications until
+  the tenant is active again.
+- **[TM-D] Staff users created by an administrator must change their password at the first sign-in** (unless the
+  create request sends `requireChangeAtNextLogin: false`); so must a user whose password an administrator set
+  (`PUT /api/v1/sec/users/{id}/password`) or a platform operator reset (`POST /api/v1/platform/tenants/{id}/admin-reset`).
+  Until then every STAFF call except `GET /api/v1/sec/me`, `PUT /api/v1/sec/me/password`, logout and
+  `GET /api/v1/tenant/me` answers 403 `SEC-403-PASSWORD-CHANGE-REQUIRED`; the login response says
+  `passwordChangeRequired`. A staff user changing their own password ends their other sessions.
+- **[TM-D] Password policy**: every path that sets a STAFF password (user create, reset completion, admin-set, own
+  change, a new tenant's first administrator, admin-reset) requires at least 8 characters, a letter and a digit, and at
+  most **72 UTF-8 bytes** (BCrypt), else 400 `SEC-400-PASSWORD-POLICY`; customer passwords get the 72-byte cap. Existing
+  passwords keep working (sign-in does not re-check the policy). Longer passwords answered 500 before.
+- **[TM-D] Multipart errors answer 400** `VALIDATION_ERROR` (missing `file` part, non-multipart request, upload above
+  `spring.servlet.multipart.*`) instead of 500.
+- **[TM-D] / [TM-E] SVG is strict**: an SVG image (tenant logos; photos take raster images only) passes only a strict
+  allow-list — plain or optimised SVG; scripts, foreign elements, external references, `<metadata>`, editor namespaces
+  (`inkscape:` / `sodipodi:`), a DOCTYPE, processing instructions, fetching CSS and duplicate `id`s are refused. It is
+  served as an attachment with `nosniff` and a sandbox CSP, so show it through `<img>` only.
+- **[TM-C5] Restricted FILE documents**: a document with `REQUIRED_AUTHORITY` (today: the tenant export archives,
+  `PLATFORM_TENANT_MANAGE`) is left out of `GET /api/v1/files` and answers 404 `FILE_DOCUMENT_NOT_FOUND` on every FILE
+  endpoint to a caller without that authority; deleting one removes its bytes. `FILE_DOCUMENT` audit rows no longer carry
+  `storageRef` / `publicSlug`.
+- **[TM-E] Configuration**: the `erp.core.tenant.path-tenant-paths` default gains
+  `/api/v1/public/tenants/{tenantCode}/branding` — an application that sets its own list must add it. `GET
+  /api/v1/tenant/me` also accepts a CUSTOMER token on the staff chain (GET only).
+- **[TM-D] New e-mail**: NOTIF sends `STAFF_PASSWORD_CHANGED` to a staff user whose password was set or changed.
+
 ### Added
 - Shared helpers in `com.erp.common`, replacing copies that lived in two or more modules (no
   behaviour change):
@@ -32,7 +76,6 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `TenantIsolationIntegrationTest` checks over HTTP that SEC, MDL, FILE, NOTIF, CU, SEQUENCE and AUDIT
   never show one tenant's rows to another (a foreign id answers 404). New governance rule: every raw
   SQL statement on a tenant-scoped table names `TENANT_ID`.
-
 - [TM-D] SEC: an administrator sets a staff user's password (`PUT /api/v1/sec/users/{id}/password`,
   `PERM_SEC_USERS_UPDATE`, never one's own: 422 `SEC-422-PASSWORD-SELF`); every session of the user ends and, by
   default, the user must change it at the next sign-in. While that change is pending every STAFF call except
@@ -126,6 +169,28 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   more answers 429 `TENANT_EXPORT_BUSY`.
 
 ### Changed
+- Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
+  published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.
+  CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
+- [TM-D] SEC: users created by an administrator (`POST /api/v1/sec/users`) must change their password at the first
+  sign-in unless the request says `requireChangeAtNextLogin: false`; the login response carries
+  `passwordChangeRequired`; user requests and responses gain `phone`, `jobTitleAr`, `jobTitleEn`,
+  `preferredLocale` (`ar` / `en`), responses also `photoUrl`, `passwordChangeRequired`, `passwordChangedAt`. On
+  `PUT /api/v1/sec/users/{id}` an absent new field keeps its value. Completing a password reset clears a pending
+  forced change. A new tenant's first administrator password must meet the policy.
+- [TM-B] TENANT: suspending a tenant (`PATCH /api/v1/platform/tenants/{id}/status`, `SUSPENDED`) now needs a
+  `reason` of 3 to 500 characters (400 `TENANT_SUSPENSION_REASON_REQUIRED` otherwise; PLATFORM still answers 422
+  first); the response records `suspendedAt`, `suspendedBy`, `suspensionReason`, cleared again on activation.
+  `TenantResponse` also carries the profile; tenant search and sort accept `contactEmail`, `countryCode`,
+  `suspendedAt`.
+- [TM-E] TENANT: `TenantResponse` carries `logoUrl` and `brandColor`; the `erp.core.tenant.path-tenant-paths` default
+  adds `/api/v1/public/tenants/{tenantCode}/branding` (an application that replaces the list keeps the public branding
+  only if it lists the path). SEC: `GET /api/v1/tenant/me` (GET only) is served to a CUSTOMER token on the core chain
+  and stays reachable during a pending forced password change (RULE-SEC-059).
+- [TM-E] Tests only: every cached Spring test context now uses a Hikari pool of 4 (`application-test.properties`),
+  so the contexts fit the test database's 100 connections with headroom (with the default 10 each, one more context
+  failed with "too many clients"). The api-doc generator no longer reads string literals as code when it looks for a
+  mapping's Java method.
 - [TM-C12] **Behaviour change** — TENANT/SEC: a token issued before a tenant's re-activation, or before a revoke-tokens
   call, is refused with 401 `TENANT_TOKEN_REVOKED` on every non-public path of both realms (`/api/v1/tenant/me`
   included); before, a re-activated tenant's old tokens worked again. Clients sign in again (a login sent with the old
@@ -135,44 +200,22 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 - [TM-C12] NOTIF: a queued notification of a tenant that is not ACTIVE is neither attempted nor requeued (it stays
   `QUEUED`, no new status) and is sent once the tenant is activated again (`TenantActivatedEvent`).
   `NotificationRequeueJob` gains a constructor taking `TenantLookupApi` (the existing ones keep working).
-- [TM-E] TENANT: `TenantResponse` carries `logoUrl` and `brandColor`; the `erp.core.tenant.path-tenant-paths` default
-  adds `/api/v1/public/tenants/{tenantCode}/branding` (an application that replaces the list keeps the public branding
-  only if it lists the path). SEC: `GET /api/v1/tenant/me` (GET only) is served to a CUSTOMER token on the core chain
-  and stays reachable during a pending forced password change (RULE-SEC-059).
-- [TM-E] Tests only: every cached Spring test context now uses a Hikari pool of 4 (`application-test.properties`),
-  so the contexts fit the test database's 100 connections with headroom (with the default 10 each, one more context
-  failed with "too many clients"). The api-doc generator no longer reads string literals as code when it looks for a
-  mapping's Java method.
-- [TM-B] TENANT: suspending a tenant (`PATCH /api/v1/platform/tenants/{id}/status`, `SUSPENDED`) now needs a
-  `reason` of 3 to 500 characters (400 `TENANT_SUSPENSION_REASON_REQUIRED` otherwise; PLATFORM still answers 422
-  first); the response records `suspendedAt`, `suspendedBy`, `suspensionReason`, cleared again on activation.
-  `TenantResponse` also carries the profile; tenant search and sort accept `contactEmail`, `countryCode`,
-  `suspendedAt`.
-- [TM-D] SEC: users created by an administrator (`POST /api/v1/sec/users`) must change their password at the first
-  sign-in unless the request says `requireChangeAtNextLogin: false`; the login response carries
-  `passwordChangeRequired`; user requests and responses gain `phone`, `jobTitleAr`, `jobTitleEn`,
-  `preferredLocale` (`ar` / `en`), responses also `photoUrl`, `passwordChangeRequired`, `passwordChangedAt`. On
-  `PUT /api/v1/sec/users/{id}` an absent new field keeps its value. Completing a password reset clears a pending
-  forced change. A new tenant's first administrator password must meet the policy.
-- Java 25: `maven.compiler.release=25` and the enforcer now require JDK 25 or newer (was 21). The
-  published jar is Java 25 bytecode, so a consuming application must also build and run on JDK 25+.
-  CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
 
 ### Fixed
-- [TM-C4] TENANT: when revoke-tokens' session step failed and the PLATFORM audit write failed too, the audit failure
-  replaced the 500 `TENANT_REVOKE_SESSIONS_FAILED` answer; it is now logged and attached to the session failure, which
-  is the answer's cause (C12 follow-up).
-- [TM-E] FILE: an SVG whose elements repeat an `id` is refused (RULE-FILE-009): a flat decoy placed after the real
-  target hid a nested `<use>` chain from the renderer-amplification guard (browsers resolve the first element of an
-  id, the guard looked at the last). Found in package D's review round 3.
+- `JwtAuthenticationFilter` no longer puts a tenant left on a reused worker thread back after the
+  request: the thread leaves the filter with no tenant, so a container error dispatch after
+  `sendError` (which skips the filter) can no longer run under the stale tenant.
 - [TM-D] A multipart request without its `file` part, a non-multipart request to a multipart endpoint, and an upload
   above `spring.servlet.multipart.*` now answer 400 `VALIDATION_ERROR` (the part named in `fieldErrors` when known)
   instead of 500. This also fixes the pre-existing 500 of `POST /api/v1/files` without a `file` part.
 - [TM-D] Passwords longer than BCrypt's 72 bytes (e.g. 80 ASCII characters, or 62 Arabic letters) answered 500 on every
   password path; they now answer 400 `SEC-400-PASSWORD-POLICY` (staff and customer realms).
-- `JwtAuthenticationFilter` no longer puts a tenant left on a reused worker thread back after the
-  request: the thread leaves the filter with no tenant, so a container error dispatch after
-  `sendError` (which skips the filter) can no longer run under the stale tenant.
+- [TM-E] FILE: an SVG whose elements repeat an `id` is refused (RULE-FILE-009): a flat decoy placed after the real
+  target hid a nested `<use>` chain from the renderer-amplification guard (browsers resolve the first element of an
+  id, the guard looked at the last). Found in package D's review round 3.
+- [TM-C4] TENANT: when revoke-tokens' session step failed and the PLATFORM audit write failed too, the audit failure
+  replaced the 500 `TENANT_REVOKE_SESSIONS_FAILED` answer; it is now logged and attached to the session failure, which
+  is the answer's cause (C12 follow-up).
 
 ## [1.2.0] — 2026-10-05
 

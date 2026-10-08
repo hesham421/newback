@@ -28,7 +28,8 @@ governance/
     modules/<MOD>/          P0 (policies, module registry, platform summary) · P0_5 (PRD) ·
                             P1 (SRS + registry) · P2 (DB script + registry) · P2_5 (UI/UX spec,
                             flow diagram — FILE, NOTIF, MDL) — verbatim, for SEC, MDL, CU, FILE, NOTIF;
-                            each P0–P2 artifact ends with "Implementation Addendum — erp-core 1.2.0";
+                            each P0–P2 artifact ends with "Implementation Addendum — erp-core 1.2.0"
+                            (and, where the tenant-maturity plan changed it, "… erp-core 1.3.0");
                             TENANT (P0–P2) is not verbatim: an as-built baseline written from the
                             erp-core 1.2.0 code on 2026-10-07 (no 1.2.0 addendum; later changes
                             are "Implementation Addendum — erp-core 1.3.0" sections on it);
@@ -54,7 +55,7 @@ lower-case package names of the running app (`sec`, `tenant`, `file`, `notif`, `
 | Question | Current reference |
 |---|---|
 | The API contract (endpoints, DTOs, envelopes, error codes, messages) | `docs/api-docs/<module>/` — generated from the running reference app; never hand-edited; the only copy |
-| Behaviour and its rationale per module | the "Implementation Addendum — erp-core 1.2.0" sections of `governance/analysis/modules/<MOD>/{P0,P0_5,P1,P2}` (what was built on top of the analysis; for TENANT the files themselves, an as-built baseline), the ADRs under `governance/analysis/decisions/<MOD>/`, and `docs/DEVIATIONS.md` (every deviation from the plan, by step) |
+| Behaviour and its rationale per module | the "Implementation Addendum — erp-core 1.2.0" and (unreleased) "… 1.3.0" sections of `governance/analysis/modules/<MOD>/{P0,P0_5,P1,P2}` (what was built on top of the analysis; for TENANT the files themselves, an as-built baseline), the ADRs under `governance/analysis/decisions/<MOD>/`, and `docs/DEVIATIONS.md` (every deviation from the plan, by step) |
 | The platform as a whole (packages, tenancy, realms, versions) | `governance/analysis/platform/PROJECT-OVERVIEW.md` |
 | Which modules, screens, page codes and test suites exist | `governance/analysis/platform/project-registry.md` |
 | How to consume and configure erp-core in an application | `docs/CONSUMING.md` |

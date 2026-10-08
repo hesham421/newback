@@ -1,0 +1,54 @@
+{
+ "meta": {
+  "profile": "P-CAP",
+  "base": "http://localhost:18111",
+  "run": "2610081135E2",
+  "started": "2026-10-08T11:35:47",
+  "cap": 2,
+  "local_root": null,
+  "instance": "erp-app-reference jar, profile dev, port 18111, DB erp_tm_z, erp.core.report.max-export-rows=2",
+  "code_under_test": "tm/z-closure @ 454be7a",
+  "setup": [
+   {
+    "step": "SEC-001 login PLATFORM admin",
+    "status": 200,
+    "code": null
+   }
+  ],
+  "finished": "2026-10-08T11:35:47",
+  "plan_notes": []
+ },
+ "results": {
+  "TC-CORE-REPORT-013": {
+   "tc": "TC-CORE-REPORT-013",
+   "test": "test_report_013_export_cap",
+   "profile": "P-CAP",
+   "checks": [
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}",
+     "expected": "422 E(REPORT_EXPORT_TOO_LARGE)",
+     "observed": "422 E(REPORT_EXPORT_TOO_LARGE) · {\"error\":{\"code\":\"REPORT_EXPORT_TOO_LARGE\",\"fieldErrors\":null,\"message\":\"The export exceeds the limit of 2 rows. Narrow the report parameters and try again.\"},\"success\":false,\"timestamp\":\"2026-10-08T07:35:47.807741500Z\"}",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/export?format=csv [token] {\"params\": {}}"
+    },
+    {
+     "ok": true,
+     "what": "POST /api/v1/report/APP_SMOKE_REPORT/run [token] {}",
+     "expected": "200",
+     "observed": "200 · {\"data\":{\"code\":\"APP_SMOKE_REPORT\",\"columns\":[{\"key\":\"id\",\"type\":\"INTEGER\",\"labelAr\":\"المعرف\",\"labelEn\":\"Id\"},{\"key\":\"label\",\"type\":\"STRING\",\"labelAr\":\"التسمية\",\"labelEn\":\"Label\"}],\"rows\":[{\"id\":1,\"label\":\"alpha\"},{\"id\":2,\"label\":\"بيتا\"},{\"id\":3,\"label\":\"gamma, delta\"}],\"totals\":{},\"page\":0,\"size\":2",
+     "request": "POST /api/v1/report/APP_SMOKE_REPORT/run [token] {}"
+    },
+    {
+     "ok": true,
+     "what": "run returns 3 rows (cap applies to exports only)",
+     "expected": "3",
+     "observed": "3",
+     "request": ""
+    }
+   ],
+   "result": "PASS",
+   "note": "",
+   "seconds": 0.29
+  }
+ }
+}

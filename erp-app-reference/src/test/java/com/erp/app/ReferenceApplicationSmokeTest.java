@@ -67,7 +67,7 @@ class ReferenceApplicationSmokeTest {
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V21 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
+        // core V2..V22 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
         // V12 = file storage, V13 = notif async + inbox, V14 = number series + settings, V15 = audit log,
         // V16 = staff user profile, V17 = STAFF_PASSWORD_CHANGED template — tenant-maturity D,
         // V18 = tenant profile, V19 = tenant lifecycle facts — tenant-maturity B, V20 = tenant branding — E,

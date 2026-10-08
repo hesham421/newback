@@ -192,3 +192,8 @@ Package C5 review round 1 — registry delta; full text in `srs.md` 1.3.0 §9.5.
 | CHANGED | XM-FILE-001 | `isAvailable` false for a restricted document |
 | CHANGED | ENTITY-FILE-001 | `@Audited(ignore = {"storageRef", "publicSlug"})`; + field `requiredAuthority` (`V22__file_document_required_authority.sql`) |
 Last sequence per atom (highest ever issued): RULE: 012 · XM: 003 · API: 008 · ADR: 008 (next free FILE ADR 009).
+
+Closure (tenant-maturity Z) — registry note; full text in `srs.md` 1.3.0 §10. No id minted.
+| Kind | Id | Delta |
+|---|---|---|
+| NOTE | RULE-FILE-012 | known limitation: on `LOCAL` / `S3` a failed after-commit delete of a restricted document's object is only logged (WARN); the tombstone is committed, the object stays, nothing retries it (follow-up: a sweeper with the export-archive retention job) |
