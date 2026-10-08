@@ -71,7 +71,7 @@ public class PlatformTenantController {
             + " ترويسة Idempotency-Key اختيارية: إعادة الطلب بالمفتاح نفسه تعيد الاستجابة المخزّنة دون إنشاء شيء")
     public ResponseEntity<ApiResponse<TenantResponse>> create(
             @Parameter(description = "Optional idempotency key of this create (e.g. a UUID reused for every retry of one"
-                + " submission) - مفتاح عدم التكرار", schema = @Schema(maxLength = 64, pattern = "^[A-Za-z0-9._:-]{1,64}$"))
+                + " submission) - مفتاح عدم التكرار", schema = @Schema(minLength = 1, maxLength = 64, pattern = "^[A-Za-z0-9._:-]+$"))
             @RequestHeader(name = IdempotentResponses.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
             @Valid @RequestBody TenantCreateRequest request) {
         return idempotentResponses.craftResponse(idempotencyKey, CREATE_ENDPOINT, request, TenantResponse.class,

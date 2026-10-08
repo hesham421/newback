@@ -1,7 +1,8 @@
 # ADR-TENANT-003 — Idempotency keys stored in `CORE_IDEMPOTENCY_KEY`; first consumer is tenant create
 
 Module  : TENANT (mechanism owned by `com.erp.common`)     Version : erp-core 1.3.0 (tenant-maturity plan, package C.4)     Stage raised : P2 (Database) — before the code
-Status  : PROPOSED (erp-core 1.3.0, package C4; written in the analysis commit, accepted after the code check)
+Status  : ACCEPTED (erp-core 1.3.0, package C4; written PROPOSED-before-code in the analysis commit df7e4e7, accepted
+          after the code check)
 
 ## Context
 `POST /api/v1/platform/tenants` is the platform's most expensive and least repeatable call: it inserts the
@@ -90,5 +91,6 @@ Reasons:
   constraints, 22 tenant-aware entities.
 
 ## Traces
+Accepted after the code check of package C4 (the check commit follows the code commits 0a5ad05, 9b39b57).
 ENT-TENANT-001 (FK target) · REQ-TENANT-001, REQ-TENANT-036 · RULE-TENANT-010, RULE-TENANT-011, RULE-TENANT-025,
 RULE-TENANT-026 · POL-TENANT-004, POL-TENANT-016 · DBF-TENANT-045 · plan §5 C.4, §9, §11
