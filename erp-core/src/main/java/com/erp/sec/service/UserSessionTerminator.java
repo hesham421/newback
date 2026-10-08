@@ -33,8 +33,16 @@ public class UserSessionTerminator {
      * {@code keepTokenRef} (null keeps none) and answers how many it ended.
      */
     public int terminateOpenSessions(User user, String keepTokenRef, String detailsAr, String detailsEn) {
+        User actor = userRepository.findByUsername(SecurityContextHelper.getCurrentUsername()).orElse(null);
+        return terminateOpenSessions(user, keepTokenRef, actor, detailsAr, detailsEn);
+    }
+
+    /**
+     * As above with the acting user given (null = none). tenant-maturity B: the platform's admin-reset runs inside
+     * the target tenant, where the operator's username could name a different user, so it passes none.
+     */
+    public int terminateOpenSessions(User user, String keepTokenRef, User actor, String detailsAr, String detailsEn) {
         String principal = SecurityContextHelper.getCurrentUsername();
-        User actor = userRepository.findByUsername(principal).orElse(null);
         Instant now = Instant.now();
         List<ActiveSession> ended = activeSessionRepository.findNonTerminatedByUser(user.getUserPk()).stream()
             .filter(session -> keepTokenRef == null || !keepTokenRef.equals(session.getTokenRef()))

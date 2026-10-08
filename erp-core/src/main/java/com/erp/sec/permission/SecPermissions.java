@@ -51,6 +51,13 @@ public class SecPermissions implements PermissionContributor {
      */
     public static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";
 
+    /**
+     * tenant-maturity B — the platform authority gating {@code SecAdminRecoveryApi} (REQ-SEC-091). Declared and
+     * contributed by the tenant module ({@code TenantPermissions}); mirrored here because SEC does not depend on
+     * that class. Not a SEC catalog permission (never contributed by SEC).
+     */
+    public static final String PLATFORM_TENANT_MANAGE = "PLATFORM_TENANT_MANAGE";
+
     private static final PermissionScreen LOGIN = new PermissionScreen(MODULE, "SEC_LOGIN", "تسجيل الدخول", "Login");
     private static final PermissionScreen SIGNUP = new PermissionScreen(MODULE, "SEC_SIGNUP", "إنشاء حساب", "Sign-up");
     private static final PermissionScreen PWD_RESET =

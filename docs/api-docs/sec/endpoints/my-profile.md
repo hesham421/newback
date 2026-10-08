@@ -249,7 +249,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `StaffProfileController.changeMyPassword`, `UserPasswordService.changeOwnPassword`, `UserDomain.assertCurrentPasswordMatches`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `UserSessionTerminator.terminateOpenSessions`, `UserPasswordService.callerTokenRef`, `SecAuditEntries.accountEvent`, `UserMapper.toPasswordChangeResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `ActiveSession.terminate`, `JwtTokenValidator.parse`, `new PasswordPolicy()`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `StaffProfileController.changeMyPassword`, `UserPasswordService.changeOwnPassword`, `UserDomain.assertCurrentPasswordMatches`, `PasswordPolicyProvider.current`, `PasswordPolicy.assertAcceptable`, `User.changePassword`, `UserSessionTerminator.terminateOpenSessions`, `UserPasswordService.callerTokenRef`, `SecAuditEntries.accountEvent`, `UserMapper.toPasswordChangeResponse`, `PasswordPolicy.create`, `PasswordPolicy.accepts`, `UserSessionTerminator.terminateOpenSessions`, `JwtTokenValidator.parse`, `new PasswordPolicy()`, `ActiveSession.terminate`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

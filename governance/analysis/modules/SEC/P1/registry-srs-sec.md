@@ -198,3 +198,19 @@ Decisions (package D)
 |---|---|---|
 | NEW | ADR-SEC-063 | An administrator-chosen password forces a change at next login (plan name ADR-SEC-039) |
 | NEW | ADR-SEC-064 | The staff `/me` payload carries no roles or permissions (plan name ADR-SEC-040) |
+
+Package B (tenant-maturity plan §4 B.4) — registry deltas; full text in `srs-sec.md` 1.3.0 addendum §10.
+
+Requirements — new items (package B)
+| Kind | Id | Title | Traces |
+|---|---|---|---|
+| NEW | REQ-SEC-090 / AC-SEC-096 | Directory counts of the current tenant (`SecUserDirectoryApi.countStaff / countCustomers / countActiveSessions`) | US-SEC-002; consumer TENANT REQ-TENANT-028 |
+| NEW | REQ-SEC-091 / AC-SEC-097 | Platform recovery of a super user's password (`SecAdminRecoveryApi.findRecoveryTarget / resetSuperUserPassword`) | US-SEC-002; RULE-SEC-056, RULE-SEC-058; consumer TENANT REQ-TENANT-027, RULE-TENANT-017 |
+
+Exposed surface (package B): `SecUserDirectoryApi` + three counts (CHANGED); `SecAdminRecoveryApi` +
+`RecoveryTarget` (NEW, gate `PLATFORM_TENANT_MANAGE`). Entities, screens, permissions, error codes, schema:
+unchanged. Audit action + `ADMIN_PASSWORD_RESET` (generic audit log).
+
+Counts in the current analysis after package B: REQ 47 · AC 47 · RULE 16 · ENT 13 · SCR-REQ 10 (ids are not contiguous).
+Last sequence per atom (highest ever issued): REQ: 091 · AC: 097 · ENT: 014 · RULE: 062 · SCR-REQ: 010 ·
+DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064 (065 held spare; 066 … 068 the analysis-coverage work's)

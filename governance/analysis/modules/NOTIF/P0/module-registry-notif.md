@@ -156,3 +156,14 @@ Now code-defined by `NotifPermissions` (same authorities as before:
 AUTO-DECISION revisited
 "In-process Spring events (via Common Utils Events) — NOT RabbitMQ" holds; the bus is the dedicated
 `com.erp.events` module and delivery is asynchronous after commit (step 08).
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — a usage count for the platform (package D.3 changed nothing here)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+EXPOSED SURFACE — delta
+| Surface | Delta | Consumer | Source |
+|---|---|---|---|
+| `com.erp.notif.crossmodule.NotificationLogQueryApi` | NEW method `countDispatchedSince(Instant)` | TENANT (`GET /api/v1/platform/tenants/{id}/usage`) | `P1/srs.md` 1.3.0 §4 |
+Entities owned, lookups, permissions, dependencies: unchanged.

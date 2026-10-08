@@ -9,11 +9,12 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
+import java.time.Instant;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests of the tenant business rules (erp-core step 05). */
+/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017). */
 class TenantDomainTest {
 
     @ParameterizedTest
@@ -67,6 +68,96 @@ class TenantDomainTest {
         assertThatCode(() -> other.assertCanChangeStatusTo(TenantConstants.STATUS_SUSPENDED)).doesNotThrowAnyException();
         assertThatCode(() -> other.assertCanChangeStatusTo(TenantConstants.STATUS_ACTIVE)).doesNotThrowAnyException();
         assertThat(TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE)).isActive()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "  ", "ab", "  ab  "})
+    void aSuspension_withoutAReasonOfThreeToFiveHundredCharacters_isRefused(String reason) {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        for (String given : new String[] {reason, null, "x".repeat(501)}) {
+            assertThatThrownBy(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, given))
+                .isInstanceOf(LocalizedException.class)
+                .satisfies(e -> {
+                    assertThat(((LocalizedException) e).getErrorCode())
+                        .isEqualTo(TenantErrorCodes.TENANT_SUSPENSION_REASON_REQUIRED);
+                    assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                });
+        }
+    }
+
+    @Test
+    void aSuspensionReason_isCheckedAfterTrimming_andIgnoredForAnActivation() {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, " abc ")).doesNotThrowAnyException();
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_SUSPENDED, "x".repeat(500)))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> other.assertSuspensionReasonGiven(TenantConstants.STATUS_ACTIVE, null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void reApplyingTheCurrentStatus_isNoTransition() {
+        TenantDomain active = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+        TenantDomain suspended = TenantDomain.from(tenant(42L, TenantConstants.STATUS_SUSPENDED));
+
+        assertThat(active.changesStatusTo(TenantConstants.STATUS_ACTIVE)).isFalse();
+        assertThat(active.changesStatusTo(TenantConstants.STATUS_SUSPENDED)).isTrue();
+        assertThat(suspended.changesStatusTo(TenantConstants.STATUS_SUSPENDED)).isFalse();
+        assertThat(suspended.changesStatusTo(TenantConstants.STATUS_ACTIVE)).isTrue();
+    }
+
+    @Test
+    void adminReset_targetsOnlyAnExistingStaffUserHoldingASuperRole() {
+        TenantDomain other = TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE));
+
+        assertThatThrownBy(() -> other.assertCanResetAdministrator("ghost", false, false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_NOT_FOUND);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.NOT_FOUND);
+            });
+        assertThatThrownBy(() -> other.assertCanResetAdministrator("clerk", true, false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_NOT_SUPER);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> other.assertCanResetAdministrator("admin", true, true)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void adminReset_isNeverAllowedOnThePlatformTenant() {
+        TenantDomain platform = TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE));
+
+        assertThatThrownBy(platform::assertAdminResetAllowed)
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_RESET_PLATFORM);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE)).assertAdminResetAllowed())
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void theEntityTransitions_setAndClearTheSuspensionFacts() {
+        Tenant entity = tenant(42L, TenantConstants.STATUS_ACTIVE);
+        Instant suspendedAt = Instant.parse("2026-10-08T10:00:00Z");
+        Instant activatedAt = Instant.parse("2026-10-09T10:00:00Z");
+
+        entity.suspend(suspendedAt, "operator", "Unpaid invoice");
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_SUSPENDED);
+        assertThat(entity.getSuspendedAt()).isEqualTo(suspendedAt);
+        assertThat(entity.getSuspendedBy()).isEqualTo("operator");
+        assertThat(entity.getSuspensionReason()).isEqualTo("Unpaid invoice");
+
+        entity.activate(activatedAt);
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_ACTIVE);
+        assertThat(entity.getSuspendedAt()).isNull();
+        assertThat(entity.getSuspendedBy()).isNull();
+        assertThat(entity.getSuspensionReason()).isNull();
+        assertThat(entity.getTokensInvalidBefore()).isEqualTo(activatedAt);
     }
 
     private static Tenant tenant(Long id, String status) {

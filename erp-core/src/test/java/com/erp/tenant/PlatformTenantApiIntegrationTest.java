@@ -150,8 +150,9 @@ class PlatformTenantApiIntegrationTest extends AbstractIntegrationTest {
         long id = http.provisionTenant(platformToken, code);
         String issuedBeforeSuspension = http.token(code, "admin");
 
+        // tenant-maturity B: a suspension carries a reason (RULE-TENANT-016)
         HttpResponse<String> suspended = http.patch(platformToken, TENANTS + "/" + id + "/status",
-            "{\"statusCode\":\"SUSPENDED\"}");
+            "{\"statusCode\":\"SUSPENDED\",\"reason\":\"Suspension test\"}");
         assertThat(suspended.statusCode()).isEqualTo(200);
         assertThat((String) JsonPath.read(suspended.body(), "$.data.statusCode")).isEqualTo("SUSPENDED");
 

@@ -78,3 +78,41 @@ DBF-TENANT ids above are the tenant-side register of the same columns and do not
 `CORE_NUMBER_SERIES` (sequence) and `CORE_AUDIT_EVENT` (audit) have no analysis folder; DBF-TENANT-031/032
 are their only register entry.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant profile and lifecycle facts on `CORE_TENANT`
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0".
+
+Tables — delta
+| Kind | Table | ENT id | Kind | DBF range | Created by |
+|---|---|---|---|---|---|
+| CHANGED | CORE_TENANT | ENT-TENANT-001 | global | + DBF-TENANT-033 … 042 (10 columns) | V18__tenant_profile.sql (033 … 038), V19__tenant_lifecycle.sql (039 … 042) |
+
+DBF ids → code location — delta
+| DBF id | Column | Type | Null | Constraint / FK | Index | Code location |
+|---|---|---|---|---|---|---|
+| DBF-TENANT-033 | CORE_TENANT.CONTACT_EMAIL | VARCHAR(255) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-034 | CORE_TENANT.CONTACT_PHONE | VARCHAR(30) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-035 | CORE_TENANT.COUNTRY_CODE | VARCHAR(2) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-036 | CORE_TENANT.DEFAULT_LOCALE | VARCHAR(5) | NULL | `CHK_CORE_TENANT_LOCALE` | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-037 | CORE_TENANT.TIMEZONE | VARCHAR(64) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-038 | CORE_TENANT.NOTES | VARCHAR(1000) | NULL | — | — | V18; tenant/entity/Tenant.java |
+| DBF-TENANT-039 | CORE_TENANT.SUSPENDED_AT | TIMESTAMPTZ | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-040 | CORE_TENANT.SUSPENDED_BY | VARCHAR(100) | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-041 | CORE_TENANT.SUSPENSION_REASON | VARCHAR(500) | NULL | — | — | V19; tenant/entity/Tenant.java |
+| DBF-TENANT-042 | CORE_TENANT.TOKENS_INVALID_BEFORE | TIMESTAMPTZ | NULL | — | — | V19; tenant/entity/Tenant.java |
+
+Constraints — delta: `CHK_CORE_TENANT_LOCALE CHECK (DEFAULT_LOCALE IS NULL OR DEFAULT_LOCALE IN ('ar', 'en'))` (V18).
+
+Lookups — delta
+| Key | Seeded values count | Owner |
+|---|---|---|
+| `CORE_TENANT.DEFAULT_LOCALE` | 2 (CHECK-constrained `CHK_CORE_TENANT_LOCALE`, not seeded rows) | TENANT |
+
+XM index, sequences: unchanged. Last DBF: DBF-TENANT-042 · Last XM: XM-TENANT-002
+
+Event
+"P2 1.3.0 (package B): TENANT — 1 table, 1 sequence, 42 DBF (20 own + 22 discriminator), 2 XM"

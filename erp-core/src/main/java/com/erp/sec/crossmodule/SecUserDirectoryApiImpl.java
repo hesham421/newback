@@ -31,4 +31,19 @@ public class SecUserDirectoryApiImpl implements SecUserDirectoryApi {
     public Optional<Long> findCurrentUserId() {
         return userService.findCurrentUserId().getData();
     }
+
+    @Override
+    public int countStaff() {
+        return userService.countStaff().getData();
+    }
+
+    @Override
+    public int countCustomers() {
+        return userService.countCustomers().getData();
+    }
+
+    @Override
+    public int countActiveSessions() {
+        return userService.countActiveSessions().getData();
+    }
 }

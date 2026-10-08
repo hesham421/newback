@@ -161,7 +161,7 @@ Shared, module-independent mapping every business error code's `Status` resolves
 | Method | Path | Summary | Doc |
 |---|---|---|---|
 | POST | `/api/v1/notifications/logs/search` | Search notification logs | [search_9](endpoints/notification-logs.md#post-apiv1notificationslogssearch) |
-| GET | `/api/v1/notifications/logs/{id}` | Get notification log by ID | [getById_7](endpoints/notification-logs.md#get-apiv1notificationslogsid) |
+| GET | `/api/v1/notifications/logs/{id}` | Get notification log by ID | [getById_6](endpoints/notification-logs.md#get-apiv1notificationslogsid) |
 
 ### Notification Lookups
 

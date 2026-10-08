@@ -1655,3 +1655,67 @@ name contains `password` (`passwordChangeRequired`, `passwordChangedAt` included
 | NEW | Error codes `SEC-400-PASSWORD-POLICY`, `SEC-422-PASSWORD-SELF`, `SEC-403-PASSWORD-CURRENT-INVALID`, `SEC-403-PASSWORD-CHANGE-REQUIRED`, `SEC-400-PHOTO-INVALID` (messages in both languages). |
 | NEW | `photoUrl` is a public URL (no token); a replaced photo gets a new URL, so it can be cached freely. |
 | unchanged | No new page code, permission or menu entry. |
+
+### 10. Package B — what the tenant level 1 needs from SEC (usage counts, platform recovery of a tenant administrator)
+Change         : tenant-maturity plan package B — `SecUserDirectoryApi` counts and the NEW `SecAdminRecoveryApi` (plan §4 B.4), consumed by TENANT's `GET /api/v1/platform/tenants/{id}/usage` and `POST /api/v1/platform/tenants/{id}/admin-reset`
+Statement      : Sections 1–9 above (packages G and D) are unchanged; §10 records package B's implemented deltas.
+
+Ids continue from the highest number ever issued (after package D: REQ-SEC-089, AC-SEC-095, RULE-SEC-062,
+XM-SEC-006, ADR-SEC-064; 065 held, 066 … 068 the analysis-coverage work's). Package B adds REQ-SEC-090/091
+and AC-SEC-096/097. No endpoint, entity field, table, permission, error code or migration of SEC changes; no
+XM-SEC id (in SEC's analysis an XM id is minted by the consuming module; TENANT records the consumption in
+its own 1.3.0 addendum, B7). The rule that decides the recovery target (RULE-TENANT-017) is TENANT's; SEC
+computes the facts.
+
+#### 10.1 Requirements (§A4) — NEW
+
+### REQ-SEC-090 — أعداد دليل المستخدمين للمستأجر الحالي / Directory counts of the current tenant
+Pattern    : ubiquitous
+Statement  : The system shall expose, through `com.erp.sec.crossmodule.SecUserDirectoryApi`, the current tenant's number of STAFF users (`int countStaff()`), CUSTOMER users (`int countCustomers()`) — both in any account status — and open sessions (`int countActiveSessions()`: `SEC_ACTIVE_SESSION` rows with `TERMINATED_AT` NULL, either realm); counts only, never a row.
+Traces     : US-SEC-002 (supporting TENANT US-TENANT-011)
+Entities   : ENT-SEC-001, ENT-SEC-010
+Rationale  : plan §4 B.4; the consumer counts another module's data without reading its tables (build-create-service "Cross-Module Calls")
+Source     : docs/plans/tenant-maturity-plan.md §4 B.4
+Priority   : MEDIUM
+Note       : read-only, `isAuthenticated()` like the sibling directory reads (REQ-SEC-034/035); the consuming service carries its own gate (TENANT: `PLATFORM_TENANT_MANAGE`). The tenant is the current one (`TenantContext`): TENANT calls it inside `callAs(id)`.
+#### AC-SEC-096 — [REQ-SEC-090]
+Given tenant D with its first administrator and nothing else
+When the counts are read inside D
+Then `countStaff() = 1`, `countCustomers() = 0`, `countActiveSessions() = 0`; after the administrator signs in and creates a user, `countStaff() = 2` and `countActiveSessions() = 1`; no row of another tenant is ever counted (`TenantUsageIntegrationTest`)
+
+### REQ-SEC-091 — استعادة كلمة مرور مستخدم فائق من المنصة / Platform recovery of a super user's password
+Pattern    : event
+Statement  : The system shall expose `com.erp.sec.crossmodule.SecAdminRecoveryApi` for the platform's recovery of a tenant administrator, running in the current tenant and gated by the authority `PLATFORM_TENANT_MANAGE`: `findRecoveryTarget(username)` answers, for a STAFF user of that name, `RecoveryTarget(userId, username, superRole)` where `superRole` = the user holds an ACTIVE role with `IS_SUPER = TRUE` (empty for an unknown name or a CUSTOMER account); `resetSuperUserPassword(username, rawPassword, requireChangeAtNextLogin)` applies the STAFF password policy (RULE-SEC-056, field `newPassword`), stores the new hash and `passwordChangedAt`, sets `passwordChangeRequired` per RULE-SEC-058 (`requireChangeAtNextLogin` null = TRUE), terminates every open session of the user, records `ADMIN_PASSWORD_RESET` in the generic audit log and publishes `UserPasswordChangedEvent(userId, byAdmin = true)`, and answers the number of terminated sessions.
+Traces     : US-SEC-002 (supporting TENANT US-TENANT-010)
+Entities   : ENT-SEC-001, ENT-SEC-002, ENT-SEC-003, ENT-SEC-010, ENT-SEC-011
+Rationale  : plan §4 B.4 ("built from D's pieces": `PasswordPolicyProvider`, `User.changePassword`, `UserSessionTerminator`); ADR-SEC-063 (an administrator-chosen password forces a change by default — the caller passes the request's flag, SEC applies the default)
+Source     : docs/plans/tenant-maturity-plan.md §4 B.2, B.4
+Priority   : HIGH
+Note       : the operator is not a user of the target tenant: the audit row has `actorUserId` null (actor = the operator's username), and the `SESSION_TERMINATED` rows of `SEC_AUDIT_LOG` carry no actor user. A name that is not a STAFF user holding an active super role answers 404 `SEC-404-USER` from `resetSuperUserPassword` (unreachable through TENANT, which refuses first with its own codes in the same transaction).
+#### AC-SEC-097 — [REQ-SEC-091]
+Given tenant D whose administrator `td-admin` holds `SYS_ADMIN` (`IS_SUPER`) and has one open session, and a STAFF user without a role
+When `findRecoveryTarget` is asked inside D for `td-admin`, for the role-less user and for an unknown name
+Then it answers `superRole = true`, `superRole = false` and empty;
+when `resetSuperUserPassword("td-admin", "abcdefgh", null)` is called, it refuses with 400 `SEC-400-PASSWORD-POLICY` and changes nothing; with a valid password it answers 1, the old session is terminated, the new password signs in with `passwordChangeRequired = true`, one `ADMIN_PASSWORD_RESET` row (actor = the operator, entity `SEC_USER` / the user's id, no secret) and one `STAFF_PASSWORD_CHANGED` e-mail are recorded in D (`TenantAdminResetIntegrationTest`)
+
+#### 10.2 Cross-module surface (exposed) — NEW / CHANGED
+| Kind | Interface (`com.erp.sec.crossmodule`) | Method | Gate | Implemented by |
+|---|---|---|---|---|
+| CHANGED | `SecUserDirectoryApi` | + `int countStaff()`, `int countCustomers()`, `int countActiveSessions()` | `isAuthenticated()` (`UserService`) | `SecUserDirectoryApiImpl` → `UserService` |
+| NEW | `SecAdminRecoveryApi` | `Optional<RecoveryTarget> findRecoveryTarget(String username)` (read-only) | authority `PLATFORM_TENANT_MANAGE` through `SecPermissions.PLATFORM_TENANT_MANAGE` (a non-catalog constant like `ROLE_CUSTOMER`, mirrored because SEC does not depend on the tenant module's `TenantPermissions`; ArchUnit rule 5 forbids a literal) | `SecAdminRecoveryApiImpl` → `UserPasswordService` |
+| NEW | `SecAdminRecoveryApi` | `int resetSuperUserPassword(String username, String rawPassword, Boolean requireChangeAtNextLogin)` (null = TRUE, RULE-SEC-058) (write, joins the caller's transaction) | same | same |
+| NEW | `RecoveryTarget` (record) | `Long userId`, `String username`, `boolean superRole` — a read-model, never the entity | — | — |
+Consumer: TENANT (`TenantService`), always inside `TenantContext.callAs(tenantId)`; the two recovery calls
+run in one transaction opened there, so the check and the write are atomic.
+
+#### 10.3 Sessions, audit, events (admin-reset)
+| Operation | Sessions | `SEC_AUDIT_LOG` | `CORE_AUDIT_EVENT` (AuditApi action) | Event |
+|---|---|---|---|---|
+| `resetSuperUserPassword` | every open session of the user terminated (`UserSessionTerminator`, keep none) | one `SESSION_TERMINATED` per session, actor user none | `ADMIN_PASSWORD_RESET` (actor = the platform operator's username, `actorUserId` null, entity `SEC_USER` / user id, tenant = the current = the target tenant) | `UserPasswordChangedEvent(userId, byAdmin = true)` → NOTIF RULE-NOTIF-023 |
+No secret is logged, returned, audited or carried by the event (POL-SEC-004).
+
+#### 10.4 Behaviour notes
+| Kind | Note |
+|---|---|
+| CHANGED (code) | `UserSessionTerminator.terminateOpenSessions` gains an overload taking the acting `User` explicitly (null = none): inside another tenant the operator's username could match a different user of that tenant, so the recovery passes none; the existing method keeps resolving the actor by username. |
+| NEW (scope) | `ADMIN_PASSWORD_RESET` is a new generic-audit action code (`^[A-Z_]{3,64}$`); the audit module's code and analysis do not change. |

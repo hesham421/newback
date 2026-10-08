@@ -30,4 +30,13 @@ public interface SecUserDirectoryApi {
      * not a user account.
      */
     Optional<Long> findCurrentUserId();
+
+    /** REQ-SEC-090 (tenant-maturity B) — the current tenant's STAFF users, any status (TENANT usage figures). */
+    int countStaff();
+
+    /** REQ-SEC-090 — the current tenant's CUSTOMER accounts, any status. */
+    int countCustomers();
+
+    /** REQ-SEC-090 — the current tenant's open sessions ({@code TERMINATED_AT} NULL), either realm. */
+    int countActiveSessions();
 }

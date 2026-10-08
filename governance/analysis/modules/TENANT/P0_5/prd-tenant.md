@@ -138,3 +138,62 @@ Approved by : n/a — as-built baseline (the stories describe implemented behavi
 Later changes are appended as "Implementation Addendum — erp-core 1.3.0" sections, never by rewriting
 the stories above.
 ══════════════════════════════════════════════════════════════════
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package B — tenant level 1 (edit, suspension facts, admin-reset, usage)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW stories (ids continue from US-TENANT-008)
+
+US-TENANT-009
+  Title          : تعديل أسماء المستأجر وملفه / Edit a tenant's names and profile
+  Story          : As a platform operator, I need to correct a tenant's names and keep its contact e-mail and phone, country, default language, time zone and notes, so that the record describes the organisation — without ever changing its code.
+  Priority       : MEDIUM
+  Success metric : `PUT /{id}` echoes the values and the code is unchanged (TC-CORE-TENANT-028)
+  Traces         : POL-TENANT-001, POL-TENANT-006
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-025
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+US-TENANT-010
+  Title          : استعادة مدير مستأجر / Recover a tenant's administrator
+  Story          : As a platform operator, I need to set a new password for a tenant's super administrator when that tenant is locked out, so that the organisation regains access without a database intervention.
+  Priority       : HIGH
+  Success metric : the administrator signs in with the new password and must change it (TC-CORE-TENANT-034)
+  Traces         : POL-TENANT-006, POL-TENANT-011, POL-TENANT-013
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-027
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+US-TENANT-011
+  Title          : أرقام استخدام المستأجر / Tenant usage figures
+  Story          : As a platform operator, I need a tenant's counts (staff, customers, open sessions, documents and their bytes, notifications of the last 30 days), so that I can see how large and how active an organisation is.
+  Priority       : MEDIUM
+  Success metric : a fresh tenant answers one staff user and zeros elsewhere (TC-CORE-TENANT-027)
+  Traces         : POL-TENANT-006, POL-TENANT-007
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-028
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+CHANGED behaviour of existing stories
+| Story | Delta | Source |
+|---|---|---|
+| US-TENANT-002 list, view, search | responses carry the profile and the suspension facts; search and sort gain `contactEmail`, `countryCode`, `suspendedAt` | REQ-TENANT-007 (CHANGED) |
+| US-TENANT-003 suspend and re-activate | a suspension needs a reason (3..500) and records `suspendedAt` / `suspendedBy` / `suspensionReason`; re-activation clears them and stores a token cut-off (`TOKENS_INVALID_BEFORE`, enforced by package C.2) | REQ-TENANT-026; POL-TENANT-012 |
+
+TRACEABILITY — delta
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-009 | POL-TENANT-001, POL-TENANT-006 | REQ-TENANT-025 |
+| US-TENANT-010 | POL-TENANT-006, POL-TENANT-011, POL-TENANT-013 | REQ-TENANT-027 |
+| US-TENANT-011 | POL-TENANT-006, POL-TENANT-007 | REQ-TENANT-028 |
+| US-TENANT-003 (CHANGED) | + POL-TENANT-012 | REQ-TENANT-026 |
+Every policy POL-TENANT-001 … 013 appears in at least one row (012 → US-003, 013 → US-010).
+
+DEFERRED — delta
+| Kind | US | Reason | Activation trigger |
+|---|---|---|---|
+| CHANGED | (rename, measure a tenant) | leaves DEFERRED: US-TENANT-009, US-TENANT-011 | this addendum |
+| unchanged | (delete a tenant) | POL-TENANT-005 | — |
+| NEW | (quotas, `ARCHIVED`, self-signup switch, per-tenant rate limits, platform-set tenant settings) | level 2 | plan §0 D2, §9 |
+
+APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the stories are
+IMPLEMENTED with package B and checked against the code in its check commit.

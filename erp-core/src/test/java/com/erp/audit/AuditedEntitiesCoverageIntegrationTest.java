@@ -85,9 +85,11 @@ class AuditedEntitiesCoverageIntegrationTest extends AbstractIntegrationTest {
         String code = AuditHttp.unique("COVT");
         long id = http.provisionTenant(token, code);
         AuditHttp.expect(http.patch(token, "/api/v1/platform/tenants/" + id + "/status",
-            "{\"statusCode\":\"SUSPENDED\"}"), 200, "suspend tenant");
-        // CORE_TENANT is global: its rows belong to the tenant that changed it (PLATFORM)
-        assertCreateAndUpdate("CORE_TENANT", id, List.of("statusCode"));
+            "{\"statusCode\":\"SUSPENDED\",\"reason\":\"Coverage test\"}"), 200, "suspend tenant");
+        // CORE_TENANT is global: its rows belong to the tenant that changed it (PLATFORM); since tenant-maturity B
+        // a suspension also records its facts (RULE-TENANT-016)
+        assertCreateAndUpdate("CORE_TENANT", id,
+            List.of("statusCode", "suspendedAt", "suspendedBy", "suspensionReason"));
         assertThat(AuditRows.of(jdbc, "CORE_TENANT", id)).allSatisfy(row -> assertThat(row).containsEntry("tenant_id", 1L));
     }
 

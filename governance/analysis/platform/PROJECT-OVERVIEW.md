@@ -47,6 +47,12 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   token's `tid` claim or the `X-Tenant-Code` header; `PLATFORM` (id 1) is the seeded platform
   tenant that owns the bootstrap `admin` (`erp.core.security.bootstrap-admin-password`, no
   default) and the platform-level screens (`PLATFORM_TENANTS`, `PLATFORM_SETTINGS`).
+  Since 1.3.0 (TM-B) a tenant carries a profile (contact e-mail and phone, country, default language,
+  time zone, notes) and editable names (`PUT /api/v1/platform/tenants/{id}`; the code never changes); a
+  suspension needs a reason and records who suspended it, when and why (cleared on re-activation, which
+  also stores a token cut-off enforced from package C.2); the platform operator can reset the password of
+  a tenant's super administrator (`/{id}/admin-reset`) and read a tenant's usage figures (`/{id}/usage`),
+  both executed inside that tenant through SEC, FILE and NOTIF cross-module APIs.
 - **Realms.** STAFF (`/api/v1/sec/auth/**`, every administrative endpoint) and CUSTOMER
   (`/api/v1/public/customers/**` for register / verify / login / password reset,
   `/api/v1/customers/me/**` for the profile and inbox). A token of one realm is rejected on the

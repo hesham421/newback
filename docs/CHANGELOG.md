@@ -52,8 +52,27 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 - [TM-D] NOTIF: template `STAFF_PASSWORD_CHANGED` (`V17__notif_seed_password_changed.sql`, every tenant) e-mailed to
   a staff user whose password was set or changed.
 - [TM-D] TENANT: `TenantLookupApi.summaryOf(tenantId)` (code and names).
+- [TM-B] TENANT: tenant level 1 on `/api/v1/platform/tenants` (all `PLATFORM_TENANT_MANAGE`, PLATFORM callers
+  only): `PUT /{id}` edits the names and a profile (`contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`
+  `ar`/`en`, `timezone`, `notes`; the code never changes); `POST /{id}/admin-reset` sets a new password for a STAFF
+  user of that tenant holding a super role (404 `TENANT_ADMIN_NOT_FOUND`, 422 `TENANT_ADMIN_NOT_SUPER`, 400
+  `SEC-400-PASSWORD-POLICY`; never on PLATFORM: 422 `TENANT_ADMIN_RESET_PLATFORM`), ends that user's sessions, forces a
+  change at the next sign-in unless `requireChangeAtNextLogin: false`, audits `ADMIN_PASSWORD_RESET` in the target tenant
+  and `TENANT_ADMIN_RESET` in PLATFORM, and answers
+  `{ username, sessionsTerminated }`; `GET /{id}/usage` answers `staffUsers`, `customerUsers`, `activeSessions`,
+  `fileDocuments`, `fileBytes`, `notificationsLast30Days`, `collectedAt`, counted inside the tenant. Migrations
+  `V18__tenant_profile.sql` (profile, `CHK_CORE_TENANT_LOCALE`) and `V19__tenant_lifecycle.sql` (suspension facts,
+  `TOKENS_INVALID_BEFORE`, the token cut-off package C.2 will enforce).
+- [TM-B] Cross-module: `SecUserDirectoryApi.countStaff / countCustomers / countActiveSessions`, the new
+  `SecAdminRecoveryApi` (`findRecoveryTarget`, `resetSuperUserPassword`), `FileDocumentLookupApi.countDocuments /
+  sumBytes`, `NotificationLogQueryApi.countDispatchedSince(Instant)`.
 
 ### Changed
+- [TM-B] TENANT: suspending a tenant (`PATCH /api/v1/platform/tenants/{id}/status`, `SUSPENDED`) now needs a
+  `reason` of 3 to 500 characters (400 `TENANT_SUSPENSION_REASON_REQUIRED` otherwise; PLATFORM still answers 422
+  first); the response records `suspendedAt`, `suspendedBy`, `suspensionReason`, cleared again on activation.
+  `TenantResponse` also carries the profile; tenant search and sort accept `contactEmail`, `countryCode`,
+  `suspendedAt`.
 - [TM-D] SEC: users created by an administrator (`POST /api/v1/sec/users`) must change their password at the first
   sign-in unless the request says `requireChangeAtNextLogin: false`; the login response carries
   `passwordChangeRequired`; user requests and responses gain `phone`, `jobTitleAr`, `jobTitleEn`,

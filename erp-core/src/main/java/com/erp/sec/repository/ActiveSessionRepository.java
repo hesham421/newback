@@ -41,6 +41,10 @@ public interface ActiveSessionRepository
     @Query("SELECT COUNT(s) FROM ActiveSession s WHERE s.terminatedAt IS NULL AND s.user.realm = 'STAFF'")
     long countNonTerminated();
 
+    /** REQ-SEC-090 (tenant-maturity B) — the current tenant's open sessions of either realm (tenant usage figures). */
+    @Query("SELECT COUNT(s) FROM ActiveSession s WHERE s.terminatedAt IS NULL")
+    long countOpenSessions();
+
     /**
      * erp-core step 14 — API-SEC-026's lookup: a session of a STAFF account only, so the staff
      * session API can neither see nor terminate a customer's session (404 {@code SEC-404-SESSION},

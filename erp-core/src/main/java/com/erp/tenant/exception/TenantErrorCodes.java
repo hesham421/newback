@@ -30,4 +30,19 @@ public final class TenantErrorCodes {
 
     /** 422 — the PLATFORM tenant cannot be suspended (it hosts the platform operators). */
     public static final String TENANT_PLATFORM_PROTECTED = "TENANT_PLATFORM_PROTECTED";
+
+    /** 400 — tenant-maturity B (RULE-TENANT-016): a suspension without a reason of 3 to 500 characters. */
+    public static final String TENANT_SUSPENSION_REASON_REQUIRED = "TENANT_SUSPENSION_REASON_REQUIRED";
+
+    /**
+     * 422 — tenant-maturity B review round 1 (RULE-TENANT-017): admin-reset never targets the PLATFORM tenant;
+     * platform operators set each other's passwords through SEC, where RULE-SEC-057 refuses one's own account.
+     */
+    public static final String TENANT_ADMIN_RESET_PLATFORM = "TENANT_ADMIN_RESET_PLATFORM";
+
+    /** 404 — tenant-maturity B (RULE-TENANT-017): admin-reset names no STAFF user of that tenant. */
+    public static final String TENANT_ADMIN_NOT_FOUND = "TENANT_ADMIN_NOT_FOUND";
+
+    /** 422 — tenant-maturity B (RULE-TENANT-017): the admin-reset target holds no active super role. */
+    public static final String TENANT_ADMIN_NOT_SUPER = "TENANT_ADMIN_NOT_SUPER";
 }

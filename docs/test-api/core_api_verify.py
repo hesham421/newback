@@ -2622,7 +2622,9 @@ def test_tenant_019_platform_protected(ctx):
 
 @tc("TC-CORE-TENANT-020")
 def test_tenant_020_suspend_c(ctx):
-    r = tstatus(ctx, ctx.C_ID, "SUSPENDED")
+    # TM-B: a suspension carries a reason (RULE-TENANT-016)
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.C_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": f"TC-CORE-TENANT-020 {ctx.RUN}"})
     st(r, 200)
     eq((r.data or {}).get("statusCode"), "SUSPENDED", "data.statusCode")
 
@@ -2649,6 +2651,211 @@ def test_tenant_024_reactivate(ctx):
     st(r, 200)
     eq((r.data or {}).get("statusCode"), "ACTIVE", "data.statusCode")
     st(login_staff(ctx.TC, "tc-admin", PW), 200)
+
+
+# =============================================================================================
+# Phase 11b — tenant level 1 (TM-B): profile, suspension facts, admin-reset, usage, on a fresh tenant D
+# =============================================================================================
+PW_RECOVERED = "Rec0vered-Tc9"
+USAGE_FIELDS = ("staffUsers", "customerUsers", "activeSessions", "fileDocuments", "fileBytes", "notificationsLast30Days")
+
+
+def usage_of(ctx, tid, token=None):
+    return api("GET", f"/api/v1/platform/tenants/{tid}/usage", t=token or ctx.T_PLAT)
+
+
+def admin_reset(ctx, tid, username, password, **extra):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/admin-reset", t=ctx.T_PLAT,
+               body={"username": username, "newPassword": password, **extra})
+
+
+@tc("TC-CORE-TENANT-027")
+def test_tenant_027_fresh_tenant_usage(ctx):
+    ctx.TD = f"TCD{ctx.RUN}"
+    r = api("POST", "/api/v1/platform/tenants", t=ctx.T_PLAT, body=tenant_body(ctx, ctx.TD, "td-admin", "Tenant D"))
+    st(r, 201, what="provision tenant D")
+    ctx.D_ID = (r.data or {}).get("id")
+    r = usage_of(ctx, ctx.D_ID)
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("id"), ctx.D_ID, "data.id")
+    eq({k: d.get(k) for k in USAGE_FIELDS},
+       {"staffUsers": 1, "customerUsers": 0, "activeSessions": 0, "fileDocuments": 0, "fileBytes": 0,
+        "notificationsLast30Days": 0}, "figures of a fresh tenant")
+    check(bool(d.get("collectedAt")), "collectedAt set", "set", d.get("collectedAt"))
+    st(usage_of(ctx, 999999999), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+
+
+@tc("TC-CORE-TENANT-028")
+def test_tenant_028_update_profile(ctx):
+    ctx.D_EMAIL = f"ops-{ctx.run}@t.test"
+    profile = {"nameAr": "مستأجر د", "nameEn": f"Tenant D {ctx.RUN}", "contactEmail": ctx.D_EMAIL,
+               "contactPhone": "+966 11 555 0100", "countryCode": "SA", "defaultLocale": "ar",
+               "timezone": "Asia/Riyadh", "notes": "TM-B"}
+    r = api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT,
+            body={**profile, "code": f"OTHER{ctx.RUN}", "statusCode": "SUSPENDED"})
+    st(r, 200)
+    d = r.data or {}
+    eq({k: d.get(k) for k in profile}, profile, "names and profile echoed")
+    eq((d.get("code"), d.get("statusCode")), (ctx.TD, "ACTIVE"), "code and statusCode unchanged")
+    check("tokensInvalidBefore" not in d, "no tokensInvalidBefore in the response", "absent", sorted(d))
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq({k: (g.data or {}).get(k) for k in profile}, profile, "GET shows the same")
+    s1 = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "countryCode", "operator": "EQUALS", "value": "SA"},
+        {"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("code") for x in s1.content], [ctx.TD], "search countryCode + code")
+    s2 = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "contactEmail", "operator": "EQUALS", "value": ctx.D_EMAIL}], "sortField": "countryCode"})
+    eq([x.get("code") for x in s2.content], [ctx.TD], "search contactEmail, sorted by countryCode")
+
+
+@tc("TC-CORE-TENANT-029")
+def test_tenant_029_update_refusals(ctx):
+    names = {"nameAr": "د", "nameEn": "D"}
+    st(api("PUT", "/api/v1/platform/tenants/999999999", t=ctx.T_PLAT, body=names), 404, "TENANT_NOT_FOUND",
+       what="unknown tenant")
+    for field, value in (("defaultLocale", "fr"), ("countryCode", "sau"), ("nameEn", "  ")):
+        r = api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT, body={**names, field: value})
+        st(r, 400, "VALIDATION_ERROR", what=f"{field}={value!r}")
+        check(field in [f.get("field") for f in r.field_errors], f"fieldErrors names {field}", field,
+              [f.get("field") for f in r.field_errors])
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq(((g.data or {}).get("countryCode"), (g.data or {}).get("defaultLocale")), ("SA", "ar"), "nothing changed")
+    st(api("PUT", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_A, body=names), 403, "SEC-403-FORBIDDEN",
+       what="a tenant administrator is refused")
+
+
+@tc("TC-CORE-TENANT-030")
+def test_tenant_030_suspend_without_reason(ctx):
+    for body in ({"statusCode": "SUSPENDED"}, {"statusCode": "SUSPENDED", "reason": "ab"}):
+        r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body=body)
+        st(r, 400, "TENANT_SUSPENSION_REASON_REQUIRED", what=f"suspend with {body}")
+    g = api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT)
+    eq(((g.data or {}).get("statusCode"), (g.data or {}).get("suspendedAt")), ("ACTIVE", None), "still ACTIVE, no facts")
+
+
+@tc("TC-CORE-TENANT-031")
+def test_tenant_031_suspend_records_facts(ctx):
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="td-admin signs in before the suspension")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    before = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
+    ctx.D_REASON = f"TM-B suspension {ctx.RUN}"
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": ctx.D_REASON})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("statusCode"), d.get("suspendedBy"), d.get("suspensionReason")), ("SUSPENDED", "admin", ctx.D_REASON),
+       "status and facts")
+    check(bool(d.get("suspendedAt")), "suspendedAt set", "set", d.get("suspendedAt"))
+    st(login_staff(ctx.TD, "td-admin", PW), 403, "TENANT_SUSPENDED", what="login refused")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 403, "TENANT_SUSPENDED", what="issued token refused")
+    since = before.strftime("%Y-%m-%dT%H:%M:%SZ")
+    s = api("POST", "/api/v1/platform/tenants/search", t=ctx.T_PLAT, body={"filters": [
+        {"field": "suspendedAt", "operator": "GREATER_THAN_OR_EQUAL", "value": since},
+        {"field": "code", "operator": "EQUALS", "value": ctx.TD}]})
+    eq([x.get("code") for x in s.content], [ctx.TD], "search suspendedAt >= before")
+
+
+@tc("TC-CORE-TENANT-032")
+def test_tenant_032_activate_clears_facts(ctx):
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"})
+    st(r, 200)
+    d = r.data or {}
+    eq((d.get("statusCode"), d.get("suspendedAt"), d.get("suspendedBy"), d.get("suspensionReason")),
+       ("ACTIVE", None, None, None), "facts cleared")
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="login restored")
+    ctx.T_D = (r.data or {}).get("accessToken")
+
+
+@tc("TC-CORE-TENANT-033")
+def test_tenant_033_admin_reset_refusals(ctx):
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_D,
+            body=user_body(f"dclerk-{ctx.run}", f"dclerk-{ctx.run}@t.test", "كاتب", "Clerk D"))
+    st(r, 201, what="a role-less staff user in D")
+    st(admin_reset(ctx, ctx.D_ID, f"ghost-{ctx.run}", PW_RECOVERED), 404, "TENANT_ADMIN_NOT_FOUND", what="unknown user")
+    st(admin_reset(ctx, ctx.D_ID, f"dclerk-{ctx.run}", PW_RECOVERED), 422, "TENANT_ADMIN_NOT_SUPER", what="not super")
+    r = admin_reset(ctx, ctx.D_ID, "td-admin", "abcdefgh")
+    st(r, 400, "SEC-400-PASSWORD-POLICY", what="weak password")
+    eq([f.get("field") for f in r.field_errors], ["newPassword"], "fieldErrors[*].field")
+    st(admin_reset(ctx, 999999999, "td-admin", PW_RECOVERED), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    st(login_staff(ctx.TD, "td-admin", PW), 200, what="nothing changed: the old password still signs in")
+
+
+@tc("TC-CORE-TENANT-034")
+def test_tenant_034_admin_reset(ctx):
+    r = login_staff(ctx.TD, "td-admin", PW)
+    st(r, 200, what="one more session of td-admin")
+    t_old = (r.data or {}).get("accessToken")
+    ctx.TD_ADMIN_ID = (api("GET", "/api/v1/sec/me", t=t_old).data or {}).get("userPk")
+    r = admin_reset(ctx, ctx.D_ID, "td-admin", PW_RECOVERED)
+    st(r, 200)
+    d = r.data or {}
+    eq(d.get("username"), "td-admin", "data.username")
+    check(isinstance(d.get("sessionsTerminated"), int) and d.get("sessionsTerminated") >= 2,
+          "data.sessionsTerminated >= 2 (TENANT-032's, TENANT-033's and this case's logins)", ">= 2", d.get("sessionsTerminated"))
+    check(PW_RECOVERED not in (r.body or b"").decode("utf-8", "replace"), "no password in the body", "absent", "checked")
+    st(api("GET", "/api/v1/sec/me", t=t_old), 401, what="the old token is refused")
+    st(login_staff(ctx.TD, "td-admin", PW), 401, what="the old password is refused")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="the new password signs in")
+    eq((r.data or {}).get("passwordChangeRequired"), True, "passwordChangeRequired")
+
+
+@tc("TC-CORE-TENANT-035")
+def test_tenant_035_admin_reset_audited(ctx):
+    r = first_login(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="first login after the reset (forced change done)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    a = audit(ctx.T_D, action="ADMIN_PASSWORD_RESET", size=50)
+    st(a, 200, what="D's audit log")
+    rows = a.content
+    eq([(x.get("actor"), x.get("actorRealm"), x.get("actorUserId"), x.get("entityType"), x.get("entityId"))
+        for x in rows], [("admin", "STAFF", None, "SEC_USER", str(ctx.TD_ADMIN_ID))], "one ADMIN_PASSWORD_RESET row")
+    blob = json.dumps(rows, ensure_ascii=False)
+    check(PW_RECOVERED not in blob and "$2a$" not in blob, "no secret in the audit row", "absent", "checked")
+    p = audit(ctx.T_PLAT, action="ADMIN_PASSWORD_RESET", entityId=ctx.TD_ADMIN_ID, size=50)
+    st(p, 200, what="PLATFORM's audit log")
+    eq(p.content, [], "the row is not written in PLATFORM")
+
+
+@tc("TC-CORE-TENANT-036")
+def test_tenant_036_usage_counts_only_that_tenant(ctx):
+    r = poll(lambda: usage_of(ctx, ctx.D_ID), lambda x: ((x.data or {}).get("notificationsLast30Days") or 0) >= 1, timeout=15)
+    st(r, 200)
+    d = r.data or {}
+    eq({k: d.get(k) for k in ("staffUsers", "customerUsers", "fileDocuments", "fileBytes")},
+       {"staffUsers": 2, "customerUsers": 0, "fileDocuments": 0, "fileBytes": 0}, "D's figures")
+    check((d.get("activeSessions") or 0) >= 1, "D activeSessions >= 1 (TENANT-035's session)", ">= 1", d.get("activeSessions"))
+    check((d.get("notificationsLast30Days") or 0) >= 1, "D notificationsLast30Days >= 1 (STAFF_PASSWORD_CHANGED)", ">= 1",
+          d.get("notificationsLast30Days"))
+    ra = usage_of(ctx, ctx.A_ID)
+    st(ra, 200, what="A's usage")
+    a = ra.data or {}
+    users = api("POST", "/api/v1/sec/users/search", t=ctx.T_A, body={"size": 1})
+    eq(a.get("staffUsers"), (users.data or {}).get("totalElements"), "A's staffUsers = A's staff user search total")
+    check((a.get("customerUsers") or 0) >= 1 and (a.get("fileDocuments") or 0) >= 1,
+          "A counts its own customers and documents", ">= 1 each", (a.get("customerUsers"), a.get("fileDocuments")))
+    st(usage_of(ctx, ctx.D_ID, token=ctx.T_A), 403, "SEC-403-FORBIDDEN", what="a tenant administrator is refused")
+
+
+@tc("TC-CORE-TENANT-037")
+def test_tenant_037_admin_reset_platform_refused_and_traced(ctx):
+    # review round 1: never on PLATFORM — not even the operator's own account (SEC RULE-SEC-057 stays whole)
+    st(admin_reset(ctx, 1, "admin", PW_RECOVERED), 422, "TENANT_ADMIN_RESET_PLATFORM", what="PLATFORM, own account")
+    st(login_staff("PLATFORM", "admin", ctx.ADMIN_PW), 200, what="the operator's password is unchanged")
+    a = audit(ctx.T_PLAT, action="TENANT_ADMIN_RESET", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+    st(a, 200, what="PLATFORM's audit log")
+    rows = a.content
+    eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+       [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))], "one TENANT_ADMIN_RESET row for tenant D")
+    summary = (rows[0].get("summaryEn") or "") if rows else ""
+    check("td-admin" in summary and ctx.TD in summary and "sessions terminated:" in summary,
+          "summary names the user, the tenant and the session count", "td-admin, $TD, sessions terminated", summary)
+    blob = json.dumps(rows, ensure_ascii=False)
+    check(PW_RECOVERED not in blob and "$2a$" not in blob, "no secret in the PLATFORM row", "absent", "checked")
 
 
 # =============================================================================================
@@ -2881,7 +3088,8 @@ def test_sec_032_staff_sessions_exclude_customers(ctx):
 @tc("TC-CORE-TENANT-026", profile="P-MAIL")
 def test_tenant_026_suspended_tenant_customer_token(ctx):
     st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 200, what="before: T_CUST works")
-    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT, body={"statusCode": "SUSPENDED"})
+    r = api("PATCH", f"/api/v1/platform/tenants/{ctx.A_ID}/status", t=ctx.T_PLAT,
+            body={"statusCode": "SUSPENDED", "reason": f"TC-CORE-TENANT-026 {ctx.RUN}"})
     st(r, 200, what="suspend the run's tenant A")
     try:
         st(api("GET", "/api/v1/customers/me", t=ctx.T_CUST), 403, "TENANT_SUSPENDED", what="issued customer token refused")
@@ -3030,7 +3238,7 @@ ORDER = {
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
-                  "TENANT-025", *rng("TENANT", 19, 24)),
+                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37)),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),

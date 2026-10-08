@@ -1,9 +1,11 @@
 package com.erp.tenant.service;
 
+import com.erp.audit.crossmodule.AuditApi;
+import com.erp.audit.crossmodule.AuditEntry;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
-import com.erp.common.search.DefaultFieldValueConverter;
+import com.erp.common.search.InstantFieldValueConverter;
 import com.erp.common.search.PageableBuilder;
 import com.erp.common.search.SearchRequest;
 import com.erp.common.search.SetAllowedFields;
@@ -11,20 +13,33 @@ import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.events.DomainEventPublisher;
 import com.erp.events.TenantCreatedEvent;
+import com.erp.file.crossmodule.FileDocumentLookupApi;
+import com.erp.notif.crossmodule.NotificationLogQueryApi;
+import com.erp.sec.crossmodule.RecoveryTarget;
+import com.erp.sec.crossmodule.SecAdminRecoveryApi;
+import com.erp.sec.crossmodule.SecUserDirectoryApi;
 import com.erp.tenant.TenantConstants;
+import com.erp.tenant.TenantContext;
 import com.erp.tenant.TenantProvisioning;
 import com.erp.tenant.TenantProvisioningContributor;
 import com.erp.tenant.domain.TenantDomain;
+import com.erp.tenant.dto.TenantAdminResetRequest;
+import com.erp.tenant.dto.TenantAdminResetResponse;
 import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantSearchRequest;
 import com.erp.tenant.dto.TenantStatusUpdateRequest;
+import com.erp.tenant.dto.TenantUpdateRequest;
+import com.erp.tenant.dto.TenantUsageResponse;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
 import com.erp.tenant.mapper.TenantMapper;
 import com.erp.tenant.repository.TenantRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +50,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Tenant provisioning and lifecycle — the platform-level API behind {@code /api/v1/platform/tenants}.
@@ -48,6 +65,11 @@ import org.springframework.transaction.annotation.Transactional;
  * its first administrator, its reference data — in the <em>same</em> transaction, so a tenant is
  * either fully provisioned or not created at all.
  *
+ * <p>tenant-maturity B: {@link #resetAdministratorPassword} and {@link #getUsage} work <em>inside</em> another
+ * tenant through SEC, FILE and NOTIF. They are deliberately not {@code @Transactional}: a transaction opened in
+ * this PLATFORM request would bind the PLATFORM Hibernate session, so each opens its own inside
+ * {@code TenantContext.callAs(id)} (the {@code PermissionCatalogSynchronizer} precedent).
+ *
  * <p>No caching: {@code CORE_TENANT} is not on the caching approved-register
  * (gov-enforce-caching-rules), so this service carries no {@code @Cacheable}/{@code @CacheEvict}.
  */
@@ -57,13 +79,33 @@ import org.springframework.transaction.annotation.Transactional;
 public class TenantService {
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-        "id", "code", "nameAr", "nameEn", "statusCode", "createdAt"
+        "id", "code", "nameAr", "nameEn", "statusCode", "createdAt",
+        "contactEmail", "countryCode", "suspendedAt"
     );
+
+    /** Filter values of these fields are ISO-8601 instants. */
+    private static final InstantFieldValueConverter INSTANT_FIELDS = new InstantFieldValueConverter(Set.of("suspendedAt"));
+
+    /** REQ-TENANT-027 (review round 1): the PLATFORM-side audit action of an admin-reset. */
+    static final String ACTION_TENANT_ADMIN_RESET = "TENANT_ADMIN_RESET";
+
+    /** The {@code @Audited} entity type of {@code CORE_TENANT}. */
+    private static final String ENTITY_TYPE_TENANT = "CORE_TENANT";
+
+    /** REQ-TENANT-028: the window of {@code notificationsLast30Days}. */
+    private static final Duration NOTIFICATION_WINDOW = Duration.ofDays(30);
 
     private final TenantRepository repository;
     private final TenantMapper mapper;
     private final ObjectProvider<TenantProvisioningContributor> contributors;
     private final DomainEventPublisher eventPublisher;
+    // tenant-maturity B — the cross-module surfaces read or written inside another tenant
+    private final SecUserDirectoryApi userDirectory;
+    private final SecAdminRecoveryApi adminRecovery;
+    private final FileDocumentLookupApi fileDocuments;
+    private final NotificationLogQueryApi notificationLog;
+    private final PlatformTransactionManager transactionManager;
+    private final AuditApi auditApi;
 
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
@@ -121,8 +163,7 @@ public class TenantService {
         SearchRequest commonRequest = searchRequest.toCommonSearchRequest();
 
         SetAllowedFields allowedFields = new SetAllowedFields(ALLOWED_SORT_FIELDS);
-        Specification<Tenant> spec =
-            SpecBuilder.build(commonRequest, allowedFields, DefaultFieldValueConverter.INSTANCE);
+        Specification<Tenant> spec = SpecBuilder.build(commonRequest, allowedFields, INSTANT_FIELDS);
         Pageable pageable = PageableBuilder.from(commonRequest, ALLOWED_SORT_FIELDS);
 
         Page<Tenant> page = repository.findAll(spec, pageable);
@@ -138,6 +179,29 @@ public class TenantService {
         return search(TenantSearchRequest.builder().sortField("id").page(page).size(size).build());
     }
 
+    /**
+     * REQ-TENANT-025 — {@code PUT /{id}}: names and profile, a full replacement; the code and the status never
+     * change here (RULE-TENANT-003). A write racing another one fails on {@code VERSION} (409).
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<TenantResponse> update(Long id, TenantUpdateRequest request) {
+        log.info("Updating tenant ID: {}", id);
+
+        Tenant entity = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
+
+        mapper.updateEntityFromRequest(entity, request);
+        Tenant saved = repository.saveAndFlush(entity);
+        log.info("Updated tenant ID: {}", saved.getId());
+
+        return ServiceResult.success(mapper.toResponse(saved), Status.UPDATED);
+    }
+
+    /**
+     * {@code PATCH /{id}/status}: PLATFORM protection (RULE-TENANT-005), then the suspension reason
+     * (RULE-TENANT-016); a real transition records or clears the suspension facts, re-applying changes nothing.
+     */
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantResponse> updateStatus(Long id, TenantStatusUpdateRequest request) {
@@ -146,16 +210,85 @@ public class TenantService {
         Tenant entity = repository.findById(id)
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
 
-        TenantDomain.from(entity).assertCanChangeStatusTo(request.getStatusCode());
+        TenantDomain domain = TenantDomain.from(entity);
+        domain.assertCanChangeStatusTo(request.getStatusCode());
+        domain.assertSuspensionReasonGiven(request.getStatusCode(), request.getReason());
 
-        if (TenantConstants.STATUS_SUSPENDED.equals(request.getStatusCode())) {
-            entity.suspend();
-        } else {
-            entity.activate();
+        if (domain.changesStatusTo(request.getStatusCode())) {
+            Instant now = Instant.now();
+            if (TenantConstants.STATUS_SUSPENDED.equals(request.getStatusCode())) {
+                entity.suspend(now, SecurityContextHelper.getCurrentUsername(), request.getReason());
+            } else {
+                entity.activate(now);
+            }
         }
         Tenant saved = repository.saveAndFlush(entity);
         log.info("Tenant ID: {} is now {}", saved.getId(), saved.getStatusCode());
 
         return ServiceResult.success(mapper.toResponse(saved), Status.UPDATED);
+    }
+
+    /**
+     * REQ-TENANT-027 — {@code POST /{id}/admin-reset}: never on PLATFORM; inside tenant {@code id}, in one
+     * transaction, SEC finds the user, {@code TenantDomain} decides (RULE-TENANT-017), SEC resets the password, ends
+     * the user's sessions and audits {@code ADMIN_PASSWORD_RESET}; then PLATFORM records {@code TENANT_ADMIN_RESET}.
+     * Not {@code @Transactional} (see the class comment). Logs name ids only, never the username (plan §1.7).
+     */
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<TenantAdminResetResponse> resetAdministratorPassword(Long id, TenantAdminResetRequest request) {
+        log.info("Resetting the password of an administrator of tenant ID: {}", id);
+
+        Tenant tenant = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
+        TenantDomain domain = TenantDomain.from(tenant);
+        domain.assertAdminResetAllowed();
+
+        Integer terminated = TenantContext.callAs(id, () -> new TransactionTemplate(transactionManager)
+            .execute(status -> resetInsideTenant(request, domain)));
+        // the PLATFORM trace of the recovery: this request's tenant, its own commit (no transaction is open here)
+        auditApi.record(AuditEntry.builder()
+            .action(ACTION_TENANT_ADMIN_RESET)
+            .tenantId(TenantConstants.PLATFORM_TENANT_ID)
+            .entityType(ENTITY_TYPE_TENANT)
+            .entityId(String.valueOf(tenant.getId()))
+            .summaryAr("إعادة تعيين كلمة مرور المدير " + request.getUsername() + " في المستأجر " + tenant.getCode()
+                + "؛ الجلسات المنتهية: " + terminated)
+            .summaryEn("Password of administrator " + request.getUsername() + " of tenant " + tenant.getCode()
+                + " reset; sessions terminated: " + terminated)
+            .build());
+        log.info("Password of an administrator of tenant ID: {} reset; sessions terminated: {}", id, terminated);
+
+        return ServiceResult.success(mapper.toAdminResetResponse(request.getUsername(), terminated), Status.UPDATED);
+    }
+
+    /**
+     * REQ-TENANT-028 — {@code GET /{id}/usage}: every figure counted inside tenant {@code id} by its owner module,
+     * in one read-only transaction of that tenant. Not {@code @Transactional} (see the class comment).
+     */
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<TenantUsageResponse> getUsage(Long id) {
+        log.debug("Collecting the usage figures of tenant ID: {}", id);
+
+        Tenant tenant = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
+        Instant collectedAt = Instant.now();
+        TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
+        readOnly.setReadOnly(true);
+
+        TenantUsageResponse usage = TenantContext.callAs(tenant.getId(), () -> readOnly.execute(status ->
+            mapper.toUsageResponse(tenant.getId(), userDirectory.countStaff(), userDirectory.countCustomers(),
+                userDirectory.countActiveSessions(), fileDocuments.countDocuments(), fileDocuments.sumBytes(),
+                notificationLog.countDispatchedSince(collectedAt.minus(NOTIFICATION_WINDOW)), collectedAt)));
+
+        return ServiceResult.success(usage);
+    }
+
+    /** Runs inside tenant {@code domain}'s transaction: facts from SEC, decision here, write by SEC. */
+    private int resetInsideTenant(TenantAdminResetRequest request, TenantDomain domain) {
+        Optional<RecoveryTarget> target = adminRecovery.findRecoveryTarget(request.getUsername());
+        domain.assertCanResetAdministrator(request.getUsername(), target.isPresent(),
+            target.map(RecoveryTarget::superRole).orElse(false));
+        return adminRecovery.resetSuperUserPassword(request.getUsername(), request.getNewPassword(),
+            request.getRequireChangeAtNextLogin());
     }
 }

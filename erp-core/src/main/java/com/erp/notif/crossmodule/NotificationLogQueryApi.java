@@ -1,5 +1,6 @@
 package com.erp.notif.crossmodule;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -15,4 +16,10 @@ public interface NotificationLogQueryApi {
     /** Logs matching all three criteria exactly, most recent first. Empty list when none match. */
     List<DispatchLogRecord> findByRecipientModuleAndReference(
         Long recipientId, String moduleCode, String referenceType);
+
+    /**
+     * tenant-maturity B — the current tenant's NOTIF_LOG rows (one per channel and dispatch, any status) created at
+     * or after {@code since}; TENANT's usage figures ({@code notificationsLast30Days}).
+     */
+    long countDispatchedSince(Instant since);
 }

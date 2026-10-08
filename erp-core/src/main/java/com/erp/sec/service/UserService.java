@@ -297,6 +297,34 @@ public class UserService {
     }
 
     /**
+     * REQ-SEC-090 (tenant-maturity B), reached only through {@code SecUserDirectoryApi.countStaff}: the current
+     * tenant's STAFF users in any status. Gated on authentication like the sibling directory reads; the
+     * consuming service carries its own gate (TENANT: {@code PLATFORM_TENANT_MANAGE}).
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public ServiceResult<Integer> countStaff() {
+        log.debug("Counting the staff users of the current tenant");
+        return ServiceResult.success(Math.toIntExact(repository.countAllUsers()));
+    }
+
+    /** REQ-SEC-090 — the current tenant's CUSTOMER accounts in any status ({@code SecUserDirectoryApi.countCustomers}). */
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public ServiceResult<Integer> countCustomers() {
+        log.debug("Counting the customer accounts of the current tenant");
+        return ServiceResult.success(Math.toIntExact(repository.countCustomers()));
+    }
+
+    /** REQ-SEC-090 — the current tenant's open sessions of either realm ({@code SecUserDirectoryApi.countActiveSessions}). */
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public ServiceResult<Integer> countActiveSessions() {
+        log.debug("Counting the open sessions of the current tenant");
+        return ServiceResult.success(Math.toIntExact(activeSessionRepository.countOpenSessions()));
+    }
+
+    /**
      * {@code fullName} matches either language column (API-SEC-005 Request line); the shared
      * {@code SearchOperator} set has no OR, so this one predicate is expressed directly.
      */

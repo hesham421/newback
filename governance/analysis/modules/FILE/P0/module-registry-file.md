@@ -145,5 +145,6 @@ EXPOSED SURFACE — deltas
 |---|---|---|
 | `com.erp.file.crossmodule.FileImageStoreApi` (XM-FILE-002) | NEW: `storePublicImage(ImageStoreRequest)` → `ImageStoreResult`, `discard(Long)`; consumed by SEC (photos) and, in package E, TENANT (logos) | srs.md 1.3.0 §1 |
 | `FileDocumentLookupApi.publicUrls(Collection<Long>)` (XM-FILE-001) | NEW method | srs.md 1.3.0 §1 |
+| `FileDocumentLookupApi.countDocuments()`, `sumBytes()` (XM-FILE-001) | NEW methods (package B): the current tenant's live documents and their bytes; consumed by TENANT (usage figures) | srs.md 1.3.0 §7 |
 
 Entities owned, permissions, dependencies: unchanged.

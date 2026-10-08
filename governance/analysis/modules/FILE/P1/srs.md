@@ -341,3 +341,18 @@ public document.
 | Kind | ADR | Decision |
 |---|---|---|
 | NEW | ADR-FILE-008 | Profile photos and logos are PUBLIC documents with non-guessable slugs; image-store documents carry no category — `governance/analysis/decisions/FILE/ADR-FILE-008.md` |
+
+### 7. Package B — usage counts for the platform (tenant-maturity plan §4 B.4)
+Change         : tenant-maturity plan package B — `FileDocumentLookupApi` counts, consumed by TENANT's `GET /api/v1/platform/tenants/{id}/usage`
+Statement      : Sections 1–6 above (package D.4) are unchanged; §7 records package B's implemented delta.
+
+No FILE id is minted (no rule: the counts decide nothing; XM-FILE-001 is the existing surface). No endpoint,
+entity field, error code, permission or migration changes.
+
+| Kind | Id | Interface | Method | Contract |
+|---|---|---|---|---|
+| CHANGED | XM-FILE-001 | `com.erp.file.crossmodule.FileDocumentLookupApi` | + `long countDocuments()` | the current tenant's `FILE_DOCUMENT` rows whose status is not `DELETED` (ACTIVE, ARCHIVED), any visibility, with or without a category (image-store documents included) |
+| CHANGED | XM-FILE-001 | same | + `long sumBytes()` | the sum of `FILE_SIZE` over the same rows (0 when none; a NULL size counts 0) — bytes the tenant's live documents hold, whatever the storage provider |
+Read-only, tenant-filtered by the `@TenantId` discriminator (JPQL), no `@PreAuthorize` like the other lookup
+methods (they reveal no content; the consuming service carries its own gate — TENANT: `PLATFORM_TENANT_MANAGE`).
+Consumer: TENANT (`TenantService.getUsage`), inside `TenantContext.callAs(tenantId)`.
