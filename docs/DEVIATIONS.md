@@ -362,3 +362,22 @@ bind later steps.
   is weakened.
 - [TM-C12] Commit hygiene: the `TenantResolutionFilter` refinement "a public path ignores a revoked authenticated token"
   landed in the test commit (`test(tenant): …`) together with the test that found it.
+- [TM-C12] Review round 1, revoke-tokens → its cut-off is **the start of the next whole second** after now
+  (`TenantDomain.revocationCutOff`), activation keeps the activation instant: the cut-off alone now refuses every token up
+  to and including the revoke's own second (the reviewer re-opened a session after a revoke and a token of that second
+  was served; a login whose session committed after the termination query was the same gap). A login later in that
+  second is refused and signs in again a moment later. The comparison (`iat` s < cut-off s) is unchanged. A failure of
+  the session step after the cut-off committed is caught: `TOKENS_REVOKED` in PLATFORM says the sessions were NOT
+  terminated, and the call answers **500 `TENANT_REVOKE_SESSIONS_FAILED`** (new code, `Status.INTERNAL_ERROR`; message:
+  the tokens are already refused, repeat the call); a repeat moves the cut-off forward and ends the sessions. ADR-TENANT-002
+  Decision and Reason 5, C7, RULE-TENANT-023, REQ-TENANT-035 amended (the first wording overclaimed the session step).
+- [TM-C12] Review round 1, ids → the C12 block cited RULE-TENANT-012 and RULE-TENANT-015, which are not defined on main
+  (reserved for the analysis-coverage work): replaced by REQ-TENANT-012 (tenant from the access token) and
+  REQ-TENANT-010; the no-caching note rests on gov-enforce-caching-rules (C7).
+- [TM-C12] Plan §5 C.1 "registered in `ErpCoreEvents` (count 10 → 12)" → `ErpCoreEvents` only holds the executor's bean
+  name, it is no registry: the event catalogue is `docs/CONSUMING.md` §5 and `PROJECT-OVERVIEW.md` (11 → 13 with D's
+  `UserPasswordChangedEvent`), where the two events were added; `ErpCoreEvents` is unchanged.
+- [TM-C12] Review round 1, nits → `NotificationLogDomain.deliversFor` (it returned its argument) removed; the requeue job
+  reads `TenantLookupApi.isActive` directly and `isDeliverable(tenantActive)` stays the claim's rule.
+  `NotificationTenantActivationListener` submits to the core event executor itself and logs a rejected task at WARN.
+  ADR-TENANT-002 records "accepted after the code check (6bfe756)".

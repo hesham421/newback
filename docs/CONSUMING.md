@@ -181,7 +181,9 @@ Each piece is off unless the application adds the dependency and its configurati
 - **Suspension and token cut-off (1.3.0).** Suspending a tenant ends its sessions; re-activating it, or
   `POST /api/v1/platform/tenants/{id}/revoke-tokens`, cuts off every token issued before (401
   `TENANT_TOKEN_REVOKED` on any non-public path, whole-second precision). A client treats it like any 401 and signs
-  in again; the login itself ignores a stale `Authorization` header. A job that works per tenant can skip suspended
+  in again; the login itself ignores a stale `Authorization` header. Revoke-tokens refuses every token up to and
+  including its own second (a login in that second signs in again a moment later); if it answers 500
+  `TENANT_REVOKE_SESSIONS_FAILED`, the tokens are already refused but the sessions were not ended — call it again. A job that works per tenant can skip suspended
   tenants with `com.erp.tenant.crossmodule.TenantLookupApi.isActive(tenantId)` (uncached).
 - **Reference data for new tenants.** If the application seeds reference data that every tenant needs,
   it implements `com.erp.tenant.TenantProvisioningContributor` (`order()`,

@@ -3092,6 +3092,7 @@ def test_tenant_048_revoke_tokens(ctx):
     old = ctx.T_D
     await_second_after(old)
     r = revoke_tokens(ctx.D_ID, ctx.T_PLAT)
+    revoked_at = int(time.time())
     st(r, 200)
     d = r.data or {}
     eq(sorted(d), ["code", "id", "sessionsTerminated"], "exactly id, code, sessionsTerminated (no cut-off field)")
@@ -3102,6 +3103,9 @@ def test_tenant_048_revoke_tokens(ctx):
     st(api("GET", "/api/v1/tenant/me", t=old), 401, "TENANT_TOKEN_REVOKED", what="… on /tenant/me too")
     eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 0, "every session of D ended")
     st(api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT), 200, what="the operator is not affected")
+    # review round 1: the revoke's cut-off is the next whole second, so a token of the revoke's own second is refused too
+    while int(time.time()) <= revoked_at:
+        time.sleep(0.05)
     r = api("POST", "/api/v1/sec/auth/login", t=old, tc=ctx.TD, body={"username": "td-admin", "password": PW_RECOVERED})
     st(r, 200, what="login sent with the revoked token in Authorization (a public path ignores it)")
     ctx.T_D = (r.data or {}).get("accessToken")

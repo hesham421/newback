@@ -155,3 +155,25 @@ name, `@Operation`), `gov-enforce-caching-rules` (no cache: tenant status has a 
 - HTTP suite: a test that suspends or re-activates a tenant must sign its users in again; to cut a token off it must
   wait for the second after the token's `iat` (`await_second_after`). Tenant D ends ACTIVE with a cut-off and one
   session (`T_D`).
+
+## Review round 1
+
+Verdict PASS, no blocking defect (evidence `rev-c12/`); the items below were fixed on the same branch, analysis first
+(7741f2a edits the C12 blocks and ADR-TENANT-002), no rebase.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1 | Revoke-tokens relied on the session step: with a session re-opened (simulated failure), a token of the cut-off's own second was served; a failed step also answered an error without any audit row; C7 / ADR Reason 5 overclaimed | (a) revoke-tokens' cut-off = **start of the next whole second** (`TenantDomain.revocationCutOff`); activation keeps the activation instant; the comparison `iat` s < cut-off s is unchanged and serves both. The in-flight login race (a login of that second whose session commits after the termination SELECT) is refused by the cut-off. (b) a failure of the session step after the cut-off committed is caught: `TOKENS_REVOKED` in PLATFORM ("the sessions were NOT terminated: call again"), 500 `TENANT_REVOKE_SESSIONS_FAILED` (new code, `Status.INTERNAL_ERROR`, AR+EN), retry moves the cut-off forward and ends the sessions. C1, C4, C7, C8, C10, C11, RULE-TENANT-023, REQ/AC-TENANT-035, ADR-TENANT-002 (Precision, Decision, Reason 5), CONSUMING, CHANGELOG, DEVIATIONS updated | `TenantTokenCutOffIntegrationTest.revokeTokens_refusesATokenOfTheRevokesOwnSecond_evenWhenItsSessionIsReopened`, `revokeTokens_whoseSessionStepFails_keepsTheCutOff_recordsItInPlatform_answers500_andARetryEndsTheSessions` (Mockito `SecAdminRecoveryApi` in a hand-built `TenantService`, no new Spring context); `TenantDomainTest.revocationCutOff_…`, `activationCutOff_…`; TC-CORE-TENANT-048 waits for the second after the revoke before signing in |
+| 2 | RULE-TENANT-012 / -015 cited but not defined on main | replaced by REQ-TENANT-012 (tenant from the access token) and REQ-TENANT-010; the no-cache note rests on gov-enforce-caching-rules | srs-tenant C3, registry, ADR Reason 1 |
+| 3 | Plan's "registered in `ErpCoreEvents`" | DEVIATIONS line: `ErpCoreEvents` is no registry; the catalogue is CONSUMING §5 and PROJECT-OVERVIEW | DEVIATIONS `[TM-C12]` |
+| 4 | Nits | ADR Traces "accepted after the code check (6bfe756)"; `NotificationLogDomain.deliversFor` removed (the job reads `isActive`); `NotificationTenantActivationListener` submits to the executor itself and logs a rejected task at WARN | `NotificationTenantActivationListenerTest` |
+
+Verification after round 1:
+- `mvn -q verify` (offline, clean `target/`, code of 4cf2cee): BUILD SUCCESS, erp-core lines 82.15 %.
+  erp-core **623** tests, 0 failures, 0 errors, 0 skipped (92 suites); erp-app-reference **10**, 0 / 0 / 0.
+- HTTP suite run **`261008072459`**, P-LIVE, port 18107, fresh `erp_tm_c12` (dropped): **196 PASS / 0 FAIL / 0 BLOCKED**
+  (22 profile cases not run) — `docs/test-api/results/20261008T072423-P-LIVE.json` / `-report.md`, replacing run
+  `261008065354`.
+- api-docs (tenant) regenerated: revoke-tokens now lists 500 `TENANT_REVOKE_SESSIONS_FAILED`; `check_completeness.py`:
+  sum 124, missing 0, duplicated 0, stale 0, PASS; `check`: TENANT PASS, the five known limitations unchanged.
+- Next free ids unchanged except TENANT (no new id; one new error code). Next free TC ids unchanged.

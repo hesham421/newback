@@ -902,13 +902,14 @@ Shape: `TenantTokenRevocationResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.revokeTenantTokens`, `TenantService.revokeTokens`, `TenantDomain.from`, `TenantService.writeCutOff`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.endSessions`, `TenantMapper.toTokenRevocationResponse`, `TenantDomain.assertTokenRevocationAllowed`, `new TenantDomain()`, `Tenant.revokeTokens`, `TenantService.recordInTenantAndPlatform`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.revokeTenantTokens`, `TenantService.revokeTokens`, `TenantDomain.from`, `TenantDomain.revocationCutOff`, `TenantService.writeCutOff`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.endSessions`, `TenantMapper.toTokenRevocationResponse`, `TenantDomain.assertTokenRevocationAllowed`, `new TenantDomain()`, `Tenant.revokeTokens`, `TenantService.recordInTenantAndPlatform`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.revokeTokens |
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.writeCutOff |
 | 422 UNPROCESSABLE_CONTENT | `TENANT_REVOKE_TOKENS_PLATFORM` | TENANT_REVOKE_TOKENS_PLATFORM | TenantDomain.assertTokenRevocationAllowed |
+| 500 INTERNAL_SERVER_ERROR | `TENANT_REVOKE_SESSIONS_FAILED` | TENANT_REVOKE_SESSIONS_FAILED | TenantService.revokeTokens |
 
 ### Other Possible Responses
 

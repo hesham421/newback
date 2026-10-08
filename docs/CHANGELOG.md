@@ -85,7 +85,10 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `TenantLookupApi.isActive(Long)`. `POST /api/v1/platform/tenants/{id}/revoke-tokens` (`PLATFORM_TENANT_MANAGE`) sets
   the tenant's token cut-off to now, ends every session of the tenant (staff and customer), audits `TOKENS_REVOKED` in
   the tenant and in PLATFORM and answers `{ id, code, sessionsTerminated }`; refused for PLATFORM (422
-  `TENANT_REVOKE_TOKENS_PLATFORM`). No migration (`TOKENS_INVALID_BEFORE` is V19's). ADR-TENANT-002.
+  `TENANT_REVOKE_TOKENS_PLATFORM`). Its cut-off is the start of the next whole second, so every token up to the
+  revoke's own second is refused even if a session survives; if ending the sessions fails it answers 500
+  `TENANT_REVOKE_SESSIONS_FAILED` (tokens already refused, PLATFORM audit row, call again). No migration
+  (`TOKENS_INVALID_BEFORE` is V19's). ADR-TENANT-002.
 - [TM-C12] Cross-module: `SecAdminRecoveryApi.terminateAllSessions()`; `com.erp.tenant.TenantTokenFacts` (the token's
   `tid` and `iat`, a request attribute the JWT filter sets for the tenant filter).
 
