@@ -23,15 +23,14 @@ public class TenantAndSecurityContextTaskDecorator implements TaskDecorator {
         Long capturedTenant = TenantContext.current();
         SecurityContext capturedSecurity = copy(SecurityContextHolder.getContext());
         return () -> {
+            Long previousTenant = TenantContext.current();
             SecurityContext previousSecurity = SecurityContextHolder.getContext();
+            apply(capturedTenant);
             SecurityContextHolder.setContext(capturedSecurity);
             try {
-                // spike ADR-TENANT-004: the captured tenant is bound for the task only
-                TenantContext.callScoped(capturedTenant, () -> {
-                    runnable.run();
-                    return null;
-                });
+                runnable.run();
             } finally {
+                apply(previousTenant);
                 if (previousSecurity == null || previousSecurity.getAuthentication() == null) {
                     SecurityContextHolder.clearContext();
                 } else {
@@ -39,6 +38,14 @@ public class TenantAndSecurityContextTaskDecorator implements TaskDecorator {
                 }
             }
         };
+    }
+
+    private static void apply(Long tenantId) {
+        if (tenantId == null) {
+            TenantContext.clear();
+        } else {
+            TenantContext.set(tenantId);
+        }
     }
 
     private static SecurityContext copy(SecurityContext source) {

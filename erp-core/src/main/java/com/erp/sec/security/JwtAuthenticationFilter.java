@@ -98,34 +98,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             TenantContext.clear();
         }
         try {
-            // spike ADR-TENANT-004: the request's tenant lives in a scope bounded by this call
-            TenantContext.callScoped(null, () -> {
-                filterInScope(request, response, chain);
-                return null;
-            });
-        } catch (IOException | ServletException | RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ServletException(e);
+            String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (header != null && header.startsWith(BEARER_PREFIX)
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
+                Optional<Claims> claims = tokenValidator.parse(header.substring(BEARER_PREFIX.length()));
+                claims.ifPresent(valid -> exposeTokenFacts(request, valid));
+                boolean authenticated = claims.map(this::authenticate).orElse(false);
+                if (!authenticated) {
+                    // no tenant behind: TenantResolutionFilter may fall back to X-Tenant-Code
+                    TenantContext.clear();
+                }
+            }
+            chain.doFilter(request, response);
         } finally {
             TenantContext.clear();
         }
-    }
-
-    private void filterInScope(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (header != null && header.startsWith(BEARER_PREFIX)
-            && SecurityContextHolder.getContext().getAuthentication() == null) {
-            Optional<Claims> claims = tokenValidator.parse(header.substring(BEARER_PREFIX.length()));
-            claims.ifPresent(valid -> exposeTokenFacts(request, valid));
-            boolean authenticated = claims.map(this::authenticate).orElse(false);
-            if (!authenticated) {
-                // no tenant behind: TenantResolutionFilter may fall back to X-Tenant-Code
-                TenantContext.clear();
-            }
-        }
-        chain.doFilter(request, response);
     }
 
     /**
