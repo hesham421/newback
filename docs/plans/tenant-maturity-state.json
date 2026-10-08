@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "C5",
+  "current_step": "Z",
   "steps": [
     {
       "id": "A",
@@ -235,19 +235,19 @@
       "migrations": [
         "V22__file_document_required_authority.sql"
       ],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/c5-tenant-export",
-      "worktree": ".worktrees/tm-c5",
+      "worktree": null,
       "attempts": 2,
       "deviations": 11,
       "implementer_agent": "ab47eee7e504db185",
       "reviewer_agent": "acfb16d2d11b7ffe6",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-c5-report.md",
-      "merged_commit": null
+      "merged_commit": "840a450"
     },
     {
       "id": "Z",
@@ -258,9 +258,9 @@
       ],
       "wave": "8",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/z-closure",
-      "worktree": null,
+      "worktree": ".worktrees/tm-z",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -607,6 +607,18 @@
       "step": "C5",
       "event": "REVIEW",
       "note": "fix round 1 done 10a51ad (REQUIRED_AUTHORITY V22 + 404 on all FILE paths, physical delete of restricted content, audit ignore + scrub, same-tx audit, max-concurrent 429; mvn 669/10, P-LIVE 204/204); round-2 review"
+    },
+    {
+      "at": "2026-10-08T07:02:53Z",
+      "step": "C5",
+      "event": "COMPLETE",
+      "note": "merged 840a450; verify 669/10; P-LIVE 204/204; HIGH fixed (REQUIRED_AUTHORITY, V22)"
+    },
+    {
+      "at": "2026-10-08T07:02:54Z",
+      "step": "Z",
+      "event": "START",
+      "note": "closure dispatched"
     }
   ]
 }
