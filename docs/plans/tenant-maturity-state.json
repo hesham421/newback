@@ -233,12 +233,12 @@
       ],
       "wave": "7",
       "migrations": [],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/c5-tenant-export",
       "worktree": ".worktrees/tm-c5",
-      "attempts": 0,
-      "deviations": 0,
-      "implementer_agent": null,
+      "attempts": 1,
+      "deviations": 11,
+      "implementer_agent": "ab47eee7e504db185",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-c5-report.md",
@@ -584,6 +584,12 @@
       "step": "C5",
       "event": "START",
       "note": "wave 7 (C5 export)"
+    },
+    {
+      "at": "2026-10-08T06:07:02Z",
+      "step": "C5",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 5c408b1 (mvn 661/10, P-LIVE 202/202, api-docs 125); data-security-focused review dispatched"
     }
   ]
 }
