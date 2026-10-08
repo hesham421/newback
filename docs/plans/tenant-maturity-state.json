@@ -186,14 +186,18 @@
       "migrations": [
         "V21__core_idempotency_key.sql"
       ],
-      "status": "REVIEW",
+      "status": "FIXING",
       "branch": "tm/c4-idempotent-provisioning",
       "worktree": ".worktrees/tm-c4",
       "attempts": 1,
       "deviations": 9,
       "implementer_agent": "a8b906cdb8e688079",
-      "reviewer_agent": null,
-      "review": null,
+      "reviewer_agent": "a24929cffff2f1260",
+      "review": {
+        "verdict": "PASS-with-findings",
+        "round": 1,
+        "findings": 5
+      },
       "report": "docs/steps/tm-c4-report.md",
       "merged_commit": null
     },
@@ -557,6 +561,12 @@
       "step": "C6",
       "event": "COMPLETE",
       "note": "merged d351bcd (NO-GO, docs + leak test only); verify 631/10"
+    },
+    {
+      "at": "2026-10-08T04:41:11Z",
+      "step": "C4",
+      "event": "FIXING",
+      "note": "reviewer PASS (41 probes; replay guarded by chain, atomic, concurrency ok); fixing: ON CONFLICT claim (no key in logs), CONSUMING authz note, generator binds IdempotentResponses + brace fix, ArchUnit common->modules rule"
     }
   ]
 }
