@@ -53,6 +53,10 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   also stores a token cut-off enforced from package C.2); the platform operator can reset the password of
   a tenant's super administrator (`/{id}/admin-reset`) and read a tenant's usage figures (`/{id}/usage`),
   both executed inside that tenant through SEC, FILE and NOTIF cross-module APIs.
+  Since 1.3.0 (TM-E) a tenant also has a branding the platform operator sets (decision D5, ADR-TENANT-005): a logo
+  (`/{id}/logo`, a PUBLIC FILE document in the tenant's own rows) and an optional brand colour (`/{id}/branding`);
+  every user reads it through `GET /api/v1/tenant/me` (either realm) and the login page through the anonymous,
+  rate-limited `GET /api/v1/public/tenants/{tenantCode}/branding` (tenant from the path).
 - **Realms.** STAFF (`/api/v1/sec/auth/**`, every administrative endpoint) and CUSTOMER
   (`/api/v1/public/customers/**` for register / verify / login / password reset,
   `/api/v1/customers/me/**` for the profile and inbox). A token of one realm is rejected on the
