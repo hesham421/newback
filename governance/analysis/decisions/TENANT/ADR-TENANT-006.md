@@ -65,7 +65,26 @@ Reasons:
 - **No pre-count, only a cap while streaming**: the plan asks to refuse before exporting; a cap alone would build and
   throw away a large ZIP before refusing (the cap stays as a second line, for a contributor whose count disagrees).
 
+## Review round 1 (package C5) — amended Decision
+- **The archive is a restricted document.** Stored as an ordinary PRIVATE document, it was readable by any PLATFORM
+  user holding `PERM_FILE_BROWSER_VIEW` (owner list → access token → download). The private store now records the
+  authority its producer names (`FILE_DOCUMENT.REQUIRED_AUTHORITY`, V22; the export names `PLATFORM_TENANT_MANAGE`)
+  and FILE refuses every generic operation on such a document — list (filtered), metadata, token, download,
+  visibility, archive, delete — with **404** to a caller without it (existence not revealed), FILE RULE-FILE-012.
+  Alternative weighed: keep private-store documents out of the FILE API and give TENANT its own re-download and
+  delete endpoints — rejected: it duplicates FILE's token, download and delete paths, and the column protects every
+  present and future FILE endpoint, for any producer.
+- **Deleting the archive removes its bytes** (a `DELETED` tombstone keeps the metadata); FILE's soft delete still
+  keeps the bytes of ordinary documents. A retention job (`erp.core.tenant.export.retention`) is a follow-up.
+- **Both `TENANT_EXPORTED` rows in one transaction** with the stored document; **at most
+  `erp.core.tenant.export.max-concurrent` exports** (default 2) at once per node, else 429 `TENANT_EXPORT_BUSY`.
+- **Audit changes scrubbed.** `FileDocument` no longer audits `storageRef` / `publicSlug`; the AUDIT contributor
+  removes them from older `FILE_DOCUMENT` rows' `CHANGES` when exporting.
+
 ## Consequences
+- `max-rows` bounds the number of rows, not their width (text columns, audit `CHANGES`): the archive's size follows the
+  data. Each running export holds one connection, an open snapshot and (with the `DB` provider) the archive in memory
+  while storing it — hence `max-concurrent`.
 - The request is held for the duration of the export (seconds; tens of seconds near the limit); the frontend shows
   progress and never retries automatically (srs-tenant.md X12). Proxies with short timeouts must allow it.
 - The snapshot transaction holds one connection and an MVCC snapshot for that duration.

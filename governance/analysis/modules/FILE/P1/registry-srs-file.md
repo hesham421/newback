@@ -183,3 +183,12 @@ Package C5 (tenant-maturity plan §5 C.5) — registry delta; full text in `srs.
 | NEW | — | `com.erp.file.tenant.FileTenantExportContributor` implements TENANT XM-TENANT-004: `FILE_CATEGORY`, `FILE_DOCUMENT` metadata (never `FILE_CONTENT`, `STORAGE_REF`, `PUBLIC_SLUG`) |
 No entity, API, permission, error-code or migration delta. Last sequence per atom (highest ever issued): RULE: 011 ·
 XM: 003 · API: 008 · ADR: 008 (next free FILE ADR 009).
+
+Package C5 review round 1 — registry delta; full text in `srs.md` 1.3.0 §9.5.
+| Kind | Id | Delta |
+|---|---|---|
+| NEW | RULE-FILE-012 | restricted documents (`REQUIRED_AUTHORITY`): hidden from the owner list, 404 on metadata / token / download / visibility / archive-delete without the authority; deleting one removes its bytes (tombstone kept) |
+| CHANGED | XM-FILE-003 | `PrivateFileStoreRequest` + `requiredAuthority`; `issueDownloadToken` checks it |
+| CHANGED | XM-FILE-001 | `isAvailable` false for a restricted document |
+| CHANGED | ENTITY-FILE-001 | `@Audited(ignore = {"storageRef", "publicSlug"})`; + field `requiredAuthority` (`V22__file_document_required_authority.sql`) |
+Last sequence per atom (highest ever issued): RULE: 012 · XM: 003 · API: 008 · ADR: 008 (next free FILE ADR 009).

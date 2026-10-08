@@ -400,3 +400,21 @@ ADR-TENANT-006).
 | Consumer | Uses | Owner type / module | Limits |
 |---|---|---|---|
 | TENANT (package C5) | `storePrivateFile`, `issueDownloadToken` inside the PLATFORM request (current tenant PLATFORM) | `CORE_TENANT` / exported tenant id / `TENANT`, `application/zip`, `tenant-export-{CODE}-{instant}.zip` | `erp.core.tenant.export.max-rows` |
+
+#### 9.5 Review round 1 (package C5) — restricted documents; their deletion removes the bytes
+Ids continue from RULE-FILE-011. This adds **RULE-FILE-012**, the nullable column `FILE_DOCUMENT.REQUIRED_AUTHORITY`
+(`V22__file_document_required_authority.sql`, `../P2/db-script.md` 1.3.0 package C5) and changes XM-FILE-001,
+XM-FILE-003, RULE-FILE-006 (for restricted documents only) and the `@Audited` configuration of ENTITY-FILE-001. No
+endpoint, error code or permission is added.
+
+| RULE-ID | Scope | Trigger | Statement | Source |
+|---|---|---|---|---|
+| RULE-FILE-012 | FILE-001 (restricted documents) | owner list, metadata, access token, download, visibility, archive / delete | A document whose `REQUIRED_AUTHORITY` is set (only the private store sets it, from `PrivateFileStoreRequest.requiredAuthority`; immutable) is served only to a caller holding that authority, **in addition** to the endpoint's own FILE permission: the owner list (`GET /api/v1/files`) leaves it out (the query keeps `REQUIRED_AUTHORITY IS NULL OR REQUIRED_AUTHORITY IN (the caller's authorities)`, so paging and totals stay exact), and `GET /{id}`, `POST /{id}/access-token`, `GET /download?token=`, `PATCH /{id}/visibility` and `DELETE /{id}` answer **404** `FILE_DOCUMENT_NOT_FOUND` to anyone else (never 403: the document's existence is not revealed). `FilePrivateStoreApi.issueDownloadToken` applies the same check. `FileDocumentLookupApi.isAvailable` answers `false` for it (no module may reference it). **Deletion** (`DELETE /{id}?action=DELETE`) of a restricted document removes its content through its storage provider — `DB`: `FILE_CONTENT` set to NULL in the deleting transaction; `LOCAL` / `S3`: the object is deleted after the commit — and keeps the row as a `DELETED` tombstone (owner, name, type, size, hash); `ARCHIVE` keeps the content. A document without `REQUIRED_AUTHORITY` behaves exactly as before (soft delete keeps the bytes, RULE-FILE-006). | TENANT RULE-TENANT-027 (review round 1); ADR-TENANT-006 |
+
+| Kind | Id / item | Delta |
+|---|---|---|
+| CHANGED | XM-FILE-003 `PrivateFileStoreRequest` | + `requiredAuthority` (nullable; TENANT passes `PLATFORM_TENANT_MANAGE`), stored in `REQUIRED_AUTHORITY` (RULE-FILE-012). `issueDownloadToken` answers 404 to a caller without it. |
+| CHANGED | XM-FILE-001 `FileDocumentLookupApi.isAvailable` | `false` for a restricted document. `countDocuments` / `sumBytes` unchanged (tenant usage still counts every live document). |
+| CHANGED | RULE-FILE-006 | soft delete keeps the bytes **except** for a restricted document (RULE-FILE-012). |
+| CHANGED | ENTITY-FILE-001 `@Audited` | `@Audited(entityType = "FILE_DOCUMENT", ignore = {"storageRef", "publicSlug"})`: a storage reference (an object key on `LOCAL` / `S3`) and a public slug (the capability of a public URL) are no longer written to `CORE_AUDIT_EVENT.CHANGES`; rows written before keep them (TENANT's AUDIT contributor removes them from an export, srs-tenant.md X14). `requiredAuthority` is recorded (not sensitive). |
+| CHANGED | `FileMetadataView` / `FileDocumentRepository.METADATA_SELECT` | + `requiredAuthority`; the owner list takes the caller's authorities. |

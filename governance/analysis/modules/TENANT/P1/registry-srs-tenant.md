@@ -458,3 +458,13 @@ Last sequence per atom: REQ: 037 · AC: 037 · ENT: 001 · RULE: 028 (012 … 01
 
 Code check (package C5) — registry delta: XM-TENANT-004 + `TenantExportJdbc.selectOfTenant` / `countOfTenant`
 (srs-tenant.md X13); ADR-TENANT-006 PROPOSED → ACCEPTED. Ids and counts unchanged (last REQ 037 · RULE 028 · XM 004).
+
+Review round 1 (package C5) — registry delta; full text in `srs-tenant.md` X14.
+| Kind | Id | Delta | Code location | Verified by |
+|---|---|---|---|---|
+| CHANGED | RULE-TENANT-027 | archive restricted to `PLATFORM_TENANT_MANAGE` (FILE RULE-FILE-012); delete removes the bytes; audit `CHANGES` without `storageRef` / `publicSlug`; both `TENANT_EXPORTED` rows in one transaction | tenant/service/TenantExportService.java; audit/tenant/AuditTenantExportContributor.java; file/service/FileService.java | `TenantExportIntegrationTest`; TC-CORE-TENANT-057, -058 |
+| CHANGED | RULE-TENANT-028 | + node-wide limit `erp.core.tenant.export.max-concurrent` → 429 `TENANT_EXPORT_BUSY` | tenant/export/TenantExportGuard.java; tenant/domain/TenantDomain.java | `TenantExportGuardTest`, `TenantDomainTest`, `TenantExportIntegrationTest` |
+| CHANGED | AC-TENANT-037 | + restricted archive, purge on delete, scrubbed audit changes, failed store audited nowhere, busy | — | as above |
+Error codes — delta: + `TENANT_EXPORT_BUSY` 429 (tenant/domain/TenantDomain.java; i18n block `tenant-maturity C5`).
+Configuration — delta: + `erp.core.tenant.export.max-concurrent` (`2`). Ids and counts unchanged (last REQ 037 ·
+RULE 028 · XM 004).

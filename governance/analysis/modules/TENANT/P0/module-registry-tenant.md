@@ -235,3 +235,7 @@ CONFIGURATION — delta
 PERMISSION MODULE → SCREEN → ACTIONS: unchanged (`PLATFORM_TENANT_MANAGE`).
 RESOLVED DECISIONS — delta: 6 · tenant data export → synchronous, bounded, PRIVATE PLATFORM document + single-use token (ADR-TENANT-006).
 POLICIES OWNED — delta: + POL-TENANT-017.
+
+Review round 1 (package C5) — CONFIGURATION delta: + `erp.core.tenant.export.max-concurrent` (2, node-wide; 429
+`TENANT_EXPORT_BUSY`). DEPENDENCIES delta: XM-FILE-003 request + `requiredAuthority` (the archive is a restricted FILE
+document, RULE-FILE-012).
