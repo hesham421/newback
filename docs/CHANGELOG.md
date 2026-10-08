@@ -91,6 +91,14 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   (`TOKENS_INVALID_BEFORE` is V19's). ADR-TENANT-002.
 - [TM-C12] Cross-module: `SecAdminRecoveryApi.terminateAllSessions()`; `com.erp.tenant.TenantTokenFacts` (the token's
   `tid` and `iat`, a request attribute the JWT filter sets for the tenant filter).
+- [TM-C4] TENANT / common: `POST /api/v1/platform/tenants` accepts an optional `Idempotency-Key` header (1 to 64
+  characters of `A-Z a-z 0-9 . _ : -`). A retry with the same key and body by the same user answers the stored 201
+  response with `Idempotent-Replayed: true` and creates nothing; the same key with another body or by another user
+  answers 409 `IDEMPOTENCY_KEY_CONFLICT`; an invalid key 400 `IDEMPOTENCY_KEY_INVALID`. Only successful answers are
+  stored, in the provisioning's own transaction; two simultaneous first requests provision once. Mechanism
+  `com.erp.common.idempotency` (`IdempotentResponses`, reusable by an application's own POST), table
+  `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`, tenant-scoped), keys kept 24 h
+  (`erp.core.idempotency.enabled` / `retention` / `retention-cron`; `IdempotencyKeyRetentionJob`). ADR-TENANT-003.
 
 ### Changed
 - [TM-C12] **Behaviour change** — TENANT/SEC: a token issued before a tenant's re-activation, or before a revoke-tokens
@@ -126,6 +134,9 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   CI, the reference app's Dockerfile and `.sdkmanrc` moved to 25 as well.
 
 ### Fixed
+- [TM-C4] TENANT: when revoke-tokens' session step failed and the PLATFORM audit write failed too, the audit failure
+  replaced the 500 `TENANT_REVOKE_SESSIONS_FAILED` answer; it is now logged and attached to the session failure, which
+  is the answer's cause (C12 follow-up).
 - [TM-E] FILE: an SVG whose elements repeat an `id` is refused (RULE-FILE-009): a flat decoy placed after the real
   target hid a nested `<use>` chain from the renderer-amplification guard (browsers resolve the first element of an
   id, the guard looked at the last). Found in package D's review round 3.

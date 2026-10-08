@@ -3137,6 +3137,78 @@ def test_tenant_050_revoke_tokens_refusals(ctx):
     st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="nothing was revoked by the refusals")
 
 
+# =============================================================================================
+# Phase 11e — idempotent provisioning (TM-C4), fresh tenants E, F, G, before TENANT-046 (no public-branding call)
+# =============================================================================================
+IDEM = "Idempotency-Key"
+
+
+def idem_create(ctx, key, body=None, raw=None, token=None):
+    return api("POST", "/api/v1/platform/tenants", t=token or ctx.T_PLAT, body=body, raw=raw,
+               content_type="application/json" if raw is not None else None,
+               headers=None if key is None else {IDEM: key})
+
+
+def replayed(r):
+    return r.headers.get("idempotent-replayed")
+
+
+@tc("TC-CORE-TENANT-051")
+def test_tenant_051_idempotent_replay(ctx):
+    ctx.TE = f"TCE{ctx.RUN}"
+    ctx.IDEM_KEY = f"c4-{ctx.run}-a"
+    body = tenant_body(ctx, ctx.TE, "te-admin", "Tenant E")
+    first = idem_create(ctx, ctx.IDEM_KEY, body)
+    st(first, 201, what="first create with the key")
+    eq(replayed(first), None, "no Idempotent-Replayed on the first answer")
+    ctx.E_ID = (first.data or {}).get("id")
+    second = idem_create(ctx, ctx.IDEM_KEY, body)
+    st(second, 201, what="the same request again")
+    eq(replayed(second), "true", "Idempotent-Replayed")
+    eq(second.data, first.data, "the same data (same id)")
+    eq((second.json or {}).get("timestamp"), (first.json or {}).get("timestamp"), "the first answer's timestamp")
+    reordered = "{ " + ",  ".join(f"{json.dumps(k)} : {json.dumps(v, ensure_ascii=False)}"
+                                    for k, v in reversed(list(body.items()))) + " }"
+    third = idem_create(ctx, ctx.IDEM_KEY, raw=reordered.encode("utf-8"))
+    st(third, 201, what="the same body, fields reversed and spaced differently")
+    eq(replayed(third), "true", "replayed (canonical body)")
+    eq((third.data or {}).get("id"), ctx.E_ID, "same id")
+    _, codes = tenant_codes(ctx)
+    eq(codes.count(ctx.TE), 1, "exactly one tenant E")
+    check(PW not in (first.body + second.body + third.body).decode("utf-8"), "no answer carries the password",
+          "absent", "present")
+
+
+@tc("TC-CORE-TENANT-052")
+def test_tenant_052_idempotent_conflict(ctx):
+    tf = f"TCF{ctx.RUN}"
+    r = idem_create(ctx, ctx.IDEM_KEY, tenant_body(ctx, tf, "tf-admin", "Tenant F"))
+    st(r, 409, "IDEMPOTENCY_KEY_CONFLICT", what="the same key with another body")
+    _, codes = tenant_codes(ctx)
+    eq(tf in codes, False, "tenant F was not created")
+    again = idem_create(ctx, ctx.IDEM_KEY, tenant_body(ctx, ctx.TE, "te-admin", "Tenant E"))
+    st(again, 201, what="the original body still replays")
+    eq(replayed(again), "true", "Idempotent-Replayed")
+    eq((again.data or {}).get("id"), ctx.E_ID, "tenant E's id")
+
+
+@tc("TC-CORE-TENANT-053")
+def test_tenant_053_idempotency_key_invalid_failure_not_stored_header_absent(ctx):
+    tg = f"TCG{ctx.RUN}"
+    body = tenant_body(ctx, tg, "tg-admin", "Tenant G")
+    for bad in ("k" * 65, "bad key", "a/b", ""):
+        st(idem_create(ctx, bad, body), 400, "IDEMPOTENCY_KEY_INVALID", what=f"key {bad[:12]!r} ({len(bad)} chars)")
+    _, codes = tenant_codes(ctx)
+    eq(tg in codes, False, "nothing created by the refused keys")
+    key = f"c4-{ctx.run}-b"
+    st(idem_create(ctx, key, tenant_body(ctx, "bad", "tg-admin", "Tenant G")), 400, "TENANT_CODE_INVALID",
+       what="a create refused with a key")
+    ok = idem_create(ctx, key, body)
+    st(ok, 201, what="the same key with the corrected body (the refusal was not stored)")
+    eq(replayed(ok), None, "not a replay")
+    st(idem_create(ctx, None, body), 409, "TENANT_CODE_DUPLICATE", what="without the header: the 1.2.0 behaviour")
+
+
 @tc("TC-CORE-TENANT-046")
 def test_tenant_046_public_branding_rate_limit(ctx):
     # last case of the run that calls the public branding: its bucket (per client address) is spent here
@@ -3540,7 +3612,7 @@ ORDER = {
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
                   "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
-                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 50), "TENANT-046"),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 53), "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),

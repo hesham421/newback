@@ -381,3 +381,50 @@ bind later steps.
   reads `TenantLookupApi.isActive` directly and `isDeliverable(tenantActive)` stays the claim's rule.
   `NotificationTenantActivationListener` submits to the core event executor itself and logs a rejected task at WARN.
   ADR-TENANT-002 records "accepted after the code check (6bfe756)".
+
+## [TM-C4] tenant-maturity C4 — idempotent provisioning
+
+- [TM-C4] Migration number (plan §5 C.4 / §11 `V20__core_idempotency_key.sql`) → `V21__core_idempotency_key.sql`: the
+  execution order put D, B and E (V16 … V20) before C4 (plan §1.3 "re-derived at creation time"; the reserved number).
+- [TM-C4] `CORE_IDEMPOTENCY_KEY` columns (plan: nine) → **twelve**: + `CREATED_BY VARCHAR(100) NOT NULL`, `UPDATED_BY`,
+  `UPDATED_AT`, because the entity `IdempotencyKey` extends `AuditableEntity` (tenant-scoped: `TenantScopedEntityTest`
+  needs no new global entity, and `db/migration/core/README.md` requires the audit columns on a tenant-scoped table).
+  `CREATED_BY` is NOT NULL because it identifies the key's owner. Index names not in the plan:
+  `IDX_CORE_IDEMPOTENCY_KEY_TENANT`, `IDX_CORE_IDEMPOTENCY_KEY_CREATED_AT`; `PK_CORE_IDEMPOTENCY_KEY`,
+  `FK_CORE_IDEMPOTENCY_KEY_TENANT` (conventions). The reference analysis' open point, decided in the P2 entry.
+- [TM-C4] Plan names for the mechanism (plan silent on its shape) → `com.erp.common.idempotency.IdempotentResponses`, a
+  response helper the controller calls with the header, the endpoint id, the bound body and the service call (beside
+  `OperationCode`; build-create-controller A.6.3 "service + response helper"); the service is unchanged. Not a servlet
+  filter: a filter cannot share the service's transaction, and a typed replay keeps the generated api-docs' response
+  schema. The new error codes are therefore not walked by the api-doc generator: the create's `@Operation` names them.
+- [TM-C4] Concurrency (plan silent) → no "in progress" state and no `IDEMPOTENCY_KEY_IN_PROGRESS` code: the claim row is
+  inserted first in the operation's own transaction, so `UQ_CORE_IDEMPOTENCY_KEY` makes a same-key request wait and then
+  replay (or run, if the first rolled back). Only 2xx answers are stored; a failure leaves no row (one transaction).
+- [TM-C4] Request hash (plan: "same body hash") → lower-case hex **HMAC-SHA256** of the canonical JSON of the bound body
+  (sorted properties and map keys), keyed by a key derived from `erp.core.security.jwt.secret` with its own label: the
+  body contains `adminPassword`, and a plain SHA-256 would be an offline password verifier. Rotating the JWT secret
+  turns a retry within 24 h into a 409.
+- [TM-C4] Namespace (plan: unique per tenant, key, endpoint; reference draft: "operators of PLATFORM share the
+  namespace") → kept, but a stored answer is replayed **only to the user who stored it** (`CREATED_BY`); another user →
+  409 `IDEMPOTENCY_KEY_CONFLICT`. A replay is served before the service's `@PreAuthorize`, so it must never reach a
+  user who did not make the request.
+- [TM-C4] Retention (plan: "24 h via the scheduled-job pattern") → also enforced at lookup (a row older than the
+  retention is deleted and the key treated as unused), so the window holds when the application never schedules the
+  job. `IdempotencyKeyRetentionJob` uses plain JDBC, tenant by tenant (RULE-TENANT-011), outside the raw-JDBC packages:
+  added to `CoreLibraryRulesArchTest.RAW_JDBC_CLASSES` (the `NotificationRequeueJob` precedent) — `com.erp.common` must
+  not import `com.erp.tenant` (`TenantContext`) to iterate tenants through JPA.
+- [TM-C4] Configuration → `erp.core.idempotency.enabled` (true), `retention` (24h, must be positive),
+  `retention-cron` (`-`); `IdempotencySettings` is built by `ErpCoreAutoConfiguration`, so `com.erp.common.idempotency`
+  imports nothing outside `com.erp.common`.
+- [TM-C4] Analysis home (the reference snapshot used a COMMON analysis folder) → none in this repository: the
+  mechanism's rules are in the TENANT 1.3.0 package-C4 block (`srs-tenant.md` I6), its contract in `docs/CONSUMING.md`.
+- [TM-C4] C12 follow-up (C12 review nit, assigned to C4) → `TenantService.revokeTokens`' failure path guards the PLATFORM
+  `TOKENS_REVOKED` write: an audit failure is logged and attached (suppressed) to the session failure, which becomes the
+  cause of the 500 `TENANT_REVOKE_SESSIONS_FAILED` (`initCause`; `LocalizedException` has no cause constructor).
+- [TM-C4] Stale registry row fixed in passing: `project-registry.md` TENANT row said 2 ADRs / 13 tenant operations;
+  now 4 ADRs (001; 002, 003, 005 of 1.3.0) / 14 operations (C12's revoke-tokens).
+- [TM-C4] Header documentation → the `Idempotency-Key` parameter's `@Schema` pattern is `^[A-Za-z0-9._:-]+$` with
+  `minLength = 1`, `maxLength = 64` (not `{1,64}`): braces inside a controller annotation string end the api-doc
+  generator's brace-counted method-body scan early (`security_extractor._method_body_span`), which dropped the create's
+  permission and 403 row on the first regeneration. Generator unchanged (a later generator fix can blank string
+  literals there too, as `blank_string_literals` already does elsewhere).

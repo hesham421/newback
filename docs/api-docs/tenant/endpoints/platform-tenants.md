@@ -106,7 +106,7 @@ Structurally guaranteed by this endpoint's own shape (auth requirement, permissi
 
 **Create (provision) a tenant with its first administrator**
 
-adminPassword must meet the STAFF password policy: 400 SEC-400-PASSWORD-POLICY (fieldErrors[0].field = adminPassword), raised by SEC's provisioning contributor; nothing is created - إنشاء مستأجر وتجهيزه مع أول مدير له؛ يجب أن تستوفي كلمة مرور المدير سياسة كلمات المرور
+adminPassword must meet the STAFF password policy: 400 SEC-400-PASSWORD-POLICY (fieldErrors[0].field = adminPassword), raised by SEC's provisioning contributor; nothing is created. Optional header Idempotency-Key (1 to 64 characters of A-Z a-z 0-9 . _ : -): a retry with the same key and the same body by the same user answers the stored 201 response with the response header Idempotent-Replayed: true and creates nothing; the same key with another body, or by another user, answers 409 IDEMPOTENCY_KEY_CONFLICT; an invalid key answers 400 IDEMPOTENCY_KEY_INVALID; only successful answers are stored, for 24 hours (erp.core.idempotency.retention) - إنشاء مستأجر وتجهيزه مع أول مدير له؛ يجب أن تستوفي كلمة مرور المدير سياسة كلمات المرور؛ ترويسة Idempotency-Key اختيارية: إعادة الطلب بالمفتاح نفسه تعيد الاستجابة المخزّنة دون إنشاء شيء
 
 Operation ID: `create_3`
 
@@ -115,6 +115,12 @@ Operation ID: `create_3`
 Required (bearerAuth).
 
 **Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Headers
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| Idempotency-Key | string | No | Optional idempotency key of this create (e.g. a UUID reused for every retry of one submission) - مفتاح عدم التكرار |
 
 ### Request Body
 
@@ -902,7 +908,7 @@ Shape: `TenantTokenRevocationResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.revokeTenantTokens`, `TenantService.revokeTokens`, `TenantDomain.from`, `TenantDomain.revocationCutOff`, `TenantService.writeCutOff`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.endSessions`, `TenantMapper.toTokenRevocationResponse`, `TenantDomain.assertTokenRevocationAllowed`, `new TenantDomain()`, `Tenant.revokeTokens`, `TenantService.recordInTenantAndPlatform`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.revokeTenantTokens`, `TenantService.revokeTokens`, `TenantDomain.from`, `TenantDomain.revocationCutOff`, `TenantService.writeCutOff`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.endSessions`, `TenantService.recordSessionsNotTerminated`, `TenantMapper.toTokenRevocationResponse`, `TenantDomain.assertTokenRevocationAllowed`, `new TenantDomain()`, `Tenant.revokeTokens`, `TenantService.recordInTenantAndPlatform`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|

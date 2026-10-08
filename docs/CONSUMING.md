@@ -152,6 +152,7 @@ should be `false`.
 | `erp.core.security.customer-login-rate-limit.capacity` / `period` | `10` / `1m` | Customer login limit per `tenant:realm:username`. |
 | `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | `60` / `1m` | (1.3.0) Requests to the anonymous `GET /api/v1/public/tenants/{tenantCode}/branding` per client address (`getRemoteAddr()`; an IPv6 address counts by its /64), counted before the tenant is looked up (unknown codes included); over it 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` (seconds). Idle buckets expire after `period`, at most 10 000 addresses are tracked. Per JVM. Behind a reverse proxy see "Client address behind a proxy" below. |
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
+| `erp.core.idempotency.enabled` / `retention` / `retention-cron` | `true` / `24h` / `-` (off) | (1.3.0) The `Idempotency-Key` mechanism (§3): `false` ignores the header; a stored answer is replayed for `retention` (must be positive; an older key counts as unused); the cron of `IdempotencyKeyRetentionJob`, which deletes older rows, fires only if the application enables scheduling. The request hash is keyed by a key derived from `erp.core.security.jwt.secret`: rotating the secret turns a retry within the retention into a 409. |
 | `erp.core.report.max-export-rows` | `100000` | Export cap. Above it the export answers 422 `REPORT_EXPORT_TOO_LARGE`. |
 
 ### Optional infrastructure
@@ -163,7 +164,7 @@ Each piece is off unless the application adds the dependency and its configurati
 | Redis | `spring-boot-starter-data-redis` + `spring.data.redis.*` | FILE download tokens use the in-memory store (single node only). `spring.cache.type=redis` also works for the settings cache. |
 | SMTP | `spring-boot-starter-mail` + `spring.mail.host` (and credentials) | No `EMAIL` channel provider exists, so EMAIL notifications end `SKIPPED_NO_PROVIDER`. |
 | S3 / S3-compatible | `software.amazon.awssdk:s3` + `erp.core.files.storage=S3`, `erp.core.files.s3.bucket` (`region`, `endpoint`, `access-key`, `secret-key`, `public-base-url`) | `S3` cannot be selected. Startup fails with a message naming the property if it is selected anyway. |
-| Scheduling | `@EnableScheduling` on an application `@Configuration` | Core never enables scheduling. Without it the requeue and retention triggers never fire. You can call `NotificationRequeueJob.requeueStale()` and `AuditRetentionJob.run()` yourself. |
+| Scheduling | `@EnableScheduling` on an application `@Configuration` | Core never enables scheduling. Without it the requeue and retention triggers never fire. You can call `NotificationRequeueJob.requeueStale()`, `AuditRetentionJob.run()` and `IdempotencyKeyRetentionJob.run()` yourself. |
 
 ## 3. Database: migrations, tenants, number series, settings
 
@@ -189,6 +190,21 @@ Each piece is off unless the application adds the dependency and its configurati
   it implements `com.erp.tenant.TenantProvisioningContributor` (`order()`,
   `provision(TenantProvisioning)`). Use JDBC with explicit `TENANT_ID` and copy from the source tenant.
   Provisioning (`POST /api/v1/platform/tenants`) runs it in the same transaction.
+- **Idempotent POSTs (1.3.0).** `POST /api/v1/platform/tenants` accepts an optional `Idempotency-Key` header
+  (1 to 64 characters of `A-Z a-z 0-9 . _ : -`; otherwise 400 `IDEMPOTENCY_KEY_INVALID`). The first request runs and
+  its 2xx answer is stored in `CORE_IDEMPOTENCY_KEY` in the same transaction (a failure stores nothing, so the key can be
+  retried); a retry with the same key, the same body (compared as canonical JSON: property order and whitespace do not
+  matter) and the same user answers the stored status and body with the response header `Idempotent-Replayed: true`
+  and runs nothing; another body or another user under the key answers 409 `IDEMPOTENCY_KEY_CONFLICT`. A concurrent
+  request with the same key waits for the first one and then replays it. Keys live `erp.core.idempotency.retention`
+  (24 h). A client generates one key per logical submission (a UUID) and reuses it for every retry of that submission.
+  An application can give its own expensive `POST` the same behaviour: inject
+  `com.erp.common.idempotency.IdempotentResponses` and return
+  `idempotentResponses.craftResponse(idempotencyKey, "POST /api/v1/my/things", request, MyResponse.class,
+  () -> service.create(request))` with `@RequestHeader(name = IdempotentResponses.IDEMPOTENCY_KEY_HEADER, required =
+  false) String idempotencyKey`; the service method must be `@Transactional` (it joins the key's transaction) and must
+  not commit work in its own `REQUIRES_NEW` transactions. Behind another origin, allow the request header
+  `Idempotency-Key` and expose `Idempotent-Replayed` in your CORS configuration (core configures no CORS).
 - **Number series.** Inject `com.erp.sequence.crossmodule.NumberSeriesApi` (`next(code)`,
   `preview(code)`). Seed series in a `V1000+` script for `PLATFORM`; new tenants receive copies with the
   counter at 1. The pattern tokens are `{PREFIX} {YYYY} {YY} {MM} {SEQ:n} {TENANT}`, and the reset policy
