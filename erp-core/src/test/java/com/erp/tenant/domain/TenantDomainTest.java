@@ -223,6 +223,27 @@ class TenantDomainTest {
     }
 
     @Test
+    void revocationCutOff_isTheNextWholeSecond_soTheRevokesOwnSecondIsRefused_andTheNextOneServed() {
+        Instant cutOff = TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00.300Z"));
+
+        assertThat(cutOff).isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), cutOff))
+            .as("a token of the revoke's own second, e.g. an in-flight login").isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:01Z"), cutOff)).isFalse();
+        assertThat(TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00Z")))
+            .as("exactly on a second: still the next one").isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+    }
+
+    @Test
+    void activationCutOff_servesATokenOfTheActivationsOwnSecond() {
+        Instant activation = Instant.parse("2026-10-08T10:00:00.300Z");
+
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), activation))
+            .as("a fresh login right after the activation").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T09:59:59Z"), activation)).isTrue();
+    }
+
+    @Test
     void tokenRevocation_isRefusedForThePlatformTenantOnly() {
         assertThatThrownBy(() -> TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE))
             .assertTokenRevocationAllowed())

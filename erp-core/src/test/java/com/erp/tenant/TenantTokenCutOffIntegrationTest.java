@@ -2,13 +2,30 @@ package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.erp.audit.crossmodule.AuditApi;
+import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
+import com.erp.events.DomainEventPublisher;
+import com.erp.file.crossmodule.FileDocumentLookupApi;
+import com.erp.file.crossmodule.FileImageStoreApi;
+import com.erp.notif.crossmodule.NotificationLogQueryApi;
 import com.erp.sec.crossmodule.SecAdminRecoveryApi;
+import com.erp.sec.crossmodule.SecUserDirectoryApi;
+import com.erp.tenant.exception.TenantErrorCodes;
+import com.erp.tenant.mapper.TenantMapper;
+import com.erp.tenant.permission.TenantPermissions;
+import com.erp.tenant.repository.TenantRepository;
+import com.erp.tenant.service.TenantLogoUrls;
+import com.erp.tenant.service.TenantService;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.net.http.HttpResponse;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -17,10 +34,12 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,6 +67,27 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
     private SecAdminRecoveryApi adminRecovery;
     @Autowired
     private PlatformTransactionManager transactionManager;
+    // review round 1: the collaborators of a TenantService built by hand with a failing SEC session step
+    @Autowired
+    private TenantRepository tenantRepository;
+    @Autowired
+    private TenantMapper tenantMapper;
+    @Autowired
+    private ObjectProvider<TenantProvisioningContributor> contributors;
+    @Autowired
+    private DomainEventPublisher eventPublisher;
+    @Autowired
+    private SecUserDirectoryApi userDirectory;
+    @Autowired
+    private FileDocumentLookupApi fileDocuments;
+    @Autowired
+    private NotificationLogQueryApi notificationLog;
+    @Autowired
+    private AuditApi auditApi;
+    @Autowired
+    private FileImageStoreApi fileImageStore;
+    @Autowired
+    private TenantLogoUrls logoUrls;
 
     private TenantHttp http;
     private String operator;
@@ -115,6 +155,8 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
         Timestamp cutOff = jdbcTemplate.queryForObject("SELECT TOKENS_INVALID_BEFORE FROM CORE_TENANT WHERE ID = ?",
             Timestamp.class, id);
         assertThat(cutOff).isNotNull();
+        assertThat(cutOff.toInstant().getNano()).as("the start of a whole second").isZero();
+        assertThat(cutOff.toInstant()).as("the next whole second").isAfter(Instant.now().minusSeconds(5));
         assertThat(openSessions()).isZero();
         assertThat(jdbcTemplate.queryForList("SELECT DISTINCT TERMINATED_BY FROM SEC_ACTIVE_SESSION WHERE TENANT_ID = ?",
             String.class, id)).containsExactly(operator);
@@ -128,6 +170,7 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
             assertThat(TenantHttp.errorCode(refused)).as("also after the session ended").isEqualTo("TENANT_TOKEN_REVOKED");
         }
         assertThat(http.get(otherTenantsToken, STAFF_PROBE).statusCode()).as("another tenant is untouched").isEqualTo(200);
+        awaitInstant(cutOff.toInstant());
         assertServed(http.token(code, "admin"), customerLogin());
         assertThat(http.post(staff, code, "/api/v1/sec/auth/login",
             "{\"username\":\"admin\",\"password\":\"" + TenantHttp.PASSWORD + "\"}").statusCode()).isEqualTo(200);
@@ -145,6 +188,73 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
             String.valueOf(id))).noneMatch(text -> text.contains(cutOffDay) || text.contains("tokensInvalidBefore"));
         assertThat(revoked.body()).doesNotContain("tokensInvalidBefore");
         assertThat(data.values()).noneMatch(value -> String.valueOf(value).contains(cutOffDay));
+    }
+
+    /**
+     * Review round 1: the cut-off alone refuses a token of the revoke's own second — the reviewer's "session step failed"
+     * and "login racing the termination query" cases, simulated by re-opening the token's session afterwards.
+     */
+    @Test
+    void revokeTokens_refusesATokenOfTheRevokesOwnSecond_evenWhenItsSessionIsReopened() {
+        registerCustomer();
+        awaitEarlyInASecond();
+        String staff = http.token(code, "admin");
+        String customer = customerLogin();
+        assertThat(http.post(platformToken, TENANTS + "/" + id + "/revoke-tokens", "").statusCode()).isEqualTo(200);
+        jdbcTemplate.update("UPDATE SEC_ACTIVE_SESSION SET TERMINATED_AT = NULL, TERMINATED_BY = NULL WHERE TENANT_ID = ?", id);
+        assertThat(openSessions()).isEqualTo(2);
+
+        for (HttpResponse<String> refused : List.of(http.get(staff, STAFF_PROBE), http.get(customer, CUSTOMER_PROBE),
+                http.get(staff, TENANT_ME), http.get(customer, TENANT_ME))) {
+            assertThat(refused.statusCode()).as(refused.body()).isEqualTo(401);
+            assertThat(TenantHttp.errorCode(refused)).isEqualTo("TENANT_TOKEN_REVOKED");
+        }
+    }
+
+    /**
+     * Review round 1: SEC's session step fails after the cut-off committed (a mocked {@code SecAdminRecoveryApi} in a
+     * {@code TenantService} built by hand, so no new Spring context): the tokens are refused anyway, PLATFORM records it,
+     * the call answers 500 {@code TENANT_REVOKE_SESSIONS_FAILED}, and a repeated call ends the sessions.
+     */
+    @Test
+    void revokeTokens_whoseSessionStepFails_keepsTheCutOff_recordsItInPlatform_answers500_andARetryEndsTheSessions() {
+        String staff = http.token(code, "admin");
+        TenantHttp.awaitSecondAfterIssueOf(staff);
+        SecAdminRecoveryApi failing = mock(SecAdminRecoveryApi.class);
+        when(failing.terminateAllSessions()).thenThrow(new IllegalStateException("database down"));
+        TenantService withFailingSessions = new TenantService(tenantRepository, tenantMapper, contributors,
+            eventPublisher, userDirectory, failing, fileDocuments, notificationLog, transactionManager, auditApi,
+            fileImageStore, logoUrls);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(operator, null,
+            List.of(new SimpleGrantedAuthority(TenantPermissions.PLATFORM_TENANT_MANAGE))));
+
+        assertThatThrownBy(() -> withFailingSessions.revokeTokens(id))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.INTERNAL_ERROR);
+            });
+        SecurityContextHolder.clearContext();
+
+        Timestamp firstCutOff = jdbcTemplate.queryForObject("SELECT TOKENS_INVALID_BEFORE FROM CORE_TENANT WHERE ID = ?",
+            Timestamp.class, id);
+        assertThat(firstCutOff).as("the cut-off committed first").isNotNull();
+        assertThat(openSessions()).as("no session ended").isEqualTo(1);
+        HttpResponse<String> refused = http.get(staff, STAFF_PROBE);
+        assertThat(refused.statusCode()).as("refused by the cut-off alone").isEqualTo(401);
+        assertThat(TenantHttp.errorCode(refused)).isEqualTo("TENANT_TOKEN_REVOKED");
+        String rows = "SELECT SUMMARY_EN FROM CORE_AUDIT_EVENT WHERE TENANT_ID = ? AND ACTION = 'TOKENS_REVOKED' AND ENTITY_ID = ?";
+        assertThat(jdbcTemplate.queryForList(rows, String.class, TenantConstants.PLATFORM_TENANT_ID, String.valueOf(id)))
+            .containsExactly("Tokens of tenant " + code + " revoked; the sessions were NOT terminated: call again");
+        assertThat(jdbcTemplate.queryForList(rows, String.class, id, String.valueOf(id))).isEmpty();
+
+        awaitInstant(firstCutOff.toInstant());
+        HttpResponse<String> retried = http.post(platformToken, TENANTS + "/" + id + "/revoke-tokens", "");
+        assertThat(retried.statusCode()).as(retried.body()).isEqualTo(200);
+        assertThat((Integer) JsonPath.read(retried.body(), "$.data.sessionsTerminated")).isEqualTo(1);
+        assertThat(openSessions()).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT TOKENS_INVALID_BEFORE FROM CORE_TENANT WHERE ID = ?",
+            Timestamp.class, id)).as("the retry moved the cut-off forward").isAfter(firstCutOff);
     }
 
     @Test
@@ -192,6 +302,17 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    /** Waits until the clock has reached {@code instant} (a revoke-tokens cut-off lies in the next second). */
+    private static void awaitInstant(Instant instant) {
+        await().atMost(Duration.ofSeconds(5)).until(() -> !Instant.now().isBefore(instant));
+    }
+
+    /** Waits for the first 300 ms of a second, so a login and a revoke made right after share that second. */
+    private static void awaitEarlyInASecond() {
+        await().atMost(Duration.ofSeconds(3)).pollInterval(Duration.ofMillis(10))
+            .until(() -> Instant.now().getNano() < 300_000_000);
+    }
+
     private void setCutOff(Instant cutOff) {
         jdbcTemplate.update("UPDATE CORE_TENANT SET TOKENS_INVALID_BEFORE = ? WHERE ID = ?", Timestamp.from(cutOff), id);
     }
@@ -203,12 +324,17 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
 
     /** A verified customer of the tenant (registered, activated directly) and its first access token. */
     private String customerToken() {
+        registerCustomer();
+        return customerLogin();
+    }
+
+    /** Registers the customer and activates it directly, without signing in. */
+    private void registerCustomer() {
         HttpResponse<String> registered = http.post(null, code, "/api/v1/public/customers/register", "{\"email\":\""
             + customerEmail() + "\",\"password\":\"" + TenantHttp.PASSWORD + "\",\"fullName\":\"Customer\"}");
         assertThat(registered.statusCode()).as(registered.body()).isEqualTo(201);
         jdbcTemplate.update("UPDATE SEC_USER SET STATUS_CODE = 'ACTIVE' WHERE TENANT_ID = ? AND USERNAME = ?"
             + " AND REALM = 'CUSTOMER'", id, customerEmail());
-        return customerLogin();
     }
 
     private String customerLogin() {
