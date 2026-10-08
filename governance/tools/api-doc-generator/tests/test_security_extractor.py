@@ -130,6 +130,23 @@ class StringLiteralsAreNotCode(unittest.TestCase):
             _, method = se.find_controller_for_endpoint(root, "GET", "/api/v1/public/tenants/{tenantCode}/branding")
             self.assertEqual(method, "getPublicTenantBranding")
 
+    def test_a_brace_inside_a_parameter_annotation_string_does_not_end_the_method_body(self):
+        """tenant-maturity C4 review round 1: "{1,64}" in a @Schema pattern closed the brace-counted body scan on
+        the parameter line, so the delegate call below it was never seen and the permission was dropped."""
+        source = (
+            'package x;\npublic class IdemController {\n'
+            '    private final ItemService service;\n'
+            '    private final IdempotentResponses idempotentResponses;\n'
+            '    @PostMapping\n'
+            '    public R create(\n'
+            '            @Parameter(schema = @Schema(maxLength = 64, pattern = "^[A-Za-z0-9._:-]{1,64}$"))\n'
+            '            @RequestHeader(name = "Idempotency-Key", required = false) String key,\n'
+            '            @Valid @RequestBody ItemCreateRequest request) {\n'
+            '        return idempotentResponses.craftResponse(key, "POST /x", request, R.class,\n'
+            '            () -> service.create(request));\n'
+            '    }\n}\n')
+        self.assertEqual(se.find_delegate(source, "create"), ("ItemService", "create"))
+
     def test_blanking_keeps_offsets_quotes_and_newlines(self):
         source = 'a("public x (", \'"\', "esc \\" public y (")\n"""\npublic z (\n""" b(c)'
         blanked = se.blank_string_literals(source)

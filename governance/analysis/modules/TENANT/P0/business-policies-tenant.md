@@ -234,3 +234,29 @@ RESOLVED DECISIONS — delta
 | # | Question | Answer | Decided | ADR |
 |---|---|---|---|---|
 | 2 | Token cut-off vs `jti` denylist | per-tenant cut-off `TOKENS_INVALID_BEFORE`, compared in whole seconds (activation: a token of the activation's own second is served; revoke-tokens: the cut-off is the next whole second, so the revoke's own second is refused); PLATFORM not revocable | plan §9 (recommendation), package C12 | ADR-TENANT-002 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-015. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C4 block.
+
+POL-TENANT-016 — التجهيز لا يتكرر بمفتاح عدم التكرار / Provisioning is idempotent under an idempotency key
+  Statement (ar) : عند تكرار طلب إنشاء مستأجر بمفتاح عدم التكرار نفسه والمحتوى نفسه ومن المستخدم نفسه يجب على النظام إعادة الاستجابة المخزّنة دون إنشاء شيء، ورفض المحتوى المختلف أو المستخدم المختلف تحت المفتاح نفسه؛ لا تُخزَّن إلا الاستجابات الناجحة، وتُحفظ المفاتيح 24 ساعة.
+  Statement (en) : When a tenant-create request is repeated with the same `Idempotency-Key`, the same body and by the same user, the system shall replay the stored answer and create nothing; another body or another user under the same key shall be refused; only successful answers are stored, and keys are kept for 24 hours.
+  Pattern   : optional · `POST /api/v1/platform/tenants` with the header
+  Trigger   : a create request carrying `Idempotency-Key`
+  Rationale : a retried provisioning call (timeout, client crash) must neither create a second tenant nor fail with `TENANT_CODE_DUPLICATE`; the stored answer commits with the tenant it describes (ADR-TENANT-003)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.4; RULE-TENANT-025, -026; REQ-TENANT-036; ADR-TENANT-003
+  Status    : CONFIRMED (erp-core 1.3.0, package C4)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-004 | still all-or-nothing; with `Idempotency-Key` the stored answer is part of the same transaction (a crash before the commit leaves neither the tenant nor a replayable answer) | REQ-TENANT-036 |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 3 | Where idempotency keys live | a core table `CORE_IDEMPOTENCY_KEY` behind the common mechanism `com.erp.common.idempotency`, tenant-scoped, 24 h retention (expired rows ignored at lookup and purged by a job), only 2xx answers stored in the operation's transaction, replayed to the same user only; first consumer tenant create | plan §9 (recommendation), package C4 | ADR-TENANT-003 |

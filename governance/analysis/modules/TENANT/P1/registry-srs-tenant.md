@@ -344,3 +344,63 @@ Decisions — delta
 Tests — delta: `TenantContextLeakTest` (M1, `com.erp.events.support`) verifies REQ-TENANT-018 and REQ-TENANT-023 on a reused pooled platform thread, and REQ-TENANT-018's in-task semantics on virtual threads.
 
 Last sequence per atom: unchanged (REQ 035 · AC 035 · RULE 024 · POL 015 · US 015 · XM 003 · DBF 044) · ADR: 005 (004 used by this block; 003 reserved for C.4)
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (`Idempotency-Key` on `POST /api/v1/platform/tenants`, common mechanism `com.erp.common.idempotency`, `CORE_IDEMPOTENCY_KEY`) (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C4
+block, I1–I11). Ids continue from the highest ever issued (REQ / AC 035, RULE 024, POL 015, US 015, DBF 044;
+RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules).
+
+Entities — delta
+| Kind | ENT id | Delta | Code location |
+|---|---|---|---|
+| NEW (owned by common, registered here) | — (no ENT-TENANT id) | `CORE_IDEMPOTENCY_KEY` — idempotency key record, tenant-scoped (`AuditableEntity`); its `TENANT_ID` is DBF-TENANT-045 (`../P2/registry-db-tenant.md`) | common/idempotency/IdempotencyKey.java |
+
+Exposed — delta
+| Kind | Id | Surface | Consumers |
+|---|---|---|---|
+| CHANGED | — | HTTP `POST /api/v1/platform/tenants` + optional header `Idempotency-Key`, response header `Idempotent-Replayed` | frontend `PLATFORM_TENANTS` |
+
+Consumed — delta
+| Kind | Owner | Surface | Used by |
+|---|---|---|---|
+| NEW | common | `com.erp.common.idempotency.IdempotentResponses.craftResponse(...)` (mechanism, no XM id) | `PlatformTenantController.create` |
+
+Screens — delta: SCR-REQ-TENANT-001 B5 create — the request may carry `Idempotency-Key` (I11); no new page code.
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-036 / AC-TENANT-036 | Idempotent provisioning (`Idempotency-Key`: replay with `Idempotent-Replayed: true`, 409 on another body or user, 2xx only, 24 h) | US-TENANT-001; POL-TENANT-016, -004; RULE-TENANT-025, -026; ADR-TENANT-003 | tenant/controller/PlatformTenantController.java (`create`); common/idempotency/IdempotentResponses.java | `TenantIdempotentProvisioningIntegrationTest`; TC-CORE-TENANT-051 … 053 |
+| NEW | RULE-TENANT-025 | `Idempotency-Key` format `^[A-Za-z0-9._:-]{1,64}$` → else 400 `IDEMPOTENCY_KEY_INVALID` | REQ-TENANT-036 | common/idempotency/IdempotencyKeyDomain.java (`assertKeyValid`) | `IdempotencyKeyDomainTest`, `TenantIdempotentProvisioningIntegrationTest`; TC-CORE-TENANT-053 |
+| NEW | RULE-TENANT-026 | Replay (same hash, same user), conflict 409 `IDEMPOTENCY_KEY_CONFLICT`, claim in the operation's transaction, 2xx only, expiry and purge | REQ-TENANT-036 | common/idempotency/IdempotencyKeyDomain.java; IdempotentResponses.java; IdempotencyKeyRetentionJob.java | `IdempotencyKeyDomainTest`, `IdempotentResponsesTest`, `TenantIdempotentProvisioningIntegrationTest`; TC-CORE-TENANT-051, -052 |
+| CHANGED | REQ-TENANT-001 | the create may carry `Idempotency-Key` (REQ-TENANT-036); without it unchanged | REQ-TENANT-036 | tenant/controller/PlatformTenantController.java | TC-CORE-TENANT-053 (header absent) |
+| CHANGED | REQ-TENANT-035 | failure path: a failing PLATFORM audit write no longer replaces 500 `TENANT_REVOKE_SESSIONS_FAILED` (C12 follow-up) | — | tenant/service/TenantService.java (`revokeTokens`) | `TenantTokenCutOffIntegrationTest` |
+| CHANGED | US-TENANT-001 | a retried create replays instead of creating twice | — | — | — |
+
+Error codes — delta
+| Code | HTTP | Code location |
+|---|---|---|
+| `IDEMPOTENCY_KEY_INVALID` | 400 | common/idempotency/IdempotencyKeyDomain.java; common/idempotency/IdempotencyErrorCodes.java |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | common/idempotency/IdempotencyKeyDomain.java; common/idempotency/IdempotencyErrorCodes.java |
+i18n: one `tenant-maturity C4` block in both bundles.
+
+Permissions — delta: none. Audit actions — delta: none. Configuration — delta: `erp.core.idempotency.enabled` /
+`retention` / `retention-cron` (`true` / `24h` / `-`).
+
+Decisions — delta
+| Kind | ADR | Subject | Status |
+|---|---|---|---|
+| NEW | ADR-TENANT-003 | Idempotency keys stored in `CORE_IDEMPOTENCY_KEY` (common mechanism), 24 h retention, first consumer tenant create | PROPOSED → ACCEPTED after the code check (erp-core 1.3.0, package C4) |
+
+Counts after this addendum: REQ 36 · AC 36 · RULE 22 · ENT 1 · SCR-REQ 1 · XM 3.
+Last sequence per atom: REQ: 036 · AC: 036 · ENT: 001 · RULE: 026 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 015 · POL: 016 · DBF: 045 · ADR: 005 (002, 003 used; 004 reserved for C.6)
+
+Review round 1 (package C4) — registry deltas
+| Kind | Id | Delta | Code location | Verified by |
+|---|---|---|---|---|
+| CHANGED | RULE-TENANT-026 | the claim is `INSERT … ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING` with explicit `TENANT_ID` (0 rows = lost; nothing logged, the key never in a log line) | common/idempotency/IdempotencyKeyClaims.java; IdempotentResponses.java | `TenantIdempotentProvisioningIntegrationTest.twoSimultaneousFirstRequestsWithOneKey_…` (captured output has no key), `IdempotentResponsesTest` |
+| NEW (note) | REQ-TENANT-036 | a replay precedes the service's `@PreAuthorize`: a consumer authorizes its path in the security chain too (srs I12) | docs/CONSUMING.md §3; ADR-TENANT-003 | — |
+| NEW | — | ArchUnit: `com.erp.common` depends on no module and not on `com.erp.autoconfigure` | architecture/CoreLibraryRulesArchTest.java | the rule itself |
+Error codes, ids and counts unchanged (last REQ 036 · RULE 026 · POL 016 · DBF 045).

@@ -3,10 +3,13 @@ package com.erp.tenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.erp.audit.crossmodule.AuditApi;
+import com.erp.audit.crossmodule.AuditEntry;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.events.DomainEventPublisher;
@@ -255,6 +258,33 @@ class TenantTokenCutOffIntegrationTest extends AbstractIntegrationTest {
         assertThat(openSessions()).isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT TOKENS_INVALID_BEFORE FROM CORE_TENANT WHERE ID = ?",
             Timestamp.class, id)).as("the retry moved the cut-off forward").isAfter(firstCutOff);
+    }
+
+    /** tenant-maturity C4 (C12 follow-up): a failing PLATFORM audit write no longer replaces the 500 answer. */
+    @Test
+    void revokeTokens_whoseSessionStepAndPlatformAuditFail_stillAnswersSessionsFailed_withTheSessionFailureAsCause() {
+        SecAdminRecoveryApi failing = mock(SecAdminRecoveryApi.class);
+        IllegalStateException sessionFailure = new IllegalStateException("database down");
+        when(failing.terminateAllSessions()).thenThrow(sessionFailure);
+        AuditApi failingAudit = mock(AuditApi.class);
+        IllegalStateException auditFailure = new IllegalStateException("audit store down");
+        doThrow(auditFailure).when(failingAudit).record(any(AuditEntry.class));
+        TenantService withFailures = new TenantService(tenantRepository, tenantMapper, contributors,
+            eventPublisher, userDirectory, failing, fileDocuments, notificationLog, transactionManager, failingAudit,
+            fileImageStore, logoUrls);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(operator, null,
+            List.of(new SimpleGrantedAuthority(TenantPermissions.PLATFORM_TENANT_MANAGE))));
+
+        assertThatThrownBy(() -> withFailures.revokeTokens(id))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.INTERNAL_ERROR);
+                assertThat(e.getCause()).isSameAs(sessionFailure);
+                assertThat(e.getCause().getSuppressed()).containsExactly(auditFailure);
+            });
+        assertThat(jdbcTemplate.queryForObject("SELECT TOKENS_INVALID_BEFORE FROM CORE_TENANT WHERE ID = ?",
+            Timestamp.class, id)).as("the cut-off committed first").isNotNull();
     }
 
     @Test

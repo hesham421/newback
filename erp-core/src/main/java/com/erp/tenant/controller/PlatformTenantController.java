@@ -1,5 +1,6 @@
 package com.erp.tenant.controller;
 
+import com.erp.common.idempotency.IdempotentResponses;
 import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
 import com.erp.tenant.dto.TenantAdminResetRequest;
@@ -14,6 +15,8 @@ import com.erp.tenant.dto.TenantUpdateRequest;
 import com.erp.tenant.dto.TenantUsageResponse;
 import com.erp.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -38,7 +42,8 @@ import org.springframework.web.multipart.MultipartFile;
  * requires an authenticated PLATFORM-tenant caller holding {@code PLATFORM_TENANT_MANAGE} (security
  * chain) and the service re-checks the authority. Tenants are never deleted (no DELETE) and their code
  * never changes; tenant-maturity B adds the names-and-profile PUT, the administrator recovery and the usage
- * figures, E the logo and the brand colour (D5). Status changes go through one PATCH. Pure delegation — zero logic.
+ * figures, E the logo and the brand colour (D5), C4 the optional {@code Idempotency-Key} of the create (answered by the
+ * common response helper {@link IdempotentResponses}). Status changes go through one PATCH. Pure delegation — zero logic.
  */
 @RestController
 @RequestMapping("/api/v1/platform/tenants")
@@ -46,16 +51,31 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "Platform Tenants", description = "Tenant provisioning and lifecycle - إدارة المستأجرين")
 public class PlatformTenantController {
 
+    /** tenant-maturity C4: the endpoint id under which the create's idempotency keys are stored. */
+    private static final String CREATE_ENDPOINT = "POST /api/v1/platform/tenants";
+
     private final TenantService service;
     private final OperationCode operationCode;
+    private final IdempotentResponses idempotentResponses;
 
     @PostMapping
     @Operation(summary = "Create (provision) a tenant with its first administrator",
         description = "adminPassword must meet the STAFF password policy: 400 SEC-400-PASSWORD-POLICY (fieldErrors[0].field ="
-            + " adminPassword), raised by SEC's provisioning contributor; nothing is created"
-            + " - إنشاء مستأجر وتجهيزه مع أول مدير له؛ يجب أن تستوفي كلمة مرور المدير سياسة كلمات المرور")
-    public ResponseEntity<ApiResponse<TenantResponse>> create(@Valid @RequestBody TenantCreateRequest request) {
-        return operationCode.craftResponse(service.create(request));
+            + " adminPassword), raised by SEC's provisioning contributor; nothing is created."
+            + " Optional header Idempotency-Key (1 to 64 characters of A-Z a-z 0-9 . _ : -): a retry with the same key and"
+            + " the same body by the same user answers the stored 201 response with the response header"
+            + " Idempotent-Replayed: true and creates nothing; the same key with another body, or by another user, answers"
+            + " 409 IDEMPOTENCY_KEY_CONFLICT; an invalid key answers 400 IDEMPOTENCY_KEY_INVALID; only successful answers"
+            + " are stored, for 24 hours (erp.core.idempotency.retention)"
+            + " - إنشاء مستأجر وتجهيزه مع أول مدير له؛ يجب أن تستوفي كلمة مرور المدير سياسة كلمات المرور؛"
+            + " ترويسة Idempotency-Key اختيارية: إعادة الطلب بالمفتاح نفسه تعيد الاستجابة المخزّنة دون إنشاء شيء")
+    public ResponseEntity<ApiResponse<TenantResponse>> create(
+            @Parameter(description = "Optional idempotency key of this create (e.g. a UUID reused for every retry of one"
+                + " submission) - مفتاح عدم التكرار", schema = @Schema(maxLength = 64, pattern = "^[A-Za-z0-9._:-]{1,64}$"))
+            @RequestHeader(name = IdempotentResponses.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+            @Valid @RequestBody TenantCreateRequest request) {
+        return idempotentResponses.craftResponse(idempotencyKey, CREATE_ENDPOINT, request, TenantResponse.class,
+            () -> service.create(request));
     }
 
     @GetMapping

@@ -337,7 +337,9 @@ def has_method(source: str, method_name: str) -> bool:
 
 
 def find_delegate(source: str, method_name: str) -> tuple[Optional[str], Optional[str]]:
-    source = strip_comments(source)
+    # Literals blanked too: a brace inside an annotation string ("^[a-z]{1,64}$") would end the brace-counted body
+    # scan early and lose the delegate (tenant-maturity C4 review round 1).
+    source = blank_string_literals(strip_comments(source))
     lines = source.splitlines()
     decl_index = _find_declaration_index(lines, method_name)
     if decl_index is None:

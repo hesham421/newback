@@ -77,5 +77,37 @@ class SharedHelperCodes(unittest.TestCase):
         self.assertIn(("HX_409_CODE_DUP", "ALREADY_EXISTS", "HxDomain.create"), codes(ep.business_errors))
 
 
+class InjectedSharedComponentCodes(unittest.TestCase):
+    """tenant-maturity C4 review round 1: a shared (package segment "common") @Component held in a field -- the
+    IdempotentResponses shape -- contributes the constant throws its method reaches through its private methods and
+    static / chained-factory calls into other shared classes, bound at the caller's site."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.classes = bx.index_module_source(HELPERS / "module")
+        cls.helpers = bx.index_code_helpers([HELPERS / "module", HELPERS / "shared"])
+
+    def walk(self, method):
+        return bx.walk_endpoint(self.classes, "HxIdemController", method, helpers=self.helpers)[0]
+
+    def test_the_index_holds_the_components_reachable_throws_only(self):
+        self.assertEqual(sorted(self.helpers.injected["HxIdempotentResponses"]["craftResponse"]),
+                         [("HX_KEY_CONFLICT", "CONFLICT"), ("HX_KEY_INVALID", "VALIDATION_ERROR")])
+        self.assertNotIn("HxResponder", self.helpers.injected, "a component that throws nothing")
+        self.assertNotIn("HxKeyDomain", self.helpers.injected, "not a component: reached only through one")
+        self.assertNotIn("HxService", self.helpers.injected, "a module class is walked, never injected")
+
+    def test_a_call_on_the_injected_component_binds_its_codes_at_the_callers_site(self):
+        self.assertEqual(codes(self.walk("create")), sorted([
+            ("HX_400_NAME_REQUIRED", "VALIDATION_ERROR", "HxDomain.create"),
+            ("HX_409_CODE_DUP", "ALREADY_EXISTS", "HxDomain.create"),
+            ("HX_KEY_CONFLICT", "CONFLICT", "HxIdemController.create"),
+            ("HX_KEY_INVALID", "VALIDATION_ERROR", "HxIdemController.create"),
+        ]))
+
+    def test_a_component_without_throws_adds_nothing(self):
+        self.assertNotIn("HX_KEY_INVALID", {code for code, _, _ in codes(self.walk("plain"))})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -120,3 +120,12 @@ Statement      : Original analysis above is unchanged; this addendum records the
 |---|---|---|---|
 | NEW (spike) | Tenant context | `TenantContext` on `ScopedValue` behind the same public API (`current` / `find` / `require` / `set` / `clear` / `runAs` / `callAs`); go / no-go decided by ADR-TENANT-004 against fixed criteria (touches `events` and `notif`); may slip to 1.4.0 | `../P1/srs-tenant.md` 1.3.0 C6-1; ADR-TENANT-004 |
 | CHANGED (outcome) | Tenant context | **no-go** — `TenantContext` stays on its `ThreadLocal` (ADR-TENANT-004 REJECTED: no benefit without breaking `set` / `clear` outside a scope); "`ScopedValue` spike" leaves the package-C list | `../P1/srs-tenant.md` 1.3.0 C6-2 |
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C4 — idempotent provisioning (plan §5 C.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Idempotency (common) | `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`) behind `com.erp.common.idempotency`; first consumer `POST /api/v1/platform/tenants` with the optional `Idempotency-Key`; replay with `Idempotent-Replayed: true`, 409 `IDEMPOTENCY_KEY_CONFLICT`, 400 `IDEMPOTENCY_KEY_INVALID`; 24 h retention (`erp.core.idempotency.*`) | `../P1/srs-tenant.md` 1.3.0 I1–I7; ADR-TENANT-003 |
+| CHANGED — FE | Tenant management | a retried create with the same key answers the first result instead of `TENANT_CODE_DUPLICATE` | I11 |
+| CHANGED | DEFERRED | idempotent provisioning leaves DEFERRED; export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |

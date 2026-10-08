@@ -53,6 +53,9 @@ public class ErpCoreProperties {
     @Valid
     private final Report report = new Report();
 
+    /** tenant-maturity C4 — the {@code Idempotency-Key} mechanism ({@code com.erp.common.idempotency}). */
+    private final Idempotency idempotency = new Idempotency();
+
     /** Authentication settings. */
     @Getter
     @Setter
@@ -435,5 +438,26 @@ public class ErpCoreProperties {
         /** Most rows one export may contain; a larger result answers 422 {@code REPORT_EXPORT_TOO_LARGE}. */
         @Positive
         private int maxExportRows = 100_000;
+    }
+
+    /**
+     * tenant-maturity C4 — {@code erp.core.idempotency.*}: the optional {@code Idempotency-Key} header (first consumer
+     * {@code POST /api/v1/platform/tenants}); a stored answer is replayed for {@link #retention}, then purged.
+     */
+    @Getter
+    @Setter
+    public static class Idempotency {
+
+        /** Honours the {@code Idempotency-Key} header; {@code false} ignores it (no row is read or written). */
+        private boolean enabled = true;
+
+        /** How long a stored answer is replayed; an older key counts as unused. Must be positive. */
+        private Duration retention = Duration.ofHours(24);
+
+        /**
+         * Cron of {@code IdempotencyKeyRetentionJob}'s own {@code @Scheduled} trigger, which fires only in an
+         * application that enables scheduling; {@code -} (the default) disables it.
+         */
+        private String retentionCron = "-";
     }
 }
