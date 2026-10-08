@@ -206,11 +206,11 @@
       ],
       "wave": "6",
       "migrations": [],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/c6-scoped-value-spike",
       "worktree": ".worktrees/tm-c6",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 7,
       "implementer_agent": "a565847c451d8db0c",
       "reviewer_agent": null,
       "review": null,
@@ -530,6 +530,12 @@
       "step": "C6",
       "event": "DISPATCH",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T04:13:13Z",
+      "step": "C6",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE 5f0d187: NO-GO (ScopedValue final, perf neutral, but set/clear outside scope needs ThreadLocal fallback; unscoped-set refusal breaks 282 tests = MAJOR); spike reverted, merges ADR REJECTED + leak test"
     }
   ]
 }
