@@ -62,6 +62,12 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   into a ZIP with a manifest, never passwords, tokens, credentials or file bytes; the ZIP is a PRIVATE FILE document of
   PLATFORM restricted to `PLATFORM_TENANT_MANAGE` and downloaded once with FILE's single-use token; bounded by
   `erp.core.tenant.export.max-rows` and `max-concurrent`.
+  Since 1.3.0 (TM-C12) a suspension publishes `TenantSuspendedEvent` (SEC ends every open session of the tenant, NOTIF
+  holds its queued notifications) and a re-activation `TenantActivatedEvent` (NOTIF sends what it held); the token
+  cut-off is enforced: a token issued before the re-activation or before `POST /{id}/revoke-tokens` answers 401
+  `TENANT_TOKEN_REVOKED` on every non-public path of both realms (ADR-TENANT-002). Since 1.3.0 (TM-C4) the tenant
+  create accepts an optional `Idempotency-Key` (ADR-TENANT-003). `TenantContext` stays a `ThreadLocal`: the
+  `ScopedValue` spike was a no-go (ADR-TENANT-004, REJECTED).
 - **Realms.** STAFF (`/api/v1/sec/auth/**`, every administrative endpoint) and CUSTOMER
   (`/api/v1/public/customers/**` for register / verify / login / password reset,
   `/api/v1/customers/me/**` for the profile and inbox). A token of one realm is rejected on the
@@ -70,9 +76,10 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   contributes; `VIEW` is the gateway action of a screen; `SYS_ADMIN` is a super role; reports get
   `<MODULE>_REPORTS` screens and `<MODULE>:REPORT:<CODE>` authorities automatically.
 - **Public login throttling.** Pre-authentication endpoints are rate limited in SEC
-  (`LoginRateLimiter`, bucket4j).
-- **Staff passwords (1.3.0).** One password policy (`erp.core.security.password-policy.*`, 8..72 characters
-  with a letter and a digit by default); a password chosen by an administrator must be changed by its
+  (`LoginRateLimiter`, bucket4j); since 1.3.0 the anonymous public branding is rate limited per client address
+  (`PublicBrandingRateLimitFilter`, `erp.core.tenant.public-branding-rate-limit.*`).
+- **Staff passwords (1.3.0).** One password policy (`erp.core.security.password-policy.*`: at least 8
+  characters, at most 72 UTF-8 bytes — BCrypt's limit — with a letter and a digit by default); a password chosen by an administrator must be changed by its
   owner before any other STAFF call is served (403 `SEC-403-PASSWORD-CHANGE-REQUIRED`, ADR-SEC-063).
 
 ## Versions
@@ -82,7 +89,7 @@ Module boundaries are package-based and enforced by the ArchUnit suite
 | 1.0.0 | 2026-10-05 | first library release: FIN removed; Testcontainers/embedded-PG test infrastructure; library split + auto-configuration; core Flyway chain `V1..V999` (additive only), applications `V1000+`; multi-tenancy; STAFF/CUSTOMER realms + permission catalog; file storage and public URLs; events + async notifications; sequences + settings API; generic audit log; minimal reporting; ArchUnit/CI/release. Tagged but never published (CI failed). |
 | 1.1.0 | 2026-10-05 | first published version. Staff APIs limited to the STAFF realm; NOTIF `REJECTED` delivery status and `RecipientDirectory.emailOf`; EMAIL dispatch uses the account e-mail; generated api-docs, the core test plan and the api-verify report. |
 | 1.2.0 | 2026-10-05 | NOTIF claim lease and retry bounds; unknown path → 404; page-offset overflow → 400; wrapped `LocalizedException` answered with its own code; strict tenant resolver before start-up; tenant context cleared per request; `CommonErrorCodes.NOT_FOUND`. **The documented version.** |
-| 1.3.0-SNAPSHOT | in progress | shared helpers moved into `com.erp.common` (no behaviour change); JDK 25 required. |
+| 1.3.0-SNAPSHOT | in progress | shared helpers moved into `com.erp.common` (no behaviour change); JDK 25 required; the tenant-maturity plan (TM-A … TM-C5, `docs/steps/tm-plan-report.md`): TENANT analysis, single screen / action grant revoke, staff passwords / profile / photo / `/me`, tenant profile, suspension facts, admin-reset and usage, tenant branding, lifecycle events and per-tenant token cut-off, isolation tests, idempotent provisioning, tenant data export with restricted FILE documents; migrations `V16` … `V22` (`docs/CHANGELOG.md` `[Unreleased]`). |
 
 Release policy: `docs/RELEASE.md` (SemVer; MINOR = additive only; core migrations never edited).
 
@@ -90,11 +97,11 @@ Release policy: `docs/RELEASE.md` (SemVer; MINOR = additive only; core migration
 
 | Question | Document |
 |---|---|
-| What does the API look like? | `docs/api-docs/<module>/` — generated from the running reference app, 105 operations across `sec`, `tenant`, `file`, `notif`, `mdl`, `cu`, `sequence`, `audit`, `report`, `app` |
-| Why does a module behave as it does? | `governance/analysis/modules/<MOD>/` (P0 policies, P0.5 PRD, P1 SRS, P2 DB script, P2.5 UI/UX) with their "Implementation Addendum — erp-core 1.2.0" sections, the ADRs under `governance/analysis/decisions/<MOD>/`, and `docs/DEVIATIONS.md` |
+| What does the API look like? | `docs/api-docs/<module>/` — generated from the running reference app, 125 operations across `sec`, `tenant`, `file`, `notif`, `mdl`, `cu`, `sequence`, `audit`, `report`, `app` |
+| Why does a module behave as it does? | `governance/analysis/modules/<MOD>/` (P0 policies, P0.5 PRD, P1 SRS, P2 DB script, P2.5 UI/UX) with their "Implementation Addendum — erp-core 1.2.0" and (unreleased) "… 1.3.0" sections, the ADRs under `governance/analysis/decisions/<MOD>/`, and `docs/DEVIATIONS.md` |
 | How is the platform consumed and configured? | `docs/CONSUMING.md` |
 | How is it released? | `docs/RELEASE.md`, `docs/CHANGELOG.md` |
 | How was it built, step by step? | `erp-core-plan/`, `docs/steps/NN-report.md` |
 | How is it verified over HTTP? | `docs/test-api/` (core suite), `governance/backend/modules/<MOD>/test-api/` (legacy adapted suites), `governance/frontend/modules/<MOD>/tests/` (the frontend's E2E archive) |
 | Which modules and screens exist? | `governance/analysis/platform/project-registry.md` |
-| How does multi-tenancy work (tenant resolution, provisioning, the `TENANT_ID` columns)? | `governance/analysis/modules/TENANT/` (as-built baseline of 1.2.0) and `governance/analysis/decisions/TENANT/ADR-TENANT-001.md` |
+| How does multi-tenancy work (tenant resolution, provisioning, the `TENANT_ID` columns)? | `governance/analysis/modules/TENANT/` (as-built baseline of 1.2.0 plus its "Implementation Addendum — erp-core 1.3.0") and `governance/analysis/decisions/TENANT/` (ADR-TENANT-001 … 006) |

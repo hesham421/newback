@@ -14,8 +14,8 @@ version (`<erp.core.version>1.2.0</erp.core.version>`) and upgrades on purpose.
 **Public API** means:
 - every type in a module's `crossmodule` package;
 - the SPIs: `PermissionContributor`/`PermissionDef`/`PermissionModule`/`PermissionScreen`,
-  `TenantProvisioningContributor`, `ReportProvider` and the `com.erp.report` records, `ChannelProvider`,
-  `StorageProvider`;
+  `TenantProvisioningContributor`, `TenantExportContributor` with `TenantExport` / `TenantExportJdbc` (1.3.0),
+  `ReportProvider` and the `com.erp.report` records, `ChannelProvider`, `StorageProvider`;
 - the `com.erp.events` contract and `TenantContext`;
 - `com.erp.common.*` (the foundation the generated code consumes);
 - the REST endpoints and their envelopes and error codes;

@@ -27,7 +27,7 @@ on a screen is `PERM_<PAGE_CODE>_<ACTION>`, `VIEW` being the gateway action.
 | APP — the reference application's own endpoints (dev profile) | `com.erp.app` | — | — | `app/` — 1 | `erp-app-reference/src/test/` |
 
 Packages without an HTTP surface: `com.erp.common` (foundation), `com.erp.events` (event bus),
-`com.erp.autoconfigure` (wiring). Total documented operations: 123 (`docs/api-docs/README.md`, after TM-E).
+`com.erp.autoconfigure` (wiring). Total documented operations: 125 (`docs/api-docs/README.md`, after TM-C5; re-checked by the TM-Z regeneration).
 
 ## Analysis status per analysed module
 
@@ -38,7 +38,7 @@ Packages without an HTTP surface: `com.erp.common` (foundation), `com.erp.events
 | CU | v1 (legacy path) | the `SettingsApi`, platform defaults and tenant overrides, `PLATFORM_SETTINGS` |
 | FILE | v1 (legacy path) | the `StorageProvider` SPI, public files, download tokens, `PUBLISH` action |
 | NOTIF | v1 (legacy path) | event-driven delivery, claim lease and retry bounds, `ChannelProvider` SPI, the customer inbox |
-| TENANT | v1 (as-built baseline: written after the code, from erp-core 1.2.0; no 1.2.0 addendum) | — (the baseline itself records the tenant module, the resolution order, provisioning and the 22 `TENANT_ID` columns; 1.3.0 changes are appended as addenda) |
+| TENANT | v1 (as-built baseline: written after the code, from erp-core 1.2.0; no 1.2.0 addendum) | — (the baseline itself records the tenant module, the resolution order, provisioning and the 22 `TENANT_ID` columns); the 1.3.0 addendum (one block per tenant-maturity package: C3, D, B, E, C12, C6, C4, C5) records the isolation tests, the tenant profile, suspension facts, admin-reset, usage, branding, lifecycle events and token cut-off, the `ScopedValue` no-go, idempotent provisioning (`CORE_IDEMPOTENCY_KEY`, the 23rd tenant-scoped table) and the tenant data export |
 
 The ADRs kept under `governance/analysis/decisions/` are those whose decision still describes
 the current code (search endpoints are `POST …/search`, no by-id read in MDL, the SEC lookups
@@ -58,6 +58,14 @@ lists them.
 | every module | SEC | screens and actions registered through `PermissionContributor`; reports through `ReportProvider` | catalog synchronisation at start-up |
 | every module | TENANT | tenant-scoped rows and provisioning hooks | `TenantContext`, `TenantProvisioningContributor` |
 | every module | AUDIT | `@Audited` entities and `AuditApi` | entity listener / in-process API |
+| every module | TENANT | a tenant's rows for the data export (1.3.0) | `TenantExportContributor` SPI |
+| TENANT | SEC | usage counts; recovery of a tenant's super administrator; ending a tenant's sessions (1.3.0) | `SecUserDirectoryApi`, `SecAdminRecoveryApi` (`crossmodule`) |
+| TENANT | FILE | logo images, export archives, usage counts (1.3.0) | `FileImageStoreApi`, `FilePrivateStoreApi`, `FileDocumentLookupApi` (`crossmodule`) |
+| TENANT | NOTIF | notifications dispatched in the last 30 days (1.3.0) | `NotificationLogQueryApi` (`crossmodule`) |
+| SEC | FILE | staff profile photos (1.3.0) | `FileImageStoreApi`, `FileDocumentLookupApi` (`crossmodule`) |
+| SEC, NOTIF | TENANT | tenant code and names for `/sec/me`; whether a tenant is ACTIVE before a delivery (1.3.0) | `TenantLookupApi` (`crossmodule`) |
+| TENANT | SEC, NOTIF | a suspension ends the tenant's sessions and holds its queued notifications; an activation releases them (1.3.0) | `TenantSuspendedEvent`, `TenantActivatedEvent` |
+| SEC | NOTIF | the `STAFF_PASSWORD_CHANGED` mail (1.3.0) | `UserPasswordChangedEvent` |
 
 No physical foreign key crosses a module boundary; `CrossModuleBoundaryArchTest` enforces the
 package rule.

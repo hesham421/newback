@@ -77,6 +77,13 @@ A global table (only when a plan step names it global) has no `TENANT_ID`, and i
 | V13 | `V13__notif_async_inbox.sql` | step 08: `NOTIF_LOG` `ATTEMPTS`/`NEXT_ATTEMPT_AT`/`LAST_ERROR`/`VARIABLES_JSON`; `NOTIF_INBOX` (IN_APP channel); `NOTIF_STATUS` values `QUEUED`/`SKIPPED_NO_PROVIDER`, `NOTIF_CHANNEL` value `IN_APP` and an enabled `IN_APP` channel config for every existing tenant |
 | V14 | `V14__sequence_and_settings.sql` | `CORE_NUMBER_SERIES` (tenant-scoped number series, one row per code and period; erp-core step 09). `CU_APP_CONFIGURATION.TENANT_ID` becomes nullable (NULL = platform default, the step-09 plan's one deliberate exception to NOT NULL tenants; the entity extends `GlobalAuditableEntity` and is filtered explicitly) and its uniqueness becomes the unique index `UQ_CU_APP_CONFIG_CONFIG_KEY (COALESCE(TENANT_ID, 0), CONFIG_KEY)`. |
 | V15 | `V15__audit_schema.sql` | erp-core step 10: `CORE_AUDIT_EVENT` (generic tenant-scoped audit log: `AuditApi` + `@Audited` listener; `CHANGES` JSONB) with `SEQ_CORE_AUDIT_EVENT`, indexes `(TENANT_ID)`, `(TENANT_ID, ENTITY_TYPE, ENTITY_ID)`, `(TENANT_ID, OCCURRED_AT)`. No permission seed: `AUDIT:EVENT:READ` is contributed by `AuditPermissions` (V14 is reserved by step 09) |
+| V16 | `V16__sec_user_profile.sql` | tenant-maturity D (1.3.0): `SEC_USER.PHONE`, `JOB_TITLE_AR/EN`, `PREFERRED_LOCALE` (`CHK_SEC_USER_LOCALE`), `PHOTO_FILE_ID` (soft reference, no FK), `PASSWORD_CHANGE_REQUIRED_FL` (default FALSE), `PASSWORD_CHANGED_AT` |
+| V17 | `V17__notif_seed_password_changed.sql` | tenant-maturity D: template `STAFF_PASSWORD_CHANGED` for every existing tenant (copied to new tenants by NOTIF's provisioning contributor) |
+| V18 | `V18__tenant_profile.sql` | tenant-maturity B: `CORE_TENANT` profile (`CONTACT_EMAIL`, `CONTACT_PHONE`, `COUNTRY_CODE`, `DEFAULT_LOCALE` + `CHK_CORE_TENANT_LOCALE`, `TIMEZONE`, `NOTES`) |
+| V19 | `V19__tenant_lifecycle.sql` | tenant-maturity B: `CORE_TENANT.SUSPENDED_AT/BY`, `SUSPENSION_REASON`, `TOKENS_INVALID_BEFORE` (the token cut-off enforced since C12) |
+| V20 | `V20__tenant_branding.sql` | tenant-maturity E: `CORE_TENANT.LOGO_FILE_ID` (soft reference), `BRAND_COLOR` + `CHK_CORE_TENANT_BRAND_COLOR`; no registry rows |
+| V21 | `V21__core_idempotency_key.sql` | tenant-maturity C4: `CORE_IDEMPOTENCY_KEY` (tenant-scoped, `SEQ_CORE_IDEMPOTENCY_KEY`, `UQ_CORE_IDEMPOTENCY_KEY (TENANT_ID, IDEMPOTENCY_KEY, ENDPOINT)`) |
+| V22 | `V22__file_document_required_authority.sql` | tenant-maturity C5: `FILE_DOCUMENT.REQUIRED_AUTHORITY` (restricted documents, RULE-FILE-012) |
 
 ## Bootstrap admin
 
