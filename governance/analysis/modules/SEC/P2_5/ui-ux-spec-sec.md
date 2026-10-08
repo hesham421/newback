@@ -75,6 +75,8 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | SEC-U08 | NEW | SCR-SEC-004 — photo, second level | `/security/users/:id?photoFor=<id>` | UPDATE | opened from the drawer's photo summary row (`user-photo-row` → `user-photo-change`); a sibling drawer above the user drawer (one drawer, one job): current photo or initials, file input, preview, constraints text, "Save photo", "Remove photo" (ConfirmDialog); closing it removes `photoFor` only. Offered on the VIEW route only: a `photoFor` that differs from the route's `:id`, or on the create (`/new`) or edit (`/:id/edit`) route, is dropped from the URL. A saving level-2 drawer — Decision SEC-U78 |
 | SEC-U09 | NEW | SCR-SEC-004 — set password, second level | `/security/users/:id?passwordFor=<id>` | UPDATE | opened from the VIEW drawer's action `user-set-password`; a Drawer (it is a form); its Submit opens a final ConfirmDialog `user-set-password-confirm` (`users.confirmSetPasswordTitle`, naming the user and the end of every session — `erp-action-confirmation` §2 item 4: an administrator-initiated credential reset), and only the confirm sends the call; **hidden on the signed-in user's own row** (`['me'].userPk = :id`), where the drawer shows instead the hint `users.setPasswordOwnHint` with the link `users.setPasswordOwnLink` → `/account/profile?changePassword=1` (handover F1 "Set password", RULE-SEC-057); the same drop rule as `photoFor` (VIEW route only, matching id); a saving level-2 drawer — Decision SEC-U78 |
 | SEC-U10 | CHANGED | SCR-SEC-005 Roles — grant tree | `/security/roles?editId=<rolePk>` | `SEC_ROLES` UPDATE | a SAVED screen checkbox and a SAVED action chip become un-checkable (SEC-U50 … U53); a STAGED item is still un-staged locally as before; the super-role hint (SEC-U54) |
+| SEC-U16 | CHANGED (TM-F1 as built, SEC-U02) | SCR-SEC-012 — tenant logo | `/account/change-password` | — | the tenant logo of SEC-U02 is F2's `<TenantLogo>` over the `/tenant/me` query (TENANT P2_5 TEN-U01, TEN-U04), which F2 builds after F1: until then the page shows the static platform mark of `AuthScreenShell` only; F2 places the logo there (TC-FE-XCUT-023 is F2's case). Recorded in newfront `docs/DEVIATIONS.md` `[TM-F1]` |
+| SEC-U19 | CHANGED (TM-F1 as built, SEC-U05 / SEC-U06) | shell topbar · SCR-SEC-004 list | — | — | the account menu is the new design-system `<ActionMenu>` (`components/data-display`, an `IconButton` trigger + `menu` / `menuitem`s, keyboard as `useMenuKeyboard`); the row avatar is `<Avatar size="list">` (28 px, a new primitive size); the Columns menu is the new `<TableColumnsMenu>`; the column choice is kept in `sessionStorage` key `avelynq_users_columns` through guarded storage (a failed read / write is a lost preference, never an error) and only a known column list rehydrates — a reload in the same tab keeps it (TC-FE-SEC-013) |
 
 ### B. Drawers and URL state (SCR-SEC-011)
 | # | Kind | Drawer | URL | Detail |
@@ -84,6 +86,8 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | SEC-U13 | NEW | Change my password | `/account/profile?changePassword=1` (a plain search param) | current password, new password, confirm; `PUT /api/v1/sec/me/password` |
 | SEC-U14 | NEW | rule | all three | one drawer open at a time (opening one removes the other two params); Back closes the drawer; reload reopens it (URL is the whole state); the profile page itself has no in-memory open flag |
 | SEC-U15 | NEW | `<AuthenticatedRoute>` (`src/core/rbac/AuthenticatedRoute.tsx`) | `/account/change-password` | the authentication-only guard: `isAuthenticated` false → `<Navigate to="/login">`, else the children; it NEVER calls `useMenuFacade` / `GET /sec/menu` (the existing `<ProtectedRoute>` reads the menu even without a page code, which would fire and cache a 403 `SEC-403-PASSWORD-CHANGE-REQUIRED` during the change). The shell keeps its `<ProtectedRoute>`, wrapped by the forced-change gate (SEC-U03), so once the flag is known the shell and its menu read are not rendered at all |
+| SEC-U17 | NEW (TM-F1 as built, detail of SEC-U08 / SEC-U12) | photo drawers after a save or a removal | `?photoFor=`, `?photo=1` | the drawer stays open and shows the new current photo (or the initials), the file input and the preview are cleared (the drawer re-mounts on the new `photoUrl`); Close or Back removes the param. The user drawer's photo row / the profile avatar and the topbar avatar already show the new `photoUrl` behind it |
+| SEC-U18 | NEW (TM-F1 as built, detail of SEC-U11 / SEC-U38) | "Edit my profile" with nothing changed | `?editId=me` | Save with no field changed sends no request and closes the drawer (the PATCH body would be empty); the users drawer's photo / password second levels open with `replace: false` (Back closes them), the stray-param drops of SEC-U08 / SEC-U09 / SEC-U11 use `replace: true` |
 
 ### C. Session state, cache and redirects
 | # | Kind | Item | Detail |
@@ -95,6 +99,8 @@ cover every new action; `/account/*` is authentication-only (SEC-U02, Decision S
 | SEC-U24 | NEW | `preferredLocale` after login | when `['me']` first resolves in a new session and `preferredLocale` is `ar` / `en` and differs from the current language → `useAuthStore.setLanguage(preferredLocale)` (dir + lang switch); a later manual toggle is NOT written back to the server (Decision SEC-U74) |
 | SEC-U25 | NEW | `preferredLocale` saved | a successful `PATCH /me` whose `preferredLocale` is `ar` / `en` switches the UI language at once; `""` (not set) leaves the current language |
 | SEC-U26 | NEW | photo URLs | `photoUrl` is public (no token), rendered only through `<img>`; always the value of the latest `['me']` / user response (a replaced photo has a new URL; the old one may stay cached for 24 h); `onError` → initials |
+| SEC-U27 | CHANGED (TM-F1 as built, deviation from SEC-U20) | the flag from `['me']` | a `['me']` answer only RAISES `passwordChangeRequired` (`true` → set); it never clears it — the flag is cleared by a successful `PUT /me/password` and by sign-out only (the two clearing paths SEC-U20 names). Reason: with a stale or diverging `['me']` (another tab changed the password; TC-FE-SEC-019 part 2 routes the menu 403 on a normal session) a read that cleared the flag would bounce between the change page and the profile; a reload re-learns the flag from scratch. Recorded in newfront `docs/DEVIATIONS.md` `[TM-F1]` |
+| SEC-U28 | NEW (TM-F1 as built, detail of SEC-U21) | `['me']` cache policy | the client default `staleTime: 0`: read by each new observer (the topbar account menu at shell mount, SCR-SEC-011, SCR-SEC-012, the users drawer's own-row check); `PATCH /me` writes its `StaffProfileResponse` into the cache, a photo save / removal writes `photoUrl`, `PUT /me/password` writes `passwordChangeRequired: false`; each also stales `['users']` (the own row shows the same facts); a photo change on the users screen stales `['me']` too |
 
 ### D. Fields
 | # | Kind | Screen / drawer | Field | Control and rule | Read-only |
@@ -276,6 +282,7 @@ Every NEW key is also declared in `core/i18n/i18n.types.ts` (the dictionaries ar
 | SEC-U77 | NEW (Decision) | optional list columns | (a) always shown; (b) hidden by default with a column menu | **(b)** as the plan says; the visibility is a per-session view preference in Zustand, not navigation state, so it is not in the URL |
 | SEC-U78 | NEW (Decision) | level-2 drawers that SAVE (`?photoFor=`, `?passwordFor=`; TENANT `?logoFor=`, `?adminResetFor=`) | (a) the `CLAUDE.md` §3 / `erp-ui-and-state-mandates` §2.5 rule — a level-2 drawer returns a value to its parent and never saves; (b) a level-2 drawer that saves its own record | **(b), a deliberate exception** dictated by plan §8 F1 / F3 and the handover: the parent is a READ-ONLY detail drawer (users VIEW route, tenant `?tenantId=`) with no form to return a value to, and each action is its own endpoint (photo multipart, password set, logo, admin-reset) — one drawer, one job, one submit; offered on read-only parents only (SEC-U08, SEC-U09: never on `/new` or `/:id/edit`) |
 | SEC-U79 | NEW (Decision, TM-F4) | where the screen / action revoke dialog's test hook and text live | (a) extend the shared `<ConfirmDialog>` with a `data-testid` prop; (b) a wrapper inside the dialog's body | **(b)**: `role-revoke-screen-confirm` / `role-revoke-action-confirm` mark a wrapper inside the `alertdialog` that also holds the confirmation sentence, the cascade count (`role-revoke-cascade-count`, `data-count`) and the VIEW warning (`role-revoke-view-warning`, `data-count`); the shared primitive (also edited by sibling steps) stays untouched |
+| SEC-U120 | NEW (Decision, TM-F1) | the test hook of the set-password confirmation | as SEC-U79 | **(b)**, as SEC-U79: `user-set-password-confirm` marks the confirmation sentence inside the `alertdialog` (naming the user and the end of every session); its buttons are the primitive's `confirm-dialog-confirm` / `confirm-dialog-cancel` |
 
 ### K. data-testid (new; used by the `TC-FE-*` cases)
 `topbar-account`, `topbar-account-menu`, `topbar-account-profile`, `topbar-account-password`, `user-row-avatar`,
@@ -287,6 +294,14 @@ Every NEW key is also declared in `core/i18n/i18n.types.ts` (the dictionaries ar
 `account-password-current`, `account-password-new`, `account-password-confirm`, `account-password-submit`,
 `account-forced-change`, `account-forced-sign-out`, `role-revoke-screen-confirm`, `role-revoke-action-confirm`,
 `role-revoke-cascade-count`, `role-revoke-view-warning`, `role-super-hint`, `user-set-password-confirm`.
+
+TM-F1 as built adds (view rows and read-only facts the cases assert): `user-view-phone`, `user-view-job-title-ar`,
+`user-view-job-title-en`, `user-view-preferred-locale`, `user-view-password-change-required`,
+`user-view-password-changed-at`, `password-bytes` (the UTF-8 counter), `photo-current`, `account-avatar`,
+`account-username`, `account-email`, `account-tenant`, `account-admin-only-hint`, `account-view-*` (the profile's six
+fields), `account-edit-drawer`, `account-edit-submit`, `account-fullNameAr` / `-fullNameEn` / `-phone` / `-jobTitleAr` /
+`-jobTitleEn` / `-preferredLocale` (edit inputs), `account-password-drawer`, `topbar-account-name`,
+`topbar-account-username`.
 
 ### L. Traceability
 | Rows | Serves | Test cases (newfront `docs/test-e2e/front-test-plan.md`) |
@@ -308,4 +323,5 @@ Every NEW key is also declared in `core/i18n/i18n.types.ts` (the dictionaries ar
 | SEC-U54 | 1.3.0 §6 (super role), §8 | TC-FE-SEC-029 |
 | SEC-U55, U56 | REQ-SEC-015, RULE-SEC-003 | TC-FE-SEC-030 |
 | SEC-U57, U58, U79 (TM-F4 as built) | REQ-SEC-080, REQ-SEC-081, RULE-SEC-054, RULE-SEC-055 | TC-FE-SEC-026, TC-FE-SEC-027, TC-FE-SEC-028 |
+| SEC-U16 … U19, U27, U28, U120 (TM-F1 as built) | REQ-SEC-084 … REQ-SEC-087 | TC-FE-SEC-015, TC-FE-SEC-018 … TC-FE-SEC-023; TC-FE-XCUT-023 (F2) for SEC-U16 |
 ══════════════════════════════════════════════════════════════════
