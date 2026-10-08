@@ -250,4 +250,14 @@ RESULT  reconciled 2 · reworked 0 · ADRs applied this pass: ADR-MDL-016 (new �
 لا سؤال في هذه المرحلة ولا قرار بحالة BLOCKED / no question is raised at this stage and no ADR is
 BLOCKED: كل نقطة احتملت وجهين حسمها مدخلٌ قائم أو قرار مُسجَّل / every two-sided point was settled
 by an existing input or a recorded decision.
+
+## Implementation Addendum — frontend 1.3.0
+Source version : mxdashboard 1.3.0 (unreleased) against erp-core 1.3.0 (no MDL contract change)
+Change         : tenant-maturity closure TM-FZ, review fix — one request per press (SEC P2_5 SEC-U122, SEC-U130)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| # | Kind | Item | Detail |
+|---|---|---|---|
+| MDL-U01 | CHANGED (FZ review) | SCR-MDL-001 record page — the type header's Create (`/reference-data/lookups/new`, `mdl-type-form-submit`) and Save (`/reference-data/lookups/:typeId`, `mdl-type-form-save`) | the design-system `SubmitButton`: a zero-gap double press sends one `POST` / `PUT` of the lookup type; the latch frees when the save settles, on an edit of the header form, on a press elsewhere, or 500 ms after a press that sent nothing. No visible change (the spinner while `isMutating` as before). Covered by TC-FE-MDL-001 … 003 (unchanged) and the primitive's Vitest |
+
 ══════════════════════════════════════════════════════════════════
