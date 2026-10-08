@@ -1485,3 +1485,202 @@ consumer is checked for that, ADR-TENANT-003).
 | CHANGED | I1 header schema | The generator's method-body scan blanks string literals before counting braces, so the header's OpenAPI schema states the rule as written: `pattern = "^[A-Za-z0-9._:-]{1,64}$"`, `maxLength = 64`. |
 | NEW | Module boundary | ArchUnit: no class of `com.erp.common..` depends on a module package (`sec`, `tenant`, `mdl`, `cu`, `file`, `notif`, `sequence`, `audit`, `report`, `events`) or on `com.erp.autoconfigure..` (`CoreLibraryRulesArchTest`). `events` uses common, never the reverse. |
 | DECIDED (not done) | Lock timeout on the claim | No `SET LOCAL lock_timeout`: a statement-level timeout would also bound every later statement of the provisioning transaction (or need a reset), and its failure answer would be a new code for a wait that lasts one provisioning (≈ 1 s). The wait stays as documented (ADR-TENANT-003 Consequences). |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export: `POST /api/v1/platform/tenants/{id}/export`, the export SPI `TenantExportContributor` implemented by every core module, the archive stored as a PRIVATE document of the PLATFORM tenant behind a single-use download token (plan §5 C.5, item 16)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+036, RULE 026 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), POL 016, US 015,
+XM 003, DBF 045, ADR 005. This block mints **REQ/AC-TENANT-037, RULE-TENANT-027, -028, XM-TENANT-004**
+(POL-TENANT-017 in P0, US-TENANT-016 in P0_5) and decision **ADR-TENANT-006**. No ENT, SCR-REQ, DBF, permission,
+page code, table, column or migration is added: the archive is a `FILE_DOCUMENT` row (data, not schema). FILE's side
+(the private store and the download token, XM-FILE-003, RULE-FILE-011) is in `../../FILE/P1/srs.md` 1.3.0 §9; the
+other modules' contributors are recorded in their own P1 1.3.0 addenda (SEC §13, MDL, CU, NOTIF §6) and their exact
+file and column lists here (X7), the one place a reader needs. SEQUENCE and AUDIT have no analysis folder in this
+repository: their files are written here only. Platform paths are relative to `/api/v1/platform/tenants`. Rows
+marked **FE** are read by the frontend (plan §8 F3).
+
+### X1. Endpoints
+The platform row keeps the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain gate
+"caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller.
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | POST | `/{id}/export` | `PLATFORM_TENANT_MANAGE` | — (no body) | 200 `TenantExportResponse { tenantId, tenantCode, fileId, fileName, sizeBytes, rowCount, downloadToken, downloadTokenExpiresAt }` | 404 · `TENANT_NOT_FOUND`; 409 · `TENANT_EXPORT_IN_PROGRESS` (an export of the same tenant is running on this node); 422 · `TENANT_EXPORT_TOO_LARGE` (the tenant has more rows than `erp.core.tenant.export.max-rows`) | REQ-TENANT-037; RULE-TENANT-027, -028 |
+| CONSUMED — **FE** | GET | `/api/v1/files/download?token={downloadToken}` (FILE API-FILE-003, unchanged) | the same platform operator (`isAuthenticated()`, the token is bound to the issuing username) | — | 200 `application/zip` attachment `tenant-export-{CODE}-{yyyyMMdd'T'HHmmss'Z'}.zip` | 401 · `FILE_ACCESS_TOKEN_INVALID` (second use, expired after 10 minutes, another user); 404 · `FILE_DOCUMENT_NOT_FOUND` (a caller of another tenant) | REQ-TENANT-037; FILE RULE-FILE-003, -011 |
+| CONSUMED | POST | `/api/v1/files/{id}/access-token` (FILE API-FILE-002, unchanged) | `PERM_FILE_BROWSER_VIEW` in PLATFORM | — | a fresh single-use token for an archive already stored | as before | FILE RULE-FILE-011 |
+
+Order of checks — export: tenant (`TENANT_NOT_FOUND`) → no export of that tenant running on this node
+(`TENANT_EXPORT_IN_PROGRESS`; the slot is taken here and released on every path) → inside tenant {id}, in **one
+read-only `REPEATABLE READ` transaction** (one snapshot): every contributor counts its rows, the sum above
+`erp.core.tenant.export.max-rows` → `TENANT_EXPORT_TOO_LARGE` (nothing is written), then every contributor streams
+its CSV files into a ZIP written to a temporary file → in PLATFORM, one transaction: FILE stores the ZIP as a PRIVATE
+document and `TENANT_EXPORTED` is recorded (X10) → FILE issues the single-use download token → 200. The temporary
+file is deleted on every path (success, refusal, failure). Controller method `exportTenant` (unique name, so
+springdoc's operation ids of other modules do not shift); service `TenantExportService.export`. Synchronous in v1
+(ADR-TENANT-006).
+
+### X2. Requirements (§A4) — NEW
+
+### REQ-TENANT-037 — تصدير بيانات المستأجر / Tenant data export
+Pattern    : event
+Statement  : When a platform operator posts `POST /api/v1/platform/tenants/{id}/export`, the system shall collect, inside tenant {id} and from one consistent snapshot, every row the tenant owns in every core module — each module writing its own tables as CSV files through the export SPI (XM-TENANT-004) — zip them with a manifest, store the ZIP as a PRIVATE `FILE_DOCUMENT` of the PLATFORM tenant (`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`), record `TENANT_EXPORTED` in PLATFORM and in the tenant, and answer the document's id, name, size, the number of exported rows and a single-use download token bound to the operator (RULE-TENANT-027); it shall refuse a tenant with more rows than `erp.core.tenant.export.max-rows` (422 `TENANT_EXPORT_TOO_LARGE`) and a second export of the same tenant while one is running on the node (409 `TENANT_EXPORT_IN_PROGRESS`, RULE-TENANT-028). A suspended tenant and the PLATFORM tenant are exported like any other.
+Traces     : US-TENANT-016
+Entities   : ENT-TENANT-001; every tenant-scoped table of X7 (read); FILE ENTITY-FILE-001 (the archive, written in PLATFORM)
+Rationale  : POL-TENANT-017; ADR-TENANT-006; ADR-TENANT-001 consequences (the shared schema makes a tenant's data a `TENANT_ID`-filtered copy)
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5
+Priority   : MEDIUM
+#### AC-TENANT-037 — [REQ-TENANT-037]
+Given a provisioned tenant T with rows in every module (a second staff user, an uploaded file, a CU override, a dispatched notification and an in-app message, a number series, audit rows, an open session) and another tenant U with rows of its own
+When the platform operator posts `/{T}/export`
+Then the answer is 200 with `tenantId = T`, `tenantCode`, a `fileId`, `fileName` `tenant-export-{T's code}-….zip`, `sizeBytes` > 0, `rowCount` = the sum of the manifest's per-file counts, a `downloadToken` and its expiry;
+the document is PRIVATE, ACTIVE, file type `ARCHIVE`, owner `CORE_TENANT` / T, module `TENANT`, in PLATFORM's rows (not in T's);
+the download with the token by the same operator answers 200 `application/zip` and a second use answers 401 `FILE_ACCESS_TOKEN_INVALID`;
+the ZIP holds `manifest.json` and exactly the files of X7 (`TENANT/CORE_TENANT.csv`, the nine SEC files, …), each a UTF-8 CSV with a byte-order mark whose first record is the X7 column list and whose record count equals the manifest's count and T's rows in that table; no file contains a password hash (`$2a$` / `$2b$` / `$2y$`), a token hash, a session token reference, a channel configuration, a file's bytes, a public slug, a storage reference or a token cut-off, and nothing of U (U's users, codes, file names);
+`TENANT_EXPORTED` is recorded once in T and once in PLATFORM (actor = the operator, entity `CORE_TENANT` / T);
+with `erp.core.tenant.export.max-rows` below T's row count the answer is 422 `TENANT_EXPORT_TOO_LARGE` and nothing is stored;
+while an export of T holds the node's slot a second one answers 409 `TENANT_EXPORT_IN_PROGRESS` and an export of U is served;
+a suspended tenant and PLATFORM (id 1) are exported (200); an unknown id answers 404 `TENANT_NOT_FOUND`, T's administrator 403 `SEC-403-FORBIDDEN`, no token 401;
+no temporary file of the export is left behind
+
+### X3. Business rules (§A5) — NEW
+
+### RULE-TENANT-027 — التصدير محدود وبلا أسرار / Export is bounded and secret-free
+Scope      : `/{id}/export`; every `TenantExportContributor`
+Trigger    : an export of tenant {id}
+Statement  : The system shall export exactly the rows whose `TENANT_ID` is {id} (and the tenant's own `CORE_TENANT` row), through every `TenantExportContributor` bean in `moduleCode` order, inside `TenantContext.callAs({id})` in one read-only `REPEATABLE READ` transaction, so the count and the files see one snapshot; every contributor's SQL names `TENANT_ID` on every tenant-scoped table it reads (RULE-TENANT-011). The total of the contributors' counts above `erp.core.tenant.export.max-rows` (default 200 000, read on every export) refuses the export with 422 `TENANT_EXPORT_TOO_LARGE` before anything is written; while writing, a contributor that writes more rows than the limit is refused the same way. Never exported: password hashes, token hashes and the token tables (`SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN`), session token references (`SEC_ACTIVE_SESSION.TOKEN_REF`, the access token's `jti`), channel configuration (`NOTIF_CHANNEL_CONFIG.CONFIG_JSON`, which holds provider credentials), notification variables (`NOTIF_LOG.VARIABLES_JSON`, which can hold reset and verification links), file bytes and storage internals (`FILE_DOCUMENT.FILE_CONTENT`, `STORAGE_REF`, `PUBLIC_SLUG` — file metadata only), the token cut-off (`CORE_TENANT.TOKENS_INVALID_BEFORE`), idempotency records (`CORE_IDEMPOTENCY_KEY`: stored answers, not business data), the platform-wide rows (registries, `CU_APP_CONFIGURATION` rows with a NULL tenant) and every row's `TENANT_ID` / `VERSION`. The archive: one CSV per table (X6, X7) and `manifest.json`; it is stored as a PRIVATE `FILE_DOCUMENT` of PLATFORM (`CORE_TENANT` / {id} / `TENANT`), never PUBLIC, and handed out only through FILE's single-use download token bound to the operator (FILE RULE-FILE-011).
+Data source: the tables of X7, read by their owner modules; `erp.core.tenant.export.max-rows`
+Message    : ar: "لا يمكن تصدير المستأجر: عدد سجلاته {0} يتجاوز الحد الأقصى المسموح {1}" · en: "The tenant cannot be exported: it has {0} rows, more than the allowed maximum of {1}"
+Traces     : REQ-TENANT-037
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5; ADR-TENANT-006
+Decided by : `TenantDomain.assertExportWithinLimit(rows, maxRows)`; applied by `TenantExportService` and `TenantExportArchive` (the streaming cap)
+
+### RULE-TENANT-028 — تصدير واحد للمستأجر في وقت واحد / One export of a tenant at a time
+Scope      : `/{id}/export`
+Trigger    : an export of tenant {id} while another export of {id} runs
+Statement  : The system shall run at most one export of a given tenant at a time **per application node**: the export takes the tenant's slot in an in-memory set before it reads anything and releases it when it ends (success, refusal or failure); a second export of the same tenant while the slot is taken is refused with 409 `TENANT_EXPORT_IN_PROGRESS` and changes nothing; exports of different tenants run side by side. Across several nodes the guard does not hold (each node has its own set): two simultaneous exports of one tenant on two nodes both succeed and store two archives — harmless (read-only on the tenant, two PLATFORM documents), documented (ADR-TENANT-006).
+Data source: the node's in-memory set of tenant ids being exported (`TenantExportGuard`)
+Message    : ar: "يجري الآن تصدير بيانات المستأجر ''{0}''؛ انتظر انتهاءه ثم أعد المحاولة" · en: "An export of tenant ''{0}'' is already running; wait for it to finish, then try again"
+Traces     : REQ-TENANT-037
+Source     : docs/plans/tenant-maturity-plan.md §5 C.5 ("in-memory guard keyed by tenant id")
+Decided by : `TenantDomain.assertExportStartable(started, code)`; the slot is held by `com.erp.tenant.export.TenantExportGuard`
+
+### X4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_EXPORT_TOO_LARGE` | 422 | `BUSINESS_RULE_VIOLATION` | `TenantDomain.assertExportWithinLimit` (RULE-TENANT-027) | the tenant's row count, the limit |
+| `TENANT_EXPORT_IN_PROGRESS` | 409 | `CONFLICT` | `TenantDomain.assertExportStartable` (RULE-TENANT-028) | tenant code |
+Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity C5` block
+each). A failure to write or read the temporary archive answers 500 `INTERNAL_ERROR` (the existing common code, the
+`readBytes` precedent); nothing is stored then.
+
+### X5. The export SPI (XM-TENANT-004) — NEW, root package `com.erp.tenant` (public, like the provisioning SPI)
+| Type | Member | Contract |
+|---|---|---|
+| `TenantExportContributor` (interface; every core module implements one bean, applications may add theirs) | `String moduleCode()` | the ZIP folder of the module's files: `^[A-Z][A-Z0-9_]{0,31}$`, unique among the contributors (a duplicate or a malformed code fails the export with 500) |
+| | `long countRows(Long tenantId)` | the number of rows `export` will write for the tenant — one `SELECT COUNT(*)` per exported table, each naming `TENANT_ID`; called first, in the export's snapshot |
+| | `void export(TenantExport export)` | writes the module's files through `export.csv(...)`, streaming rows from its own SQL (`JdbcTemplate` with a fetch size, so a table is never loaded whole), every statement naming `TENANT_ID` (RULE-TENANT-011); runs inside `TenantContext.callAs(tenantId)` and the export's read-only transaction; must never write |
+| `TenantExport` (interface, implemented by the tenant module) | `Long tenantId()`, `String tenantCode()` | the tenant being exported |
+| | `void csv(String fileName, List<String> columns, Consumer<Rows> rows)` | opens `{moduleCode}/{fileName}.csv` in the ZIP (`fileName` `^[A-Z][A-Z0-9_]{0,63}$`), writes the byte-order mark and the header record `columns`, hands `rows` the sink, closes the entry and counts its records for the manifest; a duplicate file of a module fails the export with 500 |
+| `TenantExport.Rows` (sink) | `void addRow(ResultSet resultSet)` | writes the current row of a `ResultSet` — every selected column in select-list order, which must have exactly `columns.size()` columns; usable as a `RowCallbackHandler` (`jdbc.query(sql, rows::addRow, tenantId)`) |
+| | `void add(Object... values)` | writes one record from values in column order (for rows not read by SQL) |
+| `TenantExportJdbc` (utility) | `static JdbcTemplate streaming(DataSource)` | a `JdbcTemplate` with fetch size 1 000 for the contributors (PostgreSQL streams a result set only with a fetch size inside a transaction) |
+Mirrors XM-TENANT-002 (`TenantProvisioningContributor`): the tenant module never reads another module's table; each
+module reads its own. The contributors live in each module's `tenant` package (the documented raw-JDBC place of
+`CoreLibraryRulesArchTest` rule 7, like the provisioning contributors): `com.erp.tenant.export.TenantTenantExportContributor`,
+`com.erp.sec.tenant.SecTenantExportContributor`, `com.erp.mdl.tenant.MdlTenantExportContributor`,
+`com.erp.cu.tenant.CuTenantExportContributor`, `com.erp.file.tenant.FileTenantExportContributor`,
+`com.erp.notif.tenant.NotifTenantExportContributor`, `com.erp.sequence.tenant.SequenceTenantExportContributor`,
+`com.erp.audit.tenant.AuditTenantExportContributor`. The plan's SPI has two methods; `countRows` is added because the
+plan asks for the count **before** the export (X10).
+
+### X6. The archive — format
+| Item | Decision |
+|---|---|
+| Container | ZIP (`DEFLATED`), entries in contributor order (`moduleCode` ascending), files in the order each contributor writes them, `manifest.json` last; every entry's time = the export instant |
+| Entry names | `{moduleCode}/{fileName}.csv` (e.g. `SEC/SEC_USER.csv`) and `manifest.json`; a file is written even when the tenant has no row in it (header only), so every archive has the same file set |
+| CSV encoding | UTF-8 **with** a byte-order mark (`EF BB BF`) — Excel opens Arabic text correctly only with it (the REPORT export precedent, `CsvReportWriter`, step 11); RFC 4180: `,` separator, CRLF record separator, a field holding `,` `"` CR LF or leading / trailing blanks is enclosed in `"` with inner `"` doubled |
+| Header | the physical column names of X7 (upper case), one record |
+| Values | NULL → empty field; an empty text → `""` (so NULL and empty stay distinguishable); numbers plain (`BigDecimal.toPlainString`); booleans `true` / `false`; numeric flags as stored (`1` / `0`); `TIMESTAMPTZ` → ISO-8601 instant in UTC (`2026-10-08T09:30:00Z`); `TIMESTAMP` (no zone) → ISO-8601 local date-time as stored; `JSONB` / `TEXT` as stored |
+| Formula guard | a text value starting with `=`, `+`, `-`, `@`, TAB or CR is prefixed with an apostrophe (`'`), so a spreadsheet shows it as text instead of evaluating it (the REPORT precedent; CSV injection); numbers are never prefixed. A re-import strips one leading apostrophe from such values (the manifest says so) |
+| Row order | deterministic: every query ends with `ORDER BY` the table's primary key |
+| `manifest.json` | `{ "format": "erp-tenant-export", "formatVersion": 1, "tenantId", "tenantCode", "exportedAt" (ISO instant), "exportedBy" (operator username), "erpCoreVersion" (the erp-core jar's `Implementation-Version`, `unknown` when run from classes), "rowCount", "files": [ { "module", "path", "rows" } … ], "csv": { encoding, separator, recordSeparator, nullValue, emptyText, formulaGuard } }` — written with `PlainJson.MAPPER`; no secret |
+| Name of the stored document | `tenant-export-{CODE}-{yyyyMMdd'T'HHmmss'Z'}.zip`, content type `application/zip` |
+
+### X7. Files and columns per module (exact; `TENANT_ID` and `VERSION` are never written)
+| Module (contributor) | File (`{module}/{file}.csv`) | Columns (CSV header = select list, in this order) | Excluded columns of that table (why) | Order |
+|---|---|---|---|---|
+| AUDIT (`AuditTenantExportContributor`) | `AUDIT/CORE_AUDIT_EVENT` | `ID, OCCURRED_AT, ACTOR, ACTOR_REALM, ACTOR_USER_ID, ACTION, ENTITY_TYPE, ENTITY_ID, SUMMARY_AR, SUMMARY_EN, CHANGES, IP, USER_AGENT, REFERENCE, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — (`CHANGES` never holds a sensitive field: the audit denylist, `AuditApi.SENSITIVE_FIELD_WORDS`) | `ID` |
+| CU (`CuTenantExportContributor`) | `CU/CU_APP_CONFIGURATION` | `ID, CONFIG_KEY, CONFIG_VALUE, NOTES, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | rows with `TENANT_ID IS NULL` (platform defaults, not the tenant's) | `ID` |
+| FILE (`FileTenantExportContributor`) | `FILE/FILE_CATEGORY` | `ID, CATEGORY_CODE, NAME_AR, NAME_EN, MAX_SIZE_BYTES, ALLOWED_CONTENT_TYPES, ALLOW_PUBLIC, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| FILE | `FILE/FILE_DOCUMENT` | `ID, OWNER_TYPE, OWNER_ID, MODULE_CODE, FILE_NAME, CONTENT_TYPE, FILE_SIZE, FILE_TYPE_ID, FILE_STATUS_ID, FILE_CATEGORY_FK, VISIBILITY, STORAGE_PROVIDER, CONTENT_HASH, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `FILE_CONTENT` (the bytes: metadata only), `STORAGE_REF` (provider-internal location), `PUBLIC_SLUG` (the capability of a public URL) | `ID` |
+| MDL (`MdlTenantExportContributor`) | `MDL/MDL_LOOKUP_TYPE` | `LOOKUP_TYPE_PK, KEY, OWNER_MODULE_CODE, NAME_AR, NAME_EN, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `LOOKUP_TYPE_PK` |
+| MDL | `MDL/MDL_LOOKUP_VALUE` | `LOOKUP_VALUE_PK, LOOKUP_TYPE_ID, LOOKUP_TYPE_KEY, CODE, NAME_AR, NAME_EN, SORT_ORDER, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`LOOKUP_TYPE_KEY` = the type's `KEY`, joined within the tenant) | — | `LOOKUP_VALUE_PK` |
+| NOTIF (`NotifTenantExportContributor`) | `NOTIF/NOTIF_TEMPLATE` | `ID, TEMPLATE_CODE, NAME_AR, NAME_EN, SUBJECT_AR, SUBJECT_EN, BODY_AR, BODY_EN, ATTACHMENT_FILE_ID, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| NOTIF | `NOTIF/NOTIF_CHANNEL_CONFIG` | `ID, CHANNEL_TYPE_ID, IS_ENABLED_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `CONFIG_JSON` (provider settings and credentials) | `ID` |
+| NOTIF | `NOTIF/NOTIF_LOG` | `ID, RECIPIENT_ID, CHANNEL_TYPE_ID, NOTIFICATION_STATUS_ID, MODULE_CODE, REFERENCE_TYPE, REFERENCE_ID, TEMPLATE_FK, RETRY_COUNT, ATTEMPTS, NEXT_ATTEMPT_AT, SENT_AT, ERROR_MESSAGE, LAST_ERROR, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `VARIABLES_JSON` (a queued row's template variables: reset / verification links carry raw tokens) | `ID` |
+| NOTIF | `NOTIF/NOTIF_INBOX` | `ID, RECIPIENT_USER_ID, TITLE_AR, TITLE_EN, BODY_AR, BODY_EN, READ_AT, REFERENCE_TYPE, REFERENCE_ID, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| SEC (`SecTenantExportContributor`) | `SEC/SEC_USER` | `USER_PK, USERNAME, EMAIL, REALM, FULL_NAME_AR, FULL_NAME_EN, STATUS_CODE, IS_ACTIVE_FL, LAST_LOGIN_AT, PHONE, JOB_TITLE_AR, JOB_TITLE_EN, PREFERRED_LOCALE, PHOTO_FILE_ID, PASSWORD_CHANGE_REQUIRED_FL, PASSWORD_CHANGED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `PASSWORD_HASH` | `USER_PK` |
+| SEC | `SEC/SEC_ROLE` | `ROLE_PK, CODE, NAME_AR, NAME_EN, DESCRIPTION_AR, DESCRIPTION_EN, IS_SUPER, IS_ACTIVE_FL, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ROLE_PK` |
+| SEC | `SEC/SEC_USER_ROLE` | `USER_ROLE_PK, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `USER_ROLE_PK` |
+| SEC | `SEC/SEC_ROLE_MODULE_GRANT` | `ROLE_MODULE_GRANT_PK, ROLE_ID, MODULE_ID, MODULE_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`MODULE_CODE` from the global `SEC_MODULE_REG`, which is not exported) | — | `ROLE_MODULE_GRANT_PK` |
+| SEC | `SEC/SEC_ROLE_SCREEN_GRANT` | `ROLE_SCREEN_GRANT_PK, ROLE_ID, SCREEN_ID, PAGE_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`PAGE_CODE` from the global `SEC_SCREEN_REG`) | — | `ROLE_SCREEN_GRANT_PK` |
+| SEC | `SEC/SEC_ROLE_ACTION_GRANT` | `ROLE_ACTION_GRANT_PK, ROLE_ID, ACTION_ID, PERMISSION_CODE, GRANTED_BY, GRANTED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (`PERMISSION_CODE` from the global `SEC_ACTION_REG`) | — | `ROLE_ACTION_GRANT_PK` |
+| SEC | `SEC/SEC_ACTIVE_SESSION` | `ACTIVE_SESSION_PK, USER_ID, STARTED_AT, LAST_ACTIVITY_AT, IP_ADDRESS, TERMINATED_AT, TERMINATED_BY, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | `TOKEN_REF` (the access token's `jti`) | `ACTIVE_SESSION_PK` |
+| SEC | `SEC/SEC_AUDIT_LOG` | `AUDIT_LOG_PK, EVENT_TYPE_CODE, ACTOR_USER_ID, OCCURRED_AT, TARGET_REF, DETAILS_AR, DETAILS_EN, IP_ADDRESS, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `AUDIT_LOG_PK` |
+| SEC | `SEC/SEC_SIGNUP_REQUEST` | `SIGNUP_REQUEST_PK, EMAIL, FULL_NAME_AR, FULL_NAME_EN, SUBMITTED_AT, STATUS_CODE, REVIEWED_BY, REVIEWED_AT, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `SIGNUP_REQUEST_PK` |
+| SEC | (not exported) | `SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN` | whole tables: short-lived credentials (`TOKEN_HASH`), no business data | — |
+| SEQUENCE (`SequenceTenantExportContributor`) | `SEQUENCE/CORE_NUMBER_SERIES` | `ID, CODE, PREFIX, PATTERN, RESET_POLICY, PERIOD_KEY, NEXT_VALUE, IS_ACTIVE, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` | — | `ID` |
+| TENANT (`TenantTenantExportContributor`) | `TENANT/CORE_TENANT` | `ID, CODE, NAME_AR, NAME_EN, STATUS_CODE, CONTACT_EMAIL, CONTACT_PHONE, COUNTRY_CODE, DEFAULT_LOCALE, TIMEZONE, NOTES, SUSPENDED_AT, SUSPENDED_BY, SUSPENSION_REASON, LOGO_FILE_ID, BRAND_COLOR, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT` (the one row `ID = {id}`; `CORE_TENANT` is global, the predicate is its `ID`) | `TOKENS_INVALID_BEFORE` (the token cut-off) | `ID` |
+| (common, no contributor) | (not exported) | `CORE_IDEMPOTENCY_KEY` | whole table: stored answers of retried calls, not business data (C4 note) | — |
+21 files in 8 folders. A global table (`SEC_MODULE_REG`, `SEC_SCREEN_REG`, `SEC_ACTION_REG`, `CORE_TENANT` beyond the
+tenant's own row) is never exported; a reference to one is resolved to its code (the grant files) because the
+registry's ids mean nothing outside this installation. References between the tenant's own tables stay ids (both
+sides are in the archive). REPORT owns no table (no contributor).
+
+### X8. Configuration — NEW (`erp.core.tenant.export.*`, `ErpCoreProperties.Tenant.Export`)
+| Property | Default | What |
+|---|---|---|
+| `erp.core.tenant.export.max-rows` | `200000` | the most rows one export may contain (all files together); must be positive; read on every export, so a change through the bound properties applies to the next export |
+
+### X9. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| NEW (exposed) | XM-TENANT-004 | SPI `com.erp.tenant.TenantExportContributor { String moduleCode(); long countRows(Long tenantId); void export(TenantExport export) }` + `TenantExport`, `TenantExport.Rows`, `TenantExportJdbc` (X5) | TENANT (root package) | implemented by SEC, MDL, CU, FILE, NOTIF, SEQUENCE, AUDIT and TENANT itself; applications may add their own (CONSUMING §3) |
+| NEW (consumed) | FILE XM-FILE-003 | `com.erp.file.crossmodule.FilePrivateStoreApi`: `StoredPrivateFile storePrivateFile(PrivateFileStoreRequest)`, `DownloadGrant issueDownloadToken(Long documentId)` — in the current tenant (PLATFORM here) | FILE | `TenantExportService` |
+| CHANGED (consumed) | — | `com.erp.audit.crossmodule.AuditApi` — + action `TENANT_EXPORTED` (X10) | audit | `TenantExportService` |
+`TenantExportService.export` is not `@Transactional` (the B / E / C12 precedent): the snapshot transaction is opened
+inside `TenantContext.callAs(id)` with a `TransactionTemplate` (read-only, `ISOLATION_REPEATABLE_READ`), then a
+`REQUIRES_NEW` PLATFORM transaction stores the document and audits (the tenant row in a nested `REQUIRES_NEW`
+transaction inside `callAs(id)`, committed first), then the token is issued outside any transaction. It is **not**
+wrapped in C4's `IdempotentResponses` (its work commits in several transactions — ADR-TENANT-003 Consequences); a
+retry simply exports again.
+
+### X10. Audit, secrets, memory
+| Item | Decision |
+|---|---|
+| Audit | `TENANT_EXPORTED` recorded in PLATFORM (`tenantId = 1`) and in the exported tenant, in that order inside the PLATFORM storing transaction (the tenant's row in its own nested transaction): actor = the operator's username, realm `STAFF`, `actorUserId` null in the tenant, entity `CORE_TENANT` / {id}, summaries naming the tenant code, the row count and the document id; one row when {id} is PLATFORM. A refused export (404, 409, 422) records nothing. |
+| Secrets | the X7 exclusions; the response carries the download token once (it is not logged); logs name ids, counts and sizes only, never a value of an exported row |
+| Memory | rows are streamed (fetch size 1 000) and each record is written at once to a buffered ZIP stream on a temporary file (`erp-tenant-export-*.zip` in `java.io.tmpdir`), so no table is held in memory; the temporary file is deleted in a `finally` on every path. FILE then stores the archive through the active storage provider: the `DB` provider reads it into one `BYTEA` value (bounded by `max-rows`), `LOCAL` / `S3` stream it. FILE's upload limits (`erp.core.files.max-content-bytes`) do not apply: the archive is not an upload; `max-rows` bounds it. |
+| Archives kept | an archive stays a PRIVATE PLATFORM document until a platform operator deletes it (`DELETE /api/v1/files/{id}`); no retention job in v1 |
+
+### X11. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-006 — synchronous export bounded by a row limit (v1), archive stored as a PRIVATE PLATFORM document behind FILE's single-use download token; alternatives: an asynchronous job with a status resource, streaming the ZIP in the HTTP response. |
+| CHANGED (plan) | SPI: + `long countRows(Long tenantId)` — the plan asks to count before exporting ("refuse > N rows"); the plan's two methods stay as written. |
+| CHANGED (plan) | Response `{ fileId, downloadToken }` → `TenantExportResponse` with `tenantId`, `tenantCode`, `fileName`, `sizeBytes`, `rowCount` and `downloadTokenExpiresAt` besides the two planned fields (additive). 200 with `Status.SUCCESS` (nothing of the tenant changes; the stored document is the result, like a report export). |
+| NEW (decision) | PLATFORM is exportable (its users, roles, audit and settings are tenant data like any other; its previous export archives appear as `FILE_DOCUMENT` metadata). A suspended tenant is exportable (its data is still there; the export reads, it never signs anyone in). |
+| NEW (decision) | One consistent snapshot: count and files in one read-only `REPEATABLE READ` transaction of the tenant. |
+| NEW (decision) | The in-memory guard is per node (plan: "in-memory guard keyed by tenant id"); multi-node behaviour documented in RULE-TENANT-028. |
+| NEW (decision) | CSV with a byte-order mark and the formula guard (X6), the REPORT export precedent; NULL vs empty text distinguished. |
+| NEW (decision) | The download token is FILE's existing single-use token (API-FILE-002/003): bound to the issuing username, 10 minutes, consumed by the first successful download; the archive is found only in PLATFORM's rows, so in practice only the issuing platform operator can download it. Later downloads: a new token through `POST /api/v1/files/{id}/access-token` (`PERM_FILE_BROWSER_VIEW`). |
+
+### X12. Frontend impact (read by the frontend repository — plan §8 F3)
+| Kind | Item |
+|---|---|
+| NEW | An "export data" action on a tenant row of `PLATFORM_TENANTS` (no new page code, permission or menu entry): `POST /{id}/export`, then download at once with `GET /api/v1/files/download?token={downloadToken}` (same session, single use, 10 minutes); show `rowCount` and `sizeBytes`. A long export (tens of seconds for a large tenant) keeps the request open: show progress, do not retry automatically. |
+| NEW | Error codes `TENANT_EXPORT_TOO_LARGE` (422) and `TENANT_EXPORT_IN_PROGRESS` (409), both languages. |
+| NOTE | The archive is a ZIP of UTF-8 CSV files with a byte-order mark (opens in Excel with Arabic intact) and `manifest.json`. |

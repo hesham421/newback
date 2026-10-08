@@ -404,3 +404,54 @@ Review round 1 (package C4) — registry deltas
 | NEW (note) | REQ-TENANT-036 | a replay precedes the service's `@PreAuthorize`: a consumer authorizes its path in the security chain too (srs I12) | docs/CONSUMING.md §3; ADR-TENANT-003 | — |
 | NEW | — | ArchUnit: `com.erp.common` depends on no module and not on `com.erp.autoconfigure` | architecture/CoreLibraryRulesArchTest.java | the rule itself |
 Error codes, ids and counts unchanged (last REQ 036 · RULE 026 · POL 016 · DBF 045).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (`POST /{id}/export`, SPI `TenantExportContributor`, archive as a PRIVATE PLATFORM document behind FILE's single-use download token) (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C5
+block, X1–X12). Ids continue from the highest ever issued (REQ / AC 036, RULE 026, POL 016, US 015, XM 003,
+DBF 045, ADR 005; RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules).
+
+Entities — delta: none (the archive is a FILE `FILE_DOCUMENT` row of PLATFORM, data not schema).
+
+Exposed — delta
+| Kind | Id | Surface | Consumers |
+|---|---|---|---|
+| NEW | XM-TENANT-004 | SPI `com.erp.tenant.TenantExportContributor { String moduleCode(); long countRows(Long tenantId); void export(TenantExport export) }` + `TenantExport`, `TenantExport.Rows`, `TenantExportJdbc` (exposed; implemented by every core module and by TENANT itself; applications may add theirs) | SEC, MDL, CU, FILE, NOTIF, SEQUENCE, AUDIT, TENANT; applications |
+| NEW | — | HTTP `POST /api/v1/platform/tenants/{id}/export` → `TenantExportResponse` | frontend `PLATFORM_TENANTS` |
+
+Consumed — delta
+| Kind | Owner | Surface | Used by |
+|---|---|---|---|
+| NEW | FILE | XM-FILE-003 `FilePrivateStoreApi.storePrivateFile(PrivateFileStoreRequest)`, `issueDownloadToken(Long)` | `TenantExportService` |
+| CHANGED | audit | `AuditApi` + action `TENANT_EXPORTED` | `TenantExportService` |
+
+Screens — delta: SCR-REQ-TENANT-001 B1 + export a tenant's data; B5 + `POST /{id}/export` and the FILE download (X12);
+no new page code.
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-037 / AC-TENANT-037 | Tenant data export (one snapshot, CSV per table, ZIP + manifest, PRIVATE PLATFORM document, single-use token, `TENANT_EXPORTED`) | US-TENANT-016; POL-TENANT-017; RULE-TENANT-027, -028; ADR-TENANT-006 | tenant/controller/PlatformTenantController.java (`exportTenant`); tenant/service/TenantExportService.java; tenant/export/TenantExportArchive.java | `TenantExportIntegrationTest`; TC-CORE-TENANT-054 … 056 |
+| NEW | RULE-TENANT-027 | Export is bounded (`erp.core.tenant.export.max-rows` → 422 `TENANT_EXPORT_TOO_LARGE`) and secret-free (X7 exclusions; PRIVATE, token-only) | REQ-TENANT-037 | tenant/domain/TenantDomain.java (`assertExportWithinLimit`); tenant/export/TenantExportArchive.java; the eight contributors | `TenantDomainTest`, `TenantExportArchiveTest`, `TenantExportIntegrationTest`; TC-CORE-TENANT-055 |
+| NEW | RULE-TENANT-028 | One export of a tenant at a time per node → 409 `TENANT_EXPORT_IN_PROGRESS` | REQ-TENANT-037 | tenant/domain/TenantDomain.java (`assertExportStartable`); tenant/export/TenantExportGuard.java | `TenantExportGuardTest`, `TenantExportIntegrationTest` |
+| NEW | XM-TENANT-004 | Export SPI (X5) | REQ-TENANT-037 | tenant/TenantExportContributor.java, TenantExport.java, TenantExportJdbc.java | `TenantExportIntegrationTest` |
+
+Error codes — delta
+| Code | HTTP | Code location |
+|---|---|---|
+| `TENANT_EXPORT_TOO_LARGE` | 422 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_EXPORT_IN_PROGRESS` | 409 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+i18n: one `tenant-maturity C5` block in both bundles.
+
+Permissions — delta: none (`PLATFORM_TENANT_MANAGE`). Audit actions — delta: + `TENANT_EXPORTED`. Configuration —
+delta: + `erp.core.tenant.export.max-rows` (`200000`).
+
+Decisions — delta
+| Kind | ADR | Subject | Status |
+|---|---|---|---|
+| NEW | ADR-TENANT-006 | Synchronous, row-bounded tenant export stored as a PRIVATE PLATFORM document behind FILE's single-use download token | PROPOSED → ACCEPTED after the code check (erp-core 1.3.0, package C5) |
+
+Counts after this addendum: REQ 37 · AC 37 · RULE 24 · ENT 1 · SCR-REQ 1 · XM 4.
+Last sequence per atom: REQ: 037 · AC: 037 · ENT: 001 · RULE: 028 (012 … 015 reserved) · SCR-REQ: 001 · XM: 004 · US: 016 · POL: 017 · DBF: 045 · ADR: 006

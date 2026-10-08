@@ -244,3 +244,9 @@ permissions, error codes, schema: unchanged.
 
 Last sequence per atom (highest ever issued): REQ: 093 · AC: 099 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 ·
 XM: 007 · QR: 054 · API: 050 · ADR: 064 (065 held spare; 066 … 068 the analysis-coverage work's)
+
+Package C5 (tenant-maturity plan §5 C.5) — registry delta; full text in `srs-sec.md` 1.3.0 §13.
+| Kind | Item | Delta |
+|---|---|---|
+| NEW | `com.erp.sec.tenant.SecTenantExportContributor` | implements TENANT XM-TENANT-004: nine SEC files of the exported tenant; never `PASSWORD_HASH`, `TOKEN_REF` or the two token tables |
+No id minted; entities, screens, permissions, error codes, schema unchanged. Last sequence per atom unchanged.

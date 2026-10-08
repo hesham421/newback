@@ -129,3 +129,13 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | NEW | Idempotency (common) | `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`) behind `com.erp.common.idempotency`; first consumer `POST /api/v1/platform/tenants` with the optional `Idempotency-Key`; replay with `Idempotent-Replayed: true`, 409 `IDEMPOTENCY_KEY_CONFLICT`, 400 `IDEMPOTENCY_KEY_INVALID`; 24 h retention (`erp.core.idempotency.*`) | `../P1/srs-tenant.md` 1.3.0 I1–I7; ADR-TENANT-003 |
 | CHANGED — FE | Tenant management | a retried create with the same key answers the first result instead of `TENANT_CODE_DUPLICATE` | I11 |
 | CHANGED | DEFERRED | idempotent provisioning leaves DEFERRED; export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW | Export SPI | `TenantExportContributor` beside the provisioning SPI: every core module writes its tenant rows as CSV (21 files); a tenant's data as a ZIP of per-module CSVs + `manifest.json`, a PRIVATE `FILE_DOCUMENT` of the PLATFORM tenant handed out through a single-use download token; bounded by `erp.core.tenant.export.max-rows` (422 `TENANT_EXPORT_TOO_LARGE`), one export per tenant at a time per node (409 `TENANT_EXPORT_IN_PROGRESS`) | `../P1/srs-tenant.md` 1.3.0 X1–X8; ADR-TENANT-006 |
+| NEW — FE | Tenant management | `POST /{id}/export`, then the FILE download with the returned token | X12 |
+| CHANGED | DEFERRED | tenant data export leaves DEFERRED (the `ScopedValue` spike closed as no-go in C6) | plan §5 |

@@ -395,3 +395,15 @@ existing constructors keep working without the job-level skip (the claim still r
 |---|---|
 | CHANGED (plan) | The plan: "the job simply does not claim them while suspended" — implemented at the claim (`prepare`), which every delivery path goes through (the in-process listener and the requeue job), plus the job's per-tenant skip. |
 | NEW (decision) | Re-dispatch on `TenantActivatedEvent`: the requeue job is off by default (`erp.core.notif.requeue.enabled=false`), so without it a held row would wait for an application that enables the job. |
+
+### 6. Package C5 — NOTIF's part of a tenant data export (tenant-maturity plan §5 C.5)
+Change         : tenant-maturity plan package C5 — `NotifTenantExportContributor` implements TENANT's export SPI (XM-TENANT-004) for `POST /api/v1/platform/tenants/{id}/export`
+Statement      : Sections 1–5 above (packages D.3, B and C12) are unchanged; §6 records package C5's implemented deltas.
+
+No NOTIF id is minted (the export rules are TENANT's RULE-TENANT-027 / -028; the SPI is TENANT's XM-TENANT-004). No
+endpoint, entity field, status, error code, permission or migration changes.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.notif.tenant.NotifTenantExportContributor` (`moduleCode` `NOTIF`) | writes `NOTIF/NOTIF_TEMPLATE`, `NOTIF_CHANNEL_CONFIG`, `NOTIF_LOG`, `NOTIF_INBOX` of the exported tenant with plain SQL naming `TENANT_ID` (RULE-TENANT-011), ordered by `ID` | `../../TENANT/P1/srs-tenant.md` 1.3.0 X5, X7 |
+| NEW (rule applied) | never exported | `NOTIF_CHANNEL_CONFIG.CONFIG_JSON` (provider settings and credentials), `NOTIF_LOG.VARIABLES_JSON` (a queued row's template variables: password-reset and verification links carry raw tokens), every `TENANT_ID` / `VERSION` | TENANT RULE-TENANT-027 |

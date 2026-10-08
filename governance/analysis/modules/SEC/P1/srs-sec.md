@@ -1789,3 +1789,16 @@ String detailsAr, String detailsEn)` (the per-user loop of package D, for every 
 | CHANGED (REQ-SEC-028 request half) | unchanged verdict: a token whose session is terminated (now also by a suspension or a revocation) does not authenticate. What the caller sees is decided by TENANT's filter on a non-public path: 403 `TENANT_SUSPENDED` (tenant suspended), 401 `TENANT_TOKEN_REVOKED` (issued before the tenant's cut-off), otherwise SEC's 401 `SEC-401-INVALID-CREDENTIALS` as before. A public path (login, sign-up, password reset, customer public paths) ignores a stale token. |
 | NEW (decision) | The plan said "the JWT filter exposes `iat` on the authentication details": a request attribute typed by the tenant module is used instead (`AuthRealm` is SEC-internal, and the token SEC drops has no authentication at all) — TENANT ADR-TENANT-002. `AuthRealm` is unchanged. |
 | NEW (scope) | No SEC endpoint changes: a staff administrator still terminates single sessions with API-SEC-026; tenant-wide termination is the platform's (`PLATFORM_TENANT_MANAGE`). |
+
+### 13. Package C5 — SEC's part of a tenant data export (tenant-maturity plan §5 C.5)
+Change         : tenant-maturity plan package C5 — `SecTenantExportContributor` implements TENANT's export SPI (XM-TENANT-004) for `POST /api/v1/platform/tenants/{id}/export`
+Statement      : Sections 1–12 above (packages G, D, B, E and C12) are unchanged; §13 records package C5's implemented deltas.
+
+No SEC id is minted (no SEC rule: the export rules are TENANT's RULE-TENANT-027 / -028; the SPI is TENANT's
+XM-TENANT-004). No endpoint, entity field, table, permission, error code or migration of SEC changes.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.sec.tenant.SecTenantExportContributor` (`moduleCode` `SEC`) | writes nine files of the exported tenant — `SEC/SEC_USER`, `SEC_ROLE`, `SEC_USER_ROLE`, `SEC_ROLE_MODULE_GRANT`, `SEC_ROLE_SCREEN_GRANT`, `SEC_ROLE_ACTION_GRANT`, `SEC_ACTIVE_SESSION`, `SEC_AUDIT_LOG`, `SEC_SIGNUP_REQUEST` — with plain SQL naming `TENANT_ID` on every tenant-scoped table (RULE-TENANT-011), ordered by the primary key; the grant files resolve the global registry references to `MODULE_CODE` / `PAGE_CODE` / `PERMISSION_CODE` | TENANT srs-tenant.md 1.3.0 X5, X7 |
+| NEW (rule applied) | never exported | `SEC_USER.PASSWORD_HASH` (POL-SEC-004), `SEC_ACTIVE_SESSION.TOKEN_REF` (the token's `jti`), the token tables `SEC_PWD_RESET_TOKEN` and `SEC_CUSTOMER_VERIFY_TOKEN` (short-lived credentials), every `TENANT_ID` / `VERSION` | TENANT RULE-TENANT-027 |
+Exact column lists: `../../TENANT/P1/srs-tenant.md` 1.3.0 X7 (one place for every module).

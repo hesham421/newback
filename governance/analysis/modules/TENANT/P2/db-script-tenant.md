@@ -465,3 +465,21 @@ Review round 1 (package C4) — no schema change. The claim row is written by pl
 CREATED_AT, UPDATED_BY, UPDATED_AT, VERSION) VALUES (nextval('SEQ_CORE_IDEMPOTENCY_KEY'), ?, ?, ?, ?, 0, ?, ?, ?, ?, 0)
 ON CONFLICT ON CONSTRAINT UQ_CORE_IDEMPOTENCY_KEY DO NOTHING` — `TENANT_ID` named explicitly (RULE-TENANT-011); a lost
 claim consumes one sequence value.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5): no schema change; the export SPI in the XM register
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No migration, table, column, constraint, index or sequence. The archive is a `FILE_DOCUMENT` row of the PLATFORM
+tenant (`OWNER_TYPE = CORE_TENANT`, `OWNER_ID = {id}`, `MODULE_CODE = TENANT`, `VISIBILITY = PRIVATE`,
+`FILE_TYPE_ID = ARCHIVE`, no category) — data, not schema. The export **reads** every tenant-scoped table with
+`TENANT_ID = {id}` (the 23 discriminator columns of this register except `CORE_IDEMPOTENCY_KEY`, `SEC_PWD_RESET_TOKEN`
+and `SEC_CUSTOMER_VERIFY_TOKEN`) and `CORE_TENANT` by `ID`; the exact file and column lists are in
+`../P1/srs-tenant.md` 1.3.0 X7.
+
+### XM REGISTER — delta
+| Kind | XM id | Kind | Surface | Counterpart | Physical link | Status |
+|---|---|---|---|---|---|---|
+| NEW | XM-TENANT-004 | SPI (exposed) | `TenantExportContributor.countRows(Long)` / `export(TenantExport)` | implementers SEC, MDL, CU, FILE, NOTIF, SEQUENCE, AUDIT, TENANT — each reads its own tables by `TENANT_ID` (RULE-TENANT-011) | none (CSV streams into a ZIP; the ZIP is a PRIVATE `FILE_DOCUMENT` of PLATFORM through FILE XM-FILE-003) | IMPLEMENTED (1.3.0) |
+Cascade: FILE `FILE_DOCUMENT` rows with `OWNER_TYPE = CORE_TENANT`, `MODULE_CODE = TENANT` in the PLATFORM tenant
+(one per export) — data, not schema; never deleted automatically.

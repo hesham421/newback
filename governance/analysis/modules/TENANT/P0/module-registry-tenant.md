@@ -206,3 +206,32 @@ physical names do not change.`
 
 RESOLVED DECISIONS — delta: 3 · where idempotency keys live → `CORE_IDEMPOTENCY_KEY` (common), 24 h (ADR-TENANT-003).
 POLICIES OWNED — delta: + POL-TENANT-016.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Owned runtime surface — delta: + SPI `TenantExportContributor` / `TenantExport` / `TenantExportJdbc` (root package);
++ `TenantExportService`, `TenantExportArchive` (the ZIP and CSV writer), the in-memory export guard keyed by tenant id
+(`TenantExportGuard`, per node) and TENANT's own contributor (`CORE_TENANT` row) in `com.erp.tenant.export`.
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | FILE | crossmodule (XM-FILE-003) | `FilePrivateStoreApi.storePrivateFile`, `issueDownloadToken` — the archive as a PRIVATE PLATFORM document and its single-use token | `../P1/srs-tenant.md` 1.3.0 X9 |
+| NEW | every core module | SPI implemented (XM-TENANT-004) | each module's `TenantExportContributor` writes its own tables | X5, X7 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| NEW | `com.erp.tenant.TenantExportContributor { String moduleCode(); long countRows(Long tenantId); void export(TenantExport export) }` | every core module (CSV streams of its tenant rows; never password hashes, tokens, credentials or file bytes); applications | SPI (XM-TENANT-004) | X5 |
+| NEW | `POST /api/v1/platform/tenants/{id}/export` | frontend `PLATFORM_TENANTS` (plan §8 F3) | HTTP | X1 |
+
+CONFIGURATION — delta
+| Kind | Property | Default | Source |
+|---|---|---|---|
+| NEW | `erp.core.tenant.export.max-rows` | 200 000 | X8 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (`PLATFORM_TENANT_MANAGE`).
+RESOLVED DECISIONS — delta: 6 · tenant data export → synchronous, bounded, PRIVATE PLATFORM document + single-use token (ADR-TENANT-006).
+POLICIES OWNED — delta: + POL-TENANT-017.
