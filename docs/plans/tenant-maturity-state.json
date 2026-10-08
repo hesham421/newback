@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "C4,C6",
+  "current_step": "C5",
   "steps": [
     {
       "id": "A",
@@ -186,19 +186,19 @@
       "migrations": [
         "V21__core_idempotency_key.sql"
       ],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/c4-idempotent-provisioning",
-      "worktree": ".worktrees/tm-c4",
+      "worktree": null,
       "attempts": 2,
       "deviations": 9,
       "implementer_agent": "a8b906cdb8e688079",
       "reviewer_agent": "a24929cffff2f1260",
       "review": {
-        "verdict": "pending",
+        "verdict": "PASS",
         "round": 2
       },
       "report": "docs/steps/tm-c4-report.md",
-      "merged_commit": null
+      "merged_commit": "bf37562"
     },
     {
       "id": "C6",
@@ -233,9 +233,9 @@
       ],
       "wave": "7",
       "migrations": [],
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "branch": "tm/c5-tenant-export",
-      "worktree": null,
+      "worktree": ".worktrees/tm-c5",
       "attempts": 0,
       "deviations": 0,
       "implementer_agent": null,
@@ -572,6 +572,18 @@
       "step": "C4",
       "event": "REVIEW",
       "note": "fix round 1 done 279e37e (ON CONFLICT claim, authz note, generator binds common components + brace fix, ArchUnit common rule; mvn 642/10, P-LIVE 199/199); focused re-review"
+    },
+    {
+      "at": "2026-10-08T05:14:33Z",
+      "step": "C4",
+      "event": "COMPLETE",
+      "note": "merged bf37562; verify 650/10; generator 71 OK; P-LIVE 199/199"
+    },
+    {
+      "at": "2026-10-08T05:14:33Z",
+      "step": "C5",
+      "event": "START",
+      "note": "wave 7 (C5 export)"
     }
   ]
 }
