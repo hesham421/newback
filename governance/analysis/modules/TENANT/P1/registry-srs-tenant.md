@@ -328,3 +328,19 @@ Decisions — delta
 
 Counts after this addendum: REQ 35 · AC 35 · RULE 20 · ENT 1 · SCR-REQ 1 · XM 3.
 Last sequence per atom: REQ: 035 · AC: 035 · ENT: 001 · RULE: 024 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 015 · POL: 015 · DBF: 044 · ADR: 005 (002 used by this block; 003, 004 reserved for C.4, C.6)
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C6 block,
+C6-1). No requirement, rule, entity, endpoint, error code, permission, property or migration.
+
+Decisions — delta
+| Kind | ADR | Subject | Status |
+|---|---|---|---|
+| NEW | ADR-TENANT-004 | `ScopedValue` for `TenantContext` — spike with go / no-go criteria (H1–H4, B1/B2) | REJECTED — no-go after the spike (erp-core 1.3.0, package C6; PROPOSED in the analysis commit, decided with the measurements) |
+
+Tests — delta: `TenantContextLeakTest` (M1, `com.erp.events.support`) verifies REQ-TENANT-018 and REQ-TENANT-023 on a reused pooled platform thread, and REQ-TENANT-018's in-task semantics on virtual threads.
+
+Last sequence per atom: unchanged (REQ 035 · AC 035 · RULE 024 · POL 015 · US 015 · XM 003 · DBF 044) · ADR: 005 (004 used by this block; 003 reserved for C.4)

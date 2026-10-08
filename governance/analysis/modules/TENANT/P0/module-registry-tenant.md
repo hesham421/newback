@@ -168,3 +168,13 @@ PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5).
 
 RESOLVED DECISIONS — delta: 2 · token cut-off vs `jti` denylist → per-tenant cut-off (ADR-TENANT-002). POLICIES
 OWNED — delta: + POL-TENANT-015.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+EXPOSED SURFACE — delta: none; `TenantContext` keeps its public API and behaviour (`current`, `find`, `require`,
+`isPlatform`, `set`, `clear`, `runAs`, `callAs`) and its `ThreadLocal` binding.
+
+RESOLVED DECISIONS — delta: 4 · `ScopedValue` for `TenantContext` → no-go after the spike (ADR-TENANT-004 REJECTED;
+`../P1/srs-tenant.md` 1.3.0 C6-2).

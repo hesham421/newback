@@ -1,0 +1,12 @@
+impl=threadlocal java=25.0.4.1
+platform  current(no scope)=1.28 current(in callAs)=1.68 callAs(id,current)=20.74 set/current/clear(no scope)=22.02 set/current/clear(in callAs)=21.66 ns/op
+virtual   current(no scope)=1.45 current(in callAs)=2.49 callAs(id,current)=21.44 set/current/clear(no scope)=21.45 set/current/clear(in callAs)=21.91 ns/op
+impl=scoped java=25.0.4.1
+platform  current(no scope)=1.61 current(in callAs)=2.05 callAs(id,current)=44.64 set/current/clear(no scope)=39.03 set/current/clear(in callAs)=7.69 ns/op
+virtual   current(no scope)=6.95 current(in callAs)=2.11 callAs(id,current)=46.06 set/current/clear(no scope)=40.55 set/current/clear(in callAs)=8.12 ns/op
+impl=threadlocal java=25.0.4.1
+platform  current(no scope)=1.37 current(in callAs)=1.87 callAs(id,current)=26.65 set/current/clear(no scope)=23.71 set/current/clear(in callAs)=24.32 ns/op
+virtual   current(no scope)=2.84 current(in callAs)=2.82 callAs(id,current)=27.09 set/current/clear(no scope)=23.69 set/current/clear(in callAs)=22.56 ns/op
+impl=scoped java=25.0.4.1
+platform  current(no scope)=1.62 current(in callAs)=2.08 callAs(id,current)=47.02 set/current/clear(no scope)=40.19 set/current/clear(in callAs)=7.69 ns/op
+virtual   current(no scope)=9.15 current(in callAs)=2.31 callAs(id,current)=49.55 set/current/clear(no scope)=41.68 set/current/clear(in callAs)=7.88 ns/op
