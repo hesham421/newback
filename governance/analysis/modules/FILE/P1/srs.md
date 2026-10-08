@@ -418,3 +418,11 @@ endpoint, error code or permission is added.
 | CHANGED | RULE-FILE-006 | soft delete keeps the bytes **except** for a restricted document (RULE-FILE-012). |
 | CHANGED | ENTITY-FILE-001 `@Audited` | `@Audited(entityType = "FILE_DOCUMENT", ignore = {"storageRef", "publicSlug"})`: a storage reference (an object key on `LOCAL` / `S3`) and a public slug (the capability of a public URL) are no longer written to `CORE_AUDIT_EVENT.CHANGES`; rows written before keep them (TENANT's AUDIT contributor removes them from an export, srs-tenant.md X14). `requiredAuthority` is recorded (not sensitive). |
 | CHANGED | `FileMetadataView` / `FileDocumentRepository.METADATA_SELECT` | + `requiredAuthority`; the owner list takes the caller's authorities. |
+
+### 10. Closure (tenant-maturity Z) — known limitation of RULE-FILE-012
+Change         : tenant-maturity plan closure step Z — a limitation of the implemented RULE-FILE-012 recorded when the merged packages were checked together; no code change
+Statement      : Sections 1–9 above are unchanged; §10 records a known limitation, no new id.
+
+| Kind | Id | Delta | Source |
+|---|---|---|---|
+| NOTE (known limitation) | RULE-FILE-012 — deleting a restricted document stored on `LOCAL` / `S3` | The object is deleted by an after-commit callback (`FileService.purgeContent`). When the provider's delete fails (an `IOException` on `LOCAL`, an `SdkException` on `S3`), the provider **only logs a WARN**: the row is already the committed `DELETED` tombstone, the caller gets its normal answer, and the **object stays in storage** — nothing retries it. `DB` is not affected (the column is cleared inside the deleting transaction). Follow-up, together with the export-archive retention job (TENANT srs-tenant.md X10): a sweeper that deletes again the content of `DELETED` restricted documents. | `FileService.java:406-424`; `LocalFsStorageProvider.java:82-88`; `S3StorageProvider.java:78-84` |

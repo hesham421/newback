@@ -512,3 +512,7 @@ bind later steps.
   `CUSTOMER_LOGIN_RATE_LIMITED` precedent); the tenant's own running export is answered 409 first.
 - [TM-C5] Review round 1 — TC-CORE-TENANT-056 counts `TENANT_EXPORTED` rows of PLATFORM before and after (was "exactly one",
   true only on a fresh database).
+
+## [TM-Z] tenant-maturity Z — closure
+
+- [TM-Z] Package C5 left the failure path of RULE-FILE-012's `LOCAL` / `S3` purge unspecified → recorded as a known limitation, not changed: the after-commit delete of a deleted restricted document's object only logs a WARN when the provider fails, so the object stays behind the committed `DELETED` tombstone with no retry (FILE `P1/srs.md` 1.3.0 §10). Follow-up: a sweeper together with the export-archive retention job (closure is not the place for a new behaviour).
