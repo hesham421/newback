@@ -19,9 +19,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * tenant-maturity C6 (ADR-TENANT-004, measurement M1): what a reused worker thread sees of an earlier task's tenant,
- * on a pooled platform thread and on virtual threads — {@code runAs}/{@code callAs} (also failing or nested), the event
- * executor's task decorator, and a thread started inside {@code callAs}. Holds for the {@code ThreadLocal} binding.
+ * tenant-maturity C6 (ADR-TENANT-004, M1): {@code runAs}/{@code callAs} (failing, nested), the event decorator and new
+ * threads. Only POOLED_PLATFORM reuses a thread, so only it can show a leak into the next task; VIRTUAL runs each task
+ * on a new thread (a virtual thread is never reused, and a {@code ThreadLocal} belongs to it, not to its carrier), so
+ * the VIRTUAL variants pin the in-task semantics only.
  */
 class TenantContextLeakTest {
 
@@ -38,9 +39,10 @@ class TenantContextLeakTest {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{0}: in-task restore; next-task leak checked on POOLED_PLATFORM only")
     @EnumSource(Threads.class)
-    void aFailingOrNestedCallAs_leavesNoTenantForTheNextTaskOnTheThread(Threads threads) throws Exception {
+    void aFailingOrNestedCallAs_restoresInTheTask_andLeavesNoTenantForTheNextTaskOnAPooledThread(Threads threads)
+            throws Exception {
         executor = executorOf(threads);
         String firstThread = run(() -> {
             assertThatThrownBy(() -> TenantContext.runAs(5L, () -> {
@@ -56,19 +58,20 @@ class TenantContextLeakTest {
             return Thread.currentThread().getName();
         });
 
-        AtomicReference<String> secondThread = new AtomicReference<>();
-        assertThat(run(() -> {
-            secondThread.set(Thread.currentThread().getName());
-            return TenantContext.current();
-        })).as("next task on the %s thread", threads).isNull();
         if (threads == Threads.POOLED_PLATFORM) {
+            AtomicReference<String> secondThread = new AtomicReference<>();
+            assertThat(run(() -> {
+                secondThread.set(Thread.currentThread().getName());
+                return TenantContext.current();
+            })).as("next task on the reused pooled thread").isNull();
             assertThat(secondThread.get()).as("the pool reused its thread").isEqualTo(firstThread);
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{0}: decorated task sees the tenant; next-task leak checked on POOLED_PLATFORM only")
     @EnumSource(Threads.class)
-    void aDecoratedTask_seesTheSubmittersTenant_andLeavesNoneOnTheThread(Threads threads) throws Exception {
+    void aDecoratedTask_seesTheSubmittersTenant_andLeavesNoneForTheNextTaskOnAPooledThread(Threads threads)
+            throws Exception {
         executor = executorOf(threads);
         TenantAndSecurityContextTaskDecorator decorator = new TenantAndSecurityContextTaskDecorator();
         AtomicReference<Long> inTask = new AtomicReference<>();
@@ -83,10 +86,12 @@ class TenantContextLeakTest {
         assertThat(inTask.get()).isEqualTo(42L);
         assertThat(nestedInTask.get()).as("nested callAs inside the task (C12 listeners)")
             .isEqualTo(TenantConstants.PLATFORM_TENANT_ID);
-        assertThat(run(TenantContext::current)).as("next undecorated task").isNull();
+        if (threads == Threads.POOLED_PLATFORM) {
+            assertThat(run(TenantContext::current)).as("next undecorated task on the reused pooled thread").isNull();
+        }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{0}: a new thread inherits no tenant")
     @EnumSource(Threads.class)
     void aThreadStartedInsideCallAs_doesNotInheritTheTenant(Threads threads) throws Exception {
         AtomicReference<Long> child = new AtomicReference<>(-1L);
@@ -105,7 +110,7 @@ class TenantContextLeakTest {
     }
 
     @Test
-    void manyVirtualThreads_eachSeeOnlyTheirOwnTenant() throws Exception {
+    void manyConcurrentVirtualThreads_eachSeeOnlyTheirOwnTenant_inTheTask() throws Exception {
         executor = Executors.newVirtualThreadPerTaskExecutor();
         List<Future<Boolean>> results = new ArrayList<>();
         for (long tenant = 1; tenant <= 2_000; tenant++) {

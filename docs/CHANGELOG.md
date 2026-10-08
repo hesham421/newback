@@ -94,8 +94,8 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
 - [TM-C6] Decision and tests only (no library change): ADR-TENANT-004 rejects moving `TenantContext` to `ScopedValue`
   after a spike (no-go: the same public API needs a `ThreadLocal` fallback for `set` / `clear` outside a scope, so the
   leak class stays, and the tenant filter's p95 is unchanged within noise). `TenantContext` keeps its `ThreadLocal`.
-  New `TenantContextLeakTest` pins the context on pooled platform and virtual threads (failing and nested `callAs`, the
-  event executor's decorator, no inheritance into new threads).
+  New `TenantContextLeakTest` pins the context: no next-task leak on a reused pooled platform thread (failing and nested
+  `callAs`, the event executor's decorator), in-task semantics on virtual threads, no inheritance into new threads.
 
 ### Changed
 - [TM-C12] **Behaviour change** — TENANT/SEC: a token issued before a tenant's re-activation, or before a revoke-tokens

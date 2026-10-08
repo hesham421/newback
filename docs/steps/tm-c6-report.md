@@ -72,10 +72,10 @@ All on one Windows 11 machine, JDK 25.0.4.1 (Temurin), PostgreSQL 16; details an
 | Id | What | Result |
 |---|---|---|
 | H1 | `ScopedValue` status at release 25 | final (JEP 506; no `@PreviewFeature` in the JDK class); `StructuredTaskScope` still preview |
-| M1 | `TenantContextLeakTest`, 8 cases, pooled platform + virtual threads | 8 / 8 on the `ThreadLocal` and 8 / 8 on the spike; no leak via `callAs`, decorator or virtual threads on either; a raw `set` on a pooled thread leaks on both (spike: through its compatibility fallback) |
+| M1 | `TenantContextLeakTest`, 8 cases, pooled platform + virtual threads | 8 / 8 on the `ThreadLocal` and 8 / 8 on the spike; no next-task leak via `callAs` or the decorator on a reused pooled platform thread on either; VIRTUAL variants pin in-task semantics only (a virtual thread is never reused); a raw `set` on a pooled thread leaks on both (spike: through its compatibility fallback) |
 | M4 | 14 tenant / NOTIF / decorator classes with `spring.threads.virtual.enabled=true` (requests on `tomcat-handler-N` virtual threads), spike build | 65 / 65 |
 | M5 | erp-core suite with unscoped `set` refused (`ERP_TENANT_CONTEXT_STRICT=true`) | 282 errors in 56 / 93 classes (269 from `TenantContextTestExecutionListener.beforeTestMethod`); 0 production-path failures |
-| M2 | HTTP p95 (ms), `GET /api/v1/tenant/me`, N = 3 000 after 500 warm-up, fresh JVM per round, A B A B A B | staff token: A 11.08 / 11.82 / 10.85 vs B 8.54 / 12.63 / 9.99 (median 11.08 → 9.99, inside B's spread); header-only: A 2.02 / 1.81 / 1.95 vs B 1.52 / 2.15 / 2.13 (median 1.95 → 2.13, inside A's 10.6 % band); means A 4.32 / 0.97 vs B 4.57 / 1.10 |
+| M2 | HTTP p95 (ms), `GET /api/v1/tenant/me`, N = 3 000 after 500 warm-up, fresh JVM per round, A B A B A B | staff token: A 11.08 / 11.82 / 10.85 vs B 8.54 / 12.63 / 9.99 (median 11.08 → 9.99; A band 8.8 %, limit 12.61); header-only: A 2.02 / 1.81 / 1.95 vs B 1.52 / 2.15 / 2.13 (median 1.95 → 2.13; A band 10.8 %, limit 2.26) — band = (max − min of A p95) / median A p95, limit = median A × (1 + band + 0.05); means A 4.32 / 0.97 vs B 4.57 / 1.10 |
 | M2b | in-process ns/op (platform / virtual) | `current()` in scope ≈ equal (1.7–2.8 vs 2.1–2.3); `callAs` 21–27 vs 45–50; `set/current/clear` in scope 22–24 vs 8; outside a scope 21–24 vs 39–42 |
 | M3 | complexity | +76 / −41 production lines in 3 files; two binding mechanisms; one new public method (`callScoped`); checked exceptions wrapped through a `CallableOp` in the JWT filter |
 
@@ -153,3 +153,41 @@ followed for the run archive. `CLAUDE.md` "Analysis first" followed (ADR and add
   (`SPRING_THREADS_VIRTUAL_ENABLED=true mvn -pl erp-core test -Dtest=…`), not a committed property set.
 - Counts unchanged: test plan TENANT 50, total 218, P-LIVE 196; erp-core tests 623 → 631 (+8), app 10.
 - `ADR-TENANT-004` is used; ADR-TENANT-003 remains reserved for C.4.
+
+## Review round 1
+
+Reviewer verdict PASS, with three minor items, all fixed:
+
+1. **`TenantContextLeakTest` overstated the VIRTUAL case.** A virtual thread is never reused, and a `ThreadLocal`
+   belongs to the virtual thread, not to its carrier. So the VIRTUAL variants cannot show a next-task leak; only
+   POOLED_PLATFORM caught the reviewer's mutants. The class Javadoc, the method names and the parameterized display
+   names now say that VIRTUAL pins in-task semantics only, and the next-task assertions run on POOLED_PLATFORM only.
+   No VIRTUAL "single carrier" variant was added: carrier reuse is invisible to a `ThreadLocal` (or a `ScopedValue`),
+   so such a test would assert nothing new. The M1 wording was aligned in ADR-TENANT-004, `srs-tenant.md` C6-2,
+   `registry-srs-tenant.md`, CHANGELOG and the Measurements table. `TenantContextLeakTest` 8/8 and
+   `CrossModuleBoundaryArchTest` 5/5 were re-run green; no assertion was weakened (the POOLED_PLATFORM checks are
+   unchanged).
+2. **B1 was unreachable once H2 held.** ADR-TENANT-004 has a new subsection, "B1 could not be met once H2 held": under
+   these criteria a go could only have come from B2, which was knowable before measuring. A future revisit should drop
+   H2, accept the MAJOR change, and judge the go on B1.
+3. **M2 / M2b are now reproducible.**
+   - Archive folder (chosen location): `docs/steps/tm-c6/`. It holds `http_bench.py` (HTTP timing), `Bench.java`
+     (in-process harness), `http-bench-results.jsonl` (raw output of the six HTTP rounds) and
+     `micro-bench-results.txt` (raw output of the two in-process runs per implementation). Nothing went under `src`.
+   - The noise band is now derived from the listed p95 values:
+     `band = (max − min of A p95) / median A p95`; H4 fails iff `median B p95 > median A p95 × (1 + band + 0.05)`.
+     - Staff token: band = 8.8 %, limit 12.61 ms, B median 9.99 ms.
+     - Header only: band = 10.8 %, limit 2.26 ms, B median 2.13 ms.
+     - This replaces the earlier "10.6 %" (computed from unrounded values) and the −9.9 % / +9.7 % deltas, now −9.8 % /
+       +9.2 % from the listed numbers. Verdict unchanged.
+   - Reproduction (JDK 25, PostgreSQL 16, fresh DB per series):
+     - **HTTP:** for each round, build or copy the jar to measure. Run
+       `ERP_BOOTSTRAP_ADMIN_PASSWORD=… docs/test-api/start_profile_instance.sh <jar> 18109 <db> <log>`, then
+       `python docs/steps/tm-c6/http_bench.py 18109 <label> 3000`, then stop the instance. Order: ThreadLocal,
+       ScopedValue, ×3.
+     - **In-process:** `javac -d out -cp <erp-core jar> docs/steps/tm-c6/Bench.java`, then
+       `java -cp "out;<erp-core jar>" Bench <label>`, once against main's erp-core jar and once against the spike's
+       (commit ae5fe50).
+
+Verification after the round: `TenantContextLeakTest` 8/8 and `CrossModuleBoundaryArchTest` 5/5 (the only code file
+changed was this test). Nothing outside `docs/`, `governance/analysis/` and that test changed.

@@ -133,7 +133,9 @@ what stays is this ADR, the C6 analysis rows and the leak test `TenantContextLea
   (`docs/test-api/results/20261008T075803-P-LIVE.json`). **Met** (compatibility mode).
 - **M1 leak tests** — `TenantContextLeakTest` (8 cases: failing and nested `callAs`, a decorated task with a nested
   PLATFORM `callAs`, no inheritance into a new thread, 2 000 concurrent virtual threads, a raw `set` on a pooled
-  thread) passes on **both** implementations. Neither leaks through `callAs`, the decorator or a virtual thread; on
+  thread) passes on **both** implementations. On a reused pooled platform thread neither leaks through `callAs` or the
+  decorator into the next task; on virtual threads the test pins the in-task semantics only (restore, nested `callAs`,
+  per-thread isolation) — a virtual thread is never reused, so it cannot show a next-task leak (review round 1). On
   both, a raw `set` without `clear` on a pooled platform thread is seen by the next task (compatibility mode keeps it)
   — the leak REQ-TENANT-023's guard exists for.
 - **M5 consumer impact** — the erp-core suite with unscoped `set` refused: **282 errors in 56 of 93 test classes**
@@ -148,14 +150,21 @@ what stays is this ADR, the C6 analysis rows and the leak test `TenantContextLea
   | staff token (JWT filter → token branch → handler) | 3.31 / 3.30 / 3.19 | 4.19 / 3.65 / 3.37 | 11.08 / 11.82 / 10.85 | 8.54 / 12.63 / 9.99 | 4.32 | 4.57 |
   | `X-Tenant-Code` only (header branch `set` / `clear`, then 401) | 0.74 / 0.69 / 0.71 | 0.83 / 0.75 / 0.74 | 2.02 / 1.81 / 1.95 | 1.52 / 2.15 / 2.13 | 0.97 | 1.10 |
 
-  Median p95: token A 11.08 → B 9.99 (−9.9 %, inside B's own 4.1 ms round-to-round spread); header A 1.95 → B 2.13
-  (+9.7 %, inside A's 10.6 % A-vs-A band + 5 %). **H4 met** (no p95 regression beyond noise); **no gain** — p50 and the
-  means are slightly higher on B in every round (0.04–0.25 ms).
+  Noise band and H4 test (review round 1: derived from the p95 values in the table):
+  `band = (max − min of the three A p95) / median of the three A p95`; H4 fails iff
+  `median B p95 > median A p95 × (1 + band + 0.05)`.
+  Staff token: band = (11.82 − 10.85) / 11.08 = 8.8 %; limit 11.08 × 1.138 = 12.61; B median 9.99 (−9.8 % vs A).
+  Header only: band = (2.02 − 1.81) / 1.95 = 10.8 %; limit 1.95 × 1.158 = 2.26; B median 2.13 (+9.2 % vs A).
+  **H4 met** (both B medians under their limits); **no gain** — the token median is lower on B, but B's own rounds
+  spread over 4.09 ms (8.54 … 12.63), and p50 and the means are slightly higher on B in every round (0.04–0.25 ms).
 - **M2b in-process** (a Java harness compiled against each erp-core jar; median of 15 rounds × 5 M operations; ns per
   operation, platform / virtual thread): `current()` inside a scope 1.7–1.9 / 2.5–2.8 (ThreadLocal) vs 2.1 / 2.1–2.3
   (ScopedValue); `callAs(id, current)` 21–27 vs **45–50** (each binding allocates a carrier and a frame);
   `set` / `current` / `clear` inside a scope 22–24 vs 7.7–8.1; outside a scope 21–24 vs 39–42 (the `isBound` miss plus
   the fallback). Nanoseconds against milliseconds per request: no request-level effect either way.
+- **Reproduction** — the HTTP timing script (`http_bench.py`), the in-process harness (`Bench.java`) and their raw
+  outputs (`http-bench-results.jsonl`, `micro-bench-results.txt`) are archived in `docs/steps/tm-c6/`, together with
+  the commands in `docs/steps/tm-c6-report.md` → Measurements (review round 1).
 - **M3 complexity** — +76 / −41 production lines in 3 files; two binding mechanisms instead of one (scoped frame +
   `ThreadLocal` fallback); one new public method (`callScoped`); the JWT filter wraps its checked exceptions
   (`IOException` / `ServletException`) through a `CallableOp`.
@@ -167,6 +176,14 @@ still binds a tenant past any scope, so REQ-TENANT-023's guard must stay and the
 — p95 equal within noise, `callAs` twice as slow in-process (irrelevant at request scale). Go ⇔ H1–H4 ∧ (B1 ∨ B2):
 **no-go**. The cost (a second binding mechanism, a new public method, a filter rewritten around a `CallableOp`) buys
 nothing measurable.
+
+### B1 could not be met once H2 held (review round 1)
+H2 requires `set` / `clear` to keep working outside any scope, which needs a per-thread fallback; a per-thread fallback
+lets a raw `set` outlive every scope, which is exactly what B1 excludes. So under these criteria a go could only ever
+have come from B2 (a measurable latency gain), and that was knowable before the spike: the measurements confirmed the
+compatibility cost (M5) and found no B2. A future revisit should not re-run this ADR as written: it should **drop H2**
+and accept a MAJOR change (`set` / `clear` removed or failing outside a scope), so that B1 becomes reachable, and judge
+the go on B1 against the migration cost for applications and tests.
 
 ### When to revisit
 A MAJOR release (2.0) that removes `set` / `clear` from the public API (every binding a bounded scope), together with a

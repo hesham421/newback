@@ -341,6 +341,6 @@ Decisions — delta
 |---|---|---|---|
 | NEW | ADR-TENANT-004 | `ScopedValue` for `TenantContext` — spike with go / no-go criteria (H1–H4, B1/B2) | REJECTED — no-go after the spike (erp-core 1.3.0, package C6; PROPOSED in the analysis commit, decided with the measurements) |
 
-Tests — delta: `TenantContextLeakTest` (M1, `com.erp.events.support`) verifies REQ-TENANT-018 and REQ-TENANT-023 on pooled platform and virtual threads.
+Tests — delta: `TenantContextLeakTest` (M1, `com.erp.events.support`) verifies REQ-TENANT-018 and REQ-TENANT-023 on a reused pooled platform thread, and REQ-TENANT-018's in-task semantics on virtual threads.
 
 Last sequence per atom: unchanged (REQ 035 · AC 035 · RULE 024 · POL 015 · US 015 · XM 003 · DBF 044) · ADR: 005 (004 used by this block; 003 reserved for C.4)
