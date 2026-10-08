@@ -132,7 +132,7 @@ earlier cases it depends on.
 | 8 — notifications | NOTIF-002, NOTIF-004, NOTIF-005, NOTIF-007..011, NOTIF-013, NOTIF-016 | Async outcomes and the inbox |
 | 9 — audit | AUDIT-001..005, AUDIT-007, AUDIT-008, AUDIT-010..014, AUDIT-016 | Reads the rows written by phases 1–8 |
 | 10 — reports | REPORT-001..011, AUDIT-015 (needs REPORT-011's role), REPORT-014..017, APP-001 | Definitions, run, export, per-report grant |
-| 11 — tenant lifecycle | TENANT-025, TENANT-019..024, then TENANT-027..036 (TM-B, on a fresh tenant D) | List isolation across A and B (TENANT-025, needs the phase 7–10 rows); suspension, on tenant C only, so A and B stay usable; TM-B's profile, suspension facts, admin-reset and usage on tenant D (no staff user is ever added to A; TENANT-036 reads A's usage after every phase that writes to A) |
+| 11 — tenant lifecycle | TENANT-025, TENANT-019..024, then TENANT-027..037 (TM-B, on a fresh tenant D) | List isolation across A and B (TENANT-025, needs the phase 7–10 rows); suspension, on tenant C only, so A and B stay usable; TM-B's profile, suspension facts, admin-reset and usage on tenant D (no staff user is ever added to A; TENANT-036 reads A's usage after every phase that writes to A) |
 | 12 — profile runs | P-MAIL: SEC-021..027, NOTIF-003, NOTIF-012, NOTIF-014, NOTIF-015, SEC-034, SEC-032, FILE-022, AUDIT-006, AUDIT-009, REPORT-012, PLATFORM-004, TENANT-026 (last: it suspends and re-activates the run's tenant A) · P-MAIL-DOWN: NOTIF-006 · P-CAP: REPORT-013 · P-LOCAL: FILE-025 | Re-run phase 1 (logins), plus the phase-2 tenant A setup with a fresh `RUN`, first |
 
 ## 4. Coverage matrix (step → TC ids)
@@ -153,7 +153,7 @@ earlier cases it depends on.
 | 12 | arch rules, CI & release | — (none: no HTTP-observable behaviour) | §9 (ArchUnit rules 1–7, additive guard, JaCoCo, CI) |
 | 14 | api-verify fixes (`DEVIATIONS.md` `[14]`, not a plan step) | SEC-028, SEC-029, SEC-030, SEC-031, SEC-032, SEC-033, NOTIF-003, NOTIF-006 | §9 (EMAIL with no address anywhere; explicit `variables.email` override) |
 | TM-G | tenant-maturity G: revoke a single screen or action grant (erp-core 1.3.0, `docs/plans/tenant-maturity-plan.md` §8b) | SEC-035, SEC-036, SEC-037, SEC-038, SEC-039, SEC-040 | §9 (super role keeps every authority after a revoke; cascade-set decisions) |
-| TM-B | tenant-maturity B: tenant level 1 — names and profile (`PUT /{id}`), suspension with a reason and its facts, admin-reset of a tenant administrator, usage figures (erp-core 1.3.0, `docs/plans/tenant-maturity-plan.md` §4) | TENANT-027, TENANT-028, TENANT-029, TENANT-030, TENANT-031, TENANT-032, TENANT-033, TENANT-034, TENANT-035, TENANT-036 (and TENANT-020, TENANT-026 now send a suspension reason) | §9 (token cut-off stored, facts untouched on re-apply, session-end actor, figures against JDBC) |
+| TM-B | tenant-maturity B: tenant level 1 — names and profile (`PUT /{id}`), suspension with a reason and its facts, admin-reset of a tenant administrator, usage figures (erp-core 1.3.0, `docs/plans/tenant-maturity-plan.md` §4) | TENANT-027, TENANT-028, TENANT-029, TENANT-030, TENANT-031, TENANT-032, TENANT-033, TENANT-034, TENANT-035, TENANT-036, TENANT-037 (and TENANT-020, TENANT-026 now send a suspension reason) | §9 (token cut-off stored, facts untouched on re-apply, session-end actor, figures against JDBC) |
 | TM-D | tenant-maturity D: admin-set password, forced change, own password, staff `/me`, profile fields, photos (erp-core 1.3.0, `docs/plans/tenant-maturity-plan.md` §6) | SEC-041, SEC-042, SEC-043, SEC-044, SEC-045, SEC-046, SEC-047, SEC-048, SEC-049, SEC-050, SEC-051, SEC-052, SEC-053, SEC-054, SEC-055 (and, since TM-D, every case that signs in as a user an administrator created goes through its first-login change: TENANT-013, SEC-006, SEQ-014, SEC-037, REPORT-011, NOTIF-015) | §9 (policy on reset completion and on a tenant's first administrator, SVG safety rules, event delivery, multipart ceiling) |
 
 ## 5. Test cases
@@ -214,6 +214,7 @@ cross-references.
 | TC-CORE-TENANT-034 | TENANT | TM-B | Admin-reset of the tenant administrator ends every session, refuses the old password and forces a change of the new one | TENANT-033 | login `td-admin` → `T_OLD`; `GET /api/v1/sec/me` `A:T_OLD` (its `userPk`); `A:T_PLAT`: `POST …/$D_ID/admin-reset` `{"username":"td-admin","newPassword":"Rec0vered-Tc9"}`; `GET /api/v1/sec/me` `A:T_OLD`; login with `$PW`; login with `Rec0vered-Tc9` | 200 · `data.username`=`td-admin`, `data.sessionsTerminated` ≥ 2 (the logins of TENANT-031..034), no password in the body; `T_OLD` → 401; `$PW` → 401; new password 200 · `passwordChangeRequired`=true | srs-tenant.md 1.3.0 package B — REQ-TENANT-027 / AC-TENANT-027; SEC REQ-SEC-091 / AC-SEC-097, ADR-SEC-063; JUnit `TenantAdminResetIntegrationTest.aReset_setsThePassword_endsEverySession_forcesAChange_auditsInTheTargetTenant_andMailsTheUser` |
 | TC-CORE-TENANT-035 | TENANT | TM-B | The reset is audited in the target tenant, with the platform operator as actor and no secret | TENANT-034 | `first_login` `TC:$TD` `td-admin` / `Rec0vered-Tc9` → `T_D`; `GET /api/v1/audit/events?action=ADMIN_PASSWORD_RESET&size=50` `A:T_D`; `GET /api/v1/audit/events?action=ADMIN_PASSWORD_RESET&entityId={td-admin userPk}` `A:T_PLAT` | 200 · exactly one row (`actor`=`admin`, `actorRealm`=`STAFF`, `actorUserId`=null, `entityType`=`SEC_USER`, `entityId`=td-admin's `userPk`), no password or `$2a$` in it; PLATFORM's answer is empty | srs-tenant.md 1.3.0 package B — B8; SEC REQ-SEC-091 §10.3; POL-TENANT-013; JUnit as TENANT-034 |
 | TC-CORE-TENANT-036 | TENANT | TM-B | The usage figures count only the tenant asked for | TENANT-035, phases 6–10 (A's customers and files) | `A:T_PLAT`: `GET …/$D_ID/usage` (polled until `notificationsLast30Days` ≥ 1); `GET …/$A_ID/usage`; `A:T_A`: `POST /api/v1/sec/users/search` `{"size":1}`; `GET …/$D_ID/usage` `A:T_A` | D: `staffUsers`=2, `customerUsers`=0, `fileDocuments`=0, `fileBytes`=0, `activeSessions` ≥ 1, `notificationsLast30Days` ≥ 1 (the `STAFF_PASSWORD_CHANGED` mails); A: `staffUsers` = A's search `totalElements`, `customerUsers` ≥ 1, `fileDocuments` ≥ 1; `T_A` → 403 · `E(SEC-403-FORBIDDEN)` | srs-tenant.md 1.3.0 package B — REQ-TENANT-028 / AC-TENANT-028; POL-TENANT-007; JUnit `TenantUsageIntegrationTest.theFigures_countOnlyThatTenantsRows` |
+| TC-CORE-TENANT-037 | TENANT | TM-B | Admin-reset refuses the PLATFORM tenant (even the operator's own account) and every reset leaves a PLATFORM audit trace (review round 1) | TENANT-034 | `A:T_PLAT`: `POST /api/v1/platform/tenants/1/admin-reset` `{"username":"admin","newPassword":"Rec0vered-Tc9"}`; login `TC:PLATFORM` `admin` with `$ADMIN_PW`; `GET /api/v1/audit/events?action=TENANT_ADMIN_RESET&entityType=CORE_TENANT&entityId=$D_ID` `A:T_PLAT` | 422 · `E(TENANT_ADMIN_RESET_PLATFORM)`; login 200 (unchanged); 200 · exactly one row (`actor`=`admin`, `actorRealm`=`STAFF`, `entityType`=`CORE_TENANT`, `entityId`=`$D_ID`), `summaryEn` names `td-admin`, `$TD` and the session count, no password or `$2a$` | srs-tenant.md 1.3.0 package B — RULE-TENANT-017 (CHANGED, review round 1), B8 (2); SEC RULE-SEC-057; JUnit `TenantAdminResetIntegrationTest.unknownOrNonSuperTargets_…`, `aReset_setsThePassword_…`, `TenantDomainTest.adminReset_isNeverAllowedOnThePlatformTenant` |
 
 ### 5.3 PLATFORM — platform API authorization (step 05)
 
@@ -424,7 +425,7 @@ cross-references.
 | Module | Cases |
 |---|---|
 | CORE | 8 |
-| TENANT | 36 |
+| TENANT | 37 |
 | PLATFORM | 4 |
 | SEC | 55 |
 | SEQ | 14 |
@@ -434,9 +435,9 @@ cross-references.
 | AUDIT | 16 |
 | REPORT | 17 |
 | APP | 2 |
-| **Total** | **203** |
+| **Total** | **204** |
 
-Of these, 22 cases need a profile other than P-LIVE (marked **[P-…]**); the remaining 181 run against the running app as is. SEC-028..030 FAILED against v1.0.0 (known gap from review round 1, confirmed by the phase-D api-verify run); since the `[14]` fix they are expected to PASS.
+Of these, 22 cases need a profile other than P-LIVE (marked **[P-…]**); the remaining 182 run against the running app as is. SEC-028..030 FAILED against v1.0.0 (known gap from review round 1, confirmed by the phase-D api-verify run); since the `[14]` fix they are expected to PASS.
 
 ## 7. Data hygiene
 

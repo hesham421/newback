@@ -2841,6 +2841,23 @@ def test_tenant_036_usage_counts_only_that_tenant(ctx):
     st(usage_of(ctx, ctx.D_ID, token=ctx.T_A), 403, "SEC-403-FORBIDDEN", what="a tenant administrator is refused")
 
 
+@tc("TC-CORE-TENANT-037")
+def test_tenant_037_admin_reset_platform_refused_and_traced(ctx):
+    # review round 1: never on PLATFORM — not even the operator's own account (SEC RULE-SEC-057 stays whole)
+    st(admin_reset(ctx, 1, "admin", PW_RECOVERED), 422, "TENANT_ADMIN_RESET_PLATFORM", what="PLATFORM, own account")
+    st(login_staff("PLATFORM", "admin", ctx.ADMIN_PW), 200, what="the operator's password is unchanged")
+    a = audit(ctx.T_PLAT, action="TENANT_ADMIN_RESET", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+    st(a, 200, what="PLATFORM's audit log")
+    rows = a.content
+    eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+       [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))], "one TENANT_ADMIN_RESET row for tenant D")
+    summary = (rows[0].get("summaryEn") or "") if rows else ""
+    check("td-admin" in summary and ctx.TD in summary and "sessions terminated:" in summary,
+          "summary names the user, the tenant and the session count", "td-admin, $TD, sessions terminated", summary)
+    blob = json.dumps(rows, ensure_ascii=False)
+    check(PW_RECOVERED not in blob and "$2a$" not in blob, "no secret in the PLATFORM row", "absent", "checked")
+
+
 # =============================================================================================
 # Phase 12 — profile runs
 # =============================================================================================
@@ -3221,7 +3238,7 @@ ORDER = {
                   "NOTIF-002", "NOTIF-004", "NOTIF-005", *rng("NOTIF", 7, 11), "NOTIF-013", "NOTIF-016",
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
-                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 36)),
+                  "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37)),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
