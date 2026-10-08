@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017). */
+/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021). */
 class TenantDomainTest {
 
     @ParameterizedTest
@@ -158,6 +158,55 @@ class TenantDomainTest {
         assertThat(entity.getSuspendedBy()).isNull();
         assertThat(entity.getSuspensionReason()).isNull();
         assertThat(entity.getTokensInvalidBefore()).isEqualTo(activatedAt);
+    }
+
+    @Test
+    void logo_isAcceptedOnlyWhenFileStoredIt_andTheRefusalNamesTheFilePart() {
+        assertThatCode(() -> TenantDomain.assertLogoAccepted(true)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.assertLogoAccepted(false))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                LocalizedException refusal = (LocalizedException) e;
+                assertThat(refusal.getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_LOGO_INVALID);
+                assertThat(refusal.getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                assertThat(refusal.getErrors()).singleElement().satisfies(d -> assertThat(d.field()).isEqualTo("file"));
+            });
+        assertThat(TenantDomain.LOGO_MAX_BYTES).isEqualTo(1_048_576L);
+        assertThat(TenantDomain.LOGO_TYPES).containsExactlyInAnyOrder("image/png", "image/jpeg", "image/webp", "image/svg+xml");
+        assertThat(TenantDomain.LOGO_OWNER_TYPE).isEqualTo("CORE_TENANT");
+        assertThat(TenantDomain.LOGO_MODULE_CODE).isEqualTo("TENANT");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"#1A2B3C", "#1a2b3c", "#000000", "#FFFFFF", " #abcdef ", "", "   "})
+    void brandColor_acceptsHashAndSixHexDigits_orBlank(String colour) {
+        assertThatCode(() -> TenantDomain.assertBrandColorValid(colour)).doesNotThrowAnyException();
+        assertThatCode(() -> TenantDomain.assertBrandColorValid(null)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"red", "#12345", "#1234567", "1A2B3C", "#GGGGGG", "##12345", "#12 345", "rgb(1,2,3)"})
+    void brandColor_refusesAnythingElse_namingTheField(String colour) {
+        assertThatThrownBy(() -> TenantDomain.assertBrandColorValid(colour))
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                LocalizedException refusal = (LocalizedException) e;
+                assertThat(refusal.getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_BRAND_COLOR_INVALID);
+                assertThat(refusal.getStatus()).isEqualTo(Status.VALIDATION_ERROR);
+                assertThat(refusal.getErrors()).singleElement().satisfies(d -> assertThat(d.field()).isEqualTo("brandColor"));
+            });
+    }
+
+    @Test
+    void branding_isServedForAnActiveTenantOnly_andPlatformMayCarryALogo() {
+        assertThatCode(() -> TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE))
+            .assertServed()).doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_SUSPENDED)).assertServed())
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_SUSPENDED);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.FORBIDDEN);
+            });
     }
 
     private static Tenant tenant(Long id, String status) {

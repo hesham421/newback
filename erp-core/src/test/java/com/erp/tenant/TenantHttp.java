@@ -155,6 +155,37 @@ final class TenantHttp {
             .POST(HttpRequest.BodyPublishers.ofByteArray(content.toByteArray())));
     }
 
+    /** tenant-maturity E — a multipart {@code PUT} with one part {@code file} (the logo endpoint). */
+    HttpResponse<String> putFile(String token, String path, String fileName, byte[] bytes) {
+        String boundary = "----erp" + UUID.randomUUID().toString().replace("-", "");
+        ByteArrayOutputStream content = new ByteArrayOutputStream();
+        content.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + fileName
+            + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        content.writeBytes(bytes);
+        content.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return send(authorized(HttpRequest.newBuilder(URI.create(baseUrl + path)), token)
+            .header("Accept-Language", "en")
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .PUT(HttpRequest.BodyPublishers.ofByteArray(content.toByteArray())));
+    }
+
+    HttpResponse<String> delete(String token, String path) {
+        return send(authorized(json(path), token).DELETE());
+    }
+
+    /** An anonymous GET answered as bytes (a public file), without any header but the URL. */
+    HttpResponse<byte[]> getBytes(String path) {
+        try {
+            return http.send(HttpRequest.newBuilder(URI.create(baseUrl + path)).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** The {@code tid} claim of an access token (payload decoded without verification — test only). */
     static long tenantIdOf(String token) {
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);

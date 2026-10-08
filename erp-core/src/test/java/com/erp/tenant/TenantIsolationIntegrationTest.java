@@ -30,6 +30,7 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     private TenantHttp http;
+    private String platformToken;
     private String codeA;
     private String codeB;
     private long tenantA;
@@ -42,7 +43,7 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void twoTenantsWithOneExtraUserEach() {
         http = new TenantHttp(port);
-        String platformToken = http.token(TenantConstants.PLATFORM_TENANT_CODE,
+        platformToken = http.token(TenantConstants.PLATFORM_TENANT_CODE,
             TenantHttp.platformOperator(jdbcTemplate, passwordEncoder));
         codeA = TenantHttp.unique("TA");
         codeB = TenantHttp.unique("TB");
@@ -174,6 +175,25 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         assertThat(tenantOf("file_document", "id", fileOfA)).isEqualTo(tenantA);
         assertNotFound(http.get(tokenA, "/api/v1/files/" + fileOfB), "FILE_DOCUMENT_NOT_FOUND");
         assertThat(http.get(tokenB, "/api/v1/files/" + fileOfB).statusCode()).isEqualTo(200);
+    }
+
+    /** tenant-maturity E (RULE-TENANT-018): a tenant's logo is a document of that tenant only. */
+    @Test
+    void aTenantsLogo_livesInItsOwnRows_andIsInvisibleToAnotherTenant() {
+        HttpResponse<String> set = http.putFile(platformToken, "/api/v1/platform/tenants/" + tenantA + "/logo", "a.png",
+            TenantBrandingIntegrationTest.PNG);
+        assertThat(set.statusCode()).as(set.body()).isEqualTo(200);
+        long logoOfA = jdbcTemplate.queryForObject("select logo_file_id from core_tenant where id = ?", Long.class, tenantA);
+        String list = "/api/v1/files?ownerType=CORE_TENANT&moduleCode=TENANT&ownerId=" + tenantA;
+
+        assertThat(tenantOf("file_document", "id", logoOfA)).isEqualTo(tenantA);
+        assertThat(ids(http.get(tokenA, list), "$.data.content[*].id")).containsExactly(logoOfA);
+        assertThat(ids(http.get(tokenB, list), "$.data.content[*].id")).isEmpty();
+        assertNotFound(http.get(tokenB, "/api/v1/files/" + logoOfA), "FILE_DOCUMENT_NOT_FOUND");
+        String urlOfA = JsonPath.read(set.body(), "$.data.logoUrl");
+        assertThat(http.getBytes(urlOfA.replace("/" + codeA + "/", "/" + codeB + "/")).statusCode())
+            .as("the slug does not resolve under another tenant's code").isEqualTo(404);
+        assertThat((Object) JsonPath.read(http.get(tokenB, "/api/v1/tenant/me").body(), "$.data.logoUrl")).isNull();
     }
 
     @Test
