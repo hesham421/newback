@@ -15,18 +15,19 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * RULE-SEC-059 (tenant-maturity D, ADR-SEC-063) — while the authenticated STAFF caller's
- * {@code PASSWORD_CHANGE_REQUIRED_FL} is set ({@link AuthRealm#passwordChangeRequired()}), every request
- * except {@code GET /api/v1/sec/me}, {@code PUT /api/v1/sec/me/password}, {@code POST /api/v1/sec/auth/logout}
- * and the chain's public paths answers 403 {@code SEC-403-PASSWORD-CHANGE-REQUIRED}. Placed after
- * {@link RealmEnforcementFilter} in the staff chain; not a {@code @Component}.
+ * {@code PASSWORD_CHANGE_REQUIRED_FL} is set ({@link AuthRealm#passwordChangeRequired()}), every request except
+ * {@code GET /api/v1/sec/me}, {@code PUT /api/v1/sec/me/password}, {@code POST /api/v1/sec/auth/logout}, the tenant's
+ * branding {@code GET /api/v1/tenant/me} (tenant-maturity E) and the chain's public paths answers 403
+ * {@code SEC-403-PASSWORD-CHANGE-REQUIRED}. Placed after {@link RealmEnforcementFilter} in the staff chain.
  */
 public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
 
-    /** The three calls a caller with a pending forced change may still make. */
+    /** The calls a caller with a pending forced change may still make (the branding read since tenant-maturity E). */
     static final List<Exemption> EXEMPTIONS = List.of(
         new Exemption(HttpMethod.GET, "/api/v1/sec/me"),
         new Exemption(HttpMethod.PUT, "/api/v1/sec/me/password"),
-        new Exemption(HttpMethod.POST, "/api/v1/sec/auth/logout"));
+        new Exemption(HttpMethod.POST, "/api/v1/sec/auth/logout"),
+        new Exemption(HttpMethod.GET, "/api/v1/tenant/me"));
 
     record Exemption(HttpMethod method, String path) {
     }

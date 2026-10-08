@@ -4,6 +4,7 @@ import com.erp.common.web.ApiResponse;
 import com.erp.common.web.OperationCode;
 import com.erp.tenant.dto.TenantAdminResetRequest;
 import com.erp.tenant.dto.TenantAdminResetResponse;
+import com.erp.tenant.dto.TenantBrandingUpdateRequest;
 import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantSearchRequest;
@@ -16,7 +17,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,14 +28,16 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Platform-level tenant management (erp-core step 05). Every path under {@code /api/v1/platform/**}
  * requires an authenticated PLATFORM-tenant caller holding {@code PLATFORM_TENANT_MANAGE} (security
  * chain) and the service re-checks the authority. Tenants are never deleted (no DELETE) and their code
  * never changes; tenant-maturity B adds the names-and-profile PUT, the administrator recovery and the usage
- * figures. Status changes go through one PATCH, as the step file specifies. Pure delegation — zero business logic.
+ * figures, E the logo and the brand colour (D5). Status changes go through one PATCH. Pure delegation — zero logic.
  */
 @RestController
 @RequestMapping("/api/v1/platform/tenants")
@@ -107,5 +112,37 @@ public class PlatformTenantController {
     @Operation(summary = "Get a tenant's usage figures", description = "أرقام استخدام المستأجر")
     public ResponseEntity<ApiResponse<TenantUsageResponse>> getUsage(@PathVariable Long id) {
         return operationCode.craftResponse(service.getUsage(id));
+    }
+
+    @PutMapping("/{id}/logo")
+    @Operation(summary = "Set or replace a tenant's logo",
+        description = "Multipart part file: a PNG, JPEG, WebP or plain SVG image of at most 1 MB, detected from its bytes"
+            + " (SVG without scripts, event attributes, external references, editor metadata, DOCTYPE or duplicate ids:"
+            + " export it as plain or optimised SVG); otherwise 400 TENANT_LOGO_INVALID (fieldErrors[0].field = file)."
+            + " Stored as a PUBLIC document of that tenant; the previous logo is discarded and its URL answers 404"
+            + " - تعيين شعار المستأجر أو استبداله")
+    public ResponseEntity<ApiResponse<TenantResponse>> setTenantLogo(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        return operationCode.craftResponse(service.setLogo(id, file));
+    }
+
+    @DeleteMapping("/{id}/logo")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Remove a tenant's logo",
+        description = "The document is discarded and its URL answers 404; a tenant without a logo is not an error"
+            + " - إزالة شعار المستأجر")
+    public void removeTenantLogo(@PathVariable Long id) {
+        service.removeLogo(id);
+    }
+
+    @PatchMapping("/{id}/branding")
+    @Operation(summary = "Set or clear a tenant's brand colour",
+        description = "brandColor #RRGGBB (stored upper case), null or blank clears it; otherwise 400"
+            + " TENANT_BRAND_COLOR_INVALID - ضبط لون علامة المستأجر")
+    public ResponseEntity<ApiResponse<TenantResponse>> updateTenantBranding(
+            @PathVariable Long id,
+            @Valid @RequestBody TenantBrandingUpdateRequest request) {
+        return operationCode.craftResponse(service.updateBranding(id, request));
     }
 }

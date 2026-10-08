@@ -45,4 +45,13 @@ public final class TenantErrorCodes {
 
     /** 422 — tenant-maturity B (RULE-TENANT-017): the admin-reset target holds no active super role. */
     public static final String TENANT_ADMIN_NOT_SUPER = "TENANT_ADMIN_NOT_SUPER";
+
+    /** 400 — tenant-maturity E (RULE-TENANT-018): the logo is not a PNG, JPEG, WebP or plain SVG of at most 1 MB. */
+    public static final String TENANT_LOGO_INVALID = "TENANT_LOGO_INVALID";
+
+    /** 400 — tenant-maturity E (RULE-TENANT-021): a brand colour that is not {@code #RRGGBB}. */
+    public static final String TENANT_BRAND_COLOR_INVALID = "TENANT_BRAND_COLOR_INVALID";
+
+    /** 429 — tenant-maturity E (RULE-TENANT-022): too many public branding requests from one client address. */
+    public static final String TENANT_BRANDING_RATE_LIMITED = "TENANT_BRANDING_RATE_LIMITED";
 }

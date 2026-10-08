@@ -1,6 +1,8 @@
 package com.erp.tenant.mapper;
 
 import com.erp.tenant.dto.TenantAdminResetResponse;
+import com.erp.tenant.dto.TenantBrandingResponse;
+import com.erp.tenant.dto.TenantBrandingUpdateRequest;
 import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
@@ -11,8 +13,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Manual entity/DTO mapper for {@link Tenant}. The update mapping (tenant-maturity B) covers the names and the
- * profile only: the code is immutable, the status and its facts change only through
- * {@code activate(..)}/{@code suspend(..)}; the administrator fields of the create request are not tenant columns.
+ * profile only: the code is immutable, the status and its facts change only through {@code activate(..)} /
+ * {@code suspend(..)}, the branding through its own mapping (E); the create request's administrator fields are not columns.
  */
 @Component
 public class TenantMapper {
@@ -43,7 +45,19 @@ public class TenantMapper {
         entity.setNotes(request.getNotes());
     }
 
-    public TenantResponse toResponse(Tenant entity) {
+    /**
+     * tenant-maturity E: the brand colour as sent — {@code TenantDomain} has checked it (RULE-TENANT-021); trimming,
+     * blank → null and upper case are the entity's {@code @PreUpdate} normalisation (A.1.17).
+     */
+    public void updateBrandingFromRequest(Tenant entity, TenantBrandingUpdateRequest request) {
+        if (entity == null || request == null) {
+            return;
+        }
+        entity.setBrandColor(request.getBrandColor());
+    }
+
+    /** {@code logoUrl} is resolved by the service inside the tenant (FILE's lookup is tenant-filtered); null = none. */
+    public TenantResponse toResponse(Tenant entity, String logoUrl) {
         if (entity == null) {
             return null;
         }
@@ -62,10 +76,27 @@ public class TenantMapper {
             .suspendedAt(entity.getSuspendedAt())
             .suspendedBy(entity.getSuspendedBy())
             .suspensionReason(entity.getSuspensionReason())
+            .logoUrl(logoUrl)
+            .brandColor(entity.getBrandColor())
             .createdAt(entity.getCreatedAt())
             .createdBy(entity.getCreatedBy())
             .updatedAt(entity.getUpdatedAt())
             .updatedBy(entity.getUpdatedBy())
+            .build();
+    }
+
+    /** tenant-maturity E (REQ-TENANT-031/032): the six branding fields, nothing else. */
+    public TenantBrandingResponse toBrandingResponse(Tenant entity, String logoUrl) {
+        if (entity == null) {
+            return null;
+        }
+        return TenantBrandingResponse.builder()
+            .code(entity.getCode())
+            .nameAr(entity.getNameAr())
+            .nameEn(entity.getNameEn())
+            .logoUrl(logoUrl)
+            .brandColor(entity.getBrandColor())
+            .defaultLocale(entity.getDefaultLocale())
             .build();
     }
 

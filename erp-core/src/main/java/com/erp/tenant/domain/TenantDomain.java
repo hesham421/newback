@@ -2,16 +2,20 @@ package com.erp.tenant.domain;
 
 import com.erp.common.domain.DomainRules;
 import com.erp.common.domain.status.Status;
+import com.erp.common.exception.ErrorDetail;
 import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * The tenant's business rules: code format and uniqueness on create, which status transitions are
- * allowed and with which reason (RULE-TENANT-016), and who may be recovered by the platform's admin-reset
- * (RULE-TENANT-017). No Spring/JPA annotations, no repository; the service passes every fact in.
+ * allowed and with which reason (RULE-TENANT-016), who may be recovered by the platform's admin-reset
+ * (RULE-TENANT-017), and the branding rules (RULE-TENANT-018, -021; tenant-maturity E). No Spring/JPA
+ * annotations, no repository; the service passes every fact in.
  */
 public final class TenantDomain {
 
@@ -21,6 +25,21 @@ public final class TenantDomain {
     /** RULE-TENANT-016: bounds of a suspension reason, after trimming. */
     public static final int REASON_MIN_LENGTH = 3;
     public static final int REASON_MAX_LENGTH = 500;
+
+    /** RULE-TENANT-018: the logo is a FILE image-store document of this owner type, owner id = the tenant id. */
+    public static final String LOGO_OWNER_TYPE = "CORE_TENANT";
+    public static final String LOGO_MODULE_CODE = "TENANT";
+    public static final String LOGO_BASE_NAME = "logo";
+    public static final long LOGO_MAX_BYTES = 1_048_576L;
+
+    /** RULE-TENANT-018: PNG, JPEG, WebP and (sanitised by FILE, RULE-FILE-009) SVG. */
+    public static final Set<String> LOGO_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/svg+xml");
+
+    /** RULE-TENANT-021: an accent colour {@code #RRGGBB} (the database repeats it as {@code CHK_CORE_TENANT_BRAND_COLOR}). */
+    public static final Pattern BRAND_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+
+    private static final String FIELD_LOGO_FILE = "file";
+    private static final String FIELD_BRAND_COLOR = "brandColor";
 
     private final Long id;
     private final String code;
@@ -108,6 +127,38 @@ public final class TenantDomain {
         if (!holdsSuperRole) {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 TenantErrorCodes.TENANT_ADMIN_NOT_SUPER, username, code);
+        }
+    }
+
+    /**
+     * RULE-TENANT-018 — FILE refused the image (empty, over {@link #LOGO_MAX_BYTES}, not one of {@link #LOGO_TYPES}
+     * by its bytes, or an unsafe SVG): 400 {@code TENANT_LOGO_INVALID} on field {@code file}; nothing was stored.
+     */
+    public static void assertLogoAccepted(boolean accepted) {
+        if (!accepted) {
+            throw new LocalizedException(Status.VALIDATION_ERROR,
+                List.of(ErrorDetail.ofField(FIELD_LOGO_FILE, TenantErrorCodes.TENANT_LOGO_INVALID)));
+        }
+    }
+
+    /**
+     * RULE-TENANT-021 — a brand colour is absent (null or blank: it clears the colour) or, trimmed, matches
+     * {@link #BRAND_COLOR_PATTERN}; anything else is 400 {@code TENANT_BRAND_COLOR_INVALID} on field {@code brandColor}.
+     */
+    public static void assertBrandColorValid(String brandColor) {
+        if (brandColor != null && !brandColor.isBlank() && !BRAND_COLOR_PATTERN.matcher(brandColor.strip()).matches()) {
+            throw new LocalizedException(Status.VALIDATION_ERROR,
+                List.of(ErrorDetail.ofField(FIELD_BRAND_COLOR, TenantErrorCodes.TENANT_BRAND_COLOR_INVALID, brandColor)));
+        }
+    }
+
+    /**
+     * RULE-TENANT-006 — the branding reads ({@code /tenant/me}, the public branding) serve an ACTIVE tenant only;
+     * the tenant filter refuses a suspended one first, this repeats it where the read happens (403 {@code TENANT_SUSPENDED}).
+     */
+    public void assertServed() {
+        if (!isActive()) {
+            throw new LocalizedException(Status.FORBIDDEN, TenantErrorCodes.TENANT_SUSPENDED);
         }
     }
 

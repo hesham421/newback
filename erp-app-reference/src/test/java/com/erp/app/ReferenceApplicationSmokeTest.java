@@ -67,13 +67,13 @@ class ReferenceApplicationSmokeTest {
     void flywayAppliedTheCoreChainAndThenTheApplicationMigration() {
         List<String> versions = jdbcTemplate.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        // core V2..V19 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
+        // core V2..V20 (V1 is reserved and not shipped; V10 = tenant schema, V11 = auth realms,
         // V12 = file storage, V13 = notif async + inbox, V14 = number series + settings, V15 = audit log,
         // V16 = staff user profile, V17 = STAFF_PASSWORD_CHANGED template — tenant-maturity D,
-        // V18 = tenant profile, V19 = tenant lifecycle facts — tenant-maturity B),
+        // V18 = tenant profile, V19 = tenant lifecycle facts — tenant-maturity B, V20 = tenant branding — E),
         // then the application's own V1000
         assertThat(versions).containsExactly("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-            "16", "17", "18", "19", "1000");
+            "16", "17", "18", "19", "20", "1000");
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from flyway_schema_history where not success", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("select to_regclass('public.app_smoke')::text", String.class))

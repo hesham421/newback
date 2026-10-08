@@ -27,8 +27,8 @@ import lombok.experimental.SuperBuilder;
  * A tenant ({@code CORE_TENANT}, V10). The one tenant-scoped-data owner that is itself global: it
  * has no {@code TENANT_ID} and extends {@link GlobalAuditableEntity}. {@code code} is the immutable
  * natural key clients send as {@code X-Tenant-Code}. State: {@code ACTIVE} / {@code SUSPENDED}
- * (there is no active flag; {@link #activate(Instant)}/{@link #suspend(Instant, String, String)} are the
- * two transitions, decided by {@code TenantDomain}). Profile (V18) and lifecycle facts (V19): tenant-maturity B.
+ * (no active flag; {@link #activate(Instant)}/{@link #suspend(Instant, String, String)}, decided by {@code TenantDomain}).
+ * Profile (V18), lifecycle facts (V19): tenant-maturity B; branding (V20: logo reference, brand colour): E.
  */
 @Entity
 @Audited(entityType = "CORE_TENANT")
@@ -105,6 +105,15 @@ public class Tenant extends GlobalAuditableEntity {
     @Column(name = "TOKENS_INVALID_BEFORE")
     private Instant tokensInvalidBefore;
 
+    /** tenant-maturity E (XM-TENANT-003): the logo, a soft reference (no FK) to a PUBLIC document in this tenant's rows. */
+    @Column(name = "LOGO_FILE_ID")
+    private Long logoFileId;
+
+    /** tenant-maturity E (RULE-TENANT-021): optional accent colour {@code #RRGGBB}, stored upper case. */
+    @Size(max = 7, message = "{validation.size}")
+    @Column(name = "BRAND_COLOR", length = 7)
+    private String brandColor;
+
     /** Natural-key normalization, profile normalization and the DB default for the status (A.1.17: the sole site). */
     @PrePersist
     protected void onCreate() {
@@ -133,6 +142,10 @@ public class Tenant extends GlobalAuditableEntity {
         timezone = trimToNull(timezone);
         notes = trimToNull(notes);
         suspensionReason = trimToNull(suspensionReason);
+        brandColor = trimToNull(brandColor);
+        if (brandColor != null) {
+            brandColor = brandColor.toUpperCase(Locale.ROOT);
+        }
     }
 
     private static String trimToNull(String value) {

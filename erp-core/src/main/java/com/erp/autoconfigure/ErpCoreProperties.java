@@ -280,10 +280,12 @@ public class ErpCoreProperties {
 
         /**
          * erp-core step 07: the default paths whose tenant comes from the path itself — the public
-         * file URLs, which must work in a plain browser/curl without a header or token.
+         * file URLs, which must work in a plain browser/curl without a header or token; tenant-maturity E adds
+         * the public branding the login page reads before any token exists.
          */
         public static final List<String> DEFAULT_PATH_TENANT_PATHS = List.of(
-            "/api/v1/public/files/{tenantCode}/**");
+            "/api/v1/public/files/{tenantCode}/**",
+            "/api/v1/public/tenants/{tenantCode}/branding");
 
         /**
          * Paths whose tenant is resolved from the {@code {tenantCode}} path variable instead of the
@@ -292,6 +294,25 @@ public class ErpCoreProperties {
          * anonymous there. Setting this replaces the list.
          */
         private List<String> pathTenantPaths = new ArrayList<>(DEFAULT_PATH_TENANT_PATHS);
+
+        /** tenant-maturity E (RULE-TENANT-022): the public branding's requests per client address (bucket4j). */
+        private final PublicBrandingRateLimit publicBrandingRateLimit = new PublicBrandingRateLimit();
+    }
+
+    /**
+     * tenant-maturity E — {@code erp.core.tenant.public-branding-rate-limit.*}: requests to
+     * {@code GET /api/v1/public/tenants/{tenantCode}/branding} allowed per client address and period, counted before the
+     * tenant is resolved (unknown codes included); over it → 429 {@code TENANT_BRANDING_RATE_LIMITED}. Per JVM.
+     */
+    @Getter
+    @Setter
+    public static class PublicBrandingRateLimit {
+
+        /** Requests allowed per {@link #period} for one client address. */
+        private int capacity = 60;
+
+        /** The refill period of {@link #capacity}. */
+        private Duration period = Duration.ofMinutes(1);
     }
 
     /** Links that point into the frontend (e.g. the emailed password-reset link). */
