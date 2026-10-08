@@ -111,3 +111,11 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | NEW — FE | Tenant management | `POST /api/v1/platform/tenants/{id}/revoke-tokens` signs every user of a tenant out (not PLATFORM) | C1 |
 | CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecAdminRecoveryApi.terminateAllSessions)`; `SEC ──event──▶ TenantSuspendedEvent`; `NOTIF ──crossmodule──▶ TENANT (TenantLookupApi.isActive)`, `NOTIF ──event──▶ TenantActivatedEvent` | C7 |
 | CHANGED | DEFERRED | "lifecycle events" and "token cut-off enforcement" leave DEFERRED; idempotent provisioning (C.4), export (C.5) and the `ScopedValue` spike (C.6) stay with package C | plan §5 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW (spike) | Tenant context | `TenantContext` on `ScopedValue` behind the same public API (`current` / `find` / `require` / `set` / `clear` / `runAs` / `callAs`); go / no-go decided by ADR-TENANT-004 against fixed criteria (touches `events` and `notif`); may slip to 1.4.0 | `../P1/srs-tenant.md` 1.3.0 C6-1; ADR-TENANT-004 |

@@ -1302,3 +1302,18 @@ a repeated call writes a new cut-off and ends the sessions.
 | NEW | `POST /{id}/revoke-tokens` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); not offered for PLATFORM (422 `TENANT_REVOKE_TOKENS_PLATFORM`); show `sessionsTerminated` after success. |
 | NEW | Error codes `TENANT_TOKEN_REVOKED` (401, any request of a signed-in user), `TENANT_REVOKE_TOKENS_PLATFORM` and `TENANT_REVOKE_SESSIONS_FAILED` (500 on revoke-tokens: show the message and offer to repeat the action) (both languages). On 401 `TENANT_TOKEN_REVOKED` the shell clears the session and returns to the login page (as for any 401), optionally saying "your organisation's sessions were ended". |
 | CHANGED | After a tenant is re-activated, its users sign in again (their earlier tokens answer 401 `TENANT_TOKEN_REVOKED`); a suspension ends their sessions at once. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C6 — `ScopedValue` spike for `TenantContext`, go / no-go (plan §0 D6, §5 C.6, item 11)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+A spike, not a feature: no requirement, rule, entity, endpoint, permission, error code, property or migration is
+added, and the public API of `TenantContext` (`current`, `find`, `require`, `isPlatform`, `set`, `clear`, `runAs`,
+`callAs`) is frozen whatever the outcome. This block mints decision **ADR-TENANT-004** only (the plan's own number,
+reserved for C.6); no other id.
+
+### C6-1. The spike and its criteria
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW (decision) | ADR-TENANT-004 — `ScopedValue` for `TenantContext` | Spike on branch `spike/tenant-scoped-value`: the `ThreadLocal` replaced behind the same API (`runAs` / `callAs` → `ScopedValue.where(...).call`; the request filter opens a bounded `ScopedValue.where(...).run(chain)` inside which `set` / `clear` keep working; the task decorator binds around the task). **Go** ⇔ hard gates H1 (`ScopedValue` final at release 25), H2 (same signatures **and** behaviour, `set` / `clear` outside a request included), H3 (`mvn verify`, `TenantIsolationIntegrationTest`, decorator tests, NOTIF tests under `spring.threads.virtual.enabled=true`, full P-LIVE) and H4 (p95 of the tenant filter not worse than ThreadLocal by > 5 % beyond noise) hold, **and** a benefit is shown: B1 (no production path can bind a tenant past its scope, so REQ-TENANT-023's guard becomes unnecessary) or B2 (measurable latency gain). Otherwise **no-go**: ADR REJECTED with the evidence, the `ThreadLocal` stays, the spike code is reverted. | plan §0 D6, §5 C.6; ADR-TENANT-004 |
+| CHANGED (on go only) | REQ-TENANT-023 | re-stated for the scoped binding (a tenant cannot outlive its scope); unchanged on no-go | ADR-TENANT-004 |
