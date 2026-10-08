@@ -4,6 +4,7 @@ import com.erp.tenant.dto.TenantAdminResetResponse;
 import com.erp.tenant.dto.TenantBrandingResponse;
 import com.erp.tenant.dto.TenantBrandingUpdateRequest;
 import com.erp.tenant.dto.TenantCreateRequest;
+import com.erp.tenant.dto.TenantExportResponse;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantTokenRevocationResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
@@ -117,6 +118,24 @@ public class TenantMapper {
             .id(entity.getId())
             .code(entity.getCode())
             .sessionsTerminated(sessionsTerminated)
+            .build();
+    }
+
+    /** REQ-TENANT-037: the stored archive (FILE) and its single-use download token, for the exported tenant. */
+    public TenantExportResponse toExportResponse(Tenant entity, Long fileId, String fileName, long sizeBytes, long rowCount,
+                                                 String downloadToken, Instant downloadTokenExpiresAt) {
+        if (entity == null) {
+            return null;
+        }
+        return TenantExportResponse.builder()
+            .tenantId(entity.getId())
+            .tenantCode(entity.getCode())
+            .fileId(fileId)
+            .fileName(fileName)
+            .sizeBytes(sizeBytes)
+            .rowCount(rowCount)
+            .downloadToken(downloadToken)
+            .downloadTokenExpiresAt(downloadTokenExpiresAt)
             .build();
     }
 

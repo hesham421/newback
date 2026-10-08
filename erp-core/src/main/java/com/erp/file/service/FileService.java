@@ -458,8 +458,8 @@ public class FileService {
         return byName != null ? byName : DEFAULT_CONTENT_TYPE;
     }
 
-    /** Derives the LOV-FILE-001 bucket from the detected MIME. Codes are owned by FileLookupService. */
-    private static String deriveFileType(String mime) {
+    /** Derives the LOV-FILE-001 bucket from the detected MIME (shared with {@link FilePrivateStoreService}). */
+    static String deriveFileType(String mime) {
         String m = mime.toLowerCase();
         if (m.startsWith("image/")) {
             return FileLookupService.TYPE_IMAGE;
@@ -476,7 +476,7 @@ public class FileService {
         return FileLookupService.TYPE_OTHER;
     }
 
-    private static String safeFileName(String originalName) {
+    static String safeFileName(String originalName) {
         return (originalName != null && !originalName.isBlank()) ? originalName : "file";
     }
 
@@ -484,7 +484,7 @@ public class FileService {
         return value == null || value.isBlank();
     }
 
-    private static String tokenKey(String token) {
+    static String tokenKey(String token) {
         // Reuse the canonical at-rest token hasher (SHA-256 hex) so the stored key form can never
         // drift from the rest of the platform.
         return TOKEN_KEY_PREFIX + TokenHasher.sha256Hex(token);

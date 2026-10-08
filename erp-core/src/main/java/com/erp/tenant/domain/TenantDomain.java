@@ -17,8 +17,8 @@ import java.util.regex.Pattern;
  * The tenant's business rules: code format and uniqueness on create, which status transitions are
  * allowed and with which reason (RULE-TENANT-016), who may be recovered by the platform's admin-reset
  * (RULE-TENANT-017), the branding rules (RULE-TENANT-018, -021; tenant-maturity E) and the token cut-off and its
- * revocation (RULE-TENANT-023, -024; C12). No Spring/JPA
- * annotations, no repository; the service passes every fact in.
+ * revocation (RULE-TENANT-023, -024; C12), the data export's limit and single run (RULE-TENANT-027, -028; C5). No
+ * Spring/JPA annotations, no repository; the service passes every fact in.
  */
 public final class TenantDomain {
 
@@ -40,6 +40,10 @@ public final class TenantDomain {
 
     /** RULE-TENANT-021: an accent colour {@code #RRGGBB} (the database repeats it as {@code CHK_CORE_TENANT_BRAND_COLOR}). */
     public static final Pattern BRAND_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+
+    /** RULE-TENANT-027: the export archive is a PRIVATE FILE document of PLATFORM with this owner type, owner id = the tenant id. */
+    public static final String EXPORT_OWNER_TYPE = "CORE_TENANT";
+    public static final String EXPORT_MODULE_CODE = "TENANT";
 
     private static final String FIELD_LOGO_FILE = "file";
     private static final String FIELD_BRAND_COLOR = "brandColor";
@@ -161,6 +165,24 @@ public final class TenantDomain {
         if (!holdsSuperRole) {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 TenantErrorCodes.TENANT_ADMIN_NOT_SUPER, username, code);
+        }
+    }
+
+    /**
+     * RULE-TENANT-027 — a tenant export holds at most {@code maxRows} rows ({@code erp.core.tenant.export.max-rows}): more is
+     * 422 {@code TENANT_EXPORT_TOO_LARGE}, before anything is written (and again if a contributor writes past the limit).
+     */
+    public static void assertExportWithinLimit(long rows, long maxRows) {
+        if (rows > maxRows) {
+            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION, TenantErrorCodes.TENANT_EXPORT_TOO_LARGE,
+                rows, maxRows);
+        }
+    }
+
+    /** RULE-TENANT-028 — one export of a tenant at a time on this node: the slot was taken, so 409 {@code TENANT_EXPORT_IN_PROGRESS}. */
+    public static void assertExportStartable(boolean started, String tenantCode) {
+        if (!started) {
+            throw new LocalizedException(Status.CONFLICT, TenantErrorCodes.TENANT_EXPORT_IN_PROGRESS, tenantCode);
         }
     }
 

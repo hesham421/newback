@@ -66,4 +66,10 @@ public final class TenantErrorCodes {
      * sessions failed; the call can be repeated.
      */
     public static final String TENANT_REVOKE_SESSIONS_FAILED = "TENANT_REVOKE_SESSIONS_FAILED";
+
+    /** 422 — tenant-maturity C5 (RULE-TENANT-027): the tenant has more rows than {@code erp.core.tenant.export.max-rows}. */
+    public static final String TENANT_EXPORT_TOO_LARGE = "TENANT_EXPORT_TOO_LARGE";
+
+    /** 409 — tenant-maturity C5 (RULE-TENANT-028): an export of the same tenant is already running on this node. */
+    public static final String TENANT_EXPORT_IN_PROGRESS = "TENANT_EXPORT_IN_PROGRESS";
 }
