@@ -219,7 +219,7 @@ Package E (tenant-maturity plan §7 E.2) — registry deltas; full text in `srs-
 
 | Kind | Rule | Delta |
 |---|---|---|
-| CHANGED | realm rule (`REALM_MISMATCH`, 1.2.0 §2) | `GET /api/v1/tenant/me` is realm-neutral on the core chain (authenticated, either realm) |
+| CHANGED | realm rule (`REALM_MISMATCH`, 1.2.0 §2) | `GET /api/v1/tenant/me` is realm-neutral on the core chain (authenticated, either realm; `GET` only — review round 1) |
 | CHANGED | RULE-SEC-059 | + `GET /api/v1/tenant/me` among the calls allowed during a pending forced change |
 No requirement, entity, endpoint, permission, error code or schema delta. Last sequence per atom unchanged (REQ: 091 ·
 AC: 097 · ENT: 014 · RULE: 062 · SCR-REQ: 010 · DBF: 123 · XM: 006 · QR: 054 · API: 050 · ADR: 064; 065 held spare,

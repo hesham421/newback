@@ -904,9 +904,11 @@ else) → tenant from the path (`TENANT_NOT_FOUND` / `TENANT_SUSPENDED`) → rea
 
 Wiring (`ErpCoreSecurityAutoConfiguration`, `ErpCoreProperties`):
 - `/api/v1/tenant/me` is outside the customer chain's matcher, so the core (staff) chain serves it; it is named
-  realm-neutral there (constant `TENANT_ME_PATH`): that chain's `RealmEnforcementFilter` does not refuse a CUSTOMER
-  token on it and the path still needs an authenticated caller (`anyRequest().authenticated()`). The forced-change
-  gate lets it through too (SEC RULE-SEC-059 CHANGED): it reveals nothing the public branding does not.
+  realm-neutral there **for `GET` only** (constant `TENANT_ME_PATH`; review round 1): that chain's
+  `RealmEnforcementFilter` does not refuse a CUSTOMER token on `GET /api/v1/tenant/me` (any other method still answers
+  403 `REALM_MISMATCH` to a CUSTOMER token), and the path still needs an authenticated caller
+  (`anyRequest().authenticated()`). The forced-change gate lets the `GET` through too (SEC RULE-SEC-059 CHANGED): it
+  reveals nothing the public branding does not.
 - `/api/v1/public/tenants/{tenantCode}/branding` lies under `/api/v1/public/**`, so the customer chain serves it
   (constant `PUBLIC_TENANT_BRANDING_PATHS` = `/api/v1/public/tenants/*/branding`): `GET` permitted, public for the
   realm and tenant filters, its tenant taken from the path — the `erp.core.tenant.path-tenant-paths` default gains
@@ -1018,7 +1020,7 @@ Decided by : `TenantDomain.assertBrandColorValid`
 ### RULE-TENANT-022 — حدّ معدّل العلامة العامة / Public branding rate limit
 Scope      : `GET /api/v1/public/tenants/{tenantCode}/branding`
 Trigger    : on every request to that path
-Statement  : The system shall allow each client address (`HttpServletRequest.getRemoteAddr()`, i.e. the proxy-resolved address when the application sets `server.forward-headers-strategy`) at most `erp.core.tenant.public-branding-rate-limit.capacity` requests per `period` (defaults 60 per 1 minute, bucket4j, refilled greedily), counted **before** the tenant is resolved — so unknown and suspended codes consume the budget and the endpoint cannot enumerate tenant codes faster than the limit; over the limit → 429 `TENANT_BRANDING_RATE_LIMITED`. Per JVM (a cluster gets one budget per node); the bucket map is cleared above 10 000 addresses (the `LoginRateLimiter` precedent).
+Statement  : The system shall allow each client address (`HttpServletRequest.getRemoteAddr()`, i.e. the proxy-resolved address when the application sets `server.forward-headers-strategy=native` with `server.tomcat.remoteip.internal-proxies`) at most `erp.core.tenant.public-branding-rate-limit.capacity` requests per `period` (defaults 60 per 1 minute, bucket4j, refilled greedily), counted **before** the tenant is resolved — so unknown and suspended codes consume the budget and the endpoint cannot enumerate tenant codes faster than the limit; over the limit → 429 `TENANT_BRANDING_RATE_LIMITED` with a `Retry-After` header (whole seconds until one request is available again). An IPv4 address is its own key; an IPv6 address is keyed by its **/64 prefix** (one subscriber's network, so rotating the interface bits does not reset the budget). Per JVM (a cluster gets one budget per node). The buckets are **bounded** (review round 1): a bucket unused for `period` expires (it would be full again anyway), and at most 10 000 keys are held, the least recently used one evicted first.
 Data source: the client address
 Message    : ar: "طلبات كثيرة لعلامة المستأجر. يرجى الانتظار قليلًا ثم المحاولة مجددًا" · en: "Too many tenant branding requests. Please wait a moment and try again"
 Traces     : REQ-TENANT-032
@@ -1095,7 +1097,8 @@ the `CORE_TENANT` update, the discard of the previous document and the audit row
 | NEW (decision) | `brandColor` is upper-cased on save (one spelling per colour); blank clears like null. |
 | NEW (decision) | `TENANT_LOGO_CHANGED` in both the target tenant and PLATFORM (E8); the brand colour relies on the entity audit. |
 | NEW (decision) | The rate limit is a filter keyed by client address only (not by tenant code), counted before the tenant lookup (RULE-TENANT-022): a limiter inside the controller would never see the 404 / 403 answers the tenant filter gives, and keying by code would not bound enumeration. A new error code `TENANT_BRANDING_RATE_LIMITED` (429; the plan named none; `CUSTOMER_LOGIN_RATE_LIMITED` is SEC's and speaks of sign-in). Default 60 per minute: a login page asks once per tenant code it settles on. |
-| NEW (decision) | `/api/v1/tenant/me` is realm-neutral on the core chain rather than moved to the customer chain: a STAFF token would be refused there, as a CUSTOMER token is on the core chain by default (SEC realm rule CHANGED, srs-sec.md 1.3.0 §11). |
+| NEW (decision) | `/api/v1/tenant/me` is realm-neutral on the core chain rather than moved to the customer chain: a STAFF token would be refused there, as a CUSTOMER token is on the core chain by default (SEC realm rule CHANGED, srs-sec.md 1.3.0 §11). Review round 1: for `GET` only, like the forced-change exemption. |
+| NEW (review round 1) | Rate-limit buckets: IPv6 keyed by /64, entries expire after `period` unused, at most 10 000 keys (LRU), `Retry-After` on 429 — no new dependency (Caffeine is not on erp-core's classpath; an access-ordered map does it). `LoginRateLimiter` keeps its clear-all-above-10 000 behaviour (SEC, a follow-up, not changed by E). |
 | NEW (decision) | The two read endpoints live in a new `TenantBrandingController` (`/api/v1`) with service `TenantBrandingService` (`getMyTenantBranding` `isAuthenticated()`, `getPublicTenantBranding` `permitAll()` — the FILE public-download precedent); the three writes extend `PlatformTenantController` / `TenantService`. Controller method names are unique across the application (`setTenantLogo`, `removeTenantLogo`, `updateTenantBranding`, `getMyTenantBranding`, `getPublicTenantBranding`) so springdoc's operation ids of other modules do not shift. |
 
 ### E11. Frontend impact (read by the frontend repository — plan §8 F2, F3)
@@ -1104,4 +1107,5 @@ the `CORE_TENANT` update, the discard of the previous document and the audit row
 | NEW | `GET /api/v1/tenant/me` (after login, any realm) and `GET /api/v1/public/tenants/{code}/branding` (login page, no token; 404 → platform mark only; 429 → platform mark only, no toast) → `TenantBrandingResponse`. |
 | NEW | `PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); `TenantResponse` + `logoUrl`, `brandColor`. |
 | NEW | Error codes `TENANT_LOGO_INVALID`, `TENANT_BRAND_COLOR_INVALID`, `TENANT_BRANDING_RATE_LIMITED` (both languages). |
-| NOTE | Render `logoUrl` through `<img>` only (E7); a replaced logo gets a new URL (new slug), so the day-long public cache never shows a stale logo; while a tenant is suspended its logo URL and its public branding answer 403. |
+| NOTE | Render `logoUrl` through `<img>` only (E7); a replaced logo gets a new URL (every upload is a new document with a new random slug), so a cache never serves the old file under the new URL; but public files carry `Cache-Control: max-age=86400, public` (FILE step 07), so a removed or replaced logo's **old** URL may still be served for up to 24 h by a browser or CDN cache that already holds it — the shell must always take `logoUrl` from `/tenant/me` / the public branding (not from a remembered URL). While a tenant is suspended its logo URL and its public branding answer 403. |
+| NOTE | The public branding answers 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After` when an address exceeds its budget: the login page shows the platform mark alone (no toast) and does not retry before `Retry-After`. |
