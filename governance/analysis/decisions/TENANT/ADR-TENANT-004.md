@@ -1,8 +1,8 @@
 # ADR-TENANT-004 — `ScopedValue` for `TenantContext`: a spike with go / no-go
 
 Module  : TENANT     Version : erp-core 1.3.0 (tenant-maturity plan, package C.6)     Stage raised : P1 (SRS) — before the code
-Status  : PROPOSED — decision pending the spike on branch `spike/tenant-scoped-value` (plan §0 D6); may slip to 1.4.0
-          without blocking the 1.3.0 tag
+Status  : REJECTED — no-go (erp-core 1.3.0, package C6, 2026-10-08; written PROPOSED-before-code in the analysis
+          commit a14a9c5, decided after the spike: spike code ae5fe50, reverted by 10a77b5). The `ThreadLocal` stays.
 
 ## Context
 `TenantContext` holds the current tenant in a `ThreadLocal<Long>`
@@ -89,13 +89,99 @@ evidence, the `ThreadLocal` stays, item 11 closes, and the spike's code is rever
 passes on the `ThreadLocal` remain).
 
 ## Decision
-Pending — written here when the spike ends (ACCEPTED = go, REJECTED = no-go), with the measurements.
+**No-go — REJECTED.** `TenantContext` keeps its `ThreadLocal`; item 11 closes for 1.3.0. The spike's code is reverted;
+what stays is this ADR, the C6 analysis rows and the leak test `TenantContextLeakTest` (M1), which passes on the
+`ThreadLocal`.
+
+### What the spike built (commit ae5fe50, +76 / −41 lines in 3 production files)
+- `TenantContext`: a `ScopedValue<Frame>` (a small mutable frame per binding). `callAs` / `runAs` bind a new frame
+  (`ScopedValue.where(...).call`); a new `callScoped(tenantOrNull, op)` opens a scope; `set` / `clear` update the
+  innermost frame. **Outside any scope** `set` / `clear` fell back to a per-thread value (a `ThreadLocal`, for H2), or
+  — with `ERP_TENANT_CONTEXT_STRICT=true`, the M5 probe — `set` threw.
+- `JwtAuthenticationFilter`: after the 1.2.0 leak guard, the rest of the filter (and so the chain) runs inside
+  `callScoped(null, …)`; `authenticate`'s `set` and the `clear` on a rejected token change that request frame.
+  `TenantResolutionFilter` needed **no change**: its `set` / `clear` (header branch, path-tenant set-and-restore, C12's
+  mid-request clear on a public path) all update the request frame. The pure immutable form would need nested scopes
+  instead: header and path branches → `callScoped(tenant, chain)`, C12's clear → `callScoped(null, rest of the
+  filter)`; all three are expressible.
+- `TenantAndSecurityContextTaskDecorator`: the task runs inside `callScoped(capturedTenant, task)`; the worker's own
+  value is untouched (the old "restore the previous value" comes for free).
+
+### Every `set` / `clear` caller — expressible as a bounded scope?
+| Caller | Today | Bounded scope? |
+|---|---|---|
+| `JwtAuthenticationFilter` (leak guard, `authenticate`, `finally`) | `set` before the chain, `clear` after | yes — `callScoped` around the chain; the guard stays for unscoped leaks |
+| `TenantResolutionFilter` (token check, C12 public-path clear, header, path tenant) | `set` / `clear` / restore around the chain | yes — update of the request frame, or nested scopes |
+| `TenantAndSecurityContextTaskDecorator` | `set` / `clear` around the task | yes — `callScoped(captured, task)` |
+| SEC `TenantSuspendedSessionListener` (sync, request thread, `REQUIRES_NEW`), NOTIF `NotificationTenantActivationListener` (`@Async`), `TenantLookupApiImpl.isActive`, NOTIF worker and requeue job, bootstrap runner | `callAs` / `runAs` only | already bounded — nested `callAs` works unchanged (the integration tests below) |
+| test `TenantContextTestExecutionListener` (PLATFORM for every integration test) | `set` in `beforeTestMethod`, `clear` in `afterTestMethod` | **no** — a Spring `TestExecutionListener` has no around-hook, and the test-managed transaction begins in `beforeTestMethod`, so the tenant must outlive that call |
+| direct `set` / `clear` in tests (`TenantContextTest`, `SettingsCacheTest`, `DomainEventTest`, `AuditApiIntegrationTest`, `SecLogoutIntegrationTest`, the decorator and leak tests, `JwtAuthenticationFilterTenantLeakTest`, `WebServerStartTenantProbe`) | direct `set` / `clear` | only by rewriting each test |
+| applications (`TenantContext` is public API, `docs/RELEASE.md`) | may call `set` / `clear` anywhere | unknown — a public method that starts throwing is a MAJOR change |
+
+### Measurements (2026-10-08, one Windows 11 machine, JDK 25.0.4.1 Temurin, PostgreSQL 16)
+- **H1** — `java.lang.ScopedValue` in JDK 25.0.4 carries no `@PreviewFeature` (`javap -v`; JEP 506, final);
+  `StructuredTaskScope` is still preview. **Met.**
+- **H3** — spike build: `mvn -q verify` from a clean tree green (erp-core 631 tests, 0 failures / errors; app 10).
+  With `SPRING_THREADS_VIRTUAL_ENABLED=true` (requests on virtual `tomcat-handler-N` threads; one-off command, no new
+  Spring context in the suite): `TenantIsolationIntegrationTest`, `TenantAndSecurityContextTaskDecoratorTest`,
+  `TenantContextLeakTest`, `NotificationClaimIntegrationTest`, `NotificationAsyncDeliveryIntegrationTest`,
+  `NotificationSuspendedTenantIntegrationTest`, `NotificationTenantActivationListenerTest`,
+  `NotificationDeliveryListenerTest`, `StaffPasswordChangedNotificationIntegrationTest`,
+  `TenantLifecycleEventsIntegrationTest`, `TenantTokenCutOffIntegrationTest`, `TenantContextIntegrationTest`,
+  `TenantBootstrapWindowIntegrationTest`, `JwtAuthenticationFilterTenantLeakTest` — 65 / 65 green. Full P-LIVE HTTP
+  suite on the spike jar (port 18109, fresh `erp_tm_c6`), run `2610080758F9`: **196 PASS / 0 FAIL**
+  (`docs/test-api/results/20261008T075803-P-LIVE.json`). **Met** (compatibility mode).
+- **M1 leak tests** — `TenantContextLeakTest` (8 cases: failing and nested `callAs`, a decorated task with a nested
+  PLATFORM `callAs`, no inheritance into a new thread, 2 000 concurrent virtual threads, a raw `set` on a pooled
+  thread) passes on **both** implementations. Neither leaks through `callAs`, the decorator or a virtual thread; on
+  both, a raw `set` without `clear` on a pooled platform thread is seen by the next task (compatibility mode keeps it)
+  — the leak REQ-TENANT-023's guard exists for.
+- **M5 consumer impact** — the erp-core suite with unscoped `set` refused: **282 errors in 56 of 93 test classes**
+  (269 from `TenantContextTestExecutionListener.beforeTestMethod`, the rest direct `set` in tests); **no production
+  path failed** — production code binds only inside scopes once the JWT filter and the decorator open them.
+- **M2 filter latency** — sequential HTTP timing, one keep-alive connection, measured client side; per round a fresh
+  JVM of the jar (same DB), 500 warm-up then N = 3 000 timed `GET /api/v1/tenant/me`; rounds A B A B A B
+  (A = ThreadLocal, main abbae25; B = spike), milliseconds:
+
+  | Case | A p50 (3 rounds) | B p50 | A p95 | B p95 | A mean | B mean |
+  |---|---|---|---|---|---|---|
+  | staff token (JWT filter → token branch → handler) | 3.31 / 3.30 / 3.19 | 4.19 / 3.65 / 3.37 | 11.08 / 11.82 / 10.85 | 8.54 / 12.63 / 9.99 | 4.32 | 4.57 |
+  | `X-Tenant-Code` only (header branch `set` / `clear`, then 401) | 0.74 / 0.69 / 0.71 | 0.83 / 0.75 / 0.74 | 2.02 / 1.81 / 1.95 | 1.52 / 2.15 / 2.13 | 0.97 | 1.10 |
+
+  Median p95: token A 11.08 → B 9.99 (−9.9 %, inside B's own 4.1 ms round-to-round spread); header A 1.95 → B 2.13
+  (+9.7 %, inside A's 10.6 % A-vs-A band + 5 %). **H4 met** (no p95 regression beyond noise); **no gain** — p50 and the
+  means are slightly higher on B in every round (0.04–0.25 ms).
+- **M2b in-process** (a Java harness compiled against each erp-core jar; median of 15 rounds × 5 M operations; ns per
+  operation, platform / virtual thread): `current()` inside a scope 1.7–1.9 / 2.5–2.8 (ThreadLocal) vs 2.1 / 2.1–2.3
+  (ScopedValue); `callAs(id, current)` 21–27 vs **45–50** (each binding allocates a carrier and a frame);
+  `set` / `current` / `clear` inside a scope 22–24 vs 7.7–8.1; outside a scope 21–24 vs 39–42 (the `isBound` miss plus
+  the fallback). Nanoseconds against milliseconds per request: no request-level effect either way.
+- **M3 complexity** — +76 / −41 production lines in 3 files; two binding mechanisms instead of one (scoped frame +
+  `ThreadLocal` fallback); one new public method (`callScoped`); the JWT filter wraps its checked exceptions
+  (`IOException` / `ServletException`) through a `CallableOp`.
+
+### Verdict against the criteria
+H1 met · H2 met **only** with the `ThreadLocal` fallback (strict mode breaks 56 test classes and any application that
+calls `set` outside a request — a MAJOR change) · H3 met · H4 met · **B1 not met** — with the fallback a raw `set`
+still binds a tenant past any scope, so REQ-TENANT-023's guard must stay and the class of bug remains · **B2 not met**
+— p95 equal within noise, `callAs` twice as slow in-process (irrelevant at request scale). Go ⇔ H1–H4 ∧ (B1 ∨ B2):
+**no-go**. The cost (a second binding mechanism, a new public method, a filter rewritten around a `CallableOp`) buys
+nothing measurable.
+
+### When to revisit
+A MAJOR release (2.0) that removes `set` / `clear` from the public API (every binding a bounded scope), together with a
+test-support extension that binds PLATFORM around each test method (a JUnit `InvocationInterceptor`, which also needs
+the test-managed transaction to begin inside it); or a JDK in which `StructuredTaskScope` is final and core forks
+subtasks that must inherit the tenant. Nothing in 1.3.0 needs either.
 
 ## Consequences
-- The public API is frozen either way: no consumer, in core or in an application, changes a line.
-- A go removes the class of bug REQ-TENANT-023 guards against and re-states that requirement for the new binding.
-- A no-go costs nothing at runtime; the evidence stays here for a later MAJOR version.
+- The public API and its behaviour are unchanged: no consumer, in core or in an application, changes a line; no
+  production file differs from main (abbae25).
+- REQ-TENANT-023 (the JWT filter's leak guard) stays as written; `TenantContextLeakTest` now pins the `ThreadLocal`'s
+  behaviour on pooled platform and virtual threads, including the nested `callAs` the C12 listeners rely on.
+- Item 11 of the plan is closed for 1.3.0; the evidence above is the starting point of a later MAJOR version.
 
 ## Traces
+Decided after the spike (report `docs/steps/tm-c6-report.md`).
 REQ-TENANT-017, REQ-TENANT-018, REQ-TENANT-023 · RULE-TENANT-023 (C12's public-path clear) · US-TENANT-008 ·
 POL-TENANT-007 · plan §0 D6, §5 C.6, §9
