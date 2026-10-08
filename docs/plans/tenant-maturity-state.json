@@ -235,17 +235,16 @@
       "migrations": [
         "V22__file_document_required_authority.sql"
       ],
-      "status": "FIXING",
+      "status": "REVIEW",
       "branch": "tm/c5-tenant-export",
       "worktree": ".worktrees/tm-c5",
-      "attempts": 1,
+      "attempts": 2,
       "deviations": 11,
       "implementer_agent": "ab47eee7e504db185",
       "reviewer_agent": "acfb16d2d11b7ffe6",
       "review": {
-        "verdict": "FAIL",
-        "round": 1,
-        "findings": 4
+        "verdict": "pending",
+        "round": 2
       },
       "report": "docs/steps/tm-c5-report.md",
       "merged_commit": null
@@ -602,6 +601,12 @@
       "step": "C5",
       "event": "FIXING",
       "note": "reviewer FAIL: HIGH archive readable with PERM_FILE_BROWSER_VIEW only (list/token/download via generic FILE endpoints) -> REQUIRED_AUTHORITY on FILE_DOCUMENT (V22 reserved); MEDIUM soft delete keeps bytes; LOW slugs/storage refs in audit CHANGES; LOW orphan tenant audit row; concurrency cap"
+    },
+    {
+      "at": "2026-10-08T06:52:48Z",
+      "step": "C5",
+      "event": "REVIEW",
+      "note": "fix round 1 done 10a51ad (REQUIRED_AUTHORITY V22 + 404 on all FILE paths, physical delete of restricted content, audit ignore + scrub, same-tx audit, max-concurrent 429; mvn 669/10, P-LIVE 204/204); round-2 review"
     }
   ]
 }
