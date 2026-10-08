@@ -206,20 +206,19 @@
       ],
       "wave": "6",
       "migrations": [],
-      "status": "FIXING",
+      "status": "COMPLETE",
       "branch": "tm/c6-scoped-value-spike",
-      "worktree": ".worktrees/tm-c6",
+      "worktree": null,
       "attempts": 1,
       "deviations": 7,
       "implementer_agent": "a565847c451d8db0c",
       "reviewer_agent": "abb709ddcfcb64019",
       "review": {
-        "verdict": "PASS-with-findings",
-        "round": 1,
-        "findings": 4
+        "verdict": "PASS",
+        "round": 1
       },
       "report": "docs/steps/tm-c6-report.md",
-      "merged_commit": null
+      "merged_commit": "d351bcd"
     },
     {
       "id": "C5",
@@ -552,6 +551,12 @@
       "step": "C6",
       "event": "FIXING",
       "note": "reviewer PASS (M5 reproduced, mutants caught, revert complete); docs-only fixes: VIRTUAL leak-test wording, B1-unreachable note, archive M2 harness"
+    },
+    {
+      "at": "2026-10-08T04:32:22Z",
+      "step": "C6",
+      "event": "COMPLETE",
+      "note": "merged d351bcd (NO-GO, docs + leak test only); verify 631/10"
     }
   ]
 }
