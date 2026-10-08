@@ -53,7 +53,7 @@ No ADR: no alternative needed one (the choices are in srs-tenant.md B10 and DEVI
   `tenant/domain/TenantDomainTest` (+5); `PlatformTenantApiIntegrationTest`, `audit/AuditedEntitiesCoverageIntegrationTest`
   (suspension reason; audit field list); `erp-app-reference/.../ReferenceApplicationSmokeTest` (V18, V19).
 - Docs: `docs/api-docs/**` (regenerated), `docs/api-docs/README.md`, `docs/test-api/core-test-plan.md`,
-  `core_api_verify.py`, `docs/test-api/results/20261008T035752-P-LIVE{.json,-report.md}`, `docs/CHANGELOG.md`,
+  `core_api_verify.py`, `docs/test-api/results/20261008T042452-P-LIVE{.json,-report.md}` (review round 1; replaces `20261008T035752`), `docs/CHANGELOG.md`,
   `docs/DEVIATIONS.md`, `governance/analysis/platform/PROJECT-OVERVIEW.md`, `project-registry.md`, this report.
 
 ## Decisions & deviations (all in `docs/DEVIATIONS.md` `[TM-B]` and srs-tenant.md B10)
@@ -92,7 +92,7 @@ unchanged by B and left to C.1 / C.2.
 | # | Item (plan §4 B.1–B.5, §10 DoD) | Evidence |
 |---|---|---|
 | 1 | B.1 V18 profile columns + `CHK_CORE_TENANT_LOCALE`, V19 lifecycle columns, additive | scripts; `MigrationNamingTest`; smoke test lists 2..19, 1000 |
-| 2 | B.2 `PUT /{id}` (no code/status, 404, 409 lock) | `TenantProfileIntegrationTest` (3 tests); TC-028, -029 |
+| 2 | B.2 `PUT /{id}` (no code/status, 404, 409 lock) | `TenantProfileIntegrationTest` (3 update tests; the lock by `anUpdateFromAStaleCopy_failsTheOptimisticLock`, added in review round 1 — the first version of this report claimed it without a test); TC-028, -029 |
 | 3 | B.2 PATCH status + reason, facts set/cleared, cut-off on activation, `TENANT_SUSPENSION_REASON_REQUIRED` | `TenantProfileIntegrationTest.suspension_…`, `TenantDomainTest`; TC-030 … 032 |
 | 4 | B.2 admin-reset (STAFF super target, policy, sessions, audit, 404/422) | `TenantAdminResetIntegrationTest` (3 tests); TC-033 … 035 |
 | 5 | B.2 usage via cross-module APIs inside `callAs`, never another module's tables | `TenantUsageIntegrationTest` (3 tests); TC-027, -036; ArchUnit `CrossModuleBoundaryArchTest` green |
@@ -100,12 +100,12 @@ unchanged by B and left to C.1 / C.2.
 | 7 | B.3 `TenantDomain` rules (reason; admin-reset target from SEC facts) | `TenantDomain.assertSuspensionReasonGiven`, `changesStatusTo`, `assertCanResetAdministrator`; `TenantDomainTest` |
 | 8 | B.4 SEC / FILE / NOTIF cross-module additions; ArchUnit boundaries pass | crossmodule packages; `mvn verify` |
 | 9 | B.5 TC-CORE-TENANT-* cases (update, code ignored, suspend 400, facts, cleared, 404, 422, sessions, fresh usage = 1 staff) | TC-CORE-TENANT-027 … 036 PASS |
-| 10 | B.5 api-verify tenant; CHANGELOG; PROJECT-OVERVIEW tenancy paragraph | P-LIVE 181/181; `[TM-B]` lines; overview "Tenancy" bullet |
+| 10 | B.5 api-verify tenant; CHANGELOG; PROJECT-OVERVIEW tenancy paragraph | P-LIVE 182/182; `[TM-B]` lines; overview "Tenancy" bullet |
 | 11 | DoD: analysis before code | commit 899aac4 precedes the first code commit 5572194 |
 | 12 | DoD: code matches the entry (deviations in addendum + DEVIATIONS) | table below; `[TM-B]` |
 | 13 | DoD: `mvn -q verify` green (ArchUnit, MigrationNamingTest, JaCoCo) | below |
 | 14 | DoD: api-docs regenerated, `check_completeness.py` clean, every addendum endpoint present | 118/118, tenant = 8 |
-| 15 | DoD: test plan extended, run archived | §4 TM-B row, §5.2, §6 (TENANT 36, total 203, P-LIVE 181), §9; `results/20261008T035752-P-LIVE*` |
+| 15 | DoD: test plan extended, run archived | §4 TM-B row, §5.2, §6 (TENANT 37, total 204, P-LIVE 182), §9; `results/20261008T042452-P-LIVE*` |
 | 16 | DoD: CHANGELOG `[Unreleased]` | Added (2 lines), Changed (1 line) |
 | 17 | DoD frontend items | not in this package (plan §8 F3) |
 16/16 backend items met (item 17 belongs to package F).
@@ -114,7 +114,7 @@ unchanged by B and left to C.1 / C.2.
 
 | Addendum item | Code | Match |
 |---|---|---|
-| `PUT /api/v1/platform/tenants/{id}`, `PLATFORM_TENANT_MANAGE`, 404 / 400 / 409 | `PlatformTenantController.updateTenant`, `TenantService.update` | yes |
+| `PUT /api/v1/platform/tenants/{id}`, `PLATFORM_TENANT_MANAGE`, 404 / 400 / 409 | `PlatformTenantController.updateTenant`, `TenantService.update` (409 = the shared handler's answer to the `VERSION` lock, tested at repository level) | yes |
 | `PATCH /{id}/status` + `reason`, order: validation → tenant → PLATFORM 422 → reason 400 | `TenantService.updateStatus` | yes |
 | `POST /{id}/admin-reset`, body `username` (≤100), `newPassword` (≤200), `requireChangeAtNextLogin`; response `username`, `sessionsTerminated`; order tenant → exists → super → policy | `TenantService.resetAdministratorPassword` / `resetInsideTenant`, `UserPasswordService.resetSuperUserPassword` | yes |
 | `GET /{id}/usage` → `id, staffUsers, customerUsers, activeSessions, fileDocuments, fileBytes, notificationsLast30Days, collectedAt` | `TenantUsageResponse`, `TenantService.getUsage` | yes |
@@ -135,9 +135,7 @@ unchanged by B and left to C.1 / C.2.
 - `mvn -q verify` (clean `target/`, code `a923eb4`): BUILD SUCCESS, JaCoCo met. erp-core **572** tests / 0 failures /
   0 errors / 0 skipped (86 suites; D ended at 543 / 82); erp-app-reference **10** / 0 / 0 / 0. The run before the
   generator-readable rename gave the same totals.
-- HTTP suite: run **`26100803579D`**, P-LIVE, port 18105, fresh `erp_tm_b` (dropped afterwards):
-  **181 PASS, 0 FAIL, 0 BLOCKED** (22 profile cases not run) — `docs/test-api/results/20261008T035752-P-LIVE.json`,
-  `-report.md`. A trial run before the operation-id rename also gave 181/181 (not archived).
+- HTTP suite (first delivery): run `26100803579D`, 181 PASS / 0 FAIL — superseded by the review-round-1 run below.
 - api-docs: whole app regenerated (`update`, `--base http://localhost:18105 --server-url http://localhost:7272`).
   `check_completeness.py`: `per module: app=1, audit=1, cu=5, file=14, mdl=11, notif=18, report=4, sec=50, sequence=6,
   tenant=8 (sum 118) missing=0 duplicated=0 stale=0 RESULT: PASS`. `check`: SEC, TENANT, MDL, SEQUENCE, REPORT PASS;
@@ -171,9 +169,32 @@ added), `api-verify` (cases in the plan's format).
   springdoc ids stable.
 - HTTP suite: tenant D (`$TD`, `td-admin`) exists from TENANT-027 on; it is the only tenant besides C that is suspended
   (and re-activated). Never add staff users to tenant A.
-- Open: admin-reset on PLATFORM may name the caller's own account (no current password); generator does not walk
+- Open: the generator does not walk
   cross-module calls, so admin-reset's `SEC-400-PASSWORD-POLICY` lives in the `@Operation` description.
 - Next free ids: TENANT REQ/AC-029, RULE-018 (012 … 015 reserved), POL-014, US-012, ENT-002, SCR-REQ-002, XM-003,
   DBF-043, ADR-TENANT-002 (reserved for C.2); SEC REQ-092, AC-098, RULE-063, ENT-015, DBF-124, XM-007, ADR-069
-  (065 spare, 066 … 068 other session); FILE RULE-011, XM-003, ADR-009; NOTIF RULE-024, XM-004. HTTP: TC-CORE-TENANT-037,
-  TC-CORE-SEC-056, TC-CORE-PLATFORM-005; test-plan counts TENANT 36, total 203, P-LIVE 181.
+  (065 spare, 066 … 068 other session); FILE RULE-011, XM-003, ADR-009; NOTIF RULE-024, XM-004. HTTP: TC-CORE-TENANT-038,
+  TC-CORE-SEC-056, TC-CORE-PLATFORM-005; test-plan counts TENANT 37, total 204, P-LIVE 182 (after review round 1).
+
+## Review round 1
+
+Verdict PASS with five LOW findings (evidence `rev-b/`, `probe_b.py`); fixed on the same branch, analysis first
+(commit `01c4b82` edits the package-B block, not yet on `main`), no rebase.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1 | LOW — admin-reset on PLATFORM could target the caller's own account (200, `sessionsTerminated` 3), bypassing SEC RULE-SEC-057 and the current-password check | RULE-TENANT-017 CHANGED: `TenantDomain.assertAdminResetAllowed` refuses tenant id 1 with 422 **`TENANT_ADMIN_RESET_PLATFORM`** (AR + EN), checked after the tenant lookup and before any SEC call; platform operators use `PUT /api/v1/sec/users/{id}/password`. A dedicated code because `TENANT_PLATFORM_PROTECTED`'s message is "cannot be suspended". The "open" note left B10 and DEVIATIONS | `TenantDomainTest.adminReset_isNeverAllowedOnThePlatformTenant`; `TenantAdminResetIntegrationTest.unknownOrNonSuperTargets_…` (operator's own name and another name on PLATFORM → 422, operator still signs in with the old password); HTTP TC-CORE-TENANT-037 |
+| 2 | LOW — no PLATFORM audit trace of an admin-reset | `TenantService.resetAdministratorPassword` records **`TENANT_ADMIN_RESET`** through `AuditApi` in PLATFORM after the target tenant's transaction committed (outside `callAs`, own commit): actor the operator, entity `CORE_TENANT` / {id}, summaries with the tenant code, the target username and `sessionsTerminated`, no secret. Addendum B8 (2), B7, REQ/AC-TENANT-027, POL-TENANT-013, module registry | `TenantAdminResetIntegrationTest.aReset_…`: one PLATFORM row with those fields, no secret, and the target tenant still has exactly one `ADMIN_PASSWORD_RESET` row; the refusal test: no PLATFORM row; HTTP TC-CORE-TENANT-037 |
+| 3 | LOW — springdoc `getById_N` ids of FILE / NOTIF shifted | `PlatformTenantController.getById` → **`getTenantById`**; api-docs regenerated. Operation-id diff against 5c8541c (all 115 pre-existing operations): unchanged except tenant `GET /{id}` (`getById_6` → `getTenantById`, the rename itself) and NOTIF `GET /notifications/logs/{id}` (`getById_7` → `getById_6`: the tenant method no longer takes a place before it in springdoc's `getById` numbering; keeping `_7` would need a pinned `operationId` freezing a generated suffix, not done). File categories, notification channels and templates are back to `getById_5` / `_4` / `_3` | `docs/api-docs/**`; DEVIATIONS `[TM-B]` |
+| 4 | LOW — the 409 lock of `PUT /{id}` was claimed tested | `TenantProfileIntegrationTest.anUpdateFromAStaleCopy_failsTheOptimisticLock`: two copies read, the first saved through the PUT's mapping, the stale one fails with `ObjectOptimisticLockingFailureException` (the `TenantScopedQueryIntegrationTest` repository-level pattern; `GlobalExceptionHandler` maps it to 409 `CONCURRENT_MODIFICATION`); the report rows corrected | the test |
+| 5 | LOW — usernames in logs | `TenantService` logs the tenant id only on the admin-reset path; `UserPasswordService.findRecoveryTarget` logs no name (the reset itself already logged the user id) | code |
+
+Verification after the fixes:
+- `mvn -q verify` (clean `target/`): BUILD SUCCESS, JaCoCo met. erp-core **574** / 0 / 0 / 0 (86 suites); erp-app-reference
+  **10** / 0 / 0 / 0.
+- P-LIVE run **`2610080424DF`**, port 18105, fresh `erp_tm_b` (dropped afterwards): **182 PASS, 0 FAIL, 0 BLOCKED** (22 profile
+  cases not run) — `docs/test-api/results/20261008T042452-P-LIVE.json` / `-report.md`, replacing run `26100803579D`.
+  Test plan: TENANT 37, total 204, P-LIVE 182.
+- api-docs regenerated; `check_completeness`: 118/118, 0 missing / duplicated / stale; `check` verdicts unchanged (SEC,
+  TENANT, MDL, SEQUENCE, REPORT pass; the five known limitations). The admin-reset endpoint binds
+  `TENANT_ADMIN_RESET_PLATFORM`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER`.

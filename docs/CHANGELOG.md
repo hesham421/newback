@@ -56,8 +56,9 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   only): `PUT /{id}` edits the names and a profile (`contactEmail`, `contactPhone`, `countryCode`, `defaultLocale`
   `ar`/`en`, `timezone`, `notes`; the code never changes); `POST /{id}/admin-reset` sets a new password for a STAFF
   user of that tenant holding a super role (404 `TENANT_ADMIN_NOT_FOUND`, 422 `TENANT_ADMIN_NOT_SUPER`, 400
-  `SEC-400-PASSWORD-POLICY`), ends that user's sessions, forces a change at the next sign-in unless
-  `requireChangeAtNextLogin: false`, audits `ADMIN_PASSWORD_RESET` in the target tenant and answers
+  `SEC-400-PASSWORD-POLICY`; never on PLATFORM: 422 `TENANT_ADMIN_RESET_PLATFORM`), ends that user's sessions, forces a
+  change at the next sign-in unless `requireChangeAtNextLogin: false`, audits `ADMIN_PASSWORD_RESET` in the target tenant
+  and `TENANT_ADMIN_RESET` in PLATFORM, and answers
   `{ username, sessionsTerminated }`; `GET /{id}/usage` answers `staffUsers`, `customerUsers`, `activeSessions`,
   `fileDocuments`, `fileBytes`, `notificationsLast30Days`, `collectedAt`, counted inside the tenant. Migrations
   `V18__tenant_profile.sql` (profile, `CHK_CORE_TENANT_LOCALE`) and `V19__tenant_lifecycle.sql` (suspension facts,
