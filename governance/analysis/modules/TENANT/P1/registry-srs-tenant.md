@@ -455,3 +455,6 @@ Decisions — delta
 
 Counts after this addendum: REQ 37 · AC 37 · RULE 24 · ENT 1 · SCR-REQ 1 · XM 4.
 Last sequence per atom: REQ: 037 · AC: 037 · ENT: 001 · RULE: 028 (012 … 015 reserved) · SCR-REQ: 001 · XM: 004 · US: 016 · POL: 017 · DBF: 045 · ADR: 006
+
+Code check (package C5) — registry delta: XM-TENANT-004 + `TenantExportJdbc.selectOfTenant` / `countOfTenant`
+(srs-tenant.md X13); ADR-TENANT-006 PROPOSED → ACCEPTED. Ids and counts unchanged (last REQ 037 · RULE 028 · XM 004).

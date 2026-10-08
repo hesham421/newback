@@ -1684,3 +1684,13 @@ retry simply exports again.
 | NEW | An "export data" action on a tenant row of `PLATFORM_TENANTS` (no new page code, permission or menu entry): `POST /{id}/export`, then download at once with `GET /api/v1/files/download?token={downloadToken}` (same session, single use, 10 minutes); show `rowCount` and `sizeBytes`. A long export (tens of seconds for a large tenant) keeps the request open: show progress, do not retry automatically. |
 | NEW | Error codes `TENANT_EXPORT_TOO_LARGE` (422) and `TENANT_EXPORT_IN_PROGRESS` (409), both languages. |
 | NOTE | The archive is a ZIP of UTF-8 CSV files with a byte-order mark (opens in Excel with Arabic intact) and `manifest.json`. |
+
+### X13. Code check — CHANGED (package C5)
+Code compared with X1–X12 item by item (check commit): endpoint, permission, codes and statuses, response fields, SPI
+methods, the 21 files and their column lists (compared mechanically with X7: all equal), exclusions, manifest keys,
+file name, audit rows, transactions, property. One deliberate addition, recorded here and in `docs/DEVIATIONS.md`
+`[TM-C5]`:
+| Kind | Item | Delta |
+|---|---|---|
+| CHANGED | X5 `TenantExportJdbc` | + `static String selectOfTenant(List<String> columns, String table, String primaryKey)` (`SELECT <columns> FROM <table> WHERE TENANT_ID = ? ORDER BY <primaryKey>`, so the select list **is** the header) and `static long countOfTenant(JdbcTemplate jdbc, Long tenantId, String... tables)` (one `COUNT(*)` per table, each naming `TENANT_ID`) beside `streaming(DataSource)`; the contributors' one-table files use them, the joined files (SEC grants, MDL values) write their SQL out. |
+| CONFIRMED | ADR-TENANT-006 | ACCEPTED (the code matches its Decision). |

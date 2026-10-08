@@ -1,7 +1,8 @@
 # ADR-TENANT-006 — Synchronous, row-bounded tenant export stored as a PRIVATE PLATFORM document behind a single-use download token
 
 Module  : TENANT (export SPI implemented by every core module; storage by FILE)     Version : erp-core 1.3.0 (tenant-maturity plan, package C.5)     Stage raised : P1 (Requirements) — before the code
-Status  : PROPOSED (erp-core 1.3.0, package C5; written before the code in the analysis commit, decided after the code check)
+Status  : ACCEPTED (erp-core 1.3.0, package C5; written PROPOSED-before-code in the analysis commit 4dac933, accepted
+          after the code check)
 
 ## Context
 The plan (§5 C.5, item 16) asks for a platform operation that hands a tenant its data: every core module writes the
@@ -80,3 +81,4 @@ Reasons:
 ENT-TENANT-001 · REQ-TENANT-037 · RULE-TENANT-011, RULE-TENANT-027, RULE-TENANT-028 · POL-TENANT-017 · US-TENANT-016 ·
 XM-TENANT-004 · FILE XM-FILE-003, RULE-FILE-003, RULE-FILE-011 · ADR-TENANT-001, ADR-TENANT-003 (not wrapped in the
 idempotency helper) · plan §5 C.5, §9
+Accepted after the code check of package C5 (code commit dc2b535, tests 1990849).

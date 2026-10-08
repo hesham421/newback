@@ -134,7 +134,6 @@ public final class TenantExportArchive implements TenantExport, AutoCloseable {
         csv.put("encoding", "UTF-8 with byte-order mark");
         csv.put("separator", ",");
         csv.put("recordSeparator", "CRLF");
-        csv.put("quoting", "RFC 4180");
         csv.put("nullValue", "empty field");
         csv.put("emptyText", "\"\"");
         csv.put("formulaGuard", "a text value starting with = + - @ TAB or CR is prefixed with one apostrophe");
