@@ -2,14 +2,20 @@ package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +28,7 @@ import org.springframework.test.context.TestPropertySource;
  * tenant-maturity E — tenant branding (REQ-TENANT-029 … 032, RULE-TENANT-018 … 021, ADR-TENANT-005): the platform
  * operator sets, replaces and removes a tenant's logo (a PUBLIC document in that tenant's own rows) and its brand
  * colour; every user of the tenant reads it through {@code /api/v1/tenant/me}, an anonymous visitor through the public
- * branding by code. Multipart limits as the reference application's, so the 1 MB check is the logo rule's.
+ * branding by code, rate-limited per client address. Multipart limits as the reference application's (1 MB = logo rule).
  */
 @TestPropertySource(properties = {
     "spring.servlet.multipart.max-file-size=15MB",
@@ -46,6 +52,8 @@ class TenantBrandingIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private ErpCoreProperties properties;
 
     private TenantHttp http;
     private String platformToken;
@@ -283,6 +291,39 @@ class TenantBrandingIntegrationTest extends AbstractIntegrationTest {
         assertThat(http.delete(platformToken, TENANTS + "/1/logo").statusCode()).isEqualTo(204);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM CORE_AUDIT_EVENT WHERE ACTION = 'TENANT_LOGO_CHANGED'"
             + " AND ENTITY_ID = ?", Integer.class, platformId)).as("one row per change for PLATFORM").isEqualTo(before + 2);
+    }
+
+    /**
+     * RULE-TENANT-022 — {@code capacity} calls per address and period, unknown codes included, then 429. Sent over the
+     * IPv6 loopback: a client address no other test uses, so 127.0.0.1's bucket (every other test) stays untouched.
+     */
+    @Test
+    void publicBranding_isRateLimitedPerClientAddress_unknownCodesIncluded() throws Exception {
+        int capacity = properties.getTenant().getPublicBrandingRateLimit().getCapacity();
+        HttpClient client = HttpClient.newHttpClient();
+        Assumptions.assumeTrue(ipv6Get(client, "/api/v1/public/tenants/" + code + "/branding") != null,
+            "no IPv6 loopback on this host");
+        for (int call = 2; call <= capacity; call++) {
+            String path = "/api/v1/public/tenants/" + (call % 2 == 0 ? "NO_SUCH_" : "") + code + "/branding";
+            assertThat(ipv6Get(client, path).statusCode()).as("call " + call).isIn(200, 404);
+        }
+        for (String path : List.of(code, "NO_SUCH_" + code)) {
+            HttpResponse<String> limited = ipv6Get(client, "/api/v1/public/tenants/" + path + "/branding");
+            assertThat(limited.statusCode()).as(limited.body()).isEqualTo(429);
+            assertThat(TenantHttp.errorCode(limited)).isEqualTo("TENANT_BRANDING_RATE_LIMITED");
+        }
+        assertThat(http.get(null, "/api/v1/public/tenants/" + code + "/branding").statusCode())
+            .as("another address (127.0.0.1) is still served").isEqualTo(200);
+        assertThat(ipv6Get(client, "/api/v1/tenant/me").statusCode()).as("other paths are not counted").isEqualTo(401);
+    }
+
+    private HttpResponse<String> ipv6Get(HttpClient client, String path) throws InterruptedException {
+        try {
+            return client.send(HttpRequest.newBuilder(URI.create("http://[::1]:" + port + path))
+                .header("Accept-Language", "en").GET().build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private Long logoFileId() {
