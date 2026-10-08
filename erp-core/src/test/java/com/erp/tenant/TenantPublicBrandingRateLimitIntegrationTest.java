@@ -10,17 +10,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * tenant-maturity E — RULE-TENANT-022 over the real chain: the public branding allows
- * {@code erp.core.tenant.public-branding-rate-limit.capacity} requests per client address and period, unknown codes
- * included (counted before the tenant filter answers 404), then 429 {@code TENANT_BRANDING_RATE_LIMITED}. Its own
- * context (capacity 3, period 1 h), so the bucket of 127.0.0.1 never throttles another test class.
+ * tenant-maturity E — RULE-TENANT-022 over the real chain: {@code capacity} requests per client address and period,
+ * unknown codes included (counted before the tenant filter answers 404), then 429 {@code TENANT_BRANDING_RATE_LIMITED}.
+ * Own context (capacity 3, period 1 h: 127.0.0.1's bucket never throttles another class) with a two-connection pool,
+ * closed after the class, so the cached contexts' pools still fit the database's 100 connections.
  */
 @TestPropertySource(properties = {
     "erp.core.tenant.public-branding-rate-limit.capacity=3",
-    "erp.core.tenant.public-branding-rate-limit.period=1h"})
+    "erp.core.tenant.public-branding-rate-limit.period=1h",
+    "spring.datasource.hikari.maximum-pool-size=2",
+    "spring.datasource.hikari.minimum-idle=1"})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TenantPublicBrandingRateLimitIntegrationTest extends AbstractIntegrationTest {
 
     @Value("${local.server.port}")
