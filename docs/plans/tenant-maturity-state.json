@@ -166,7 +166,7 @@
       "worktree": ".worktrees/tm-c12",
       "attempts": 0,
       "deviations": 0,
-      "implementer_agent": null,
+      "implementer_agent": "ad223efb12f48d324",
       "reviewer_agent": null,
       "review": null,
       "report": "docs/steps/tm-c12-report.md",
@@ -473,6 +473,12 @@
       "step": "C12",
       "event": "START",
       "note": "wave 5 (C1+C2) dispatched"
+    },
+    {
+      "at": "2026-10-08T02:11:08Z",
+      "step": "C12",
+      "event": "DISPATCH",
+      "note": "implementer dispatched"
     }
   ]
 }
