@@ -782,13 +782,14 @@ Shape: `TenantExportResponse`
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.exportTenant`, `TenantExportService.export`, `TenantDomain.assertExportStartable`, `TenantExportGuard.tryStart`, `TenantExportService.createArchiveFile`, `TenantExportService.orderedContributors`, `TenantContext.callAs`, `TenantExportService.snapshot`, `TenantExportService.writeArchive`, `TenantExportService.requiresNew`, `TenantExportService.storeAndRecord`, `TenantMapper.toExportResponse`, `TenantExportGuard.finish`, `TenantExportService.deleteQuietly`, `TenantExportService.internalError`, `TenantDomain.assertExportWithinLimit`, `TenantExportArchive.startModule`, `TenantExportArchive.finish`, `TenantExportService.erpCoreVersion`, `TenantExportArchive.rowCount`, `new TenantExportArchive()`, `TenantContext.runAs`, `TenantExportArchive.internal`, `TenantExportArchive.openEntry`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.exportTenant`, `TenantExportService.export`, `TenantExportGuard.tryStart`, `TenantDomain.assertExportStartable`, `TenantExportService.createArchiveFile`, `TenantExportService.orderedContributors`, `TenantContext.callAs`, `TenantExportService.snapshot`, `TenantExportService.writeArchive`, `TenantExportService.requiresNew`, `TenantExportService.storeAndRecord`, `TenantMapper.toExportResponse`, `TenantExportGuard.finish`, `TenantExportService.deleteQuietly`, `TenantExportService.internalError`, `TenantDomain.assertExportWithinLimit`, `TenantExportArchive.startModule`, `TenantExportArchive.finish`, `TenantExportService.erpCoreVersion`, `TenantExportArchive.rowCount`, `new TenantExportArchive()`, `TenantExportArchive.internal`, `TenantExportArchive.openEntry`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantExportService.export |
 | 409 CONFLICT | `TENANT_EXPORT_IN_PROGRESS` | TENANT_EXPORT_IN_PROGRESS | TenantDomain.assertExportStartable |
 | 422 UNPROCESSABLE_CONTENT | `TENANT_EXPORT_TOO_LARGE` | TENANT_EXPORT_TOO_LARGE | TenantDomain.assertExportWithinLimit |
+| 429 TOO_MANY_REQUESTS | `TENANT_EXPORT_BUSY` | TENANT_EXPORT_BUSY | TenantDomain.assertExportStartable |
 | 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | TenantExportArchive.internal |
 | 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` | INTERNAL_ERROR | TenantExportService.internalError |
 

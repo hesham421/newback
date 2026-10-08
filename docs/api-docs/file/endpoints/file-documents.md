@@ -86,7 +86,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.listByOwner`, `FileService.listByOwner`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.listByOwner`, `FileService.listByOwner`, `FileService.callerAuthorities`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -235,12 +235,13 @@ Required (bearerAuth).
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.download`, `FileService.retrieve`, `FileAccessTokenDomainService.validateAndExtractFileId`, `FileService.tokenKey`, `StorageProviderRegistry.forKey`, `FileService.closeQuietly`, `FileService.FileDownload`, `FileMetadataView.from`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.download`, `FileService.retrieve`, `FileAccessTokenDomainService.validateAndExtractFileId`, `FileService.tokenKey`, `FileDocumentDomain.assertVisibleTo`, `FileService.callerAuthorities`, `StorageProviderRegistry.forKey`, `FileService.closeQuietly`, `FileService.FileDownload`, `FileMetadataView.from`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 401 UNAUTHORIZED | `FILE_ACCESS_TOKEN_INVALID` | FILE_ACCESS_TOKEN_INVALID | FileAccessTokenDomainService.validateAndExtractFileId |
 | 401 UNAUTHORIZED | `FILE_ACCESS_TOKEN_INVALID` | FILE_ACCESS_TOKEN_INVALID | FileService.retrieve |
+| 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertVisibleTo |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.retrieve |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |
 
@@ -320,10 +321,11 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.metadata`, `FileService.getMetadata`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.metadata`, `FileService.getMetadata`, `FileDocumentDomain.assertVisibleTo`, `FileService.callerAuthorities`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileMetadataView.from`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
+| 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertVisibleTo |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.getMetadata |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |
 
@@ -409,11 +411,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.archiveOrDelete`, `FileService.softDelete`, `FileService.resolveTargetStatus`, `FileDocumentDomain.from`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileDocumentDomain.assertCanTransitionTo`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.archiveOrDelete`, `FileService.softDelete`, `FileService.resolveTargetStatus`, `FileDocumentDomain.assertVisibleTo`, `FileService.callerAuthorities`, `FileDocumentDomain.from`, `FileDocumentDomain.purgesContentOn`, `FileService.purgeContent`, `StorageProviderRegistry.forKey`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `FileDocumentDomain.assertCanTransitionTo`, `new FileDocumentDomain()`, `FileService.afterCommit`, `FileDocumentDomain.isPubliclyServable`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 400 BAD_REQUEST | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileService.resolveTargetStatus |
+| 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertVisibleTo |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.softDelete |
 | 422 UNPROCESSABLE_CONTENT | `FILE_DOCUMENT_INVALID_TRANSITION` | FILE_DOCUMENT_INVALID_TRANSITION | FileDocumentDomain.assertCanTransitionTo |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |
@@ -467,11 +470,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.issueToken`, `FileService.issueAccessToken`, `FileAccessTokenDomainService.issueToken`, `FileService.tokenKey`, `FileMetadataView.from`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.issueToken`, `FileService.issueAccessToken`, `FileDocumentDomain.assertVisibleTo`, `FileService.callerAuthorities`, `FileAccessTokenDomainService.issueToken`, `FileService.tokenKey`, `FileMetadataView.from`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 401 UNAUTHORIZED | `FILE_ACCESS_TOKEN_INVALID` | FILE_ACCESS_TOKEN_INVALID | FileAccessTokenDomainService.issueToken |
+| 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertVisibleTo |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.issueAccessToken |
 
 ### Other Possible Responses
@@ -566,11 +570,12 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.updateVisibility`, `FileService.updateVisibility`, `FileDocumentDomain.from`, `FileDocumentDomain.assertNotDeleted`, `FileDocumentDomain.assertCanBePublic`, `FileDocument.publish`, `PublicFileUrls.newSlug`, `FileDocument.unpublish`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `FileController.updateVisibility`, `FileService.updateVisibility`, `FileDocumentDomain.assertVisibleTo`, `FileService.callerAuthorities`, `FileDocumentDomain.from`, `FileDocumentDomain.assertNotDeleted`, `FileDocumentDomain.assertCanBePublic`, `FileDocument.publish`, `PublicFileUrls.newSlug`, `FileDocument.unpublish`, `FileMapper.toMetadataResponse`, `PublicFileUrls.of`, `new FileDocumentDomain()`, `FileDocumentDomain.isPubliclyServable`, `StorageProviderRegistry.forKey`, `PublicFileUrls.baseUrl`, `FileDocumentDomain.isPubliclyServable`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertNotDeleted |
+| 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileDocumentDomain.assertVisibleTo |
 | 404 NOT_FOUND | `FILE_DOCUMENT_NOT_FOUND` | FILE_DOCUMENT_NOT_FOUND | FileService.updateVisibility |
 | 409 CONFLICT | `FILE_PUBLIC_NOT_ALLOWED` | FILE_PUBLIC_NOT_ALLOWED | FileDocumentDomain.assertCanBePublic |
 | 500 INTERNAL_SERVER_ERROR | `FILE_STORAGE_UNAVAILABLE` | FILE_STORAGE_UNAVAILABLE | StorageProviderRegistry.forKey |

@@ -154,7 +154,7 @@ should be `false`.
 | `erp.core.audit.retention-days` / `retention-cron` | `0` (keep) / `-` (off) | Audit retention. The cron fires only if the application enables scheduling. |
 | `erp.core.idempotency.enabled` / `retention` / `retention-cron` | `true` / `24h` / `-` (off) | (1.3.0) The `Idempotency-Key` mechanism (§3): `false` ignores the header; a stored answer is replayed for `retention` (must be positive; an older key counts as unused); the cron of `IdempotencyKeyRetentionJob`, which deletes older rows, fires only if the application enables scheduling. The request hash is keyed by a key derived from `erp.core.security.jwt.secret`: rotating the secret turns a retry within the retention into a 409. |
 | `erp.core.report.max-export-rows` | `100000` | Export cap. Above it the export answers 422 `REPORT_EXPORT_TOO_LARGE`. |
-| `erp.core.tenant.export.max-rows` | `200000` | (1.3.0) The most rows one tenant data export (`POST /api/v1/platform/tenants/{id}/export`) may contain, all files together; more answers 422 `TENANT_EXPORT_TOO_LARGE`. Read on every export; must be positive. |
+| `erp.core.tenant.export.max-rows` / `max-concurrent` | `200000` / `2` | (1.3.0) The most rows one tenant data export (`POST /api/v1/platform/tenants/{id}/export`) may contain, all files together (more answers 422 `TENANT_EXPORT_TOO_LARGE`; it bounds the number of rows, not their width), and how many exports may run at once on a node (one more answers 429 `TENANT_EXPORT_BUSY`). Read on every export; must be positive. |
 
 ### Optional infrastructure
 
@@ -212,9 +212,13 @@ Each piece is off unless the application adds the dependency and its configurati
   ZIP of one CSV per table (UTF-8 with BOM, RFC 4180, a text starting with `= + - @` TAB or CR prefixed with `'`) and
   `manifest.json`, stored as a PRIVATE file document of the PLATFORM tenant, and a single-use download token for
   `GET /api/v1/files/download?token=` (10 minutes, same user; a new one with `POST /api/v1/files/{id}/access-token`).
+  The archive is a **restricted** FILE document: only a user holding `PLATFORM_TENANT_MANAGE` sees it through the FILE
+  API (list, metadata, token, download, delete); anyone else gets 404 `FILE_DOCUMENT_NOT_FOUND`, whatever FILE permission
+  they hold. Deleting it (`DELETE /api/v1/files/{id}?action=DELETE`) removes its bytes and keeps a metadata tombstone.
   It is synchronous and bounded by `erp.core.tenant.export.max-rows`; one export per tenant at a time **per node**
   (409 `TENANT_EXPORT_IN_PROGRESS`). Proxies in front of the platform API must allow a request of tens of seconds near
-  the limit. Archives stay until deleted. To include an application's own tenant tables, implement
+  the limit; at most `erp.core.tenant.export.max-concurrent` exports run at once per node (429 `TENANT_EXPORT_BUSY`). Archives
+  stay until deleted (no automatic retention yet: delete them once downloaded). To include an application's own tenant tables, implement
   `com.erp.tenant.TenantExportContributor` as a bean: `moduleCode()` (the ZIP folder, `^[A-Z][A-Z0-9_]{0,31}$`, unique —
   not one of core's `AUDIT CU FILE MDL NOTIF SEC SEQUENCE TENANT`), `countRows(tenantId)` (the rows `export` will write)
   and `export(TenantExport export)`, e.g.

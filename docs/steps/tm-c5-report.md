@@ -4,7 +4,7 @@
 |---|---|
 | Plan | `docs/plans/tenant-maturity-plan.md` §5 C.5 (item 16), §9, §10 |
 | Branch | `tm/c5-tenant-export` (from local `main` @ 9bbf708: A, G, C3, D, B, E, C12, C6, C4 merged) |
-| Migration | none (the plan reserved none; no schema change) |
+| Migration | none in the first round; review round 1: `V22__file_document_required_authority.sql` (the reserved number) |
 | Date | 2026-10-08 |
 
 ## Summary
@@ -193,3 +193,38 @@ statement; Stage 0 entity / repository items n/a — no entity), `api-verify`. `
 - The closure step should re-check: the export endpoint's api-docs page after any later regeneration (binds four codes);
   the README operation count 125; that no later HTTP case relies on PLATFORM having no `TENANT_EXPORTED` row for entity 1
   (TENANT-056 asserts exactly one in a fresh run).
+
+## Review round 1
+
+Verdict FAIL on one HIGH finding (evidence `rev-c5/`). Fixed on the same branch, analysis first (885549e: srs-tenant X14,
+FILE srs §9.5 + P2, registries, ADR-TENANT-006 amended), no rebase.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 1 HIGH | The archive was an ordinary PRIVATE PLATFORM document: a PLATFORM user holding only `PERM_FILE_BROWSER_VIEW` listed it, got an access token and downloaded tenant A's whole export; UPDATE / DELETE holders could archive or delete it | **Restricted documents** (FILE RULE-FILE-012): NEW `FILE_DOCUMENT.REQUIRED_AUTHORITY VARCHAR(100)` (`V22__file_document_required_authority.sql`, appended to `ReferenceApplicationSmokeTest`), set from `PrivateFileStoreRequest.requiredAuthority`; the export stores `PLATFORM_TENANT_MANAGE`. FILE's owner list filters such documents in the query (exact paging), and metadata, access token, download, visibility and archive / delete answer **404** `FILE_DOCUMENT_NOT_FOUND` to a caller without the authority (decided: 404, existence not revealed); `FilePrivateStoreApi.issueDownloadToken` checks it; `FileDocumentLookupApi.isAvailable` is false (no NOTIF attachment can name an archive). The alternative (TENANT-only re-download / delete endpoints) is weighed and rejected in ADR-TENANT-006 | `TenantExportIntegrationTest.theArchiveIsRestricted_aFileViewerSeesNothingOfIt_theOperatorUsesIt_andDeletingItRemovesItsBytes` (viewer: list empty, 404 metadata / token / delete, another user's token 401; ordinary document visible; operator: list, metadata, download, delete); `FileDocumentDomainRestrictedTest`; TC-CORE-TENANT-057, -058; reviewer probe: viewer list `ids=[]`, token **404** (was 200 / 200 / download 200) |
+| 2 MEDIUM | "Deleting" an archive kept its bytes (6.7 MB) | Deleting a restricted document removes its content through its provider — `DB`: `FILE_CONTENT` NULL in the transaction; `LOCAL` / `S3`: the object is deleted after the commit — and keeps a `DELETED` tombstone (name, size, hash, owner); `ARCHIVE` keeps the bytes; ordinary documents unchanged (RULE-FILE-006). Retention job **not done** (follow-up, DEVIATIONS) | `Db/LocalStorageFileIntegrationTest.deletingARestrictedDocument_removesItsContent_archivingOrDeletingAnOrdinaryOneKeepsIt`; the restricted test above (`FILE_CONTENT` NULL); against the run's DB: the probe's 6 767 062-byte archive → `DELETED`, content length NULL, size and hash kept |
+| 3 LOW | Public slugs (and object keys on LOCAL / S3) reached `AUDIT/CORE_AUDIT_EVENT.csv` through `CHANGES` | `@Audited(entityType = "FILE_DOCUMENT", ignore = {"storageRef", "publicSlug"})`; the AUDIT contributor removes both fields from every `FILE_DOCUMENT` row's `CHANGES` (JSON array, order kept, NULL when empty) — older rows included. `AuditedEntitiesCoverageIntegrationTest.fileCategoryAndFileDocument` asserted `publicSlug` **was** audited: changed to assert it (and `storageRef`) is not, while `visibility` still is | main export test seeds a logo (PUBLIC slug) and a legacy audit row with an object key `tenant/<id>/legacy-object-key-…` and a slug: neither in the archive, the row's `fileName` change kept; reviewer probe: "no public slug" now PASS |
+| 4 LOW | A failed store still committed the tenant's `TENANT_EXPORTED` | both rows written in the PLATFORM storing transaction (the tenant's with an explicit `tenantId`) | `aFailedStore_answers500_recordsTenantExportedNowhere_andFreesTheSlot` (a test trigger refuses the insert); probe: audit rows after a failed storage `(1, 1, 1, 1)` (was `(1, 2, 1, 1)`) |
+| 5 note | No global cap | `erp.core.tenant.export.max-concurrent` (2, per node) → 429 `TENANT_EXPORT_BUSY` (`TOO_MANY_REQUESTS`, no `Retry-After`: the envelope carries no headers — `CUSTOMER_LOGIN_RATE_LIMITED` precedent); the tenant's own running export answers 409 first; `max-rows` bounds rows, not width (ADR, X8) | `atTheConcurrencyLimit_anotherTenantsExportIs429Busy`; `TenantExportGuardTest` (3); `TenantDomainTest` |
+| 6 notes | `TOKENS_INVALID_BEFORE` derivable from `UPDATED_AT`; TC-056 exact count | X7 note (not a secret; kept as is — the probe's two "tokens-invalid-before" FAIL lines are this, by design); TC-056 counts PLATFORM's rows before and after | X14; TC-CORE-TENANT-056 |
+
+Verification after round 1:
+- `mvn -q -o verify` (clean `target/`, code d265b24): BUILD SUCCESS, erp-core lines **82.92 %**; erp-core **669** tests, 0
+  failures, 0 errors, 0 skipped (+3 export integration, +1 guard, +2 FILE domain, +2 storage — DB and LOCAL);
+  erp-app-reference **10**, 0 / 0 / 0.
+- HTTP suite run **`261008104981`**, P-LIVE, port 18110, fresh `erp_tm_c5` (dropped afterwards): **204 PASS / 0 FAIL /
+  0 BLOCKED** (22 profile cases not run) — `docs/test-api/results/20261008T104926-P-LIVE.json` / `-report.md`, replacing
+  run `261008100062`. New TENANT-057 / -058 run before TENANT-046.
+- api-docs: `review` → `file/` six endpoints (+ the 404 `FILE_DOCUMENT_NOT_FOUND` row from `assertVisibleTo`, walk lists)
+  and `tenant/` (+ 429 `TENANT_EXPORT_BUSY`, error table) → `update`; **0 table rows removed**. `check`: SEC, TENANT, MDL,
+  SEQUENCE, REPORT PASS; FILE, NOTIF, CU, AUDIT, APP — the same five known FAIL lines as before (diffed).
+  `check_completeness.py`: sum 125, missing 0, duplicated 0, stale 0, PASS.
+- Reviewer probes against this app (DB `erp_tm_c5`, after the P-LIVE run): `probe.py` **166 PASS / 2 FAIL / 12 INFO**
+  (was 165 / 3 / 15): the public-slug FAIL is gone, the viewer gets 404, the failed store leaves no audit row; the two
+  remaining FAILs are the accepted `TOKENS_INVALID_BEFORE ≈ UPDATED_AT` note (6). `probe_rr.py`: one snapshot (late
+  inbox rows not in the archive, manifest 190 129 = sum). `probe_large.py`: 199 000 rows in 1.46 s, 6.8 MB, same-tenant
+  409, other tenant 200, 422 above the limit, no temporary file left.
+
+Next free ids after round 1: TENANT unchanged (REQ/AC-038, RULE-029, POL-018, US-017, XM-005, DBF-046, ADR-007); FILE
+**RULE-013**, XM-004, API-FILE-009, ADR-FILE-009. HTTP: **TC-CORE-TENANT-059**, PLATFORM-006, SEC-056, NOTIF-017; counts
+TENANT 58, total 226, P-LIVE 204. Migration V22 used (next core migration V23).

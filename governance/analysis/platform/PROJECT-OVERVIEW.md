@@ -27,7 +27,7 @@ applications goes into core, additively, as a new MINOR version.
 | `com.erp.cu` | configuration and settings store: `SettingsApi` (typed, cached, platform defaults + tenant overrides) and configuration management | `cu/` |
 | `com.erp.mdl` | master-data lookups: lookup types registered by their owning module, values read by key | `mdl/` |
 | `com.erp.sec` | identity and access: staff users (since 1.3.0 with phone, job title, preferred language, a public photo, an administrator-set password that must be changed at the next sign-in, the own password change and the staff `/me` profile), roles, the three-level Module → Screen → Action grants, module/screen/action registry, sessions, audit log, dashboard, customer accounts, the permission catalog (`PermissionContributor`) | `sec/` |
-| `com.erp.file` | files and categories, the `StorageProvider` SPI (DB, LOCAL, S3), content hashes, public files at stable URLs, single-use download tokens (since 1.3.0 also the image store and the private store of server-generated files, e.g. tenant export archives) | `file/` |
+| `com.erp.file` | files and categories, the `StorageProvider` SPI (DB, LOCAL, S3), content hashes, public files at stable URLs, single-use download tokens (since 1.3.0 also the image store and the private store of server-generated files, e.g. tenant export archives, which can be restricted to an authority: hidden and 404 without it, bytes removed on delete) | `file/` |
 | `com.erp.notif` | templates, channels (`ChannelProvider` SPI), event-driven retried delivery with a claim lease, in-app inbox for staff and customers, dispatch and logs | `notif/` |
 | `com.erp.tenant` | multi-tenancy: `TenantContext`, `TENANT_ID` on every core table filtered by Hibernate `@TenantId`, tenant provisioning (`POST /api/v1/platform/tenants`) and the `TenantProvisioningContributor` SPI; since 1.3.0 the tenant data export and its `TenantExportContributor` SPI | `tenant/` |
 | `com.erp.audit` | the generic, tenant-scoped audit log: `CORE_AUDIT_EVENT`, `AuditApi`, the `@Audited` entity listener (sensitive fields redacted), a query API and a retention job | `audit/` |
@@ -60,7 +60,8 @@ Module boundaries are package-based and enforced by the ArchUnit suite
   Since 1.3.0 (TM-C5) the platform operator can export a tenant's data (`POST /{id}/export`, ADR-TENANT-006): every
   module writes its rows of the tenant as CSV through the `TenantExportContributor` SPI (applications may add theirs)
   into a ZIP with a manifest, never passwords, tokens, credentials or file bytes; the ZIP is a PRIVATE FILE document of
-  PLATFORM downloaded once with FILE's single-use token; bounded by `erp.core.tenant.export.max-rows`.
+  PLATFORM restricted to `PLATFORM_TENANT_MANAGE` and downloaded once with FILE's single-use token; bounded by
+  `erp.core.tenant.export.max-rows` and `max-concurrent`.
 - **Realms.** STAFF (`/api/v1/sec/auth/**`, every administrative endpoint) and CUSTOMER
   (`/api/v1/public/customers/**` for register / verify / login / password reset,
   `/api/v1/customers/me/**` for the profile and inbox). A token of one realm is rejected on the

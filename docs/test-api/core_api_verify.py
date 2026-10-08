@@ -3311,13 +3311,85 @@ def test_tenant_056_export_refusals_and_platform(ctx):
     st(export_tenant(ctx.A_ID, ctx.T_A), 403, "SEC-403-FORBIDDEN", what="A's own administrator")
     st(export_tenant(ctx.A_ID, None), 401, "SEC-401-INVALID-CREDENTIALS", what="anonymous")
     st(export_tenant(999999999, ctx.T_PLAT), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    before = audit(ctx.T_PLAT, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=1, size=200)
+    st(before, 200, what="PLATFORM's audit log before")
     p = export_tenant(1, ctx.T_PLAT)
     st(p, 200, what="the PLATFORM tenant is exportable")
     eq(((p.data or {}).get("tenantId"), (p.data or {}).get("tenantCode")), (1, "PLATFORM"), "PLATFORM's export")
     check(((p.data or {}).get("rowCount") or 0) > 0, "PLATFORM has rows", "> 0", (p.data or {}).get("rowCount"))
     a = audit(ctx.T_PLAT, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=1, size=50)
     st(a, 200, what="PLATFORM's audit log")
-    eq(len(a.content), 1, "one TENANT_EXPORTED row when the tenant is PLATFORM")
+    eq(len(a.content) - len(before.content), 1, "one more TENANT_EXPORTED row when the tenant is PLATFORM")
+
+
+def file_viewer(ctx):
+    """`fv-{run}` in PLATFORM: a role with FILE_BROWSER VIEW + DELETE only — no PLATFORM_TENANT_MANAGE (TM-C5 round 1)."""
+    if ctx.has("T_FV"):
+        return ctx.T_FV
+    r = api("POST", "/api/v1/sec/roles", t=ctx.T_PLAT, body={"code": f"TC_FV_{ctx.RUN}", "nameAr": "عارض", "nameEn": "File viewer"})
+    st(r, 201, what="create PLATFORM role TC_FV_{RUN}")
+    role = (r.data or {}).get("rolePk")
+    perms = ["PERM_FILE_BROWSER_VIEW", "PERM_FILE_BROWSER_DELETE"]
+    mod_id, scr_id, actions = registry_ids(ctx, ctx.T_PLAT, "FILE_BROWSER", perms)
+    st(api("POST", f"/api/v1/sec/roles/{role}/modules", t=ctx.T_PLAT, body={"moduleId": mod_id}), 201)
+    st(api("POST", f"/api/v1/sec/roles/{role}/screens", t=ctx.T_PLAT, body={"screenId": scr_id}), 201)
+    for perm in perms:
+        st(api("POST", f"/api/v1/sec/roles/{role}/actions", t=ctx.T_PLAT, body={"actionId": actions.get(perm)}), 201)
+    r = api("POST", "/api/v1/sec/users", t=ctx.T_PLAT, body=user_body(f"fv-{ctx.run}", f"fv-{ctx.run}@p.test", "عارض", "File viewer"))
+    st(r, 201, what="create PLATFORM user fv-{run}")
+    st(api("PUT", f"/api/v1/sec/users/{(r.data or {}).get('userPk')}/roles", t=ctx.T_PLAT, body={"roleIds": [role]}), 200)
+    r = first_login("PLATFORM", f"fv-{ctx.run}", PW)
+    st(r, 200, what="login fv-{run}")
+    t = (r.data or {}).get("accessToken")
+    if not t:
+        raise Blocked("no T_FV")
+    ctx.T_FV = t
+    return t
+
+
+@tc("TC-CORE-TENANT-057")
+def test_tenant_057_archive_restricted_to_platform_tenant_manage(ctx):
+    fv = file_viewer(ctx)
+    archive = ctx.EXPORT_FILE_ID
+    owner_list = f"/api/v1/files?ownerId={ctx.A_ID}&ownerType=CORE_TENANT&moduleCode=TENANT"
+    lst = api("GET", owner_list, t=fv)
+    st(lst, 200, what="the viewer lists A's archives")
+    eq([x.get("id") for x in lst.content], [], "the archive is filtered out of the owner list")
+    st(api("GET", f"/api/v1/files/{archive}", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="metadata")
+    st(api("POST", f"/api/v1/files/{archive}/access-token", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="access token")
+    st(api("DELETE", f"/api/v1/files/{archive}?action=DELETE", t=fv), 404, "FILE_DOCUMENT_NOT_FOUND", what="delete")
+    st(api("PATCH", f"/api/v1/files/{archive}/visibility", t=ctx.T_PLAT, body={"visibility": "PUBLIC"}), 409,
+       "FILE_PUBLIC_NOT_ALLOWED", what="the operator cannot publish it either (uncategorised)")
+    up = upload(ctx, ctx.T_PLAT, f"ordinary-{ctx.run}.png", "image/png", png_bytes(57))
+    st(up, 201, what="an ordinary PLATFORM document")
+    ordinary = (up.data or {}).get("id")
+    st(api("GET", f"/api/v1/files/{ordinary}", t=fv), 200, what="ordinary documents stay visible to the viewer")
+    ordinary_list = api("GET", "/api/v1/files?ownerId=4711&ownerType=PRODUCT&moduleCode=SHOP&size=200", t=fv)
+    check(ordinary in [x.get("id") for x in ordinary_list.content], "the viewer lists the ordinary document", ordinary,
+          [x.get("id") for x in ordinary_list.content][:10])
+    st(api("GET", f"/api/v1/files/{archive}", t=ctx.T_PLAT), 200, what="the operator still reads the archive")
+
+
+@tc("TC-CORE-TENANT-058")
+def test_tenant_058_operator_redownloads_and_deletes_archive(ctx):
+    archive = ctx.EXPORT_FILE_ID
+    lst = api("GET", f"/api/v1/files?ownerId={ctx.A_ID}&ownerType=CORE_TENANT&moduleCode=TENANT", t=ctx.T_PLAT)
+    st(lst, 200, what="the operator lists A's archives")
+    check(archive in [x.get("id") for x in lst.content], "the archive is listed", archive, [x.get("id") for x in lst.content])
+    tok = api("POST", f"/api/v1/files/{archive}/access-token", t=ctx.T_PLAT)
+    st(tok, 200, what="a fresh token for the stored archive")
+    path = "/api/v1/files/download?token=" + urllib.parse.quote((tok.data or {}).get("accessToken") or "", safe="")
+    z = api("GET", path, t=ctx.T_PLAT)
+    check(z.status == 200 and (z.body or b"")[:2] == b"PK", "re-download", "200 ZIP", f"{z.status} {(z.body or b'')[:2]!r}")
+    d = api("DELETE", f"/api/v1/files/{archive}?action=DELETE", t=ctx.T_PLAT)
+    st(d, 200, what="the operator deletes the archive")
+    eq((d.data or {}).get("fileStatusId"), "DELETED", "a DELETED tombstone")
+    st(api("POST", f"/api/v1/files/{archive}/access-token", t=ctx.T_PLAT), 404, "FILE_DOCUMENT_NOT_FOUND",
+       what="no token for a deleted archive")
+    meta = api("GET", f"/api/v1/files/{archive}", t=ctx.T_PLAT)
+    st(meta, 200, what="the tombstone's metadata")
+    check((meta.data or {}).get("fileName", "").startswith(f"tenant-export-{ctx.TA}-"), "the tombstone keeps the name",
+          f"tenant-export-{ctx.TA}-…", (meta.data or {}).get("fileName"))
 
 
 @tc("TC-CORE-TENANT-046")
@@ -3723,7 +3795,7 @@ ORDER = {
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
                   "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
-                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 56), "TENANT-046"),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 58), "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),

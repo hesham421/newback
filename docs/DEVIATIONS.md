@@ -491,3 +491,24 @@ bind later steps.
 - [TM-C5] HTTP suite: the row limit (422) and the in-progress guard (409) are JUnit-only (the running app keeps the
   default limit; a held export needs the test to take the slot) — `docs/test-api/core-test-plan.md` §9.
 - [TM-C5] No migration (the plan reserved none); no new permission, page code or screen (D5: `PLATFORM_TENANTS`).
+- [TM-C5] Review round 1 — archive access (the archive was an ordinary PRIVATE document: any PLATFORM user holding
+  `PERM_FILE_BROWSER_VIEW` could list, re-token and download it) → **restricted documents**: NEW nullable
+  `FILE_DOCUMENT.REQUIRED_AUTHORITY VARCHAR(100)` (`V22__file_document_required_authority.sql`, the reserved number),
+  set by the private store from `PrivateFileStoreRequest.requiredAuthority` (the export: `PLATFORM_TENANT_MANAGE`); FILE's
+  owner list filters such documents and metadata / access token / download / visibility / archive / delete answer **404**
+  `FILE_DOCUMENT_NOT_FOUND` (not 403: existence not revealed) to a caller without the authority; `isAvailable` is false for
+  them (FILE RULE-FILE-012). Alternative (TENANT-only re-download and delete endpoints, archive outside the FILE API)
+  rejected in ADR-TENANT-006 (duplicated FILE paths; the column protects every FILE endpoint and any producer).
+- [TM-C5] Review round 1 — RULE-FILE-006 (soft delete keeps the bytes) → except for a restricted document: its delete removes
+  the content (DB in the transaction, LOCAL / S3 after the commit) and keeps a `DELETED` tombstone. A retention purge
+  (`erp.core.tenant.export.retention`, the `AuditRetentionJob` pattern) is a **follow-up**, not done in 1.3.0.
+- [TM-C5] Review round 1 — `FileDocument` `@Audited` → `ignore = {"storageRef", "publicSlug"}`; the AUDIT contributor removes
+  both fields from older `FILE_DOCUMENT` rows' `CHANGES` when exporting (srs-tenant.md X14); the stored audit rows are not
+  rewritten.
+- [TM-C5] Review round 1 — the tenant's `TENANT_EXPORTED` row (was a nested, separately committed transaction) → written in the
+  PLATFORM storing transaction with an explicit `tenantId`, so a failed store leaves no row anywhere.
+- [TM-C5] Review round 1 — no global cap → `erp.core.tenant.export.max-concurrent` (2, per node) and 429 `TENANT_EXPORT_BUSY`
+  (`TOO_MANY_REQUESTS`, without `Retry-After`: a `LocalizedException` answer carries no headers — the
+  `CUSTOMER_LOGIN_RATE_LIMITED` precedent); the tenant's own running export is answered 409 first.
+- [TM-C5] Review round 1 — TC-CORE-TENANT-056 counts `TENANT_EXPORTED` rows of PLATFORM before and after (was "exactly one",
+  true only on a fresh database).
