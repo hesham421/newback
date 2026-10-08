@@ -1,28 +1,31 @@
 package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.erp.autoconfigure.ErpCoreProperties;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
+import jakarta.servlet.Filter;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 /**
  * tenant-maturity E — tenant branding (REQ-TENANT-029 … 032, RULE-TENANT-018 … 021, ADR-TENANT-005): the platform
@@ -54,6 +57,11 @@ class TenantBrandingIntegrationTest extends AbstractIntegrationTest {
     private PasswordEncoder passwordEncoder;
     @Autowired
     private ErpCoreProperties properties;
+    @Autowired
+    private WebApplicationContext webContext;
+    @Autowired
+    @Qualifier("springSecurityFilterChain")
+    private Filter securityFilterChain;
 
     private TenantHttp http;
     private String platformToken;
@@ -222,6 +230,11 @@ class TenantBrandingIntegrationTest extends AbstractIntegrationTest {
         assertThat((String) JsonPath.read(asCustomer.body(), "$.data.code")).isEqualTo(code);
         assertThat((String) JsonPath.read(asCustomer.body(), "$.data.brandColor")).isEqualTo("#102030");
         assertThat(http.get(customerToken, "/api/v1/sec/me").statusCode()).as("other core paths stay STAFF-only").isEqualTo(403);
+        for (HttpResponse<String> otherMethod : List.of(http.post(customerToken, "/api/v1/tenant/me", "{}"),
+                http.put(customerToken, "/api/v1/tenant/me", "{}"), http.patch(customerToken, "/api/v1/tenant/me", "{}"))) {
+            assertThat(otherMethod.statusCode()).as("only GET is realm-neutral").isEqualTo(403);
+            assertThat(TenantHttp.errorCode(otherMethod)).isEqualTo("REALM_MISMATCH");
+        }
 
         http.createUser(adminToken, "clerk");
         String clerkToken = http.token(code, "clerk");
@@ -294,36 +307,38 @@ class TenantBrandingIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * RULE-TENANT-022 — {@code capacity} calls per address and period, unknown codes included, then 429. Sent over the
-     * IPv6 loopback: a client address no other test uses, so 127.0.0.1's bucket (every other test) stays untouched.
+     * RULE-TENANT-022 through the real security chain (MockMvc over the context's {@code springSecurityFilterChain}): each
+     * call carries its own client address, so no other test's bucket is touched and no host network feature is needed.
      */
     @Test
     void publicBranding_isRateLimitedPerClientAddress_unknownCodesIncluded() throws Exception {
         int capacity = properties.getTenant().getPublicBrandingRateLimit().getCapacity();
-        HttpClient client = HttpClient.newHttpClient();
-        Assumptions.assumeTrue(ipv6Get(client, "/api/v1/public/tenants/" + code + "/branding") != null,
-            "no IPv6 loopback on this host");
-        for (int call = 2; call <= capacity; call++) {
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(webContext).addFilters(securityFilterChain).build();
+        String address = "203.0.113." + (1 + Math.abs(code.hashCode() % 250));
+        for (int call = 1; call <= capacity; call++) {
             String path = "/api/v1/public/tenants/" + (call % 2 == 0 ? "NO_SUCH_" : "") + code + "/branding";
-            assertThat(ipv6Get(client, path).statusCode()).as("call " + call).isIn(200, 404);
+            assertThat(mvc.perform(get(path).with(from(address))).andReturn().getResponse().getStatus())
+                .as("call " + call).isIn(200, 404);
         }
         for (String path : List.of(code, "NO_SUCH_" + code)) {
-            HttpResponse<String> limited = ipv6Get(client, "/api/v1/public/tenants/" + path + "/branding");
-            assertThat(limited.statusCode()).as(limited.body()).isEqualTo(429);
-            assertThat(TenantHttp.errorCode(limited)).isEqualTo("TENANT_BRANDING_RATE_LIMITED");
+            MockHttpServletResponse limited = mvc.perform(get("/api/v1/public/tenants/" + path + "/branding")
+                .with(from(address))).andReturn().getResponse();
+            assertThat(limited.getStatus()).as(limited.getContentAsString()).isEqualTo(429);
+            assertThat((String) JsonPath.read(limited.getContentAsString(), "$.error.code"))
+                .isEqualTo("TENANT_BRANDING_RATE_LIMITED");
+            assertThat(Long.parseLong(limited.getHeader("Retry-After"))).isPositive();
         }
-        assertThat(http.get(null, "/api/v1/public/tenants/" + code + "/branding").statusCode())
-            .as("another address (127.0.0.1) is still served").isEqualTo(200);
-        assertThat(ipv6Get(client, "/api/v1/tenant/me").statusCode()).as("other paths are not counted").isEqualTo(401);
+        assertThat(mvc.perform(get("/api/v1/public/tenants/" + code + "/branding").with(from("198.51.100.9")))
+            .andReturn().getResponse().getStatus()).as("another address is still served").isEqualTo(200);
+        assertThat(mvc.perform(get("/api/v1/tenant/me").with(from(address))).andReturn().getResponse().getStatus())
+            .as("other paths are not counted").isEqualTo(401);
     }
 
-    private HttpResponse<String> ipv6Get(HttpClient client, String path) throws InterruptedException {
-        try {
-            return client.send(HttpRequest.newBuilder(URI.create("http://[::1]:" + port + path))
-                .header("Accept-Language", "en").GET().build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            return null;
-        }
+    private static RequestPostProcessor from(String address) {
+        return request -> {
+            request.setRemoteAddr(address);
+            return request;
+        };
     }
 
     private Long logoFileId() {
