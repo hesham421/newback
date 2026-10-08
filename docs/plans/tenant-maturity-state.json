@@ -640,7 +640,22 @@
       "step": "Z",
       "event": "COMPLETE",
       "note": "merged 45b5de9; verify 669/10; HTTP 226/226 all profiles; plan COMPLETE (backend); release recommendation MINOR 1.3.0 by recorded exception — awaiting owner"
+    },
+    {
+      "at": "2026-10-08T13:25:12Z",
+      "step": "Z",
+      "event": "RELEASED",
+      "note": "erp-core 1.3.0 tagged v1.3.0 (2ff422a), CI publish + consume-published green; frontend mxdashboard 1.3.0 released together; main -> 1.4.0-SNAPSHOT"
     }
   ],
-  "status": "COMPLETE"
+  "status": "COMPLETE",
+  "release": {
+    "version": "1.3.0",
+    "tag": "v1.3.0",
+    "commit": "2ff422a",
+    "ci_run": 37783173921,
+    "published": true,
+    "frontend": "newfront mxdashboard 1.3.0 tag v1.3.0 (794a743)",
+    "date": "2026-10-08"
+  }
 }
