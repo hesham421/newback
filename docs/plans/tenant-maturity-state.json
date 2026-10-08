@@ -111,13 +111,13 @@
         "V18__tenant_profile.sql",
         "V19__tenant_lifecycle.sql"
       ],
-      "status": "IN_PROGRESS",
+      "status": "REVIEW",
       "branch": "tm/b-tenant-level-1",
       "worktree": ".worktrees/tm-b",
-      "attempts": 0,
-      "deviations": 0,
+      "attempts": 1,
+      "deviations": 11,
       "implementer_agent": "ae63a19e09096e36c",
-      "reviewer_agent": null,
+      "reviewer_agent": "a62a12a6ee8762b83",
       "review": null,
       "report": "docs/steps/tm-b-report.md",
       "merged_commit": null
@@ -407,6 +407,12 @@
       "step": "B",
       "event": "DISPATCH",
       "note": "implementer dispatched"
+    },
+    {
+      "at": "2026-10-08T00:03:30Z",
+      "step": "B",
+      "event": "REVIEW",
+      "note": "implementer COMPLETE e7806e4 (mvn 572/10, P-LIVE 181/181, api-docs 118 ops); reviewer dispatched"
     }
   ]
 }
