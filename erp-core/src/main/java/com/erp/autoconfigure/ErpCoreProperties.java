@@ -318,6 +318,10 @@ public class ErpCoreProperties {
         /** Most rows one tenant export may contain; read on every export. */
         @Positive
         private long maxRows = 200_000;
+
+        /** Review round 1 (RULE-TENANT-028): exports running at once on a node, all tenants; one more is 429 {@code TENANT_EXPORT_BUSY}. */
+        @Positive
+        private int maxConcurrent = 2;
     }
 
     /**

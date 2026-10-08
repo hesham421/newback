@@ -42,7 +42,8 @@ import org.springframework.util.StringUtils;
 
 /**
  * XM-FILE-003 (tenant-maturity C5) — the private store behind {@code FilePrivateStoreApi}: a server-generated file becomes
- * a PRIVATE, uncategorised {@code FILE_DOCUMENT} of the current tenant (RULE-FILE-011), and FILE's single-use download token
+ * a PRIVATE, uncategorised, optionally restricted {@code FILE_DOCUMENT} of the current tenant (RULE-FILE-011, -012), and
+ * FILE's single-use download token
  * is issued for it exactly as API-FILE-002 does. Reached only through the cross-module adapter; {@code isAuthenticated()}
  * here, the consuming service owns the permission. No caching (FILE is absent from the approved register).
  */
@@ -80,6 +81,7 @@ public class FilePrivateStoreService {
             .build();
         FileDocument entity = mapper.toEntity(owner, fileName, contentType, size, contentHash,
             FileService.deriveFileType(contentType), FileDocumentDomain.STATUS_ACTIVE, null, provider.key());
+        entity.setRequiredAuthority(StringUtils.hasText(request.requiredAuthority()) ? request.requiredAuthority() : null);
 
         FileDocument saved = repository.save(entity);
         try (InputStream content = new BufferedInputStream(Files.newInputStream(request.content()))) {
@@ -109,6 +111,7 @@ public class FilePrivateStoreService {
         FileMetadataView view = repository.findMetadataTupleById(documentId)
             .map(FileMetadataView::from)
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId));
+        FileDocumentDomain.assertVisibleTo(documentId, view.getRequiredAuthority(), FileService.callerAuthorities());
         // RULE-FILE-006 — a soft-deleted file is gone: no token (the API-FILE-002 check)
         if (FileDocumentDomain.STATUS_DELETED.equals(view.getFileStatusId())) {
             throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId);

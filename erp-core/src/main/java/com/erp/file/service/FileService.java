@@ -25,6 +25,7 @@ import com.erp.file.mapper.FileMapper;
 import com.erp.file.repository.FileCategoryRepository;
 import com.erp.file.repository.FileDocumentRepository;
 import com.erp.file.repository.FileMetadataView;
+import com.erp.file.storage.StorageKeys;
 import com.erp.file.storage.StorageProvider;
 import com.erp.file.storage.StorageProviderRegistry;
 import com.erp.file.storage.StorageTarget;
@@ -37,12 +38,15 @@ import java.net.URLConnection;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -173,6 +177,7 @@ public class FileService {
             .map(FileMetadataView::from)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
+        FileDocumentDomain.assertVisibleTo(id, view.getRequiredAuthority(), callerAuthorities());
 
         // RULE-FILE-006 — a soft-deleted file is treated as gone: no download token may be minted.
         if (FileDocumentDomain.STATUS_DELETED.equals(view.getFileStatusId())) {
@@ -212,6 +217,7 @@ public class FileService {
             .map(FileMetadataView::from)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, fileId));
+        FileDocumentDomain.assertVisibleTo(fileId, view.getRequiredAuthority(), callerAuthorities());
 
         // RULE-FILE-006 — a soft-deleted file is treated as gone and is never downloadable.
         if (FileDocumentDomain.STATUS_DELETED.equals(view.getFileStatusId())) {
@@ -240,6 +246,7 @@ public class FileService {
             .map(FileMetadataView::from)
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
+        FileDocumentDomain.assertVisibleTo(id, view.getRequiredAuthority(), callerAuthorities());
 
         return ServiceResult.success(mapper.toMetadataResponse(view, publicFileUrls.of(view).orElse(null)));
     }
@@ -264,7 +271,7 @@ public class FileService {
         Pageable pageable = PageableBuilder.from(pageRequest, ALLOWED_SORT_FIELDS);
 
         Page<FileMetadataView> result = repository.findMetadataTupleByOwner(
-            ownerId, ownerType, moduleCode, fileTypeId, fileStatusId, pageable)
+            ownerId, ownerType, moduleCode, fileTypeId, fileStatusId, callerAuthorities(), pageable)
             .map(FileMetadataView::from);
 
         return ServiceResult.success(result.map(view ->
@@ -272,10 +279,9 @@ public class FileService {
     }
 
     /**
-     * API-FILE-006 — archive (ARCHIVE→ARCHIVED, UPDATE perm) or soft-delete (DELETE→DELETED, DELETE
-     * perm). Bytes are retained (RULE-FILE-006). The lifecycle transition is guarded by
-     * FileDocumentDomain; no physical removal. The gate picks the permission by the action
-     * argument; any other action value passes it so resolveTargetStatus still answers 400, never 403.
+     * API-FILE-006 — archive (ARCHIVE→ARCHIVED, UPDATE perm) or soft-delete (DELETE→DELETED, DELETE perm). Bytes are
+     * retained (RULE-FILE-006), except that deleting a restricted document removes them (RULE-FILE-012, a tombstone row
+     * stays). The gate picks the permission by the action; any other value passes so resolveTargetStatus answers 400.
      */
     @Transactional
     @PreAuthorize("(#action == 'ARCHIVE' and hasAuthority(T(com.erp.file.permission.FilePermissions)"
@@ -292,9 +298,14 @@ public class FileService {
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
 
+        FileDocumentDomain.assertVisibleTo(id, entity.getRequiredAuthority(), callerAuthorities());
         // RULE-FILE-006 — the state machine decides whether the transition is legal.
         FileDocumentDomain.from(entity).assertCanTransitionTo(targetStatus);
         entity.setFileStatusId(targetStatus);
+        if (FileDocumentDomain.purgesContentOn(entity.getRequiredAuthority(), targetStatus)) {
+            purgeContent(storageProviders.forKey(entity.getStorageProvider()), entity.getStorageRef());
+            log.info("File ID: {} is restricted: its content is removed, its metadata kept", id);
+        }
 
         FileDocument saved = repository.save(entity);
         log.info("File ID: {} status set to {}", saved.getId(), targetStatus);
@@ -319,6 +330,7 @@ public class FileService {
             .orElseThrow(() -> new LocalizedException(
                 Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, id));
 
+        FileDocumentDomain.assertVisibleTo(id, entity.getRequiredAuthority(), callerAuthorities());
         FileDocumentDomain domain = FileDocumentDomain.from(entity);
         domain.assertNotDeleted(id);
 
@@ -389,6 +401,35 @@ public class FileService {
                 }
             }
         });
+    }
+
+    /**
+     * RULE-FILE-012 — removes a deleted restricted document's content: the {@code DB} provider clears the column in this
+     * transaction; another provider deletes its object after the commit (a rollback keeps it).
+     */
+    static void purgeContent(StorageProvider provider, String storageRef) {
+        if (storageRef == null) {
+            return;
+        }
+        if (StorageKeys.DB.equals(provider.key()) || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            provider.delete(storageRef);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                provider.delete(storageRef);
+            }
+        });
+    }
+
+    /** RULE-FILE-012 — the caller's authority names (empty without a caller). */
+    static Set<String> callerAuthorities() {
+        Authentication caller = SecurityContextHelper.currentCaller();
+        if (caller == null) {
+            return Set.of();
+        }
+        return caller.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
     }
 
     private static void closeQuietly(InputStream stream) {

@@ -48,7 +48,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * REQ-TENANT-037 (tenant-maturity C5) — {@code POST /api/v1/platform/tenants/{id}/export}: inside the tenant, one read-only
  * snapshot transaction counts (RULE-TENANT-027) and streams every {@link TenantExportContributor}'s CSV files into a ZIP on
  * a temporary file; in PLATFORM, FILE stores it as a PRIVATE document and {@code TENANT_EXPORTED} is recorded; then FILE
- * issues the single-use download token. One export per tenant at a time on this node (RULE-TENANT-028). Not
+ * issues the single-use download token. One export per tenant, at most {@code max-concurrent} in all, per node (RULE-TENANT-028). Not
  * {@code @Transactional}: each step opens its own transaction in its own tenant (the {@code TenantService} precedent).
  */
 @Service
@@ -80,7 +80,10 @@ public class TenantExportService {
 
         Tenant tenant = repository.findById(id)
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
-        TenantDomain.assertExportStartable(guard.tryStart(id), tenant.getCode());
+        int maxConcurrent = properties.getTenant().getExport().getMaxConcurrent();
+        TenantExportGuard.Start start = guard.tryStart(id, maxConcurrent);
+        TenantDomain.assertExportStartable(start != TenantExportGuard.Start.ALREADY_RUNNING,
+            start != TenantExportGuard.Start.BUSY, tenant.getCode(), maxConcurrent);
         Path archive = null;
         try {
             archive = createArchiveFile();
@@ -133,11 +136,14 @@ public class TenantExportService {
         }
     }
 
-    /** Runs in a PLATFORM transaction: FILE stores the ZIP; {@code TENANT_EXPORTED} in PLATFORM and in the tenant. */
+    /**
+     * Runs in a PLATFORM transaction: FILE stores the ZIP as a restricted document (RULE-FILE-012); {@code TENANT_EXPORTED}
+     * in PLATFORM and, with an explicit tenant id, in the tenant — all three commit or roll back together.
+     */
     private StoredPrivateFile storeAndRecord(Tenant tenant, Path archive, String fileName, long rowCount) {
         StoredPrivateFile stored = filePrivateStore.storePrivateFile(new PrivateFileStoreRequest(
             TenantDomain.EXPORT_OWNER_TYPE, tenant.getId(), TenantDomain.EXPORT_MODULE_CODE, fileName, CONTENT_TYPE_ZIP,
-            archive));
+            archive, TenantDomain.EXPORT_REQUIRED_AUTHORITY));
         AuditEntry entry = AuditEntry.builder()
             .action(ACTION_TENANT_EXPORTED)
             .entityType(ENTITY_TYPE_TENANT)
@@ -149,7 +155,7 @@ public class TenantExportService {
             .build();
         auditApi.record(entry.toBuilder().tenantId(TenantConstants.PLATFORM_TENANT_ID).build());
         if (!Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(tenant.getId())) {
-            TenantContext.runAs(tenant.getId(), () -> requiresNew().executeWithoutResult(status -> auditApi.record(entry)));
+            auditApi.record(entry.toBuilder().tenantId(tenant.getId()).build());
         }
         return stored;
     }

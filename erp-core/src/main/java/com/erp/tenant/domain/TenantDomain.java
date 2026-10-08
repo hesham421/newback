@@ -7,6 +7,7 @@ import com.erp.common.exception.LocalizedException;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
+import com.erp.tenant.permission.TenantPermissions;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -44,6 +45,9 @@ public final class TenantDomain {
     /** RULE-TENANT-027: the export archive is a PRIVATE FILE document of PLATFORM with this owner type, owner id = the tenant id. */
     public static final String EXPORT_OWNER_TYPE = "CORE_TENANT";
     public static final String EXPORT_MODULE_CODE = "TENANT";
+
+    /** RULE-TENANT-027 (review round 1): FILE serves the archive only to callers holding this authority (RULE-FILE-012). */
+    public static final String EXPORT_REQUIRED_AUTHORITY = TenantPermissions.PLATFORM_TENANT_MANAGE;
 
     private static final String FIELD_LOGO_FILE = "file";
     private static final String FIELD_BRAND_COLOR = "brandColor";
@@ -179,10 +183,16 @@ public final class TenantDomain {
         }
     }
 
-    /** RULE-TENANT-028 — one export of a tenant at a time on this node: the slot was taken, so 409 {@code TENANT_EXPORT_IN_PROGRESS}. */
-    public static void assertExportStartable(boolean started, String tenantCode) {
-        if (!started) {
+    /**
+     * RULE-TENANT-028 — one export of a tenant at a time on this node (else 409 {@code TENANT_EXPORT_IN_PROGRESS}), and at
+     * most {@code maxConcurrent} exports together (else 429 {@code TENANT_EXPORT_BUSY}); the tenant's own export is checked first.
+     */
+    public static void assertExportStartable(boolean tenantFree, boolean capacityFree, String tenantCode, int maxConcurrent) {
+        if (!tenantFree) {
             throw new LocalizedException(Status.CONFLICT, TenantErrorCodes.TENANT_EXPORT_IN_PROGRESS, tenantCode);
+        }
+        if (!capacityFree) {
+            throw new LocalizedException(Status.TOO_MANY_REQUESTS, TenantErrorCodes.TENANT_EXPORT_BUSY, maxConcurrent);
         }
     }
 

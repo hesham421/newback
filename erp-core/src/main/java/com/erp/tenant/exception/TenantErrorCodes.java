@@ -72,4 +72,7 @@ public final class TenantErrorCodes {
 
     /** 409 — tenant-maturity C5 (RULE-TENANT-028): an export of the same tenant is already running on this node. */
     public static final String TENANT_EXPORT_IN_PROGRESS = "TENANT_EXPORT_IN_PROGRESS";
+
+    /** 429 — tenant-maturity C5 review round 1 (RULE-TENANT-028): {@code erp.core.tenant.export.max-concurrent} exports run. */
+    public static final String TENANT_EXPORT_BUSY = "TENANT_EXPORT_BUSY";
 }
