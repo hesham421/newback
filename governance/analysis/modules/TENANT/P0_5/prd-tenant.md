@@ -197,3 +197,58 @@ DEFERRED — delta
 
 APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the stories are
 IMPLEMENTED with package B and checked against the code in its check commit.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW stories (ids continue from US-TENANT-011)
+
+US-TENANT-012
+  Title          : شعار المستأجر ولون علامته / A tenant's logo and brand colour
+  Story          : As a platform operator, I need to upload, replace or remove a tenant's logo and set an optional brand colour from the tenants screen, so that the organisation's users see their own mark beside the platform's.
+  Priority       : MEDIUM
+  Success metric : the uploaded logo's URL is served under the tenant's code and shown by `/tenant/me` (TC-CORE-TENANT-038, -039)
+  Traces         : POL-TENANT-014, POL-TENANT-006
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-029, REQ-TENANT-030
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+US-TENANT-013
+  Title          : قراءة علامة مستأجري / Read my tenant's branding
+  Story          : As any signed-in user (staff or customer), I need my tenant's code, names, logo URL, brand colour and default language, so that the application shell can show them after login.
+  Priority       : MEDIUM
+  Success metric : `/tenant/me` answers exactly the six branding fields (TC-CORE-TENANT-039)
+  Traces         : POL-TENANT-007, POL-TENANT-014
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-031
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+US-TENANT-014
+  Title          : علامة المستأجر قبل الدخول / Tenant branding before login
+  Story          : As an anonymous visitor on the login page, I need the branding of the tenant whose code I typed, so that I see the right logo before I sign in.
+  Priority       : MEDIUM
+  Success metric : the public branding answers 200 / 404 / 403 / 429 as specified (TC-CORE-TENANT-043, -046)
+  Traces         : POL-TENANT-008, POL-TENANT-014
+  Source         : `../P1/srs-tenant.md` REQ-TENANT-032
+  Status         : IMPLEMENTED (erp-core 1.3.0)
+
+CHANGED behaviour of existing stories
+| Story | Delta | Source |
+|---|---|---|
+| US-TENANT-002 list, view, search | responses carry `logoUrl` and `brandColor` | REQ-TENANT-029, -030 |
+| US-TENANT-005 public URL carrying its tenant | a second path-tenant path: the public branding endpoint | REQ-TENANT-032 |
+
+TRACEABILITY — delta
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-012 | POL-TENANT-006, POL-TENANT-014 | REQ-TENANT-029, -030 |
+| US-TENANT-013 | POL-TENANT-007, POL-TENANT-014 | REQ-TENANT-031 |
+| US-TENANT-014 | POL-TENANT-008, POL-TENANT-014 | REQ-TENANT-032 |
+Every policy POL-TENANT-001 … 014 appears in at least one row (014 → US-012 … 014).
+
+DEFERRED — delta
+| Kind | US | Reason | Activation trigger |
+|---|---|---|---|
+| NEW | (tenant self-service branding screen) | decision D5 | a later version (ADR-TENANT-005 alternative) |
+
+APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header, decision D5); the stories are
+IMPLEMENTED with package E and checked against the code in its check commit.

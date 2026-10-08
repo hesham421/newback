@@ -89,3 +89,13 @@ Statement      : Original analysis above is unchanged; this addendum records the
 | CHANGED | Tenant management | `/api/v1/platform/tenants` gains update, admin-reset (recover a tenant's super administrator) and usage figures; a suspension needs a reason; still `PLATFORM_TENANT_MANAGE` + PLATFORM-tenant caller; no new permission (D5) | `../P1/srs-tenant.md` 1.3.0 B1 |
 | CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ SEC (SecUserDirectoryApi counts, SecAdminRecoveryApi)`, `──▶ FILE (FileDocumentLookupApi counts)`, `──▶ NOTIF (NotificationLogQueryApi.countDispatchedSince)` — each called inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 B7 |
 | CHANGED | DEFERRED | "Editing a tenant's name, a usage endpoint" leaves DEFERRED; "tenant profile, suspension facts" leave DEFERRED (the token cut-off is stored, its enforcement is package C.2); lifecycle events, branding, idempotent provisioning and export stay with packages C and E; level 2 stays deferred | plan §0 D2, §4, §5, §7 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+| Kind | Aspect | Delta | Source |
+|---|---|---|---|
+| NEW — FE | Branding for the UI | a tenant gets an optional logo and brand colour, set by the platform operator on `PLATFORM_TENANTS` (`PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding`); `GET /api/v1/tenant/me` (authenticated, any realm) and `GET /api/v1/public/tenants/{tenantCode}/branding` (public, path tenant, rate-limited per client address) feed the shell and the login page; the logo document lives in the tenant's own rows as a PUBLIC file | `../P1/srs-tenant.md` 1.3.0 E1 |
+| CHANGED | DEPENDENCY MAP | + `TENANT ──crossmodule──▶ FILE (FileImageStoreApi, FileDocumentLookupApi.publicUrl; soft reference CORE_TENANT.LOGO_FILE_ID)` | E6 |
+| CHANGED | DEFERRED | "branding" leaves DEFERRED; a tenant self-service branding screen is deferred (ADR-TENANT-005) | plan §0 D5 |

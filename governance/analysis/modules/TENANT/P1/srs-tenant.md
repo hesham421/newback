@@ -870,3 +870,238 @@ so they open one transaction inside `callAs(id)` with a `TransactionTemplate` (t
 | NEW | `PUT /{id}`, `POST /{id}/admin-reset`, `GET /{id}/usage` on the `PLATFORM_TENANTS` screen (no new page code, permission or menu entry). |
 | CHANGED | The suspend action must send a `reason` (3..500); without it 400 `TENANT_SUSPENSION_REASON_REQUIRED`. `TenantResponse` carries the profile and the suspension facts. |
 | NEW | Error codes `TENANT_SUSPENSION_REASON_REQUIRED`, `TENANT_ADMIN_RESET_PLATFORM`, `TENANT_ADMIN_NOT_FOUND`, `TENANT_ADMIN_NOT_SUPER` (both languages); the admin-reset form is not offered for the PLATFORM row; admin-reset may also answer `SEC-400-PASSWORD-POLICY`. |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding: a logo and an optional brand colour set by the platform operator from `PLATFORM_TENANTS`, `GET /api/v1/tenant/me`, public branding by tenant code (plan §0 D5, §7 E.1–E.4)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Ids continue from the highest number ever issued for TENANT (tree and history of both repositories): REQ / AC
+028, RULE 017 (RULE-TENANT-012 … 015 reserved for the analysis-coverage work's as-built rules), XM 002, POL 013,
+US 011, DBF 042. This block mints **REQ/AC-TENANT-029 … 032, RULE-TENANT-018 … 022, XM-TENANT-003**
+(POL-TENANT-014, US-TENANT-012 … 014 in P0 / P0_5, DBF-TENANT-043 … 044 in P2) and decision
+**ADR-TENANT-005** (the plan's own number, reserved for E). No ENT, SCR-REQ, module, screen, permission, grant
+seed or page code is added (plan §0 D5). Migration `V20__tenant_branding.sql` (the plan expected V18; numbers
+re-derived at creation time, plan §1.3 / §11, `docs/DEVIATIONS.md` `[TM-E]`). Platform paths are relative to
+`/api/v1/platform/tenants`. Rows marked **FE** are read by the frontend (plan §8 F2, F3).
+
+### E1. Endpoints
+The three platform rows keep the 1.2.0 gate: authority `PLATFORM_TENANT_MANAGE` on the service plus the chain
+gate "caller's tenant = PLATFORM" (REQ-TENANT-015); 401 `SEC-401-INVALID-CREDENTIALS` without a token, 403
+`SEC-403-FORBIDDEN` for any other caller — a tenant administrator included (RULE-TENANT-020).
+
+| Kind | Method | Path | Access | Request | Response (`ApiResponse<T>`) | Errors (HTTP · code) | Traces |
+|---|---|---|---|---|---|---|---|
+| NEW — **FE** | PUT | `/{id}/logo` | `PLATFORM_TENANT_MANAGE` | `multipart/form-data`, part `file` (the image; at most 1 MB, PNG / JPEG / WebP / plain SVG, detected from the bytes) | 200 `TenantResponse` with the new `logoUrl` | 404 · `TENANT_NOT_FOUND`; 400 · `TENANT_LOGO_INVALID` (`fieldErrors[0].field = file`; empty, too large, another type, unsafe SVG); 400 · `VALIDATION_ERROR` (no `file` part, not a multipart request) | REQ-TENANT-029; RULE-TENANT-018, -019, -020 |
+| NEW — **FE** | DELETE | `/{id}/logo` | `PLATFORM_TENANT_MANAGE` | — | 204 (no body); a tenant without a logo also answers 204 (idempotent, D's photo precedent) | 404 · `TENANT_NOT_FOUND` | REQ-TENANT-029; RULE-TENANT-018, -020 |
+| NEW — **FE** | PATCH | `/{id}/branding` | `PLATFORM_TENANT_MANAGE` | `TenantBrandingUpdateRequest { brandColor }` — `#RRGGBB`; null, absent or blank clears it | 200 `TenantResponse` | 404 · `TENANT_NOT_FOUND`; 400 · `TENANT_BRAND_COLOR_INVALID` (`fieldErrors[0].field = brandColor`) | REQ-TENANT-030; RULE-TENANT-020, -021 |
+| NEW — **FE** | GET | `/api/v1/tenant/me` | `isAuthenticated()`, **any realm** (STAFF or CUSTOMER token) | — | 200 `TenantBrandingResponse { code, nameAr, nameEn, logoUrl, brandColor, defaultLocale }` of the token's tenant | 401 · `SEC-401-INVALID-CREDENTIALS`; 403 · `TENANT_SUSPENDED` (the token's tenant is suspended, RULE-TENANT-006); 404 · `TENANT_NOT_FOUND` (defensive: the token's tenant vanished) | REQ-TENANT-031 |
+| NEW — **FE** | GET | `/api/v1/public/tenants/{tenantCode}/branding` | public, no token, no header | — | 200 `TenantBrandingResponse` | 404 · `TENANT_NOT_FOUND` (unknown code); 403 · `TENANT_SUSPENDED`; 429 · `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022) | REQ-TENANT-032; RULE-TENANT-006, -012 |
+| CHANGED — **FE** | POST / GET / GET / POST / PUT / PATCH | create, `/{id}`, list, `/search`, `/{id}`, `/{id}/status` | as before | as before | `TenantResponse` + `logoUrl` (nullable: the public URL of the logo, resolved inside the tenant), `brandColor` (nullable `#RRGGBB`); `LOGO_FILE_ID` itself is not exposed | as before | REQ-TENANT-029, -030 |
+
+Order of checks — logo PUT: request binding (`file` part) → tenant (`TENANT_NOT_FOUND`) → image (`TENANT_LOGO_INVALID`)
+→ write. Branding PATCH: tenant → colour → write. Public branding: rate limit (per client address, before anything
+else) → tenant from the path (`TENANT_NOT_FOUND` / `TENANT_SUSPENDED`) → read.
+
+Wiring (`ErpCoreSecurityAutoConfiguration`, `ErpCoreProperties`):
+- `/api/v1/tenant/me` is outside the customer chain's matcher, so the core (staff) chain serves it; it is named
+  realm-neutral there (constant `TENANT_ME_PATH`): that chain's `RealmEnforcementFilter` does not refuse a CUSTOMER
+  token on it and the path still needs an authenticated caller (`anyRequest().authenticated()`). The forced-change
+  gate lets it through too (SEC RULE-SEC-059 CHANGED): it reveals nothing the public branding does not.
+- `/api/v1/public/tenants/{tenantCode}/branding` lies under `/api/v1/public/**`, so the customer chain serves it
+  (constant `PUBLIC_TENANT_BRANDING_PATHS` = `/api/v1/public/tenants/*/branding`): `GET` permitted, public for the
+  realm and tenant filters, its tenant taken from the path — the `erp.core.tenant.path-tenant-paths` default gains
+  `/api/v1/public/tenants/{tenantCode}/branding` (RULE-TENANT-012 source 1, the step-07 mechanism of the public
+  files). An application that replaces the list and leaves the path out gets 400 `TENANT_REQUIRED` there. A
+  `PublicBrandingRateLimitFilter` runs first on that chain, for that path only (RULE-TENANT-022).
+
+### E2. Requirements (§A4) — NEW
+
+### REQ-TENANT-029 — شعار المستأجر يضبطه مدير المنصة / Tenant logo set by the platform administrator
+Pattern    : event
+Statement  : When a platform operator puts an image to `PUT /api/v1/platform/tenants/{id}/logo`, the system shall validate it through FILE's image store (RULE-TENANT-018), store it as a PUBLIC document **in tenant {id}'s own rows** (`TenantContext.callAs(id)`; owner `CORE_TENANT` / {id}, module `TENANT`, base name `logo`), reference it from `CORE_TENANT.LOGO_FILE_ID`, discard the previous logo document, record `TENANT_LOGO_CHANGED` and answer the tenant with its `logoUrl` (`/api/v1/public/files/{thatTenantCode}/{slug}`) — all in one transaction of tenant {id}; when the operator calls `DELETE …/{id}/logo`, the system shall clear the reference, discard the document and record `TENANT_LOGO_CHANGED`; a refused image changes nothing.
+Traces     : US-TENANT-012
+Entities   : ENT-TENANT-001; FILE ENTITY-FILE-001 (through `FileImageStoreApi`, XM-TENANT-003)
+Rationale  : POL-TENANT-014; ADR-TENANT-005; FILE ADR-FILE-008 (PUBLIC, non-guessable slug)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2, E.4
+Priority   : MEDIUM
+#### AC-TENANT-029 — [REQ-TENANT-029]
+Given a tenant T and a platform operator
+When the operator puts a small PNG to `/{T}/logo`
+Then the system answers 200 with `logoUrl` starting `/api/v1/public/files/{T's code}/`; `GET /{T}` carries the same `logoUrl`; T's administrator's `GET /api/v1/tenant/me` carries the same `logoUrl`; an anonymous `GET {logoUrl}` answers 200 with the bytes (`image/png`, inline); the `FILE_DOCUMENT` row has `TENANT_ID = T`, owner `CORE_TENANT` / T, module `TENANT`, and is not visible to another tenant;
+when the operator puts another image, the old URL answers 404 `FILE_DOCUMENT_NOT_FOUND` and the new one 200; an SVG carrying `<script>`, an executable and an image over 1 MB each answer 400 `TENANT_LOGO_INVALID` and keep the current logo; a plain SVG is accepted and served as `image/svg+xml` with `Content-Disposition: attachment`, `nosniff` and the sandbox CSP;
+when the operator deletes the logo, the system answers 204, `logoUrl` becomes null everywhere and the old URL answers 404; an unknown tenant id answers 404 `TENANT_NOT_FOUND`; T's administrator calling any of the three platform endpoints gets 403 `SEC-403-FORBIDDEN`; PLATFORM itself (id 1) can carry a logo
+
+### REQ-TENANT-030 — لون العلامة / Brand colour
+Pattern    : event
+Statement  : When a platform operator patches `PATCH /api/v1/platform/tenants/{id}/branding` with `brandColor`, the system shall store it upper-cased if it is `#` followed by six hexadecimal digits, clear it if it is null, absent or blank, and refuse anything else with 400 `TENANT_BRAND_COLOR_INVALID` without a change.
+Traces     : US-TENANT-012
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-014; plan §0 D5 ("optional part"): the frontend uses it only when present (plan §8 F2)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2
+Priority   : LOW
+#### AC-TENANT-030 — [REQ-TENANT-030]
+Given a tenant T
+When the operator patches `{"brandColor":"#1a2b3c"}`
+Then the system answers 200 `brandColor = "#1A2B3C"`, and `GET /{T}`, T's `/tenant/me` and the public branding show it;
+`{"brandColor":"red"}`, `"#12345"`, `"#1234567"`, `"1A2B3C"` each answer 400 `TENANT_BRAND_COLOR_INVALID` and keep `#1A2B3C`;
+`{"brandColor":null}` (or `{}`) answers 200 `brandColor = null`; the database refuses a malformed value as well (`CHK_CORE_TENANT_BRAND_COLOR`)
+
+### REQ-TENANT-031 — علامة المستأجر الحالي / Branding of the token's tenant
+Pattern    : event
+Statement  : When an authenticated caller of either realm asks for `GET /api/v1/tenant/me`, the system shall return the branding of the tenant its token names — `code`, `nameAr`, `nameEn`, `logoUrl`, `brandColor`, `defaultLocale` — and nothing else (no contact, profile, status or audit field); it is read-only and needs no permission; a staff caller with a pending forced password change may call it.
+Traces     : US-TENANT-013
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-007 (only the caller's own tenant), POL-TENANT-014 (the read side is open to every user of the tenant, ADR-TENANT-005)
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2, §8 F2
+Priority   : MEDIUM
+#### AC-TENANT-031 — [REQ-TENANT-031]
+Given tenant T with a logo and a brand colour, its staff administrator and one of its customers
+When each calls `GET /api/v1/tenant/me` with their token
+Then each answers 200 with exactly the keys `code, nameAr, nameEn, logoUrl, brandColor, defaultLocale` (T's values); a token of another tenant answers that tenant's branding; no token → 401; a staff user with a pending forced change → 200; T suspended → 403 `TENANT_SUSPENDED`
+
+### REQ-TENANT-032 — علامة عامة برمز المستأجر / Public branding by tenant code
+Pattern    : event
+Statement  : When an anonymous caller asks for `GET /api/v1/public/tenants/{tenantCode}/branding`, the system shall resolve the tenant from the path (trimmed, upper-cased; RULE-TENANT-012 source 1) and return its `TenantBrandingResponse`; if the code is unknown the system shall answer 404 `TENANT_NOT_FOUND`, if the tenant is suspended 403 `TENANT_SUSPENDED`, and if the caller's address exceeded its budget 429 `TENANT_BRANDING_RATE_LIMITED` (RULE-TENANT-022).
+Traces     : US-TENANT-014; US-TENANT-005 (CHANGED: a second path-tenant path)
+Entities   : ENT-TENANT-001
+Rationale  : POL-TENANT-008; the login page needs the logo before a token exists (plan §8 F2); the rate limit bounds tenant-code enumeration
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2, E.4
+Priority   : MEDIUM
+#### AC-TENANT-032 — [REQ-TENANT-032]
+Given tenant T (ACTIVE, with a logo) and a suspended tenant S
+When an anonymous client asks for T's, an unknown code's and S's branding (T's code in lower case included)
+Then T → 200 with T's branding (the same `logoUrl` as `/tenant/me`), no contact or profile field; unknown → 404 `TENANT_NOT_FOUND`; S → 403 `TENANT_SUSPENDED`;
+and after `capacity` calls in one `period` from one address the next call — whatever the code, unknown codes included — answers 429 `TENANT_BRANDING_RATE_LIMITED`, while another address is still served
+
+### E3. Business rules (§A5) — NEW / CHANGED
+
+### RULE-TENANT-018 — شعار المستأجر / Tenant logo
+Scope      : ENT-TENANT-001; FILE ENTITY-FILE-001
+Trigger    : on `PUT` / `DELETE /{id}/logo`
+Statement  : A tenant has at most one logo: a PUBLIC `FILE_DOCUMENT` of at most 1 048 576 bytes whose content is PNG, JPEG, WebP or SVG (type detected from the bytes, RULE-FILE-008; SVG only if it passes FILE's allow-list, RULE-FILE-009 — plain / optimised SVG: no script, event attribute, external reference, editor metadata, DOCTYPE or duplicate `id`), stored in the tenant's own rows (`TENANT_ID = {id}`, owner `CORE_TENANT` / {id}, module `TENANT`), so its URL carries that tenant's code. Replacing or removing the logo discards the previous document in the same transaction (DELETED + PRIVATE: its URL answers 404 at once, RULE-FILE-010); a refused image changes nothing. The rejection comes from FILE as a value, never an exception, and the tenant raises `TENANT_LOGO_INVALID`.
+Data source: FILE's `ImageStoreResult`; ENT-TENANT-001.logoFileId
+Message    : ar: "يجب أن يكون الشعار صورة PNG أو JPEG أو WebP أو SVG بسيطة بحجم لا يتجاوز 1 ميغابايت (SVG دون نصوص برمجية أو مراجع خارجية أو بيانات محرّر: صدّره بصيغة SVG بسيطة أو محسّنة)" · en: "The logo must be a PNG, JPEG, WebP or plain SVG image of at most 1 MB (SVG without scripts, external references or editor metadata: export it as plain or optimised SVG)"
+Traces     : REQ-TENANT-029
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.3; §6 D.4
+Decided by : FILE `ImageValidationDomainService` (the verdict) and `TenantDomain.assertLogoAccepted` (the tenant's error); the constants `LOGO_OWNER_TYPE`, `LOGO_MODULE_CODE`, `LOGO_BASE_NAME`, `LOGO_MAX_BYTES`, `LOGO_TYPES` live on `TenantDomain`
+
+### RULE-TENANT-019 — مستأجر المنصة يحمل شعارًا أيضًا / PLATFORM may carry a logo
+Scope      : ENT-TENANT-001
+Trigger    : on `PUT /1/logo`
+Statement  : The PLATFORM tenant may carry a logo like any tenant (its URL is `/api/v1/public/files/PLATFORM/{slug}`); the platform **mark** the frontend shows is a static asset, never a tenant logo, so a tenant without a logo always has a fallback.
+Data source: —
+Message    : —
+Traces     : REQ-TENANT-029
+Source     : docs/plans/tenant-maturity-plan.md §7 E.3
+Decided by : no refusal exists (`TenantDomain` has no PLATFORM check on branding, unlike RULE-TENANT-005 / -017)
+
+### RULE-TENANT-020 — العلامة التجارية من المنصة فقط / Branding is written by the platform only
+Scope      : ENT-TENANT-001
+Trigger    : on the logo and branding endpoints
+Statement  : The system shall serve `PUT` / `DELETE /{id}/logo` and `PATCH /{id}/branding` only to a PLATFORM operator holding `PLATFORM_TENANT_MANAGE` (decision D5): a tenant administrator, whatever its roles, has no write path to branding in 1.3.0; every user of a tenant reads it through `GET /api/v1/tenant/me`.
+Data source: the caller's authorities and tenant
+Message    : `SEC-403-FORBIDDEN`
+Traces     : REQ-TENANT-029, REQ-TENANT-030
+Source     : docs/plans/tenant-maturity-plan.md §0 D5, §7 E.3; ADR-TENANT-005
+Decided by : the chain gate on `/api/v1/platform/**` (REQ-TENANT-015) and `@PreAuthorize(PLATFORM_TENANT_MANAGE)` on `TenantService.setLogo`, `removeLogo`, `updateBranding`
+
+### RULE-TENANT-021 — صيغة لون العلامة / Brand colour format
+Scope      : ENT-TENANT-001.brandColor
+Trigger    : on `PATCH /{id}/branding`
+Statement  : `brandColor` shall be null or, after trimming, `^#[0-9A-Fa-f]{6}$`; it is stored upper-case (`@PreUpdate`). A blank value clears it. Anything else → 400 `TENANT_BRAND_COLOR_INVALID`; the database repeats the check (`CHK_CORE_TENANT_BRAND_COLOR`).
+Data source: the request's `brandColor`
+Message    : ar: "لون العلامة ''{0}'' غير صالح: استخدم الصيغة #RRGGBB (ستة أرقام ست عشرية)" · en: "Brand colour ''{0}'' is invalid: use #RRGGBB (six hexadecimal digits)"
+Traces     : REQ-TENANT-030
+Source     : docs/plans/tenant-maturity-plan.md §7 E.1, E.2
+Decided by : `TenantDomain.assertBrandColorValid`
+
+### RULE-TENANT-022 — حدّ معدّل العلامة العامة / Public branding rate limit
+Scope      : `GET /api/v1/public/tenants/{tenantCode}/branding`
+Trigger    : on every request to that path
+Statement  : The system shall allow each client address (`HttpServletRequest.getRemoteAddr()`, i.e. the proxy-resolved address when the application sets `server.forward-headers-strategy`) at most `erp.core.tenant.public-branding-rate-limit.capacity` requests per `period` (defaults 60 per 1 minute, bucket4j, refilled greedily), counted **before** the tenant is resolved — so unknown and suspended codes consume the budget and the endpoint cannot enumerate tenant codes faster than the limit; over the limit → 429 `TENANT_BRANDING_RATE_LIMITED`. Per JVM (a cluster gets one budget per node); the bucket map is cleared above 10 000 addresses (the `LoginRateLimiter` precedent).
+Data source: the client address
+Message    : ar: "طلبات كثيرة لعلامة المستأجر. يرجى الانتظار قليلًا ثم المحاولة مجددًا" · en: "Too many tenant branding requests. Please wait a moment and try again"
+Traces     : REQ-TENANT-032
+Source     : docs/plans/tenant-maturity-plan.md §7 E.2 ("rate-limited like customer login, bucket per IP")
+Decided by : `PublicBrandingRateLimitFilter` (`com.erp.tenant.security`, first filter of the customer chain, acting on that path only; writes the envelope like `TenantResolutionFilter`)
+
+| Kind | Rule | Delta |
+|---|---|---|
+| CHANGED | RULE-TENANT-012 (request-tenant resolution order, source 1: path) | the `path-tenant-paths` default gains `/api/v1/public/tenants/{tenantCode}/branding` (still the customer chain only) |
+| CHANGED | RULE-TENANT-006 (a suspended tenant is not served) | also refuses the public branding (403 `TENANT_SUSPENDED` from the filter, and from `TenantDomain.assertServed` in the service) and `/tenant/me`; a suspended tenant's logo URL answers 403 like its other public files |
+
+### E4. Error codes — NEW
+| Code | HTTP | `Status` | Raised by | Message args |
+|---|---|---|---|---|
+| `TENANT_LOGO_INVALID` | 400 | `VALIDATION_ERROR` (field error `file`) | `TenantDomain.assertLogoAccepted` | — |
+| `TENANT_BRAND_COLOR_INVALID` | 400 | `VALIDATION_ERROR` (field error `brandColor`) | `TenantDomain.assertBrandColorValid` | the value sent |
+| `TENANT_BRANDING_RATE_LIMITED` | 429 | (written by the filter) | `PublicBrandingRateLimitFilter` | — |
+Referenced: `TENANT_NOT_FOUND` 404 (also thrown by `TenantBrandingService`), `TENANT_SUSPENDED` 403 (also thrown by
+`TenantDomain.assertServed` for the two branding reads, so the generated api-docs list it), `VALIDATION_ERROR` 400.
+Every new code has an entry in `messages.properties` and `messages_ar.properties` (one `tenant-maturity E` block each).
+
+### E5. ENT-TENANT-001 Tenant — CHANGED (fields); DTOs
+| Kind | Field | Logical type | Required | Rule / format | Written by | Label-ar | Label-en |
+|---|---|---|---|---|---|---|---|
+| NEW | logoFileId | id (soft reference to `FILE_DOCUMENT.ID`, no FK — XM-TENANT-003) | no | not exposed; the API shows `logoUrl` | `PUT` / `DELETE /{id}/logo` (RULE-TENANT-018) | الشعار | Logo |
+| NEW | brandColor | text (7) | no | `#RRGGBB`, upper-cased (RULE-TENANT-021) | `PATCH /{id}/branding` | لون العلامة | Brand colour |
+New DTOs: `TenantBrandingUpdateRequest { brandColor }` and `TenantBrandingResponse { code, nameAr, nameEn, logoUrl,
+brandColor, defaultLocale }` (no id, status, contact, profile or audit field). `TenantResponse` CHANGED: + `logoUrl`,
+`brandColor`. `TenantUpdateRequest` unchanged (profile only; the logo has its own endpoints). `logoUrl` is resolved
+inside the tenant (`TenantContext.callAs(id)`, a new read-only transaction when the caller's tenant differs), because
+FILE's lookup reads the current tenant's documents only; a logo document that is no longer servable yields null.
+Physical names, widths, constraint: `../P2/db-script-tenant.md` 1.3.0 addendum (DBF-TENANT-043, -044).
+
+### E6. Dependencies (§A8) — NEW / CHANGED
+| Kind | Id | Surface | Owner | Used by |
+|---|---|---|---|---|
+| NEW | XM-TENANT-003 | SOFT-REF (consumed) `CORE_TENANT.LOGO_FILE_ID` → `FILE_DOCUMENT.ID`, no FK (the `NOTIF_TEMPLATE.ATTACHMENT_FILE_ID` / `SEC_USER.PHOTO_FILE_ID` convention) — written through `FileImageStoreApi.storePublicImage` / `discard` (FILE XM-FILE-002), read through `FileDocumentLookupApi.publicUrl` (XM-FILE-001), always inside `TenantContext.callAs(id)` | FILE | logo endpoints; every `TenantResponse` / `TenantBrandingResponse` |
+| CHANGED | — | `com.erp.audit.crossmodule.AuditApi` — + action `TENANT_LOGO_CHANGED` (E8) | audit | logo endpoints |
+| CONFIG | — | NEW `erp.core.tenant.public-branding-rate-limit.capacity` (60) / `period` (1m); CHANGED `erp.core.tenant.path-tenant-paths` default + `/api/v1/public/tenants/{tenantCode}/branding` | — | RULE-TENANT-012, -022 |
+| EXPOSED | — | `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) — HTTP, for the frontend shell and login page (plan §8 F2) | — | frontend |
+The write runs like package B's admin-reset: `TenantService.setLogo` / `removeLogo` are not `@Transactional` (a
+transaction of the PLATFORM request would bind the PLATFORM Hibernate session, and the image would land in PLATFORM's
+rows); each opens one transaction inside `callAs(id)` (`TransactionTemplate`, `REQUIRES_NEW`), so the stored image,
+the `CORE_TENANT` update, the discard of the previous document and the audit rows commit or roll back together.
+
+### E7. Serving an SVG logo — facts and decision (for the frontend)
+| Kind | Item |
+|---|---|
+| fact | PNG, JPEG and WebP logos are served `inline` (step 07's inline list). An SVG logo is served `Content-Type: image/svg+xml`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'` (SVG is deliberately not inline-safe, FILE srs 1.3.0 §3): an `<img src="{logoUrl}">` renders it (the disposition only affects navigation, and an SVG in `<img>` runs no script and loads nothing), opening the URL in a tab downloads it. |
+| decision | The inline list is **not** changed (no FILE ADR): SVG stays accepted for logos (plan §7 E.3) because `<img>` is the only way the frontend shows a logo (plan §8 F2 `<TenantLogo>`, F3 preview). The frontend must render `logoUrl` only through `<img>` (never `<object>`, `<embed>`, `<iframe>` or inline markup). Raster is preferred where the file is opened directly or reused outside the page (e-mail, favicon): the PLATFORM_TENANTS upload hint should say "PNG or WebP recommended; SVG must be plain or optimised". |
+| decision | No server-side resize (plan §6 D.4); the frontend constrains the height (28 px in the shell). |
+
+### E8. Audit
+| Operation | `CORE_AUDIT_EVENT` |
+|---|---|
+| `PUT /{id}/logo`, `DELETE /{id}/logo` | `TENANT_LOGO_CHANGED` (actor = the operator's username, realm `STAFF`, `actorUserId` null, entity `CORE_TENANT` / {id}, summaries "logo set" / "logo removed" with the tenant code and the document id) recorded **twice in the same transaction**: once in tenant {id} (its administrators see who changed their branding) and once in PLATFORM (`tenantId = 1`, the operator's trail — B's `TENANT_ADMIN_RESET` precedent); one row only when {id} is PLATFORM. The `@Audited` `UPDATE` row of `CORE_TENANT` (`logoFileId`) lands in tenant {id}, the tenant the change was made in (the audit module's rule for global entities). A removal of a missing logo records nothing. |
+| `PATCH /{id}/branding` | the `@Audited` `UPDATE` row of `CORE_TENANT` (`brandColor`), in PLATFORM; no explicit action |
+| `/tenant/me`, public branding | none (reads) |
+
+### E9. SCR-REQ-TENANT-001 PLATFORM_TENANTS — CHANGED
+| Kind | Section | Delta |
+|---|---|---|
+| CHANGED | B1 Operations | + set / replace / remove a tenant's logo, set / clear its brand colour |
+| CHANGED | B3 Input | branding row in the tenant detail: logo file input (PNG / JPEG / WebP / plain SVG, ≤ 1 MB) with preview, remove (sensitive, confirmation), optional brand colour `#RRGGBB` |
+| unchanged | B4 Access | same two actions; the new endpoints need `PLATFORM_TENANT_MANAGE` (D5, ADR-TENANT-005) |
+| CHANGED | B5 API expectations | + the three platform rows of E1 |
+
+### E10. Decisions and deliberate differences from the plan
+| Kind | Note |
+|---|---|
+| NEW (ADR) | ADR-TENANT-005 — the logo is set by the platform administrator from `PLATFORM_TENANTS`; no tenant self-service screen in 1.3.0 (decision D5). |
+| CHANGED (plan) | Migration `V20__tenant_branding.sql` (plan: V18; packages D and B took V16 … V19). |
+| NEW (decision) | DELETE answers 204 without a body (plan §7 E.2; SEC's photo removal; build-create-controller A.6.5); removing a missing logo is not an error. G's "200 + count" precedent applies to revokes that report a cascade count, which a logo removal has not. |
+| NEW (decision) | `brandColor` is upper-cased on save (one spelling per colour); blank clears like null. |
+| NEW (decision) | `TENANT_LOGO_CHANGED` in both the target tenant and PLATFORM (E8); the brand colour relies on the entity audit. |
+| NEW (decision) | The rate limit is a filter keyed by client address only (not by tenant code), counted before the tenant lookup (RULE-TENANT-022): a limiter inside the controller would never see the 404 / 403 answers the tenant filter gives, and keying by code would not bound enumeration. A new error code `TENANT_BRANDING_RATE_LIMITED` (429; the plan named none; `CUSTOMER_LOGIN_RATE_LIMITED` is SEC's and speaks of sign-in). Default 60 per minute: a login page asks once per tenant code it settles on. |
+| NEW (decision) | `/api/v1/tenant/me` is realm-neutral on the core chain rather than moved to the customer chain: a STAFF token would be refused there, as a CUSTOMER token is on the core chain by default (SEC realm rule CHANGED, srs-sec.md 1.3.0 §11). |
+| NEW (decision) | The two read endpoints live in a new `TenantBrandingController` (`/api/v1`) with service `TenantBrandingService` (`getMyTenantBranding` `isAuthenticated()`, `getPublicTenantBranding` `permitAll()` — the FILE public-download precedent); the three writes extend `PlatformTenantController` / `TenantService`. Controller method names are unique across the application (`setTenantLogo`, `removeTenantLogo`, `updateTenantBranding`, `getMyTenantBranding`, `getPublicTenantBranding`) so springdoc's operation ids of other modules do not shift. |
+
+### E11. Frontend impact (read by the frontend repository — plan §8 F2, F3)
+| Kind | Item |
+|---|---|
+| NEW | `GET /api/v1/tenant/me` (after login, any realm) and `GET /api/v1/public/tenants/{code}/branding` (login page, no token; 404 → platform mark only; 429 → platform mark only, no toast) → `TenantBrandingResponse`. |
+| NEW | `PUT` / `DELETE /{id}/logo`, `PATCH /{id}/branding` on `PLATFORM_TENANTS` (no new page code, permission or menu entry); `TenantResponse` + `logoUrl`, `brandColor`. |
+| NEW | Error codes `TENANT_LOGO_INVALID`, `TENANT_BRAND_COLOR_INVALID`, `TENANT_BRANDING_RATE_LIMITED` (both languages). |
+| NOTE | Render `logoUrl` through `<img>` only (E7); a replaced logo gets a new URL (new slug), so the day-long public cache never shows a stale logo; while a tenant is suspended its logo URL and its public branding answer 403. |

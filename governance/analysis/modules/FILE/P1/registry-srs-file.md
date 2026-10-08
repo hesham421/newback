@@ -166,3 +166,11 @@ Package B (tenant-maturity plan §4 B.4) — registry delta; full text in `srs.m
 | CHANGED | XM-FILE-001 | `FileDocumentLookupApi` + `countDocuments()`, `sumBytes()` (current tenant, documents not DELETED) | TENANT (usage) |
 No rule, entity, API, permission or error-code delta. Last sequence per atom unchanged (RULE: 010 · XM: 002 ·
 API: 008 · ADR: 008).
+
+Package E (tenant-maturity plan §7) — registry delta; full text in `srs.md` 1.3.0 §8.
+| Kind | Id | Delta |
+|---|---|---|
+| CHANGED | RULE-FILE-009 | item (8) + every `id` unique: an SVG with a duplicate `id` is refused (`UNSAFE_SVG`), so the nested-`<use>` guard cannot be fooled by a decoy (package D review round 3, carried over) |
+| CHANGED | XM-FILE-002 | consumer TENANT implemented (logos, `CORE_TENANT` / tenant id / `TENANT`, inside `TenantContext.callAs(tenantId)`) |
+No entity, API, permission, error-code or migration delta. Last sequence per atom unchanged (RULE: 010 · XM: 002 ·
+API: 008 · ADR: 008; next free FILE ADR 009).

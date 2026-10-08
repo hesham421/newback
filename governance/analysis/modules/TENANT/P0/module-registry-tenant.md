@@ -109,3 +109,34 @@ EXPOSED SURFACE, PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D
 or grant seed; every new endpoint sits behind `PLATFORM_TENANT_MANAGE` on `PLATFORM_TENANTS`).
 
 POLICIES OWNED — delta: + POL-TENANT-012, POL-TENANT-013 (`business-policies-tenant.md` 1.3.0 addendum).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package E — tenant branding (logo, brand colour, `/api/v1/tenant/me`, public branding; plan §0 D5, §7)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+ENTITIES OWNED — delta
+| Kind | Entity | Delta | Source |
+|---|---|---|---|
+| CHANGED | المستأجر / Tenant (`CORE_TENANT`) | + `LOGO_FILE_ID` (soft reference to `FILE_DOCUMENT.ID`, no FK) and `BRAND_COLOR` (V20); still global. "ROOT for data" no longer holds strictly: one column points into FILE (XM-TENANT-003) | `../P2/db-script-tenant.md` 1.3.0 addendum |
+
+DEPENDENCIES — delta (TENANT still reads no other module's table)
+| Kind | Module code | HARD / SOFT / SPI | What is consumed | Source |
+|---|---|---|---|---|
+| NEW | FILE | SOFT (crossmodule, XM-TENANT-003) | `FileImageStoreApi.storePublicImage`, `discard`; `FileDocumentLookupApi.publicUrl` — inside `TenantContext.callAs(id)` | `../P1/srs-tenant.md` 1.3.0 E6 |
+| CHANGED | audit | SOFT | + action `TENANT_LOGO_CHANGED` (target tenant and PLATFORM) | same, E8 |
+
+EXPOSED SURFACE — delta
+| Kind | Surface | Consumers | Through | Source |
+|---|---|---|---|---|
+| NEW | `GET /api/v1/tenant/me`, `GET /api/v1/public/tenants/{tenantCode}/branding` (`TenantBrandingResponse`) | the frontend shell and login page (plan §8 F2) | HTTP | plan §7 E.2 |
+
+CONFIGURATION — delta
+| Kind | Property | Delta | Source |
+|---|---|---|---|
+| CHANGED | `erp.core.tenant.path-tenant-paths` | default + `/api/v1/public/tenants/{tenantCode}/branding` | plan §7 E.2 |
+| NEW | `erp.core.tenant.public-branding-rate-limit.capacity` / `period` | 60 / 1 min per client address (RULE-TENANT-022), like the customer login's bucket4j limiter | plan §7 E.2 |
+
+PERMISSION MODULE → SCREEN → ACTIONS: unchanged (plan §0 D5: no module, screen, permission or grant seed).
+
+RESOLVED DECISIONS — delta: 5 · who sets a tenant's logo → the platform administrator from `PLATFORM_TENANTS`
+(decision D5, ADR-TENANT-005). POLICIES OWNED — delta: + POL-TENANT-014.

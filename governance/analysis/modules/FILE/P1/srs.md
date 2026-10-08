@@ -356,3 +356,16 @@ entity field, error code, permission or migration changes.
 Read-only, tenant-filtered by the `@TenantId` discriminator (JPQL), no `@PreAuthorize` like the other lookup
 methods (they reveal no content; the consuming service carries its own gate — TENANT: `PLATFORM_TENANT_MANAGE`).
 Consumer: TENANT (`TenantService.getUsage`), inside `TenantContext.callAs(tenantId)`.
+
+### 8. Package E — tenant logos; SVG duplicate ids (tenant-maturity plan §7)
+Change         : tenant-maturity plan package E — TENANT consumes the image store for logos; RULE-FILE-009 refuses duplicate `id` values (carry-over of package D's review round 3)
+Statement      : Sections 1–7 above are unchanged; §8 records package E's implemented delta.
+
+No FILE id is minted. No endpoint, entity field, error code, permission or migration changes.
+
+| Kind | Id | Delta | Source |
+|---|---|---|---|
+| CHANGED | RULE-FILE-009 (item 8, renderer limits) | + **no two elements may carry the same `id`**: an SVG with a duplicate `id` value is refused (`UNSAFE_SVG`). The nested-`<use>` guard resolves a `<use>` reference by `id`; browsers resolve a duplicated `id` to the **first** element in tree order, while a map filled during the walk kept the **last** one, so a flat decoy placed after the real target hid a nested `<use>` chain (91 `<use>` elements rendering 10^9 instances). Refusing duplicates makes the guard's resolution unambiguous; optimisers (SVGO) and the design tools' exports emit unique ids. Item (8) now reads: at most 100 `<use>` elements; no `<use>` may reference a `<use>` or a subtree containing one; every `id` unique. | package D review round 3 (LOW, carried over to E); `SvgAllowList.Walk` (`putIfAbsent`); `ImageValidationDomainServiceTest.duplicateIds_areRefused_soNoDecoyHidesANestedUseChain` |
+| CHANGED | §5 Consumers, TENANT row | implemented: `TenantService.setLogo` / `removeLogo` call `storePublicImage` (`CORE_TENANT` / tenant id / `TENANT`, base name `logo`, 1 048 576 bytes, PNG / JPEG / WebP / SVG) and `discard` inside `TenantContext.callAs(tenantId)` in one transaction of that tenant; `TenantLogoUrls` calls `FileDocumentLookupApi.publicUrl` inside the same tenant (TENANT XM-TENANT-003, REQ-TENANT-029) | TENANT srs-tenant.md 1.3.0 E6 |
+| RESOLVED | §3 "OPEN (for package E)" (SVG not inline-safe) | kept as is, no FILE ADR: an SVG logo stays `attachment` + `nosniff` + sandbox CSP and is shown only through `<img>` (TENANT srs-tenant.md 1.3.0 E7); the inline list is unchanged | TENANT E7 |
+| RESOLVED | §3 "NOTE (for package E)" (plain / optimised SVG) | the logo error `TENANT_LOGO_INVALID` says so in both languages (TENANT RULE-TENANT-018) | TENANT E4 |
