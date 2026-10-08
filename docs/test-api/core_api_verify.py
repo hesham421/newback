@@ -3052,6 +3052,87 @@ def test_platform_005_branding_writes_platform_only(ctx):
     eq((a.get("logoUrl"), a.get("brandColor")), (None, None), "tenant A unchanged")
 
 
+# =============================================================================================
+# Phase 11d — tenant lifecycle events and token cut-off (TM-C12), on tenant D, before TENANT-046
+# =============================================================================================
+def await_second_after(token):
+    """TM-C12: RULE-TENANT-023 compares whole seconds, so a cut-off must lie in a later second than the token's iat."""
+    iat = jwt_claims(token).get("iat") or 0
+    while int(time.time()) <= iat:
+        time.sleep(0.05)
+
+
+def revoke_tokens(tid, token):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/revoke-tokens", t=token)
+
+
+@tc("TC-CORE-TENANT-047")
+def test_tenant_047_suspension_ends_sessions_reactivation_cuts_off(ctx):
+    u = usage_of(ctx, ctx.D_ID).data or {}
+    check((u.get("activeSessions") or 0) >= 1, "D has an open session before", ">= 1", u.get("activeSessions"))
+    old = ctx.T_D
+    await_second_after(old)
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT,
+           body={"statusCode": "SUSPENDED", "reason": f"TM-C12 lifecycle {ctx.RUN}"}), 200, what="suspend D")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 0, "the suspension ended every session of D")
+    st(api("GET", "/api/v1/sec/menu", t=old), 403, "TENANT_SUSPENDED", what="old token while suspended")
+    st(api("GET", "/api/v1/tenant/me", t=old), 403, "TENANT_SUSPENDED", what="old token on /tenant/me while suspended")
+    st(api("PATCH", f"/api/v1/platform/tenants/{ctx.D_ID}/status", t=ctx.T_PLAT, body={"statusCode": "ACTIVE"}), 200,
+       what="re-activate D")
+    st(api("GET", "/api/v1/sec/menu", t=old), 401, "TENANT_TOKEN_REVOKED", what="the token from before the re-activation")
+    st(api("GET", "/api/v1/tenant/me", t=old), 401, "TENANT_TOKEN_REVOKED", what="… on /tenant/me too")
+    r = login_staff(ctx.TD, "td-admin", PW_RECOVERED)
+    st(r, 200, what="td-admin signs in right after the re-activation")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="the new token is served")
+
+
+@tc("TC-CORE-TENANT-048")
+def test_tenant_048_revoke_tokens(ctx):
+    old = ctx.T_D
+    await_second_after(old)
+    r = revoke_tokens(ctx.D_ID, ctx.T_PLAT)
+    st(r, 200)
+    d = r.data or {}
+    eq(sorted(d), ["code", "id", "sessionsTerminated"], "exactly id, code, sessionsTerminated (no cut-off field)")
+    eq((d.get("id"), d.get("code")), (ctx.D_ID, ctx.TD), "data.id / data.code")
+    check((d.get("sessionsTerminated") or 0) >= 1, "sessionsTerminated >= 1 (TENANT-047's login)", ">= 1",
+          d.get("sessionsTerminated"))
+    st(api("GET", "/api/v1/sec/menu", t=old), 401, "TENANT_TOKEN_REVOKED", what="the revoked token")
+    st(api("GET", "/api/v1/tenant/me", t=old), 401, "TENANT_TOKEN_REVOKED", what="… on /tenant/me too")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 0, "every session of D ended")
+    st(api("GET", f"/api/v1/platform/tenants/{ctx.D_ID}", t=ctx.T_PLAT), 200, what="the operator is not affected")
+    r = api("POST", "/api/v1/sec/auth/login", t=old, tc=ctx.TD, body={"username": "td-admin", "password": PW_RECOVERED})
+    st(r, 200, what="login sent with the revoked token in Authorization (a public path ignores it)")
+    ctx.T_D = (r.data or {}).get("accessToken")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="the new token is served")
+    eq((usage_of(ctx, ctx.D_ID).data or {}).get("activeSessions"), 1, "one session: the new login")
+
+
+@tc("TC-CORE-TENANT-049")
+def test_tenant_049_revoke_tokens_audited(ctx):
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("D", ctx.T_D)):
+        a = audit(token, action="TOKENS_REVOKED", entityType="CORE_TENANT", entityId=ctx.D_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+           [("admin", "STAFF", "CORE_TENANT", str(ctx.D_ID))], f"{who}: one TOKENS_REVOKED row (TENANT-048)")
+        summary = (rows[0].get("summaryEn") or "") if rows else ""
+        check(ctx.TD in summary and "sessions terminated:" in summary, f"{who}: the summary names the tenant and the count",
+              f"{ctx.TD}, sessions terminated", summary)
+        check(not re.search(r"\d{4}-\d{2}-\d{2}T", summary), f"{who}: no instant in the summary", "none", summary)
+
+
+@tc("TC-CORE-TENANT-050")
+def test_tenant_050_revoke_tokens_refusals(ctx):
+    st(revoke_tokens(1, ctx.T_PLAT), 422, "TENANT_REVOKE_TOKENS_PLATFORM", what="PLATFORM is never revoked")
+    st(api("GET", "/api/v1/platform/tenants/1", t=ctx.T_PLAT), 200, what="the operator is still signed in")
+    st(revoke_tokens(999999999, ctx.T_PLAT), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    st(revoke_tokens(ctx.D_ID, ctx.T_D), 403, "SEC-403-FORBIDDEN", what="D's own administrator")
+    st(revoke_tokens(ctx.D_ID, None), 401, "SEC-401-INVALID-CREDENTIALS", what="anonymous")
+    st(api("GET", "/api/v1/sec/menu", t=ctx.T_D), 200, what="nothing was revoked by the refusals")
+
+
 @tc("TC-CORE-TENANT-046")
 def test_tenant_046_public_branding_rate_limit(ctx):
     # last case of the run that calls the public branding: its bucket (per client address) is spent here
@@ -3455,7 +3536,7 @@ ORDER = {
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
                   "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
-                  *rng("TENANT", 38, 45), "PLATFORM-005", "TENANT-046"),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 50), "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
