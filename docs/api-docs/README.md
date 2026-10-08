@@ -103,5 +103,15 @@ Also not a `check` failure: the generator renders request headers but no **respo
 in that endpoint's description; its codes `IDEMPOTENCY_KEY_INVALID` and `IDEMPOTENCY_KEY_CONFLICT` are bound to the
 endpoint like any other (the generator follows an injected `com.erp.common` component, TM-C4 review round 1).
 
+Also not a `check` failure: **bogus `of` rows**. Eleven Business Responses rows have the code and constant `of`, e.g.
+`400 BAD_REQUEST · of · of · PasswordPolicy.assertAcceptable` — `sec/endpoints/users.md` (3), `my-profile.md` (2),
+`authentication.md`, `customer-accounts-public.md` (2), `tenant/endpoints/platform-tenants.md` (2),
+`report/endpoints/reports.md`; present since the 1.3.0 regenerations. The generator reads the factory call
+`FieldError.of(...)` passed to a `LocalizedException` as an error code. `of` is never a code: ignore the row; the real
+answer of that throw site is the other row of the same method (e.g. `SEC-400-PASSWORD-POLICY` "as a `fieldErrors[]`
+entry") or the one named in the endpoint's description (`SEC-400-PHOTO-INVALID`, `TENANT_BRAND_COLOR_INVALID`,
+`TENANT_LOGO_INVALID`; `VALIDATION_ERROR` for the report export format), with the field in `fieldErrors`. To be fixed
+in the generator's business-error extractor, never by hand (TM-Z review).
+
 The affected endpoints document the outcome explicitly (for example "**Authorization**: not extracted — no controller method matching this route was found")
 instead of claiming that no permission is required. Do not fix these by hand-editing the docs.

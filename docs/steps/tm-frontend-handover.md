@@ -173,6 +173,13 @@ Common: `IDEMPOTENCY_KEY_INVALID`, `IDEMPOTENCY_KEY_CONFLICT`. FILE (now also fo
 
 ## Contract caveats (generator limitations, not gaps)
 
+- **Ignore the error code `of`.** Eleven Business Responses rows show code and constant `of` (e.g. `users.md` under
+  `PasswordPolicy.assertAcceptable`, `platform-tenants.md` under `TenantDomain.assertBrandColorValid` /
+  `assertLogoAccepted`, `my-profile.md`, `authentication.md`, `customer-accounts-public.md`, `report/endpoints/reports.md`):
+  the generator misread `FieldError.of(...)` as a code. The real code is the one in the endpoint's description or the
+  other row of the same method (`SEC-400-PASSWORD-POLICY`, `SEC-400-PHOTO-INVALID`, `TENANT_BRAND_COLOR_INVALID`,
+  `TENANT_LOGO_INVALID`, `VALIDATION_ERROR`), with the field in `fieldErrors` (`docs/api-docs/README.md` known limitations).
+
 - Response headers are not rendered by the api-doc generator: `Idempotent-Replayed` (tenant create) and `Retry-After`
   (public branding 429) appear only in the endpoints' descriptions and here (`docs/api-docs/README.md` known limitations).
 - Filter-raised codes (`SEC-403-PASSWORD-CHANGE-REQUIRED`, `TENANT_TOKEN_REVOKED`, `TENANT_BRANDING_RATE_LIMITED`) are

@@ -121,6 +121,11 @@ Generator (`governance/tools/api-doc-generator`)
     business-errors, APP); response headers not rendered (`Idempotent-Replayed`, `Retry-After`); no cross-module call walk
     (`SEC-400-PASSWORD-POLICY` on tenant create / admin-reset lives in the description); provisioning-SPI errors; a
     lower-case "public" before `word (` in an `@Operation` text confused method matching (worked around in E).
+    **Bogus `of` rows**: 11 Business Responses rows carry the code `of` (`sec/endpoints/users.md` ×3, `my-profile.md` ×2,
+    `authentication.md`, `customer-accounts-public.md` ×2, `tenant/endpoints/platform-tenants.md` ×2,
+    `report/endpoints/reports.md`) because the business-error extractor reads `FieldError.of(...)` inside a
+    `LocalizedException` as a code; to be fixed in the extractor and regenerated (recorded in `docs/api-docs/README.md`
+    and the frontend handover; TM-Z review).
 
 Scope
 19. `ScopedValue`: revisit only by dropping the public-API constraint (accept a MAJOR change) and judging on the leak
@@ -131,7 +136,7 @@ Scope
 
 ## 6. Release recommendation
 
-**Version: MINOR — `1.3.0`.** `docs/RELEASE.md` reserves MAJOR for removing or renaming public API, changing migration
+**Version: MINOR — `1.3.0`, by a recorded exception.** `docs/RELEASE.md` reserves MAJOR for removing or renaming public API, changing migration
 semantics, or removing / renaming a property key. None happened: every `crossmodule` type, SPI, event and property key of
 1.2.0 is still there with the same shape (interfaces gained methods, `NotificationRequeueJob` gained a constructor, the
 old ones stay); every migration is additive; new properties all have defaults. What changes for a client is behaviour on
@@ -141,8 +146,15 @@ FILE documents answer 404 — and the 1.2.0 precedent (answers changing from 500
 release line ("everything is additive, so it all ships as 1.3.0") place these in a MINOR with explicit upgrade notes,
 which `docs/CHANGELOG.md` `[Unreleased]` now carries under "Behaviour changes — read before upgrading". The JDK 25
 requirement was already part of `[Unreleased]` before this plan. The one real client is the in-house frontend: ship
-package F with (or right after) the backend, because today's frontend sends no suspension reason and has no
+package F together with the backend, because today's frontend sends no suspension reason and has no
 forced-change page.
+
+Because `docs/RELEASE.md` defined a MINOR as "additive only, upgrade cost none", the exception is written down rather than
+implied (TM-Z review): `docs/RELEASE.md` gains a row "behaviour tightening on existing endpoints is allowed in a MINOR only
+when it is listed under Behaviour changes and its client ships with it", and `docs/CHANGELOG.md` `[Unreleased]` opens its
+"Behaviour changes" list by stating that 1.3.0 is a MINOR by exception and why (no public Java API, property key or
+migration semantic changed; the only client, the frontend, ships package F with it). The condition is binding: **release
+1.3.0 together with frontend package F** (F1 forced-change page, F3 suspension reason), not before it.
 
 What the owner does (`docs/RELEASE.md` "How a release is cut"):
 1. Merge `tm/z-closure` into `main`; CI green on `main`.
@@ -152,4 +164,4 @@ What the owner does (`docs/RELEASE.md` "How a release is cut"):
 3. Tag `v1.3.0`, push the tag: CI runs `build-test` (Testcontainers), `docker-image`, `publish` (GitHub Packages) and
    `consume-published`.
 4. A second commit moves `main` to `1.4.0-SNAPSHOT`.
-5. Tell the frontend which backend version to pin when F lands.
+5. Release frontend package F with it (the exception's condition) and tell the frontend which backend version to pin.

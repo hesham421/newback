@@ -11,6 +11,12 @@ Everything since 1.2.0, chiefly the tenant-maturity plan (packages TM-A … TM-C
 answers change status.
 
 ### Behaviour changes — read before upgrading
+1.3.0 is released as a **MINOR by exception** to `docs/RELEASE.md`'s "additive only, upgrade cost none": the items below
+tighten behaviour on existing endpoints (a suspension without a reason → 400, old tokens → 401 after a re-activation,
+administrator-created users → 403 until they change their password, …). It stays a MINOR because no public Java API
+(`crossmodule` types, SPIs, events, `TenantContext`, `com.erp.common`), no `erp.core.*` property key and no migration
+semantic was removed, renamed or changed, and because the only REST client of these endpoints, the in-house frontend,
+ships its matching package F together with this release (`docs/RELEASE.md`, "Behaviour tightening" row).
 - **JDK 25** is required to build and run a consuming application (see Changed).
 - **[TM-B] Suspending a tenant needs a `reason`** (3 to 500 characters): `PATCH /api/v1/platform/tenants/{id}/status`
   with `SUSPENDED` and no reason now answers 400 `TENANT_SUSPENSION_REASON_REQUIRED` (it was accepted before).
