@@ -1,5 +1,7 @@
 package com.erp.tenant.service;
 
+import com.erp.audit.crossmodule.AuditApi;
+import com.erp.audit.crossmodule.AuditEntry;
 import com.erp.common.domain.status.ServiceResult;
 import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
@@ -84,6 +86,12 @@ public class TenantService {
     /** Filter values of these fields are ISO-8601 instants. */
     private static final InstantFieldValueConverter INSTANT_FIELDS = new InstantFieldValueConverter(Set.of("suspendedAt"));
 
+    /** REQ-TENANT-027 (review round 1): the PLATFORM-side audit action of an admin-reset. */
+    static final String ACTION_TENANT_ADMIN_RESET = "TENANT_ADMIN_RESET";
+
+    /** The {@code @Audited} entity type of {@code CORE_TENANT}. */
+    private static final String ENTITY_TYPE_TENANT = "CORE_TENANT";
+
     /** REQ-TENANT-028: the window of {@code notificationsLast30Days}. */
     private static final Duration NOTIFICATION_WINDOW = Duration.ofDays(30);
 
@@ -97,6 +105,7 @@ public class TenantService {
     private final FileDocumentLookupApi fileDocuments;
     private final NotificationLogQueryApi notificationLog;
     private final PlatformTransactionManager transactionManager;
+    private final AuditApi auditApi;
 
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
@@ -220,22 +229,34 @@ public class TenantService {
     }
 
     /**
-     * REQ-TENANT-027 — {@code POST /{id}/admin-reset}: inside tenant {@code id}, in one transaction, SEC finds the
-     * user, {@code TenantDomain} decides (RULE-TENANT-017) and SEC resets the password, ends the user's sessions
-     * and audits {@code ADMIN_PASSWORD_RESET}. Not {@code @Transactional} (see the class comment).
+     * REQ-TENANT-027 — {@code POST /{id}/admin-reset}: never on PLATFORM; inside tenant {@code id}, in one
+     * transaction, SEC finds the user, {@code TenantDomain} decides (RULE-TENANT-017), SEC resets the password, ends
+     * the user's sessions and audits {@code ADMIN_PASSWORD_RESET}; then PLATFORM records {@code TENANT_ADMIN_RESET}.
+     * Not {@code @Transactional} (see the class comment). Logs name ids only, never the username (plan §1.7).
      */
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantAdminResetResponse> resetAdministratorPassword(Long id, TenantAdminResetRequest request) {
-        log.info("Resetting the password of administrator {} of tenant ID: {}", request.getUsername(), id);
+        log.info("Resetting the password of an administrator of tenant ID: {}", id);
 
         Tenant tenant = repository.findById(id)
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
         TenantDomain domain = TenantDomain.from(tenant);
+        domain.assertAdminResetAllowed();
 
         Integer terminated = TenantContext.callAs(id, () -> new TransactionTemplate(transactionManager)
             .execute(status -> resetInsideTenant(request, domain)));
-        log.info("Password of administrator {} of tenant ID: {} reset; sessions terminated: {}",
-            request.getUsername(), id, terminated);
+        // the PLATFORM trace of the recovery: this request's tenant, its own commit (no transaction is open here)
+        auditApi.record(AuditEntry.builder()
+            .action(ACTION_TENANT_ADMIN_RESET)
+            .tenantId(TenantConstants.PLATFORM_TENANT_ID)
+            .entityType(ENTITY_TYPE_TENANT)
+            .entityId(String.valueOf(tenant.getId()))
+            .summaryAr("إعادة تعيين كلمة مرور المدير " + request.getUsername() + " في المستأجر " + tenant.getCode()
+                + "؛ الجلسات المنتهية: " + terminated)
+            .summaryEn("Password of administrator " + request.getUsername() + " of tenant " + tenant.getCode()
+                + " reset; sessions terminated: " + terminated)
+            .build());
+        log.info("Password of an administrator of tenant ID: {} reset; sessions terminated: {}", id, terminated);
 
         return ServiceResult.success(mapper.toAdminResetResponse(request.getUsername(), terminated), Status.UPDATED);
     }

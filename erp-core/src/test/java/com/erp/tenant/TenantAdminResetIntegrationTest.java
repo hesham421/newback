@@ -63,12 +63,15 @@ class TenantAdminResetIntegrationTest extends AbstractIntegrationTest {
         assertRefused(http.post(platformToken, TENANTS + "/" + tenantId + "/admin-reset", "{\"newPassword\":\"x\"}"),
             400, "VALIDATION_ERROR");
 
-        // the platform tenant's own lookup never sees the target tenant's users
-        assertRefused(reset(TenantConstants.PLATFORM_TENANT_ID, clerk, NEW_PASSWORD), 404, "TENANT_ADMIN_NOT_FOUND");
+        // review round 1: never on PLATFORM itself — not even the operator's own account (RULE-SEC-057 stays whole)
+        assertRefused(reset(TenantConstants.PLATFORM_TENANT_ID, operator, NEW_PASSWORD), 422, "TENANT_ADMIN_RESET_PLATFORM");
+        assertRefused(reset(TenantConstants.PLATFORM_TENANT_ID, clerk, NEW_PASSWORD), 422, "TENANT_ADMIN_RESET_PLATFORM");
+        assertThat(http.login(TenantConstants.PLATFORM_TENANT_CODE, operator, TenantHttp.PASSWORD).statusCode()).isEqualTo(200);
 
         assertThat(http.get(adminToken, "/api/v1/sec/me").statusCode()).isEqualTo(200);
         assertThat(http.login(code, "admin", TenantHttp.PASSWORD).statusCode()).isEqualTo(200);
         assertThat(auditRows()).isEmpty();
+        assertThat(platformAuditRows()).isEmpty();
     }
 
     @Test
@@ -102,6 +105,16 @@ class TenantAdminResetIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("select count(*) from core_audit_event where tenant_id = ?"
             + " and action = 'ADMIN_PASSWORD_RESET'", Integer.class, TenantConstants.PLATFORM_TENANT_ID)).isZero();
 
+        // review round 1: the PLATFORM trace of the recovery; the target tenant still has exactly its own row
+        List<Map<String, Object>> platform = platformAuditRows();
+        assertThat(platform).hasSize(1);
+        assertThat(platform.get(0)).containsEntry("actor", operator).containsEntry("actor_realm", "STAFF")
+            .containsEntry("entity_type", "CORE_TENANT").containsEntry("entity_id", String.valueOf(tenantId));
+        assertThat((String) platform.get(0).get("summary_en")).contains("admin").contains(code)
+            .contains("sessions terminated: 1");
+        assertThat(platform.get(0).toString()).doesNotContain(NEW_PASSWORD).doesNotContain("$2a$");
+        assertThat(auditRows()).hasSize(1);
+
         await().atMost(Duration.ofSeconds(20)).until(() -> jdbcTemplate.queryForObject("select count(*) from notif_log l"
             + " join notif_template t on t.id = l.template_fk where l.tenant_id = ? and l.recipient_id = ?"
             + " and t.template_code = 'STAFF_PASSWORD_CHANGED'", Integer.class, tenantId, adminId) == 1);
@@ -128,6 +141,12 @@ class TenantAdminResetIntegrationTest extends AbstractIntegrationTest {
         return jdbcTemplate.queryForList("select actor, actor_user_id, actor_realm, entity_type, entity_id,"
             + " summary_ar, summary_en, changes::text as changes from core_audit_event"
             + " where tenant_id = ? and action = 'ADMIN_PASSWORD_RESET'", tenantId);
+    }
+
+    private List<Map<String, Object>> platformAuditRows() {
+        return jdbcTemplate.queryForList("select actor, actor_realm, entity_type, entity_id, summary_ar, summary_en,"
+            + " changes::text as changes from core_audit_event where tenant_id = ? and action = 'TENANT_ADMIN_RESET'"
+            + " and entity_id = ?", TenantConstants.PLATFORM_TENANT_ID, String.valueOf(tenantId));
     }
 
     private static void assertRefused(HttpResponse<String> response, int status, String code) {

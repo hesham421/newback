@@ -87,6 +87,17 @@ public final class TenantDomain {
     }
 
     /**
+     * RULE-TENANT-017 (review round 1) — the platform's admin-reset never runs on the PLATFORM tenant itself: there it
+     * would let an operator reset their own password without the current one (SEC RULE-SEC-057).
+     */
+    public void assertAdminResetAllowed() {
+        if (Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(id)) {
+            throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
+                TenantErrorCodes.TENANT_ADMIN_RESET_PLATFORM, code);
+        }
+    }
+
+    /**
      * RULE-TENANT-017 — the platform's admin-reset only targets a STAFF user of this tenant holding an
      * active super role. Both facts are computed by SEC inside this tenant and passed in by the service.
      */

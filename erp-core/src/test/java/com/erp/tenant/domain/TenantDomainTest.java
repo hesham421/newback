@@ -127,6 +127,20 @@ class TenantDomainTest {
     }
 
     @Test
+    void adminReset_isNeverAllowedOnThePlatformTenant() {
+        TenantDomain platform = TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE));
+
+        assertThatThrownBy(platform::assertAdminResetAllowed)
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_ADMIN_RESET_PLATFORM);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.from(tenant(42L, TenantConstants.STATUS_ACTIVE)).assertAdminResetAllowed())
+            .doesNotThrowAnyException();
+    }
+
+    @Test
     void theEntityTransitions_setAndClearTheSuspensionFacts() {
         Tenant entity = tenant(42L, TenantConstants.STATUS_ACTIVE);
         Instant suspendedAt = Instant.parse("2026-10-08T10:00:00Z");

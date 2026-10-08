@@ -62,7 +62,7 @@ public class PlatformTenantController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get tenant by ID", description = "جلب مستأجر حسب المعرف")
-    public ResponseEntity<ApiResponse<TenantResponse>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<TenantResponse>> getTenantById(@PathVariable Long id) {
         return operationCode.craftResponse(service.getById(id));
     }
 

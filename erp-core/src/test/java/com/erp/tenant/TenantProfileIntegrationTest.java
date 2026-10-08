@@ -1,7 +1,12 @@
 package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.erp.tenant.dto.TenantUpdateRequest;
+import com.erp.tenant.entity.Tenant;
+import com.erp.tenant.mapper.TenantMapper;
+import com.erp.tenant.repository.TenantRepository;
 import com.erp.testsupport.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.net.http.HttpResponse;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -31,6 +37,10 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private TenantRepository tenantRepository;
+    @Autowired
+    private TenantMapper tenantMapper;
 
     private TenantHttp http;
     private String operator;
@@ -180,6 +190,26 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
             .isEqualTo(200);
         assertThat(jdbcTemplate.queryForObject("select tokens_invalid_before from core_tenant where id = ?",
             Timestamp.class, id)).isEqualTo(cutOff);
+    }
+
+    /**
+     * The 409 {@code CONCURRENT_MODIFICATION} of {@code PUT /{id}} is the shared handler's answer to this lock failure:
+     * a write from a copy read before another write committed (the {@code TenantScopedQueryIntegrationTest} pattern).
+     */
+    @Test
+    void anUpdateFromAStaleCopy_failsTheOptimisticLock() {
+        long id = http.provisionTenant(platformToken, TenantHttp.unique("LOCK"));
+        Tenant first = tenantRepository.findById(id).orElseThrow();
+        Tenant stale = tenantRepository.findById(id).orElseThrow();
+
+        tenantMapper.updateEntityFromRequest(first, TenantUpdateRequest.builder().nameAr("أ").nameEn("First").build());
+        tenantRepository.saveAndFlush(first);
+        tenantMapper.updateEntityFromRequest(stale, TenantUpdateRequest.builder().nameAr("ب").nameEn("Stale").build());
+
+        assertThatThrownBy(() -> tenantRepository.saveAndFlush(stale))
+            .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThat(jdbcTemplate.queryForObject("select name_en from core_tenant where id = ?", String.class, id))
+            .isEqualTo("First");
     }
 
     @Test

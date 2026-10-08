@@ -135,7 +135,7 @@ public class UserPasswordService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<Optional<RecoveryTarget>> findRecoveryTarget(String username) {
-        log.debug("Resolving the recovery target {} in the current tenant", username);
+        log.debug("Resolving a recovery target in the current tenant");
 
         return ServiceResult.success(repository.findByUsername(username)
             .map(user -> new RecoveryTarget(user.getUserPk(), user.getUsername(),
