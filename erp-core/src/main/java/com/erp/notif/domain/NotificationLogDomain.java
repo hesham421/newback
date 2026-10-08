@@ -68,12 +68,7 @@ public final class NotificationLogDomain {
      * ACTIVE. A suspended tenant's row is left exactly as it is (still {@code QUEUED}) until the tenant is active again.
      */
     public boolean isDeliverable(boolean tenantActive) {
-        return isAwaitingDelivery() && deliversFor(tenantActive);
-    }
-
-    /** RULE-NOTIF-024 — nothing of a tenant that is not ACTIVE is claimed or re-dispatched. */
-    public static boolean deliversFor(boolean tenantActive) {
-        return tenantActive;
+        return isAwaitingDelivery() && tenantActive;
     }
 
     /**

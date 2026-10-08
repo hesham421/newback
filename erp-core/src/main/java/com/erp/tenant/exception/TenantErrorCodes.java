@@ -60,4 +60,10 @@ public final class TenantErrorCodes {
 
     /** 422 — tenant-maturity C12 (RULE-TENANT-024): revoke-tokens never targets the PLATFORM tenant. */
     public static final String TENANT_REVOKE_TOKENS_PLATFORM = "TENANT_REVOKE_TOKENS_PLATFORM";
+
+    /**
+     * 500 — tenant-maturity C12 review round 1 (REQ-TENANT-035): the token cut-off is in force but ending the tenant's
+     * sessions failed; the call can be repeated.
+     */
+    public static final String TENANT_REVOKE_SESSIONS_FAILED = "TENANT_REVOKE_SESSIONS_FAILED";
 }

@@ -8,6 +8,7 @@ import com.erp.tenant.TenantConstants;
 import com.erp.tenant.entity.Tenant;
 import com.erp.tenant.exception.TenantErrorCodes;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -127,6 +128,14 @@ public final class TenantDomain {
             throw new LocalizedException(Status.BUSINESS_RULE_VIOLATION,
                 TenantErrorCodes.TENANT_REVOKE_TOKENS_PLATFORM, code);
         }
+    }
+
+    /**
+     * RULE-TENANT-023 (review round 1) — revoke-tokens' cut-off: the start of the next whole second after {@code now}, so
+     * the cut-off alone refuses every token issued up to and including the revoke's own second.
+     */
+    public static Instant revocationCutOff(Instant now) {
+        return now.truncatedTo(ChronoUnit.SECONDS).plusSeconds(1);
     }
 
     /**

@@ -296,10 +296,10 @@ public class TenantService {
     }
 
     /**
-     * REQ-TENANT-035 — {@code POST /{id}/revoke-tokens}: never on PLATFORM (RULE-TENANT-024); the cut-off is written in
-     * this PLATFORM request and commits first (the tokens are refused from then on), then inside tenant {@code id}, in one
-     * transaction, SEC ends every session and {@code TOKENS_REVOKED} is recorded there and in PLATFORM. Not
-     * {@code @Transactional} (see the class comment).
+     * REQ-TENANT-035 — {@code POST /{id}/revoke-tokens}: never on PLATFORM (RULE-TENANT-024); the cut-off (the next whole
+     * second) commits first in this PLATFORM request and alone refuses every earlier token; then inside tenant {@code id}
+     * SEC ends every session and {@code TOKENS_REVOKED} is recorded there and in PLATFORM. A failure of that step is
+     * recorded in PLATFORM and answered 500 {@code TENANT_REVOKE_SESSIONS_FAILED} (retryable). Not {@code @Transactional}.
      */
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
     public ServiceResult<TenantTokenRevocationResponse> revokeTokens(Long id) {
@@ -309,9 +309,24 @@ public class TenantService {
             .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
         TenantDomain.from(tenant).assertTokenRevocationAllowed();
 
-        Instant cutOff = Instant.now();
+        Instant cutOff = TenantDomain.revocationCutOff(Instant.now());
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> writeCutOff(id, cutOff));
-        Integer terminated = TenantContext.callAs(id, () -> writeInTenant().execute(status -> endSessions(tenant)));
+        Integer terminated;
+        try {
+            terminated = TenantContext.callAs(id, () -> writeInTenant().execute(status -> endSessions(tenant)));
+        } catch (RuntimeException e) {
+            log.error("Tokens of tenant ID: {} revoked, but its sessions could not be terminated", id, e);
+            auditApi.record(AuditEntry.builder()
+                .action(ACTION_TOKENS_REVOKED)
+                .tenantId(TenantConstants.PLATFORM_TENANT_ID)
+                .entityType(ENTITY_TYPE_TENANT)
+                .entityId(String.valueOf(tenant.getId()))
+                .summaryAr("إبطال رموز الدخول للمستأجر " + tenant.getCode() + "؛ لم تُنهَ الجلسات: أعد الطلب")
+                .summaryEn("Tokens of tenant " + tenant.getCode() + " revoked; the sessions were NOT terminated: call again")
+                .build());
+            throw new LocalizedException(Status.INTERNAL_ERROR, TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED,
+                tenant.getCode());
+        }
         log.info("Tokens of tenant ID: {} revoked; sessions terminated: {}", id, terminated);
 
         return ServiceResult.success(mapper.toTokenRevocationResponse(tenant, terminated), Status.UPDATED);

@@ -94,7 +94,7 @@ public class NotificationRequeueJob {
             NotificationLogDomain.STATUS_QUEUED);
         int requeued = 0;
         for (Long tenantId : tenants) {
-            if (tenantLookup != null && !NotificationLogDomain.deliversFor(tenantLookup.isActive(tenantId))) {
+            if (tenantLookup != null && !tenantLookup.isActive(tenantId)) {
                 log.debug("Tenant {} is not ACTIVE — its QUEUED notifications are not requeued", tenantId);
                 continue;
             }
