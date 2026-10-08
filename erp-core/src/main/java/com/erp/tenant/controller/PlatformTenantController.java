@@ -9,6 +9,7 @@ import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantSearchRequest;
 import com.erp.tenant.dto.TenantStatusUpdateRequest;
+import com.erp.tenant.dto.TenantTokenRevocationResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
 import com.erp.tenant.dto.TenantUsageResponse;
 import com.erp.tenant.service.TenantService;
@@ -106,6 +107,15 @@ public class PlatformTenantController {
             @PathVariable Long id,
             @Valid @RequestBody TenantAdminResetRequest request) {
         return operationCode.craftResponse(service.resetAdministratorPassword(id, request));
+    }
+
+    @PostMapping("/{id}/revoke-tokens")
+    @Operation(summary = "Revoke every token of a tenant (sign all its users out)",
+        description = "Sets the tenant's token cut-off to now and terminates its sessions (staff and customer); every token"
+            + " issued before then answers 401 TENANT_TOKEN_REVOKED. Refused for the PLATFORM tenant: 422"
+            + " TENANT_REVOKE_TOKENS_PLATFORM - إبطال رموز المستأجر")
+    public ResponseEntity<ApiResponse<TenantTokenRevocationResponse>> revokeTenantTokens(@PathVariable Long id) {
+        return operationCode.craftResponse(service.revokeTokens(id));
     }
 
     @GetMapping("/{id}/usage")

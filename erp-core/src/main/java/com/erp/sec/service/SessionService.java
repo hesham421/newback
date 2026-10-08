@@ -63,6 +63,7 @@ public class SessionService {
     private final AuditLogEntryRepository auditLogEntryRepository;
     private final UserRepository userRepository;
     private final ActiveSessionMapper mapper;
+    private final UserSessionTerminator sessionTerminator;
 
     /** API-SEC-025 — only sessions whose {@code terminatedAt} is null (REQ-SEC-027). */
     @Transactional(readOnly = true)
@@ -176,5 +177,22 @@ public class SessionService {
         log.info("Terminated ActiveSession ID: {}", saved.getActiveSessionPk());
 
         return ServiceResult.success(mapper.toTerminationResponse(saved), Status.UPDATED);
+    }
+
+    /**
+     * REQ-SEC-093 (tenant-maturity C12), reached only through {@code SecAdminRecoveryApi.terminateAllSessions}: ends
+     * every open session of the current tenant, both realms, in the caller's transaction (TENANT's revoke-tokens runs
+     * it inside {@code TenantContext.callAs(tenantId)}), and answers how many. Gate: the platform authority.
+     */
+    @Transactional
+    @PreAuthorize("hasAuthority(T(com.erp.sec.permission.SecPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<Integer> terminateAllSessionsForPlatform() {
+        String operator = SecurityContextHelper.getCurrentUsername();
+        int ended = sessionTerminator.terminateAllOpenSessions(operator,
+            "إنهاء الجلسة: أبطل مشغّل المنصة " + operator + " رموز المستأجر",
+            "Session terminated: the tenant's tokens were revoked by the platform operator " + operator);
+        log.info("Terminated {} open session(s) of the current tenant for a token revocation", ended);
+
+        return ServiceResult.success(ended, Status.UPDATED);
     }
 }

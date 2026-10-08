@@ -79,8 +79,29 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `period`, default 60 per minute, IPv6 counted by /64, 429 `TENANT_BRANDING_RATE_LIMITED` with `Retry-After`).
   Migration `V20__tenant_branding.sql`
   (`LOGO_FILE_ID`, `BRAND_COLOR`, `CHK_CORE_TENANT_BRAND_COLOR`; no registry rows).
+- [TM-C12] TENANT: tenant lifecycle events `TenantSuspendedEvent(tenantId, tenantCode, reason, actor)` and
+  `TenantActivatedEvent(tenantId, tenantCode, actor)` (`com.erp.events`, 13 core events), published by
+  `PATCH /api/v1/platform/tenants/{id}/status` on real transitions only and delivered after commit;
+  `TenantLookupApi.isActive(Long)`. `POST /api/v1/platform/tenants/{id}/revoke-tokens` (`PLATFORM_TENANT_MANAGE`) sets
+  the tenant's token cut-off to now, ends every session of the tenant (staff and customer), audits `TOKENS_REVOKED` in
+  the tenant and in PLATFORM and answers `{ id, code, sessionsTerminated }`; refused for PLATFORM (422
+  `TENANT_REVOKE_TOKENS_PLATFORM`). Its cut-off is the start of the next whole second, so every token up to the
+  revoke's own second is refused even if a session survives; if ending the sessions fails it answers 500
+  `TENANT_REVOKE_SESSIONS_FAILED` (tokens already refused, PLATFORM audit row, call again). No migration
+  (`TOKENS_INVALID_BEFORE` is V19's). ADR-TENANT-002.
+- [TM-C12] Cross-module: `SecAdminRecoveryApi.terminateAllSessions()`; `com.erp.tenant.TenantTokenFacts` (the token's
+  `tid` and `iat`, a request attribute the JWT filter sets for the tenant filter).
 
 ### Changed
+- [TM-C12] **Behaviour change** — TENANT/SEC: a token issued before a tenant's re-activation, or before a revoke-tokens
+  call, is refused with 401 `TENANT_TOKEN_REVOKED` on every non-public path of both realms (`/api/v1/tenant/me`
+  included); before, a re-activated tenant's old tokens worked again. Clients sign in again (a login sent with the old
+  token in `Authorization` still works). The cut-off is compared in whole seconds: a token issued in the cut-off's own
+  second is served. Suspending a tenant now also ends every open session of the tenant (SEC listens to
+  `TenantSuspendedEvent`); an issued token of a suspended tenant still answers 403 `TENANT_SUSPENDED`.
+- [TM-C12] NOTIF: a queued notification of a tenant that is not ACTIVE is neither attempted nor requeued (it stays
+  `QUEUED`, no new status) and is sent once the tenant is activated again (`TenantActivatedEvent`).
+  `NotificationRequeueJob` gains a constructor taking `TenantLookupApi` (the existing ones keep working).
 - [TM-E] TENANT: `TenantResponse` carries `logoUrl` and `brandColor`; the `erp.core.tenant.path-tenant-paths` default
   adds `/api/v1/public/tenants/{tenantCode}/branding` (an application that replaces the list keeps the public branding
   only if it lists the path). SEC: `GET /api/v1/tenant/me` (GET only) is served to a CUSTOMER token on the core chain

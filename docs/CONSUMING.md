@@ -178,6 +178,13 @@ Each piece is off unless the application adds the dependency and its configurati
 - **Tenant context.** On a request it comes from the token's `tid` claim or the `X-Tenant-Code` header.
   Outside a request (jobs, listeners), wrap the work in
   `com.erp.tenant.TenantContext.runAs(tenantId, ...)` / `callAs`, around the `@Transactional` call.
+- **Suspension and token cut-off (1.3.0).** Suspending a tenant ends its sessions; re-activating it, or
+  `POST /api/v1/platform/tenants/{id}/revoke-tokens`, cuts off every token issued before (401
+  `TENANT_TOKEN_REVOKED` on any non-public path, whole-second precision). A client treats it like any 401 and signs
+  in again; the login itself ignores a stale `Authorization` header. Revoke-tokens refuses every token up to and
+  including its own second (a login in that second signs in again a moment later); if it answers 500
+  `TENANT_REVOKE_SESSIONS_FAILED`, the tokens are already refused but the sessions were not ended — call it again. A job that works per tenant can skip suspended
+  tenants with `com.erp.tenant.crossmodule.TenantLookupApi.isActive(tenantId)` (uncached).
 - **Reference data for new tenants.** If the application seeds reference data that every tenant needs,
   it implements `com.erp.tenant.TenantProvisioningContributor` (`order()`,
   `provision(TenantProvisioning)`). Use JDBC with explicit `TENANT_ID` and copy from the source tenant.
@@ -242,8 +249,13 @@ Core publishes these events, all in `com.erp.events`: `UserCreatedEvent`, `UserS
 `CustomerRegisteredEvent`, `CustomerVerifiedEvent`, `PasswordResetRequestedEvent`, `TenantCreatedEvent`,
 `FileDocumentPublishedEvent`, `NotificationRequestedEvent`, `NotificationDispatchedEvent`,
 `NotificationFailedEvent` and (1.3.0) `UserPasswordChangedEvent` (`userId`, `byAdmin`; NOTIF answers it with the
-`STAFF_PASSWORD_CHANGED` e-mail). Each extends `DomainEvent`, which carries `id` (the idempotency key),
-`occurredAt`, `tenantId`, `actor` and `realm`.
+`STAFF_PASSWORD_CHANGED` e-mail), `TenantSuspendedEvent` (`tenantCode`, `reason`) and `TenantActivatedEvent`
+(`tenantCode`) — 13 in all. Each extends `DomainEvent`, which carries `id` (the idempotency key),
+`occurredAt`, `tenantId`, `actor` and `realm`. The two tenant events (1.3.0) are published by the platform's
+`PATCH /api/v1/platform/tenants/{id}/status` on a real transition only; their `tenantId` is the tenant that changed
+and their `actor` the platform operator. Core reacts to them itself — SEC ends the suspended tenant's sessions, NOTIF
+holds a suspended tenant's queued notifications and sends them on activation — and an application may listen too
+(e.g. to pause its own jobs for a suspended tenant).
 
 ```java
 @Async(ErpCoreEvents.EXECUTOR)

@@ -265,3 +265,66 @@ Decisions — delta
 
 Counts after this addendum: REQ 32 · AC 32 · RULE 18 · ENT 1 · SCR-REQ 1 · XM 3.
 Last sequence per atom: REQ: 032 · AC: 032 · ENT: 001 · RULE: 022 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 014 · POL: 014 · DBF: 044 · ADR: 005
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events (plan §5 C.1) and the per-tenant token cut-off with `POST /{id}/revoke-tokens` (plan §5 C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C12
+block, C1–C11). Ids continue from the highest ever issued (REQ / AC 032, RULE 022, POL 014, US 014; RULE-TENANT-012
+… 015 reserved for the analysis-coverage work's as-built rules).
+
+Entities — delta
+| Kind | ENT id | Delta | Code location |
+|---|---|---|---|
+| CHANGED | ENT-TENANT-001 Tenant | `tokensInvalidBefore` (DBF-TENANT-042) enforced and also written by revoke-tokens (`revokeTokens(Instant)`); no new column | tenant/entity/Tenant.java |
+
+Exposed — delta
+| Kind | Id | Surface | Consumers |
+|---|---|---|---|
+| CHANGED | XM-TENANT-001 | `TenantLookupApi` + `boolean isActive(Long tenantId)` (uncached; reads as PLATFORM without a current tenant) | NOTIF (claim, requeue) |
+| NEW | — | root-package `TenantTokenFacts(tenantId, issuedAt)` + `REQUEST_ATTRIBUTE` | SEC `JwtAuthenticationFilter` (writes) |
+| NEW | — | events `TenantSuspendedEvent`, `TenantActivatedEvent` (published after commit by `TenantService.updateStatus`) | SEC, NOTIF, applications |
+| NEW | — | HTTP `POST /api/v1/platform/tenants/{id}/revoke-tokens` (`TenantTokenRevocationResponse`) | frontend `PLATFORM_TENANTS` |
+
+Consumed — delta
+| Kind | Owner | Surface | Used by |
+|---|---|---|---|
+| NEW | SEC | `SecAdminRecoveryApi.terminateAllSessions()` (REQ-SEC-093), inside `TenantContext.callAs(id)` | revoke-tokens |
+
+Screens — delta
+| Kind | SCR-REQ id | Delta |
+|---|---|---|
+| CHANGED | SCR-REQ-TENANT-001 PLATFORM_TENANTS | B1 + revoke a tenant's tokens; B3 confirmation dialog; B5 + `POST /{id}/revoke-tokens`; B4 unchanged (D5) |
+
+Requirements — new / changed items
+| Kind | Id | Title | Traces | Code location (primary) | Verified by |
+|---|---|---|---|---|---|
+| NEW | REQ-TENANT-033 / AC-TENANT-033 | Tenant lifecycle events (`TenantSuspendedEvent`, `TenantActivatedEvent` after commit; SEC ends sessions; NOTIF holds queued rows) | US-TENANT-003; POL-TENANT-002; RULE-TENANT-006 | tenant/service/TenantService.java (`updateStatus`); events/TenantSuspendedEvent.java, events/TenantActivatedEvent.java | `TenantLifecycleEventsIntegrationTest`, `NotificationSuspendedTenantIntegrationTest` (NOTIF hold); TC-CORE-TENANT-047 |
+| NEW | REQ-TENANT-034 / AC-TENANT-034 | Per-tenant token cut-off (401 `TENANT_TOKEN_REVOKED`, both realms, `/tenant/me`) | US-TENANT-003, -004, -015; POL-TENANT-015; RULE-TENANT-023; ADR-TENANT-002 | tenant/security/TenantResolutionFilter.java; tenant/domain/TenantDomain.java (`isTokenRevoked`); sec/security/JwtAuthenticationFilter.java | `TenantTokenCutOffIntegrationTest`, `PlatformTenantApiIntegrationTest`; TC-CORE-TENANT-047, -048 |
+| NEW | REQ-TENANT-035 / AC-TENANT-035 | Revoke a tenant's tokens (`POST /{id}/revoke-tokens`) | US-TENANT-015; POL-TENANT-015, -006; RULE-TENANT-023, -024 | tenant/service/TenantService.java (`revokeTokens`) | `TenantTokenCutOffIntegrationTest`; TC-CORE-TENANT-048 … 050 |
+| NEW | RULE-TENANT-023 | Per-tenant token cut-off: `iat` (s) < cut-off truncated to the second → 401 `TENANT_TOKEN_REVOKED`; also for a token SEC dropped, on non-public paths; status first; revoke-tokens' cut-off = the next whole second (review round 1) | REQ-TENANT-034, -035 | tenant/domain/TenantDomain.java; tenant/security/TenantResolutionFilter.java | `TenantDomainTest`, `TenantTokenCutOffIntegrationTest` |
+| NEW | RULE-TENANT-024 | PLATFORM's tokens are not revoked (422 `TENANT_REVOKE_TOKENS_PLATFORM`) | REQ-TENANT-035 | tenant/domain/TenantDomain.java (`assertTokenRevocationAllowed`) | `TenantDomainTest`, `TenantTokenCutOffIntegrationTest`; TC-CORE-TENANT-050 |
+| CHANGED | RULE-TENANT-006 | + SEC ends the suspended tenant's sessions; NOTIF holds its queued rows; a dropped token of a suspended tenant still answers 403 `TENANT_SUSPENDED` | REQ-TENANT-033 | sec/service/TenantSuspendedSessionListener.java; notif/service/NotificationDeliveryProcessor.java; tenant/security/TenantResolutionFilter.java | `TenantLifecycleEventsIntegrationTest`; TC-CORE-TENANT-022, -047 |
+| CHANGED | RULE-TENANT-016 | the activation's cut-off is enforced; transitions publish the lifecycle events | REQ-TENANT-033, -034 | tenant/service/TenantService.java | `PlatformTenantApiIntegrationTest`, `TenantLifecycleEventsIntegrationTest` |
+| CHANGED | REQ-TENANT-012 | the token tenant is also checked against the cut-off; a dropped token is checked for its tenant before the header source (review round 1: replaces two citations of rule ids not defined on main) | REQ-TENANT-034 | tenant/security/TenantResolutionFilter.java | `TenantTokenCutOffIntegrationTest` |
+| CHANGED | US-TENANT-003, US-TENANT-004 | re-activation cuts off earlier tokens; suspension ends sessions | — | — | — |
+
+Error codes — delta
+| Code | HTTP | Code location |
+|---|---|---|
+| `TENANT_TOKEN_REVOKED` | 401 | tenant/security/TenantResolutionFilter.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_REVOKE_TOKENS_PLATFORM` | 422 | tenant/domain/TenantDomain.java; tenant/exception/TenantErrorCodes.java |
+| `TENANT_REVOKE_SESSIONS_FAILED` | 500 | tenant/service/TenantService.java; tenant/exception/TenantErrorCodes.java (review round 1) |
+i18n: one `tenant-maturity C12` block in both bundles.
+
+Permissions — delta: none (plan §0 D5). Audit actions — delta: `TOKENS_REVOKED` (written by TENANT in the target
+tenant and in PLATFORM). Configuration — delta: none.
+
+Decisions — delta
+| Kind | ADR | Subject | Status |
+|---|---|---|---|
+| NEW | ADR-TENANT-002 | Per-tenant token cut-off (`TOKENS_INVALID_BEFORE`) instead of a `jti` denylist | ACCEPTED (erp-core 1.3.0, package C12) |
+
+Counts after this addendum: REQ 35 · AC 35 · RULE 20 · ENT 1 · SCR-REQ 1 · XM 3.
+Last sequence per atom: REQ: 035 · AC: 035 · ENT: 001 · RULE: 024 (012 … 015 reserved) · SCR-REQ: 001 · XM: 003 · US: 015 · POL: 015 · DBF: 044 · ADR: 005 (002 used by this block; 003, 004 reserved for C.4, C.6)

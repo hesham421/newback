@@ -305,3 +305,79 @@ bind later steps.
 - [TM-E] Review round 1, rate-limit buckets → IPv6 keyed by /64 (`InetAddress.ofLiteral`, no DNS), an access-ordered map whose entries expire after `period` unused and which holds at most 10 000 keys (least recently used evicted), `Retry-After` on 429 (whole seconds until one request refills, from bucket4j's `ConsumptionProbe`). No Caffeine: it is not on erp-core's classpath and the map is enough. **Follow-up, not changed here:** SEC's `LoginRateLimiter` still clears all buckets above 10 000 keys and keys by `tenant:realm:username` — the same bounded-expiry treatment belongs to a SEC change of its own.
 - [TM-E] Review round 1, api-doc generator → `security_extractor.find_controller_for_endpoint` searches the Java method name on a copy whose string, text-block and char literals are blanked (`blank_string_literals`, offsets kept), so an `@Operation` text with "public … word (" is no longer read as the declaration; two unit tests (the first fails on the old code). The round-0 entry above ("generator unchanged") is superseded; the public-branding `@Operation` keeps its natural wording.
 - [TM-E] Review round 1, docs → CONSUMING: `server.forward-headers-strategy=native` with `server.tomcat.remoteip.internal-proxies` behind a proxy, a warning that `framework` trusts any client's `X-Forwarded-For` unless the proxy overwrites it, the frontend's 429 fallback (platform mark, honour `Retry-After`), and the 24 h public-file cache of an old logo URL (a new upload always gets a new slug).
+
+## [TM-C12] tenant-maturity C12 — tenant lifecycle events and per-tenant token cut-off
+
+- [TM-C12] Plan §5 C.2 "the JWT filter exposes `iat` on the authentication details" → **a request attribute**
+  `com.erp.tenant.TenantTokenFacts(tenantId, issuedAt)` that `JwtAuthenticationFilter` sets for **every signature-valid
+  token** with a `tid`, whether or not it authenticates; `AuthRealm` is unchanged (the tenant module may not depend on
+  `com.erp.sec.security`, and after C.1 a suspended or revoked tenant's token no longer authenticates because its
+  session is terminated). ADR-TENANT-002, srs-tenant.md 1.3.0 C10.
+- [TM-C12] `TenantResolutionFilter` → also checks a **dropped** token (signature-valid, not authenticated) on a
+  non-public path: tenant suspended → 403 `TENANT_SUSPENDED`, issued before the cut-off → 401 `TENANT_TOKEN_REVOKED`,
+  else unauthenticated as before. Without it, C.1's session termination would have turned the 1.2.0 answer for an
+  issued token of a suspended tenant (403, TC-CORE-TENANT-022 / -031, `PlatformTenantApiIntegrationTest`) into a bare
+  401 and the cut-off code would never be seen after a re-activation. A public path ignores a revoked token (also an
+  authenticated one whose session is still open), so a login sent with a stale `Authorization` header works.
+- [TM-C12] Cut-off precision (plan silent; the reference draft said "a token issued in the same second as the cut-off is
+  refused") → **whole seconds, strict**: refused when `iat` (s) < the cut-off truncated to the second; a token of the
+  cut-off's own second is **served**, so a login right after an activation works (TC-CORE-TENANT-024/-032/-043 sign in
+  within the same second). A token issued in that second *before* the cut-off is still refused through its session,
+  which the same operation ends (401 `SEC-401-INVALID-CREDENTIALS`). RULE-TENANT-023, ADR-TENANT-002.
+- [TM-C12] Revoke-tokens on PLATFORM (plan silent) → **refused**, 422 `TENANT_REVOKE_TOKENS_PLATFORM` (new code; the
+  `TENANT_ADMIN_RESET_PLATFORM` precedent): it would sign every platform operator out, the caller included. A suspended
+  tenant may be revoked. RULE-TENANT-024.
+- [TM-C12] Revoke-tokens response (reference draft: `TenantResponse`) → `TenantTokenRevocationResponse { id, code,
+  sessionsTerminated }`, 200 (`Status.UPDATED`): the count is the result (admin-reset precedent); the cut-off is never
+  returned.
+- [TM-C12] Revoke-tokens transactions → the cut-off is written in a **PLATFORM** `TransactionTemplate` and commits first
+  (TM-E's note: `CORE_TENANT` writes stay in the PLATFORM request like `updateStatus`), then one `REQUIRES_NEW`
+  transaction inside `callAs(id)` ends the sessions (`SecAdminRecoveryApi.terminateAllSessions`) and records
+  `TOKENS_REVOKED` in the tenant and in PLATFORM (TM-E's two-row precedent). `TenantService.revokeTokens` is not
+  `@Transactional` (B / E precedent, build-create-service A.5.3 deviation already recorded for them).
+- [TM-C12] Events → payload name `tenantCode` (the plan's `code`), like `TenantCreatedEvent`; explicit constructor (the
+  event's tenant is the changed tenant, the actor the PLATFORM operator, realm `STAFF`). SEC's
+  `TenantSuspendedSessionListener` is **synchronous** after commit (sessions are closed when the PATCH answers); NOTIF's
+  `NotificationTenantActivationListener` is asynchronous.
+- [TM-C12] NOTIF (plan: "the retry/claim job skips rows of suspended tenants") → the check sits at the **claim**
+  (`NotificationDeliveryProcessor.prepare`, every delivery path) and in `NotificationRequeueJob` (per-tenant skip), and a
+  re-activated tenant's held rows are **re-dispatched on `TenantActivatedEvent`** — the requeue job is off by default, so
+  without the listener they would wait for an application that enables it. Status set unchanged. RULE-NOTIF-024.
+  `NotificationRequeueJob` gains a constructor with `TenantLookupApi`; the older ones keep working without the job-level
+  skip.
+- [TM-C12] `TenantLookupApi.isActive` → not `@Transactional`: without a current tenant it reads as PLATFORM (the
+  `TenantResolutionFilter` precedent), inside a tenant it joins the caller's session (`CORE_TENANT` is global); uncached
+  (a state lifecycle is never cache-eligible, gov-enforce-caching-rules).
+- [TM-C12] No migration: `TOKENS_INVALID_BEFORE` is `V19__tenant_lifecycle.sql`'s (package B; the plan's §11 row
+  "V17 B / C.2"). No migration number was reserved for C12.
+- [TM-C12] Reference snapshot (`reference-snapshot.md` C1, C2, ADR-TENANT-002 draft) adopted after checking it against the
+  code, except: the same-second rule (above), the revoke-tokens response (above), the draft's "the JWT filter exposes
+  `iat` on the authentication details" (above), the event count "10 → 12" (the catalogue already had 11 with D's
+  `UserPasswordChangedEvent`: 11 → 13), "NOTIF registers no listener" (it listens to `TenantActivatedEvent`, above), and
+  its placeholder cases TC-CORE-TENANT-036/-037 (→ TENANT-047 … 050). Its facts 3 and 6 (`isActive` and `iat` missing)
+  are confirmed and closed by this package.
+- [TM-C12] `PlatformTenantApiIntegrationTest.suspend_blocksLoginWith403_andRevokesIssuedTokens_andActivateRestoresThem`
+  → renamed `…_andActivateRestoresLoginButNotTheOldTokens`; its last assertion changes from "old token 200" to "old token
+  401 `TENANT_TOKEN_REVOKED`, a fresh token 200" (the analysis-first behaviour change REQ-TENANT-034); nothing else in it
+  is weakened.
+- [TM-C12] Commit hygiene: the `TenantResolutionFilter` refinement "a public path ignores a revoked authenticated token"
+  landed in the test commit (`test(tenant): …`) together with the test that found it.
+- [TM-C12] Review round 1, revoke-tokens → its cut-off is **the start of the next whole second** after now
+  (`TenantDomain.revocationCutOff`), activation keeps the activation instant: the cut-off alone now refuses every token up
+  to and including the revoke's own second (the reviewer re-opened a session after a revoke and a token of that second
+  was served; a login whose session committed after the termination query was the same gap). A login later in that
+  second is refused and signs in again a moment later. The comparison (`iat` s < cut-off s) is unchanged. A failure of
+  the session step after the cut-off committed is caught: `TOKENS_REVOKED` in PLATFORM says the sessions were NOT
+  terminated, and the call answers **500 `TENANT_REVOKE_SESSIONS_FAILED`** (new code, `Status.INTERNAL_ERROR`; message:
+  the tokens are already refused, repeat the call); a repeat moves the cut-off forward and ends the sessions. ADR-TENANT-002
+  Decision and Reason 5, C7, RULE-TENANT-023, REQ-TENANT-035 amended (the first wording overclaimed the session step).
+- [TM-C12] Review round 1, ids → the C12 block cited RULE-TENANT-012 and RULE-TENANT-015, which are not defined on main
+  (reserved for the analysis-coverage work): replaced by REQ-TENANT-012 (tenant from the access token) and
+  REQ-TENANT-010; the no-caching note rests on gov-enforce-caching-rules (C7).
+- [TM-C12] Plan §5 C.1 "registered in `ErpCoreEvents` (count 10 → 12)" → `ErpCoreEvents` only holds the executor's bean
+  name, it is no registry: the event catalogue is `docs/CONSUMING.md` §5 and `PROJECT-OVERVIEW.md` (11 → 13 with D's
+  `UserPasswordChangedEvent`), where the two events were added; `ErpCoreEvents` is unchanged.
+- [TM-C12] Review round 1, nits → `NotificationLogDomain.deliversFor` (it returned its argument) removed; the requeue job
+  reads `TenantLookupApi.isActive` directly and `isDeliverable(tenantActive)` stays the claim's rule.
+  `NotificationTenantActivationListener` submits to the core event executor itself and logs a rejected task at WARN.
+  ADR-TENANT-002 records "accepted after the code check (6bfe756)".

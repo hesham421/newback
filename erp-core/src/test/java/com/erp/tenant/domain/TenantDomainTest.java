@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021). */
+/** Unit tests of the tenant business rules (erp-core step 05; tenant-maturity B: RULE-TENANT-016/017; E: RULE-TENANT-018/021; C12: RULE-TENANT-023/024). */
 class TenantDomainTest {
 
     @ParameterizedTest
@@ -207,6 +207,66 @@ class TenantDomainTest {
                 assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_SUSPENDED);
                 assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.FORBIDDEN);
             });
+    }
+
+    @Test
+    void tokenCutOff_comparesWholeSeconds_servesTheCutOffsOwnSecond_andRefusesATokenWithoutIat() {
+        Instant cutOff = Instant.parse("2026-10-08T10:00:00.500Z");
+
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T09:59:59Z"), cutOff)).isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), cutOff))
+            .as("issued in the cut-off's own second").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:01Z"), cutOff)).isFalse();
+        assertThat(TenantDomain.isTokenRevoked(null, cutOff)).as("no iat").isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2000-01-01T00:00:00Z"), null)).as("no cut-off").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(null, null)).isFalse();
+    }
+
+    @Test
+    void revocationCutOff_isTheNextWholeSecond_soTheRevokesOwnSecondIsRefused_andTheNextOneServed() {
+        Instant cutOff = TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00.300Z"));
+
+        assertThat(cutOff).isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), cutOff))
+            .as("a token of the revoke's own second, e.g. an in-flight login").isTrue();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:01Z"), cutOff)).isFalse();
+        assertThat(TenantDomain.revocationCutOff(Instant.parse("2026-10-08T10:00:00Z")))
+            .as("exactly on a second: still the next one").isEqualTo(Instant.parse("2026-10-08T10:00:01Z"));
+    }
+
+    @Test
+    void activationCutOff_servesATokenOfTheActivationsOwnSecond() {
+        Instant activation = Instant.parse("2026-10-08T10:00:00.300Z");
+
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T10:00:00Z"), activation))
+            .as("a fresh login right after the activation").isFalse();
+        assertThat(TenantDomain.isTokenRevoked(Instant.parse("2026-10-08T09:59:59Z"), activation)).isTrue();
+    }
+
+    @Test
+    void tokenRevocation_isRefusedForThePlatformTenantOnly() {
+        assertThatThrownBy(() -> TenantDomain.from(tenant(TenantConstants.PLATFORM_TENANT_ID, TenantConstants.STATUS_ACTIVE))
+            .assertTokenRevocationAllowed())
+            .isInstanceOf(LocalizedException.class)
+            .satisfies(e -> {
+                assertThat(((LocalizedException) e).getErrorCode()).isEqualTo(TenantErrorCodes.TENANT_REVOKE_TOKENS_PLATFORM);
+                assertThat(((LocalizedException) e).getStatus()).isEqualTo(Status.BUSINESS_RULE_VIOLATION);
+            });
+        assertThatCode(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_ACTIVE)).assertTokenRevocationAllowed())
+            .doesNotThrowAnyException();
+        assertThatCode(() -> TenantDomain.from(tenant(7L, TenantConstants.STATUS_SUSPENDED)).assertTokenRevocationAllowed())
+            .as("a suspended tenant may be revoked").doesNotThrowAnyException();
+    }
+
+    @Test
+    void revokeTokens_setsOnlyTheCutOff() {
+        Tenant entity = tenant(7L, TenantConstants.STATUS_ACTIVE);
+        Instant at = Instant.parse("2026-10-08T10:00:00Z");
+
+        entity.revokeTokens(at);
+
+        assertThat(entity.getTokensInvalidBefore()).isEqualTo(at);
+        assertThat(entity.getStatusCode()).isEqualTo(TenantConstants.STATUS_ACTIVE);
     }
 
     private static Tenant tenant(Long id, String status) {

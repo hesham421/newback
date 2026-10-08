@@ -115,3 +115,8 @@ NEW product capabilities
 | Capability | Actor | Implemented behaviour | Source |
 |---|---|---|---|
 | Password-change e-mail | staff user (recipient) | When an administrator sets a staff user's password or the user changes it, the user receives `STAFF_PASSWORD_CHANGED` (when and by whom). The template exists in every tenant and can be edited like any template. | srs.md 1.3.0 (RULE-NOTIF-023); V17 |
+
+Package C12 (tenant-maturity plan §5 C.1) — changed behaviour of existing stories; full text in `P1/srs.md` 1.3.0 §5.
+| Story | Delta | Source |
+|---|---|---|
+| US-NOTIF-001 notify a user, US-NOTIF-005 see each notification's status — for a suspended tenant | queued notifications of a suspended tenant are not sent while it is suspended (they stay `QUEUED`, attempts unchanged) and are sent once it is activated again | srs.md 1.3.0 §5 (RULE-NOTIF-024) |

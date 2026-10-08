@@ -13,7 +13,9 @@ import com.erp.common.search.SetAllowedFields;
 import com.erp.common.search.SpecBuilder;
 import com.erp.common.util.SecurityContextHelper;
 import com.erp.events.DomainEventPublisher;
+import com.erp.events.TenantActivatedEvent;
 import com.erp.events.TenantCreatedEvent;
+import com.erp.events.TenantSuspendedEvent;
 import com.erp.file.crossmodule.FileDocumentLookupApi;
 import com.erp.file.crossmodule.FileImageStoreApi;
 import com.erp.file.crossmodule.ImageStoreRequest;
@@ -34,6 +36,7 @@ import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantSearchRequest;
 import com.erp.tenant.dto.TenantStatusUpdateRequest;
+import com.erp.tenant.dto.TenantTokenRevocationResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
 import com.erp.tenant.dto.TenantUsageResponse;
 import com.erp.tenant.entity.Tenant;
@@ -79,7 +82,8 @@ import org.springframework.web.multipart.MultipartFile;
  * this PLATFORM request would bind the PLATFORM Hibernate session, so each opens its own inside
  * {@code TenantContext.callAs(id)} (the {@code PermissionCatalogSynchronizer} precedent). tenant-maturity E's
  * {@link #setLogo} and {@link #removeLogo} do the same (the logo document belongs to the tenant's own rows), and
- * every {@code TenantResponse} resolves its {@code logoUrl} inside the tenant ({@link TenantLogoUrls}).
+ * every {@code TenantResponse} resolves its {@code logoUrl} inside the tenant ({@link TenantLogoUrls}). tenant-maturity
+ * C12's {@link #revokeTokens} writes the cut-off in a PLATFORM transaction first, then ends the sessions inside the tenant.
  *
  * <p>No caching: {@code CORE_TENANT} is not on the caching approved-register
  * (gov-enforce-caching-rules), so this service carries no {@code @Cacheable}/{@code @CacheEvict}.
@@ -105,6 +109,9 @@ public class TenantService {
 
     /** REQ-TENANT-029 (tenant-maturity E): the audit action of a logo set or removed (target tenant and PLATFORM). */
     static final String ACTION_TENANT_LOGO_CHANGED = "TENANT_LOGO_CHANGED";
+
+    /** REQ-TENANT-035 (tenant-maturity C12): the audit action of revoke-tokens (target tenant and PLATFORM). */
+    static final String ACTION_TOKENS_REVOKED = "TOKENS_REVOKED";
 
     /** REQ-TENANT-028: the window of {@code notificationsLast30Days}. */
     private static final Duration NOTIFICATION_WINDOW = Duration.ofDays(30);
@@ -217,8 +224,9 @@ public class TenantService {
     }
 
     /**
-     * {@code PATCH /{id}/status}: PLATFORM protection (RULE-TENANT-005), then the suspension reason
-     * (RULE-TENANT-016); a real transition records or clears the suspension facts, re-applying changes nothing.
+     * {@code PATCH /{id}/status}: PLATFORM protection (RULE-TENANT-005), then the suspension reason (RULE-TENANT-016);
+     * a real transition records or clears the suspension facts and publishes {@code TenantSuspendedEvent} /
+     * {@code TenantActivatedEvent} (REQ-TENANT-033, delivered after commit); re-applying changes nothing.
      */
     @Transactional
     @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
@@ -232,16 +240,24 @@ public class TenantService {
         domain.assertCanChangeStatusTo(request.getStatusCode());
         domain.assertSuspensionReasonGiven(request.getStatusCode(), request.getReason());
 
-        if (domain.changesStatusTo(request.getStatusCode())) {
+        boolean transition = domain.changesStatusTo(request.getStatusCode());
+        String operator = SecurityContextHelper.getCurrentUsername();
+        if (transition) {
             Instant now = Instant.now();
             if (TenantConstants.STATUS_SUSPENDED.equals(request.getStatusCode())) {
-                entity.suspend(now, SecurityContextHelper.getCurrentUsername(), request.getReason());
+                entity.suspend(now, operator, request.getReason());
             } else {
                 entity.activate(now);
             }
         }
         Tenant saved = repository.saveAndFlush(entity);
         log.info("Tenant ID: {} is now {}", saved.getId(), saved.getStatusCode());
+        if (transition) {
+            // tenant-maturity C12: the event's tenant is the changed tenant; listeners run after commit
+            eventPublisher.publish(TenantConstants.STATUS_SUSPENDED.equals(saved.getStatusCode())
+                ? new TenantSuspendedEvent(saved.getId(), saved.getCode(), saved.getSuspensionReason(), operator)
+                : new TenantActivatedEvent(saved.getId(), saved.getCode(), operator));
+        }
 
         return ServiceResult.success(mapper.toResponse(saved, logoUrls.of(saved)), Status.UPDATED);
     }
@@ -277,6 +293,64 @@ public class TenantService {
         log.info("Password of an administrator of tenant ID: {} reset; sessions terminated: {}", id, terminated);
 
         return ServiceResult.success(mapper.toAdminResetResponse(request.getUsername(), terminated), Status.UPDATED);
+    }
+
+    /**
+     * REQ-TENANT-035 — {@code POST /{id}/revoke-tokens}: never on PLATFORM (RULE-TENANT-024); the cut-off (the next whole
+     * second) commits first in this PLATFORM request and alone refuses every earlier token; then inside tenant {@code id}
+     * SEC ends every session and {@code TOKENS_REVOKED} is recorded there and in PLATFORM. A failure of that step is
+     * recorded in PLATFORM and answered 500 {@code TENANT_REVOKE_SESSIONS_FAILED} (retryable). Not {@code @Transactional}.
+     */
+    @PreAuthorize("hasAuthority(T(com.erp.tenant.permission.TenantPermissions).PLATFORM_TENANT_MANAGE)")
+    public ServiceResult<TenantTokenRevocationResponse> revokeTokens(Long id) {
+        log.info("Revoking the tokens of tenant ID: {}", id);
+
+        Tenant tenant = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
+        TenantDomain.from(tenant).assertTokenRevocationAllowed();
+
+        Instant cutOff = TenantDomain.revocationCutOff(Instant.now());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> writeCutOff(id, cutOff));
+        Integer terminated;
+        try {
+            terminated = TenantContext.callAs(id, () -> writeInTenant().execute(status -> endSessions(tenant)));
+        } catch (RuntimeException e) {
+            log.error("Tokens of tenant ID: {} revoked, but its sessions could not be terminated", id, e);
+            auditApi.record(AuditEntry.builder()
+                .action(ACTION_TOKENS_REVOKED)
+                .tenantId(TenantConstants.PLATFORM_TENANT_ID)
+                .entityType(ENTITY_TYPE_TENANT)
+                .entityId(String.valueOf(tenant.getId()))
+                .summaryAr("إبطال رموز الدخول للمستأجر " + tenant.getCode() + "؛ لم تُنهَ الجلسات: أعد الطلب")
+                .summaryEn("Tokens of tenant " + tenant.getCode() + " revoked; the sessions were NOT terminated: call again")
+                .build());
+            throw new LocalizedException(Status.INTERNAL_ERROR, TenantErrorCodes.TENANT_REVOKE_SESSIONS_FAILED,
+                tenant.getCode());
+        }
+        log.info("Tokens of tenant ID: {} revoked; sessions terminated: {}", id, terminated);
+
+        return ServiceResult.success(mapper.toTokenRevocationResponse(tenant, terminated), Status.UPDATED);
+    }
+
+    /** Runs in a PLATFORM transaction: the global {@code CORE_TENANT} row gets its new cut-off (RULE-TENANT-023). */
+    private void writeCutOff(Long id, Instant cutOff) {
+        Tenant tenant = repository.findById(id)
+            .orElseThrow(() -> new LocalizedException(Status.NOT_FOUND, TenantErrorCodes.TENANT_NOT_FOUND, id));
+        tenant.revokeTokens(cutOff);
+        repository.saveAndFlush(tenant);
+    }
+
+    /** Runs inside the tenant's transaction: SEC ends every session, then {@code TOKENS_REVOKED} (never the instant). */
+    private int endSessions(Tenant tenant) {
+        int ended = adminRecovery.terminateAllSessions();
+        recordInTenantAndPlatform(tenant.getId(), AuditEntry.builder()
+            .action(ACTION_TOKENS_REVOKED)
+            .entityType(ENTITY_TYPE_TENANT)
+            .entityId(String.valueOf(tenant.getId()))
+            .summaryAr("إبطال رموز الدخول للمستأجر " + tenant.getCode() + "؛ الجلسات المنتهية: " + ended)
+            .summaryEn("Tokens of tenant " + tenant.getCode() + " revoked; sessions terminated: " + ended)
+            .build());
+        return ended;
     }
 
     /**
@@ -391,15 +465,19 @@ public class TenantService {
      * PLATFORM — the operator's trail (B's {@code TENANT_ADMIN_RESET} precedent); one row when the tenant is PLATFORM.
      */
     private void recordLogoChange(Tenant tenant, String summaryAr, String summaryEn) {
-        AuditEntry entry = AuditEntry.builder()
+        recordInTenantAndPlatform(tenant.getId(), AuditEntry.builder()
             .action(ACTION_TENANT_LOGO_CHANGED)
             .entityType(ENTITY_TYPE_TENANT)
             .entityId(String.valueOf(tenant.getId()))
             .summaryAr(summaryAr)
             .summaryEn(summaryEn)
-            .build();
+            .build());
+    }
+
+    /** {@code entry} in the current tenant and, unless that is PLATFORM, once more in PLATFORM (same transaction). */
+    private void recordInTenantAndPlatform(Long tenantId, AuditEntry entry) {
         auditApi.record(entry);
-        if (!Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(tenant.getId())) {
+        if (!Long.valueOf(TenantConstants.PLATFORM_TENANT_ID).equals(tenantId)) {
             auditApi.record(entry.toBuilder().tenantId(TenantConstants.PLATFORM_TENANT_ID).build());
         }
     }

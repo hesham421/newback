@@ -5,6 +5,7 @@ import com.erp.tenant.dto.TenantBrandingResponse;
 import com.erp.tenant.dto.TenantBrandingUpdateRequest;
 import com.erp.tenant.dto.TenantCreateRequest;
 import com.erp.tenant.dto.TenantResponse;
+import com.erp.tenant.dto.TenantTokenRevocationResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
 import com.erp.tenant.dto.TenantUsageResponse;
 import com.erp.tenant.entity.Tenant;
@@ -103,6 +104,18 @@ public class TenantMapper {
     public TenantAdminResetResponse toAdminResetResponse(String username, int sessionsTerminated) {
         return TenantAdminResetResponse.builder()
             .username(username)
+            .sessionsTerminated(sessionsTerminated)
+            .build();
+    }
+
+    /** REQ-TENANT-035 — the tenant and the number of sessions revoke-tokens ended; never the cut-off. */
+    public TenantTokenRevocationResponse toTokenRevocationResponse(Tenant entity, int sessionsTerminated) {
+        if (entity == null) {
+            return null;
+        }
+        return TenantTokenRevocationResponse.builder()
+            .id(entity.getId())
+            .code(entity.getCode())
             .sessionsTerminated(sessionsTerminated)
             .build();
     }

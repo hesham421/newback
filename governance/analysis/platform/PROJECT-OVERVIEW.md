@@ -31,7 +31,7 @@ applications goes into core, additively, as a new MINOR version.
 | `com.erp.notif` | templates, channels (`ChannelProvider` SPI), event-driven retried delivery with a claim lease, in-app inbox for staff and customers, dispatch and logs | `notif/` |
 | `com.erp.tenant` | multi-tenancy: `TenantContext`, `TENANT_ID` on every core table filtered by Hibernate `@TenantId`, tenant provisioning (`POST /api/v1/platform/tenants`) and the `TenantProvisioningContributor` SPI | `tenant/` |
 | `com.erp.audit` | the generic, tenant-scoped audit log: `CORE_AUDIT_EVENT`, `AuditApi`, the `@Audited` entity listener (sensitive fields redacted), a query API and a retention job | `audit/` |
-| `com.erp.events` | the domain event bus (11 core events; `UserPasswordChangedEvent` since 1.3.0) with a tenant-propagating async executor; consumed with `@TransactionalEventListener` | none |
+| `com.erp.events` | the domain event bus (13 core events; `UserPasswordChangedEvent`, `TenantSuspendedEvent` and `TenantActivatedEvent` since 1.3.0) with a tenant-propagating async executor; consumed with `@TransactionalEventListener` | none |
 | `com.erp.sequence` | tenant-scoped number series: `NumberSeriesApi`, patterns, reset policies, admin API | `sequence/` |
 | `com.erp.report` | the `ReportProvider` SPI and registry with automatic report permissions, run and CSV/JSON export, three core reference reports | `report/` |
 

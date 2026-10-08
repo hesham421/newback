@@ -148,3 +148,10 @@ Package B (tenant-maturity plan §4 B.4) — exposed surface deltas; full text i
 |---|---|---|---|
 | CHANGED | `com.erp.sec.crossmodule.SecUserDirectoryApi` | + `countStaff()`, `countCustomers()`, `countActiveSessions()` (current tenant) | TENANT usage (REQ-SEC-090) |
 | NEW | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (+ `RecoveryTarget`) | `findRecoveryTarget(String)`, `resetSuperUserPassword(String, String, Boolean)`; gate `PLATFORM_TENANT_MANAGE` | TENANT admin-reset (REQ-SEC-091) |
+
+Package C12 (tenant-maturity plan §5 C.1, C.2) — dependency and exposed surface deltas; full text in `P1/srs-sec.md` 1.3.0 §12.
+| Kind | Module / surface | Kind of link | Delta | Source |
+|---|---|---|---|---|
+| NEW | events (TENANT publishes) | event bus (XM-SEC-007) | consumes `TenantSuspendedEvent` → ends the tenant's sessions | srs-sec.md 1.3.0 §12 |
+| CHANGED | tenant | root-package API | `JwtAuthenticationFilter` writes `TenantTokenFacts` (request attribute) for the tenant filter's cut-off check | same |
+| CHANGED | `com.erp.sec.crossmodule.SecAdminRecoveryApi` (exposed) | in-core API | + `terminateAllSessions()`; gate `PLATFORM_TENANT_MANAGE`; consumer TENANT revoke-tokens | same |

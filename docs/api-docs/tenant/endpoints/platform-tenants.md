@@ -12,6 +12,7 @@
 - [PATCH /api/v1/platform/tenants/{id}/branding](#patch-apiv1platformtenantsidbranding)
 - [PUT /api/v1/platform/tenants/{id}/logo](#put-apiv1platformtenantsidlogo)
 - [DELETE /api/v1/platform/tenants/{id}/logo](#delete-apiv1platformtenantsidlogo)
+- [POST /api/v1/platform/tenants/{id}/revoke-tokens](#post-apiv1platformtenantsidrevoke-tokens)
 - [PATCH /api/v1/platform/tenants/{id}/status](#patch-apiv1platformtenantsidstatus)
 - [GET /api/v1/platform/tenants/{id}/usage](#get-apiv1platformtenantsidusage)
 
@@ -801,7 +802,7 @@ _(partial — only fields with a documented example are shown)_
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.setTenantLogo`, `TenantService.setLogo`, `TenantService.readBytes`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.replaceLogo`, `TenantDomain.assertLogoAccepted`, `TenantService.recordLogoChange`, `TenantMapper.toResponse`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.setTenantLogo`, `TenantService.setLogo`, `TenantService.readBytes`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.replaceLogo`, `TenantDomain.assertLogoAccepted`, `TenantService.recordLogoChange`, `TenantMapper.toResponse`, `TenantService.recordInTenantAndPlatform`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
@@ -844,12 +845,71 @@ Required (bearerAuth).
 
 ### Business Responses
 
-Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.removeTenantLogo`, `TenantService.removeLogo`, `TenantContext.runAs`, `TenantService.writeInTenant`, `TenantService.clearLogo`, `TenantContext.callAs`, `TenantService.recordLogoChange`).
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.removeTenantLogo`, `TenantService.removeLogo`, `TenantContext.runAs`, `TenantService.writeInTenant`, `TenantService.clearLogo`, `TenantContext.callAs`, `TenantService.recordLogoChange`, `TenantService.recordInTenantAndPlatform`).
 
 | HTTP Status | Code | Constant | Raised at |
 |---|---|---|---|
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.clearLogo |
 | 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.removeLogo |
+
+### Other Possible Responses
+
+Structurally guaranteed by this endpoint's own shape (auth requirement, permission check, request body) combined with the shared framework's exception handling — not specific business errors.
+
+| HTTP Status | Code | Why |
+|---|---|---|
+| 403 FORBIDDEN | ACCESS_DENIED | An authorization check was found for this endpoint (@PreAuthorize/@Secured); GlobalExceptionHandler maps AccessDeniedException to this status. |
+
+## POST /api/v1/platform/tenants/{id}/revoke-tokens
+
+**Revoke every token of a tenant (sign all its users out)**
+
+Sets the tenant's token cut-off to now and terminates its sessions (staff and customer); every token issued before then answers 401 TENANT_TOKEN_REVOKED. Refused for the PLATFORM tenant: 422 TENANT_REVOKE_TOKENS_PLATFORM - إبطال رموز المستأجر
+
+Operation ID: `revokeTenantTokens`
+
+**Authentication**
+
+Required (bearerAuth).
+
+**Required permission(s)**: PLATFORM_TENANT_MANAGE (found on service:TenantService)
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| id | integer | Yes |  |
+
+### Response `200` — OK
+
+Shape: `TenantTokenRevocationResponse`
+
+| Field | Type | Required | Constraints | Description | Example |
+|---|---|---|---|---|---|
+| id | integer (int64) | No |  | Tenant ID - معرّف المستأجر | 2 |
+| code | string | No |  | Tenant code - رمز المستأجر | ACME |
+| sessionsTerminated | integer (int32) | No |  | Number of the tenant's sessions that were terminated - عدد الجلسات المنتهية | 3 |
+
+**Response Example**
+
+```json
+{
+  "id": 2,
+  "code": "ACME",
+  "sessionsTerminated": 3
+}
+```
+
+### Business Responses
+
+Raised by this endpoint's own rules. Each row cites the throw site it was read from (walked `PlatformTenantController.revokeTenantTokens`, `TenantService.revokeTokens`, `TenantDomain.from`, `TenantDomain.revocationCutOff`, `TenantService.writeCutOff`, `TenantContext.callAs`, `TenantService.writeInTenant`, `TenantService.endSessions`, `TenantMapper.toTokenRevocationResponse`, `TenantDomain.assertTokenRevocationAllowed`, `new TenantDomain()`, `Tenant.revokeTokens`, `TenantService.recordInTenantAndPlatform`).
+
+| HTTP Status | Code | Constant | Raised at |
+|---|---|---|---|
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.revokeTokens |
+| 404 NOT_FOUND | `TENANT_NOT_FOUND` | TENANT_NOT_FOUND | TenantService.writeCutOff |
+| 422 UNPROCESSABLE_CONTENT | `TENANT_REVOKE_TOKENS_PLATFORM` | TENANT_REVOKE_TOKENS_PLATFORM | TenantDomain.assertTokenRevocationAllowed |
+| 500 INTERNAL_SERVER_ERROR | `TENANT_REVOKE_SESSIONS_FAILED` | TENANT_REVOKE_SESSIONS_FAILED | TenantService.revokeTokens |
 
 ### Other Possible Responses
 

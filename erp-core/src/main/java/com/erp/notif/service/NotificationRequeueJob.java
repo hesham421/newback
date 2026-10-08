@@ -7,6 +7,7 @@ import com.erp.notif.domain.NotificationLogDomain;
 import com.erp.notif.entity.NotificationLog;
 import com.erp.notif.repository.NotificationLogRepository;
 import com.erp.tenant.TenantContext;
+import com.erp.tenant.crossmodule.TenantLookupApi;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -36,6 +37,9 @@ import org.springframework.scheduling.annotation.Scheduled;
  * two retries ({@code NEXT_ATTEMPT_AT} = when the retry is due), and a row waiting in, or running on,
  * this node's event executor ({@link NotificationDeliveryTracker}). A row the executor rejected is
  * untracked and unclaimed, so it is delivered once it is stale.
+ *
+ * <p>tenant-maturity C12 (RULE-NOTIF-024): a tenant that is not ACTIVE is skipped (built with a
+ * {@link TenantLookupApi}); its rows wait, still {@code QUEUED}, and the delivery claim refuses them anyway.
  */
 @Slf4j
 public class NotificationRequeueJob {
@@ -48,6 +52,7 @@ public class NotificationRequeueJob {
     private final JdbcTemplate jdbcTemplate;
     private final ErpCoreProperties properties;
     private final NotificationDeliveryTracker tracker;
+    private final TenantLookupApi tenantLookup;
 
     /** Without a tracker: no row is known to be pending on this node (kept for existing callers). */
     public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
@@ -62,11 +67,22 @@ public class NotificationRequeueJob {
     public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
                                   JdbcTemplate jdbcTemplate, ErpCoreProperties properties,
                                   NotificationDeliveryTracker tracker) {
+        this(logRepository, eventPublisher, jdbcTemplate, properties, tracker, null);
+    }
+
+    /**
+     * @param tenantLookup tenant-maturity C12 — the tenants that are not ACTIVE are skipped (RULE-NOTIF-024); null skips
+     *                     none (the delivery claim still refuses their rows)
+     */
+    public NotificationRequeueJob(NotificationLogRepository logRepository, DomainEventPublisher eventPublisher,
+                                  JdbcTemplate jdbcTemplate, ErpCoreProperties properties,
+                                  NotificationDeliveryTracker tracker, TenantLookupApi tenantLookup) {
         this.logRepository = logRepository;
         this.eventPublisher = eventPublisher;
         this.jdbcTemplate = jdbcTemplate;
         this.properties = properties;
         this.tracker = tracker;
+        this.tenantLookup = tenantLookup;
     }
 
     /** Re-dispatches every stale {@code QUEUED} row of every tenant; returns how many. */
@@ -78,6 +94,10 @@ public class NotificationRequeueJob {
             NotificationLogDomain.STATUS_QUEUED);
         int requeued = 0;
         for (Long tenantId : tenants) {
+            if (tenantLookup != null && !tenantLookup.isActive(tenantId)) {
+                log.debug("Tenant {} is not ACTIVE — its QUEUED notifications are not requeued", tenantId);
+                continue;
+            }
             requeued += TenantContext.callAs(tenantId, () -> requeueTenant(cutoff));
         }
         if (requeued > 0) {

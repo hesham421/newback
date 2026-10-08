@@ -356,3 +356,42 @@ NOTIF's own consumptions). No endpoint, entity field, error code, permission or 
 Plan delta: the plan names "the existing dispatch API"; `NotificationDispatchApi` is NOTIF's write surface, so
 the read went to `NotificationLogQueryApi` (TENANT srs-tenant.md 1.3.0 B10). Consumer: TENANT
 (`TenantService.getUsage`, `since` = 30 days before `collectedAt`), inside `TenantContext.callAs(tenantId)`.
+
+### 5. Package C12 — a suspended tenant's queued notifications wait (tenant-maturity plan §5 C.1)
+Change         : tenant-maturity plan package C12 — the delivery claim and the requeue job skip the `QUEUED` rows of a tenant that is not ACTIVE (`TenantLookupApi.isActive`); `TenantActivatedEvent` re-dispatches them
+Statement      : Sections 1–4 above (packages D.3 and B) are unchanged; §5 records package C12's implemented deltas.
+
+Ids continue from the highest ever issued for NOTIF (tree, this repository's history and `governance-shared`):
+RULE-NOTIF-023, XM-NOTIF-003. This section adds **RULE-NOTIF-024, XM-NOTIF-004, XM-NOTIF-005**. No endpoint,
+entity field, status, error code, permission or migration changes (the status set LOV-NOTIF-002 is unchanged: no
+`DEFERRED`).
+
+#### 5.1 Business rules — NEW
+| RULE-ID | Scope | Trigger | Statement | Source |
+|---|---|---|---|---|
+| RULE-NOTIF-024 | ENTITY-NOTIF-001 | a delivery attempt (`NotificationDeliveryProcessor.prepare`), the requeue job (`NotificationRequeueJob`), `TenantActivatedEvent` | The system shall not claim, attempt or re-dispatch a `QUEUED` row whose tenant is not ACTIVE (`TenantLookupApi.isActive(tenantId)`, XM-NOTIF-004): the attempt ends without touching the row (no claim, `ATTEMPTS` and `NEXT_ATTEMPT_AT` unchanged — the outcome `NOT_QUEUED`, "nothing was done") and the requeue job skips the tenant. The row keeps `QUEUED`; once the tenant is ACTIVE again it is delivered: on `TenantActivatedEvent` (XM-NOTIF-005) NOTIF re-dispatches that tenant's `QUEUED` rows that are not claimed (`NEXT_ATTEMPT_AT` null or past) and not pending on this node, and the requeue job (when enabled) picks any later stale one. A send already under way when the suspension commits is finished and recorded normally. This covers a dispatch made just before the suspension (its after-commit delivery finds the tenant suspended), a retry falling due during the suspension, and dispatches made inside a suspended tenant by system code. | TENANT REQ-TENANT-033; plan §5 C.1 |
+
+Decided by `NotificationLogDomain.isDeliverable(boolean tenantActive)` (a `QUEUED` row of an ACTIVE tenant) in
+`prepare`; the job's per-tenant skip reads the same fact (`TenantLookupApi.isActive`) before it loads any row.
+
+#### 5.2 Cross-module (A7) — NEW
+| XM-ID | Type | From | To | What |
+|---|---|---|---|---|
+| XM-NOTIF-004 | CROSSMODULE-READ | NOTIF | TENANT | `com.erp.tenant.crossmodule.TenantLookupApi.isActive(Long tenantId)` (TENANT XM-TENANT-001 CHANGED) — uncached, so a status change is seen by the next attempt |
+| XM-NOTIF-005 | EVENT-CONSUME | NOTIF | events (published by TENANT) | `com.erp.events.TenantActivatedEvent(tenantId, tenantCode, actor)` → RULE-NOTIF-024 re-dispatch |
+
+The listener is `com.erp.notif.service.NotificationTenantActivationListener`
+(`@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`) which submits the re-dispatch to the core event
+executor itself, as `NotificationDeliveryListener` does, so a rejected task is logged at WARN (the held rows stay
+`QUEUED` for the requeue job or a later activation) instead of failing silently (review round 1); the task reads inside
+`TenantContext.callAs(event.getTenantId())` and publishes one `NotificationRequestedEvent` per row outside a
+transaction, as the requeue job does. NOTIF registers no listener for
+`TenantSuspendedEvent`: the claim-time check is the mechanism (a status read per attempt is enough; no state to keep).
+`NotificationRequeueJob` gains a constructor taking `TenantLookupApi` (used by `ErpCoreNotifAutoConfiguration`); the
+existing constructors keep working without the job-level skip (the claim still refuses).
+
+#### 5.3 Plan delta
+| Kind | Note |
+|---|---|
+| CHANGED (plan) | The plan: "the job simply does not claim them while suspended" — implemented at the claim (`prepare`), which every delivery path goes through (the in-process listener and the requeue job), plus the job's per-tenant skip. |
+| NEW (decision) | Re-dispatch on `TenantActivatedEvent`: the requeue job is off by default (`erp.core.notif.requeue.enabled=false`), so without it a held row would wait for an application that enables the job. |

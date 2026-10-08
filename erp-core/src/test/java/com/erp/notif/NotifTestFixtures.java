@@ -123,6 +123,11 @@ final class NotifTestFixtures {
         return send(authorized(json(path), token).method("PATCH", HttpRequest.BodyPublishers.noBody()));
     }
 
+    /** tenant-maturity C12 — a PATCH with a JSON body (a tenant's status). */
+    HttpResponse<String> patch(String token, String path, String jsonBody) {
+        return send(authorized(json(path), token).method("PATCH", body(jsonBody)));
+    }
+
     static String errorCode(HttpResponse<String> response) {
         return JsonPath.read(response.body(), "$.error.code");
     }

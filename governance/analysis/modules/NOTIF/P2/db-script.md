@@ -265,3 +265,8 @@ change per file; numbers re-derived at creation time). No DDL.
 Pattern: `INSERT … SELECT … FROM CORE_TENANT t CROSS JOIN (VALUES …) WHERE NOT EXISTS (…)` like V11 §6, plus the
 `NOT EXISTS` guard against `UQ_NOTIF_TEMPLATE_CODE (TENANT_ID, TEMPLATE_CODE)` (an application may already
 have created a template of that code). Name widths: `NAME_EN` ≤ 100, `SUBJECT_*` ≤ 300.
+
+Package C12 (tenant-maturity plan §5 C.1): **no schema change, no migration.** `NOTIF_LOG` rows of a suspended tenant keep
+`NOTIFICATION_STATUS_ID = 'QUEUED'` with `ATTEMPTS` and `NEXT_ATTEMPT_AT` untouched; the delivery claim and the requeue job
+skip them by the tenant's status (`TenantLookupApi.isActive`, RULE-NOTIF-024 in `../P1/srs.md` 1.3.0 §5). The status
+set (`CHK` / LOV-NOTIF-002) is unchanged.

@@ -207,3 +207,30 @@ RESOLVED DECISIONS — delta
 | # | Question | Answer | Decided | ADR |
 |---|---|---|---|---|
 | 5 | Who sets a tenant's logo | the platform administrator from `PLATFORM_TENANTS` | decision D5 (2026-10-07) | ADR-TENANT-005 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C12 — tenant lifecycle events and the per-tenant token cut-off (plan §5 C.1, C.2)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-014. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C12 block.
+
+POL-TENANT-015 — إعادة التفعيل والإبطال يقطعان الرموز السابقة / Re-activation and revocation cut off earlier tokens
+  Statement (ar) : يجب على النظام ألا يقبل رمز دخول صدر قبل آخر إعادة تفعيل للمستأجر أو آخر إبطال صريح لرموزه من مشغّل المنصة؛ يحفظ النظام حدًّا زمنيًا واحدًا لكل مستأجر، وينهي الإبطال جلسات المستأجر، ولا تُبطَل رموز مستأجر المنصة.
+  Statement (en) : The system shall refuse an access token issued before the tenant's last re-activation or the platform operator's last explicit revocation of its tokens; one cut-off instant is kept per tenant, a revocation also ends the tenant's sessions, and the PLATFORM tenant's tokens are never revoked this way.
+  Pattern   : ubiquitous
+  Trigger   : every authenticated request; `PATCH /{id}/status` to ACTIVE; `POST /api/v1/platform/tenants/{id}/revoke-tokens`
+  Rationale : tokens issued before a suspension must not come back to life when the tenant is re-activated, and a compromised tenant needs a "sign everyone out" without being suspended; a platform-wide denylist is avoided (ADR-TENANT-002)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.2; RULE-TENANT-023, -024; REQ-TENANT-034, -035; ADR-TENANT-002
+  Status    : CONFIRMED (erp-core 1.3.0, package C12)
+
+CHANGED policies
+| Policy | Delta | Source |
+|---|---|---|
+| POL-TENANT-002 | still two statuses (no `ARCHIVED`, level 2); a suspension now also **ends every open session** of the tenant (SEC, on `TenantSuspendedEvent`) and **holds its queued notifications** (NOTIF claims none until the tenant is ACTIVE again, then sends them); a re-activation cuts off every token issued before it (POL-TENANT-015) | REQ-TENANT-033, -034 |
+| POL-TENANT-006 | unchanged: revoke-tokens is platform-only like every tenant operation (`PLATFORM_TENANT_MANAGE`) | REQ-TENANT-035 |
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 2 | Token cut-off vs `jti` denylist | per-tenant cut-off `TOKENS_INVALID_BEFORE`, compared in whole seconds (activation: a token of the activation's own second is served; revoke-tokens: the cut-off is the next whole second, so the revoke's own second is refused); PLATFORM not revocable | plan §9 (recommendation), package C12 | ADR-TENANT-002 |

@@ -20,4 +20,10 @@ public interface SecAdminRecoveryApi {
      * is not a STAFF user holding an active super role answers {@code SEC-404-USER}.
      */
     int resetSuperUserPassword(String username, String rawPassword, Boolean requireChangeAtNextLogin);
+
+    /**
+     * tenant-maturity C12 (REQ-SEC-093) — ends every open session of the current tenant, staff and customer, records one
+     * {@code SESSION_TERMINATED} row each and answers how many (TENANT's revoke-tokens). Joins the caller's transaction.
+     */
+    int terminateAllSessions();
 }

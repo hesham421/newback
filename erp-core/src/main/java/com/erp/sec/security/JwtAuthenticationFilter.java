@@ -8,13 +8,16 @@ import com.erp.sec.repository.UserRepository;
 import com.erp.sec.service.MenuService;
 import com.erp.tenant.TenantConstants;
 import com.erp.tenant.TenantContext;
+import com.erp.tenant.TenantTokenFacts;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -38,6 +41,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * cleared in a {@code finally} after the chain. A token without {@code tid}, or one whose user or
  * session is rejected, leaves no tenant behind, so the tenant module's {@code TenantResolutionFilter}
  * (next in the chain) can fall back to the {@code X-Tenant-Code} header.
+ *
+ * <p>tenant-maturity C12 (RULE-TENANT-023): every signature-valid token with a {@code tid} leaves its
+ * {@link TenantTokenFacts} (tenant, {@code iat}) as a request attribute, whether or not it authenticates, so the tenant
+ * filter can refuse a token issued before its tenant's cut-off — also one whose session was ended.
  *
  * <p>erp-core 1.2.0: the filter starts every request with no tenant. A value already present on the
  * thread (a leak from earlier work on a reused worker thread) is logged and cleared before anything
@@ -94,9 +101,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String header = request.getHeader(HttpHeaders.AUTHORIZATION);
             if (header != null && header.startsWith(BEARER_PREFIX)
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
-                boolean authenticated = tokenValidator.parse(header.substring(BEARER_PREFIX.length()))
-                    .map(this::authenticate)
-                    .orElse(false);
+                Optional<Claims> claims = tokenValidator.parse(header.substring(BEARER_PREFIX.length()));
+                claims.ifPresent(valid -> exposeTokenFacts(request, valid));
+                boolean authenticated = claims.map(this::authenticate).orElse(false);
                 if (!authenticated) {
                     // no tenant behind: TenantResolutionFilter may fall back to X-Tenant-Code
                     TenantContext.clear();
@@ -169,6 +176,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             new UsernamePasswordAuthenticationToken(username, null, authorities);
         authentication.setDetails(details);
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /** tenant-maturity C12 — the token's tenant and {@code iat} for the tenant filter (nothing without a {@code tid}). */
+    private static void exposeTokenFacts(HttpServletRequest request, Claims claims) {
+        Long tenantId = tenantIdOf(claims);
+        if (tenantId != null) {
+            Date issuedAt = claims.getIssuedAt();
+            request.setAttribute(TenantTokenFacts.REQUEST_ATTRIBUTE,
+                new TenantTokenFacts(tenantId, issuedAt == null ? null : issuedAt.toInstant()));
+        }
     }
 
     /** The token's {@code tid} claim (a JSON number), or {@code null} when absent or malformed. */
