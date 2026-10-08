@@ -4,7 +4,7 @@
   "target_version": "1.3.0",
   "scope": "backend packages A,G,D,C3,B,E,C12,C4,C6,C5 + closure; frontend package F is out of this run",
   "max_parallel": 3,
-  "current_step": "Z",
+  "current_step": null,
   "steps": [
     {
       "id": "A",
@@ -258,16 +258,19 @@
       ],
       "wave": "8",
       "migrations": [],
-      "status": "REVIEW",
+      "status": "COMPLETE",
       "branch": "tm/z-closure",
-      "worktree": ".worktrees/tm-z",
+      "worktree": null,
       "attempts": 1,
       "deviations": 5,
       "implementer_agent": "a2ae0c0d721c960fe",
       "reviewer_agent": null,
-      "review": null,
+      "review": {
+        "verdict": "PASS",
+        "round": 1
+      },
       "report": "docs/steps/tm-z-report.md",
-      "merged_commit": null
+      "merged_commit": "45b5de9"
     }
   ],
   "halts": [],
@@ -631,6 +634,13 @@
       "step": "Z",
       "event": "REVIEW",
       "note": "closure COMPLETE 143affd: 226/226 HTTP (all profiles), mvn 669/10, docs consistency, frontend handover, plan report; recommendation MINOR 1.3.0; review dispatched"
+    },
+    {
+      "at": "2026-10-08T08:01:51Z",
+      "step": "Z",
+      "event": "COMPLETE",
+      "note": "merged 45b5de9; verify 669/10; HTTP 226/226 all profiles; plan COMPLETE (backend); release recommendation MINOR 1.3.0 by recorded exception — awaiting owner"
     }
-  ]
+  ],
+  "status": "COMPLETE"
 }
