@@ -44,6 +44,7 @@ import time
 import traceback
 import urllib.parse
 import uuid
+import zipfile
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -144,6 +145,7 @@ class Resp:
             t = repr(self.body[:n])
         t = re.sub(r'"accessToken"\s*:\s*"[^"]+"', '"accessToken":"<redacted>"', t)
         t = re.sub(r'"token"\s*:\s*"[^"]+"', '"token":"<redacted>"', t)
+        t = re.sub(r'"downloadToken"\s*:\s*"[^"]+"', '"downloadToken":"<redacted>"', t)
         return t[:n]
 
 
@@ -3209,6 +3211,115 @@ def test_tenant_053_idempotency_key_invalid_failure_not_stored_header_absent(ctx
     st(idem_create(ctx, None, body), 409, "TENANT_CODE_DUPLICATE", what="without the header: the 1.2.0 behaviour")
 
 
+# =============================================================================================
+# Phase 11f — tenant data export (TM-C5), tenant A and PLATFORM, before TENANT-046 (no public-branding call)
+# =============================================================================================
+C5_FILES = {"AUDIT/CORE_AUDIT_EVENT.csv", "CU/CU_APP_CONFIGURATION.csv", "FILE/FILE_CATEGORY.csv",
+            "FILE/FILE_DOCUMENT.csv", "MDL/MDL_LOOKUP_TYPE.csv", "MDL/MDL_LOOKUP_VALUE.csv",
+            "NOTIF/NOTIF_TEMPLATE.csv", "NOTIF/NOTIF_CHANNEL_CONFIG.csv", "NOTIF/NOTIF_LOG.csv", "NOTIF/NOTIF_INBOX.csv",
+            "SEC/SEC_USER.csv", "SEC/SEC_ROLE.csv", "SEC/SEC_USER_ROLE.csv", "SEC/SEC_ROLE_MODULE_GRANT.csv",
+            "SEC/SEC_ROLE_SCREEN_GRANT.csv", "SEC/SEC_ROLE_ACTION_GRANT.csv", "SEC/SEC_ACTIVE_SESSION.csv",
+            "SEC/SEC_AUDIT_LOG.csv", "SEC/SEC_SIGNUP_REQUEST.csv", "SEQUENCE/CORE_NUMBER_SERIES.csv",
+            "TENANT/CORE_TENANT.csv"}
+
+
+def export_tenant(tid, token):
+    return api("POST", f"/api/v1/platform/tenants/{tid}/export", t=token)
+
+
+def csv_records(raw):
+    """RFC 4180 records of one exported CSV (after its byte-order mark)."""
+    return list(csv.reader(io.StringIO(raw.decode("utf-8-sig"), newline="")))
+
+
+@tc("TC-CORE-TENANT-054")
+def test_tenant_054_export_tenant_a(ctx):
+    r = export_tenant(ctx.A_ID, ctx.T_PLAT)
+    st(r, 200, what="export tenant A")
+    d = r.data or {}
+    eq(sorted(d), ["downloadToken", "downloadTokenExpiresAt", "fileId", "fileName", "rowCount", "sizeBytes",
+                   "tenantCode", "tenantId"], "response fields")
+    eq((d.get("tenantId"), d.get("tenantCode")), (ctx.A_ID, ctx.TA), "the exported tenant")
+    check(re.fullmatch(rf"tenant-export-{ctx.TA}-\d{{8}}T\d{{6}}Z\.zip", d.get("fileName") or "") is not None,
+          "file name", f"tenant-export-{ctx.TA}-<yyyyMMddTHHmmssZ>.zip", d.get("fileName"))
+    ctx.EXPORT_FILE_ID = d.get("fileId")
+    meta = api("GET", f"/api/v1/files/{d.get('fileId')}", t=ctx.T_PLAT)
+    st(meta, 200, what="the archive is a document of PLATFORM")
+    m = meta.data or {}
+    eq((m.get("ownerType"), m.get("ownerId"), m.get("moduleCode"), m.get("visibility"), m.get("contentType")),
+       ("CORE_TENANT", ctx.A_ID, "TENANT", "PRIVATE", "application/zip"), "owner, visibility, type")
+    eq(m.get("publicUrl"), None, "no public URL")
+    st(api("GET", f"/api/v1/files/{d.get('fileId')}", t=ctx.T_A), 404, "FILE_DOCUMENT_NOT_FOUND",
+       what="not a document of tenant A")
+    path = "/api/v1/files/download?token=" + urllib.parse.quote(d.get("downloadToken") or "", safe="")
+    z = api("GET", path, t=ctx.T_PLAT)
+    check(z.status == 200 and z.headers.get("content-type", "").startswith("application/zip"), "download once",
+          "200 application/zip", f"{z.status} {z.headers.get('content-type')}")
+    eq(len(z.body or b""), d.get("sizeBytes"), "size")
+    st(api("GET", path, t=ctx.T_PLAT), 401, "FILE_ACCESS_TOKEN_INVALID", what="the token is single-use")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(z.body))
+    except zipfile.BadZipFile as e:
+        check(False, "a ZIP archive", "zip", repr(e))
+        return
+    names = set(archive.namelist())
+    eq(names, C5_FILES | {"manifest.json"}, "21 CSV files and manifest.json")
+    manifest = json.loads(archive.read("manifest.json"))
+    eq((manifest.get("format"), manifest.get("tenantCode"), manifest.get("rowCount")),
+       ("erp-tenant-export", ctx.TA, d.get("rowCount")), "manifest")
+    counted, bom = 0, True
+    for f in manifest.get("files", []):
+        raw = archive.read(f["path"])
+        bom = bom and raw.startswith(b"\xef\xbb\xbf")
+        records = csv_records(raw)
+        check(len(records) - 1 == f["rows"], f"{f['path']}: records = manifest rows", f["rows"], len(records) - 1)
+        counted += f["rows"]
+    check(bom, "every CSV starts with a UTF-8 byte-order mark", "BOM", bom)
+    eq(counted, d.get("rowCount"), "rowCount = sum of the files")
+    header = {p: csv_records(archive.read(p))[0] for p in C5_FILES}
+    check("PASSWORD_HASH" not in header["SEC/SEC_USER.csv"] and "TOKEN_REF" not in header["SEC/SEC_ACTIVE_SESSION.csv"]
+          and not {"FILE_CONTENT", "STORAGE_REF", "PUBLIC_SLUG"} & set(header["FILE/FILE_DOCUMENT.csv"])
+          and "CONFIG_JSON" not in header["NOTIF/NOTIF_CHANNEL_CONFIG.csv"]
+          and "VARIABLES_JSON" not in header["NOTIF/NOTIF_LOG.csv"]
+          and "TOKENS_INVALID_BEFORE" not in header["TENANT/CORE_TENANT.csv"]
+          and not any(c in ("TENANT_ID", "VERSION") for h in header.values() for c in h), "no secret column",
+          "excluded", header["SEC/SEC_USER.csv"])
+    text = b"".join(archive.read(n) for n in names).decode("utf-8", errors="replace")
+    for needle in ("$2a$", "$2b$", "$2y$", ctx.TB, ctx.TC):
+        check(needle not in text, f"the archive holds no {needle!r}", "absent", "present" if needle in text else "absent")
+    users = [rec[1] for rec in csv_records(archive.read("SEC/SEC_USER.csv"))[1:]]
+    check("ta-admin" in users, "tenant A's administrator is exported", "ta-admin", users[:5])
+    eq([rec[1] for rec in csv_records(archive.read("TENANT/CORE_TENANT.csv"))[1:]], [ctx.TA], "one CORE_TENANT row")
+
+
+@tc("TC-CORE-TENANT-055")
+def test_tenant_055_export_audited(ctx):
+    for who, token in (("PLATFORM", ctx.T_PLAT), ("A", ctx.T_A)):
+        a = audit(token, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=ctx.A_ID, size=50)
+        st(a, 200, what=f"{who}'s audit log")
+        rows = a.content
+        eq([(x.get("actor"), x.get("actorRealm"), x.get("entityType"), x.get("entityId")) for x in rows],
+           [("admin", "STAFF", "CORE_TENANT", str(ctx.A_ID))], f"{who}: one TENANT_EXPORTED row")
+        summary = (rows[0].get("summaryEn") or "") if rows else ""
+        check(ctx.TA in summary and f"document {ctx.EXPORT_FILE_ID}" in summary,
+              f"{who}: the summary names the tenant and the document", f"{ctx.TA}, document {ctx.EXPORT_FILE_ID}",
+              summary)
+
+
+@tc("TC-CORE-TENANT-056")
+def test_tenant_056_export_refusals_and_platform(ctx):
+    st(export_tenant(ctx.A_ID, ctx.T_A), 403, "SEC-403-FORBIDDEN", what="A's own administrator")
+    st(export_tenant(ctx.A_ID, None), 401, "SEC-401-INVALID-CREDENTIALS", what="anonymous")
+    st(export_tenant(999999999, ctx.T_PLAT), 404, "TENANT_NOT_FOUND", what="unknown tenant")
+    p = export_tenant(1, ctx.T_PLAT)
+    st(p, 200, what="the PLATFORM tenant is exportable")
+    eq(((p.data or {}).get("tenantId"), (p.data or {}).get("tenantCode")), (1, "PLATFORM"), "PLATFORM's export")
+    check(((p.data or {}).get("rowCount") or 0) > 0, "PLATFORM has rows", "> 0", (p.data or {}).get("rowCount"))
+    a = audit(ctx.T_PLAT, action="TENANT_EXPORTED", entityType="CORE_TENANT", entityId=1, size=50)
+    st(a, 200, what="PLATFORM's audit log")
+    eq(len(a.content), 1, "one TENANT_EXPORTED row when the tenant is PLATFORM")
+
+
 @tc("TC-CORE-TENANT-046")
 def test_tenant_046_public_branding_rate_limit(ctx):
     # last case of the run that calls the public branding: its bucket (per client address) is spent here
@@ -3612,7 +3723,7 @@ ORDER = {
                   *rng("AUDIT", 1, 5), "AUDIT-007", "AUDIT-008", *rng("AUDIT", 10, 14), "AUDIT-016",
                   *rng("REPORT", 1, 11), "AUDIT-015", *rng("REPORT", 14, 17), "APP-001",
                   "TENANT-025", *rng("TENANT", 19, 24), *rng("TENANT", 27, 37),
-                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 53), "TENANT-046"),
+                  *rng("TENANT", 38, 45), "PLATFORM-005", *rng("TENANT", 47, 56), "TENANT-046"),
     "P-MAIL": ids(*rng("SEC", 21, 27), "NOTIF-003", "NOTIF-012", "NOTIF-014", "NOTIF-015", "SEC-034", "SEC-032",
                   "FILE-022", "AUDIT-006", "AUDIT-009", "REPORT-012", "PLATFORM-004", "TENANT-026"),
     "P-MAIL-DOWN": ids("NOTIF-006"),
