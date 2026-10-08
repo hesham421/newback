@@ -100,3 +100,17 @@ NEW `PERM_PLATFORM_SETTINGS_VIEW`, `PLATFORM_SETTINGS_MANAGE`.
 |---|---|---|
 | HARD-FK + context | `CORE_TENANT`, `TenantContext` | tenant |
 | SPI | `PermissionContributor` | SEC |
+
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export contributor
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-cu.md` → "Implementation Addendum — erp-core 1.3.0".
+
+### DEPENDENCIES — delta
+| Type | Target | Module |
+|---|---|---|
+| SPI (implemented) | `TenantExportContributor` (XM-TENANT-004) — `CuTenantExportContributor`: the tenant's `CU_APP_CONFIGURATION` overrides | tenant |
+No id minted; endpoints, rules, error codes, permissions, schema unchanged.

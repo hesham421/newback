@@ -34,7 +34,8 @@ public interface FileDocumentRepository
         + "f.fileCategoryFk.id AS fileCategoryId, f.createdAt AS createdAt, f.createdBy AS createdBy, "
         + "f.updatedAt AS updatedAt, f.updatedBy AS updatedBy, f.storageProvider AS storageProvider, "
         + "f.storageRef AS storageRef, f.visibility AS visibility, f.publicSlug AS publicSlug, "
-        + "f.contentHash AS contentHash, c.allowPublic AS categoryAllowPublic "
+        + "f.contentHash AS contentHash, c.allowPublic AS categoryAllowPublic, "
+        + "f.requiredAuthority AS requiredAuthority "
         + "FROM FileDocument f LEFT JOIN f.fileCategoryFk c";
 
     /** Alias of the content column in {@link #findContentTupleById}. */
@@ -46,29 +47,33 @@ public interface FileDocumentRepository
 
     /**
      * QR-FILE-0005 — owner list (bytes excluded, DRV-003). ownerId/ownerType/moduleCode EXACT;
-     * fileTypeId/fileStatusId optional EXACT (null param = no filter). Paged, no join.
+     * fileTypeId/fileStatusId optional EXACT (null param = no filter). Paged. RULE-FILE-012: a restricted
+     * document is listed only when {@code authorities} (the caller's) holds its required authority.
      */
     @Query(value = METADATA_SELECT + " WHERE f.ownerId = :ownerId AND f.ownerType = :ownerType "
         + "AND f.moduleCode = :moduleCode "
         + "AND (:fileTypeId IS NULL OR f.fileTypeId = :fileTypeId) "
-        + "AND (:fileStatusId IS NULL OR f.fileStatusId = :fileStatusId)",
+        + "AND (:fileStatusId IS NULL OR f.fileStatusId = :fileStatusId) "
+        + "AND (f.requiredAuthority IS NULL OR f.requiredAuthority IN :authorities)",
         countQuery = "SELECT COUNT(f) FROM FileDocument f WHERE f.ownerId = :ownerId "
         + "AND f.ownerType = :ownerType AND f.moduleCode = :moduleCode "
         + "AND (:fileTypeId IS NULL OR f.fileTypeId = :fileTypeId) "
-        + "AND (:fileStatusId IS NULL OR f.fileStatusId = :fileStatusId)")
+        + "AND (:fileStatusId IS NULL OR f.fileStatusId = :fileStatusId) "
+        + "AND (f.requiredAuthority IS NULL OR f.requiredAuthority IN :authorities)")
     Page<Tuple> findMetadataTupleByOwner(@Param("ownerId") Long ownerId,
                                          @Param("ownerType") String ownerType,
                                          @Param("moduleCode") String moduleCode,
                                          @Param("fileTypeId") String fileTypeId,
                                          @Param("fileStatusId") String fileStatusId,
+                                         @Param("authorities") Collection<String> authorities,
                                          Pageable pageable);
 
     /** tenant-maturity D.4 — metadata of several documents at once ({@code FileDocumentLookupApi.publicUrls}). */
     @Query(METADATA_SELECT + " WHERE f.id IN :ids")
     List<Tuple> findMetadataTuplesByIdIn(@Param("ids") Collection<Long> ids);
 
-    /** Existence check for {@code FileDocumentLookupApi} — no content or metadata loaded. */
-    boolean existsByIdAndFileStatusIdNot(Long id, String fileStatusId);
+    /** Existence check for {@code FileDocumentLookupApi} — no content or metadata loaded; never a restricted document. */
+    boolean existsByIdAndFileStatusIdNotAndRequiredAuthorityIsNull(Long id, String fileStatusId);
 
     /** tenant-maturity B — the current tenant's documents whose status is not {@code fileStatusId} (tenant usage). */
     long countByFileStatusIdNot(String fileStatusId);

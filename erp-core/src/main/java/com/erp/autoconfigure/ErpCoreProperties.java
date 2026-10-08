@@ -39,6 +39,7 @@ public class ErpCoreProperties {
 
     private final Frontend frontend = new Frontend();
 
+    @Valid
     private final Tenant tenant = new Tenant();
 
     // erp-core step 08 — event bus executor and NOTIF asynchronous delivery
@@ -300,6 +301,27 @@ public class ErpCoreProperties {
 
         /** tenant-maturity E (RULE-TENANT-022): the public branding's requests per client address (bucket4j). */
         private final PublicBrandingRateLimit publicBrandingRateLimit = new PublicBrandingRateLimit();
+
+        /** tenant-maturity C5 (RULE-TENANT-027): {@code erp.core.tenant.export.*}. */
+        @Valid
+        private final Export export = new Export();
+    }
+
+    /**
+     * tenant-maturity C5 — {@code erp.core.tenant.export.*}: {@code POST /api/v1/platform/tenants/{id}/export} refuses a
+     * tenant with more rows than {@link #maxRows} (all files together) with 422 {@code TENANT_EXPORT_TOO_LARGE}.
+     */
+    @Getter
+    @Setter
+    public static class Export {
+
+        /** Most rows one tenant export may contain; read on every export. */
+        @Positive
+        private long maxRows = 200_000;
+
+        /** Review round 1 (RULE-TENANT-028): exports running at once on a node, all tenants; one more is 429 {@code TENANT_EXPORT_BUSY}. */
+        @Positive
+        private int maxConcurrent = 2;
     }
 
     /**

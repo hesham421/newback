@@ -84,3 +84,6 @@ XM ids are assigned here.
 | Type | Target Table | Target Module | Note |
 |---|---|---|---|
 | HARD-FK | CORE_TENANT | tenant (no analysis folder) | every `TENANT_ID` |
+
+Package C5 review round 1 — COLUMNS delta: `REQUIRED_AUTHORITY` · VARCHAR(100) NULL · FILE_DOCUMENT ·
+`V22__file_document_required_authority.sql` (RULE-FILE-012; detail in `db-script.md` 1.3.0 package C5).

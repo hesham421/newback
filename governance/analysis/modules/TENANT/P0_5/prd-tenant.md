@@ -304,3 +304,21 @@ stored answer commits with the tenant in step 4's transaction; nothing else chan
 
 APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the story change is IMPLEMENTED
 with package C4 and checked against the code in its check commit.
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+NEW story
+| Kind | US | Title | Story | Actor | Traces (POL) | Source |
+|---|---|---|---|---|---|---|
+| NEW | US-TENANT-016 | تصدير بيانات مستأجر / Export a tenant's data | As a platform operator, I need one downloadable archive of a tenant's data written by every module, so that the organisation can take its data with it — without passwords, tokens, credentials or file contents. | platform operator | POL-TENANT-017 | plan §5 C.5 (`/{id}/export`, `TenantExportContributor`); REQ-TENANT-037 |
+
+TRACEABILITY — delta
+| US | Traces (POL) | Source |
+|---|---|---|
+| US-TENANT-016 (NEW) | POL-TENANT-017 | REQ-TENANT-037 |
+Every policy POL-TENANT-001 … 017 appears in at least one row (017 → US-016).
+
+APPROVAL — delta: scope APPROVED by the platform owner on 2026-10-07 (plan header); the story is IMPLEMENTED with
+package C5 and checked against the code in its check commit.

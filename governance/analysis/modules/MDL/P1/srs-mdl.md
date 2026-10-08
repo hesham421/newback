@@ -661,3 +661,17 @@ No new MDL code. Common additions visible on MDL endpoints: `CONCURRENT_MODIFICA
 ### 6. Dependencies (A8) — deltas
 tenant (`CORE_TENANT` FK, provisioning SPI); SEC permission SPI (`MdlPermissions`); audit (`@Audited`);
 consumer: report module (LOOKUP parameters). — DEVIATIONS [05], [06], [10], [11]
+
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — `MdlTenantExportContributor` implements TENANT's export SPI (XM-TENANT-004) for `POST /api/v1/platform/tenants/{id}/export` (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No MDL id is minted (the export rules are TENANT's RULE-TENANT-027 / -028; the SPI is TENANT's XM-TENANT-004). No
+endpoint, entity field, rule, error code, permission or migration of MDL changes.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.mdl.tenant.MdlTenantExportContributor` (`moduleCode` `MDL`) | writes `MDL/MDL_LOOKUP_TYPE` and `MDL/MDL_LOOKUP_VALUE` of the exported tenant (every column but `TENANT_ID` / `VERSION`; the value file adds `LOOKUP_TYPE_KEY`, the type's `KEY` joined within the same tenant) with plain SQL naming `TENANT_ID` on both tables (RULE-TENANT-011), ordered by the primary key | `../../TENANT/P1/srs-tenant.md` 1.3.0 X5, X7 |
+| NEW (dependency) | tenant | + SPI implemented: `com.erp.tenant.TenantExportContributor` (root package) | TENANT XM-TENANT-004 |

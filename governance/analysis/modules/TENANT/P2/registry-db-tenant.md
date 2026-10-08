@@ -191,3 +191,19 @@ Last DBF: DBF-TENANT-045 · Last XM: XM-TENANT-003
 
 Event
 "P2 1.3.0 (package C4): TENANT — 1 own table + 1 registered common table, 2 sequences, 45 DBF (22 own + 23 discriminator), 3 XM"
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (no schema change)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; detail in `db-script-tenant.md` → "Implementation Addendum — erp-core 1.3.0" (package C5).
+Tables, DBF ids, constraints, indexes, sequences — delta: none.
+
+XM index — delta
+| Kind | XM id | Kind | Surface | Status |
+|---|---|---|---|---|
+| NEW | XM-TENANT-004 | SPI (exposed) | `TenantExportContributor` (export of a tenant's rows, module by module) | IMPLEMENTED (1.3.0) |
+Last DBF: DBF-TENANT-045 · Last XM: XM-TENANT-004
+
+Event
+"P2 1.3.0 (package C5): TENANT — no schema change, 45 DBF, 4 XM"

@@ -174,3 +174,21 @@ Package E (tenant-maturity plan §7) — registry delta; full text in `srs.md` 1
 | CHANGED | XM-FILE-002 | consumer TENANT implemented (logos, `CORE_TENANT` / tenant id / `TENANT`, inside `TenantContext.callAs(tenantId)`) |
 No entity, API, permission, error-code or migration delta. Last sequence per atom unchanged (RULE: 010 · XM: 002 ·
 API: 008 · ADR: 008; next free FILE ADR 009).
+
+Package C5 (tenant-maturity plan §5 C.5) — registry delta; full text in `srs.md` 1.3.0 §9.
+| Kind | Id | Delta |
+|---|---|---|
+| NEW | XM-FILE-003 | `FilePrivateStoreApi.storePrivateFile(PrivateFileStoreRequest)` → `StoredPrivateFile`, `issueDownloadToken(Long)` → `DownloadGrant` (current tenant; `isAuthenticated()`, the consumer's permission) — consumer TENANT (export archive) |
+| NEW | RULE-FILE-011 | a privately stored file: current tenant, no category, PRIVATE, ACTIVE, type from the declared content type, SHA-256 hash, no upload limits (bounded by the producer); token = the upload's single-use token bound to the issuing username |
+| NEW | — | `com.erp.file.tenant.FileTenantExportContributor` implements TENANT XM-TENANT-004: `FILE_CATEGORY`, `FILE_DOCUMENT` metadata (never `FILE_CONTENT`, `STORAGE_REF`, `PUBLIC_SLUG`) |
+No entity, API, permission, error-code or migration delta. Last sequence per atom (highest ever issued): RULE: 011 ·
+XM: 003 · API: 008 · ADR: 008 (next free FILE ADR 009).
+
+Package C5 review round 1 — registry delta; full text in `srs.md` 1.3.0 §9.5.
+| Kind | Id | Delta |
+|---|---|---|
+| NEW | RULE-FILE-012 | restricted documents (`REQUIRED_AUTHORITY`): hidden from the owner list, 404 on metadata / token / download / visibility / archive-delete without the authority; deleting one removes its bytes (tombstone kept) |
+| CHANGED | XM-FILE-003 | `PrivateFileStoreRequest` + `requiredAuthority`; `issueDownloadToken` checks it |
+| CHANGED | XM-FILE-001 | `isAvailable` false for a restricted document |
+| CHANGED | ENTITY-FILE-001 | `@Audited(ignore = {"storageRef", "publicSlug"})`; + field `requiredAuthority` (`V22__file_document_required_authority.sql`) |
+Last sequence per atom (highest ever issued): RULE: 012 · XM: 003 · API: 008 · ADR: 008 (next free FILE ADR 009).

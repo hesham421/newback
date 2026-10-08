@@ -5,6 +5,7 @@ import com.erp.common.domain.status.Status;
 import com.erp.common.exception.LocalizedException;
 import com.erp.file.entity.FileDocument;
 import com.erp.file.exception.FileErrorCodes;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -37,6 +38,21 @@ public final class FileDocumentDomain {
     }
 
     /** Reconstructs a Domain view over a persisted entity — no validation. */
+    /**
+     * RULE-FILE-012 (tenant-maturity C5) — a restricted document ({@code requiredAuthority} set) exists only for a caller
+     * holding that authority; anyone else gets 404 {@code FILE_DOCUMENT_NOT_FOUND}, so its existence is not revealed.
+     */
+    public static void assertVisibleTo(Long documentId, String requiredAuthority, Collection<String> callerAuthorities) {
+        if (requiredAuthority != null && !callerAuthorities.contains(requiredAuthority)) {
+            throw new LocalizedException(Status.NOT_FOUND, FileErrorCodes.FILE_DOCUMENT_NOT_FOUND, documentId);
+        }
+    }
+
+    /** RULE-FILE-012 — deleting a restricted document removes its content (a tombstone row stays); others keep it (RULE-FILE-006). */
+    public static boolean purgesContentOn(String requiredAuthority, String targetStatus) {
+        return requiredAuthority != null && STATUS_DELETED.equals(targetStatus);
+    }
+
     public static FileDocumentDomain from(FileDocument entity) {
         return new FileDocumentDomain(entity.getFileStatusId());
     }

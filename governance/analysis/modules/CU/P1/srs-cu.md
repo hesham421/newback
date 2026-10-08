@@ -205,3 +205,18 @@ Note (informational, predates erp-core): API-CU-002 is implemented as `POST /api
 ### 6. Dependencies (A7) — deltas
 "CU ROOT — no dependency" no longer holds strictly: `CORE_TENANT` FK and `TenantContext` (tenant),
 `CuPermissions` (SEC permission SPI), `@Audited` (audit). — V10; DEVIATIONS [06], [09], [10]
+
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — `CuTenantExportContributor` implements TENANT's export SPI (XM-TENANT-004) for `POST /api/v1/platform/tenants/{id}/export` (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+No CU id is minted (the export rules are TENANT's RULE-TENANT-027 / -028; the SPI is TENANT's XM-TENANT-004). No
+endpoint, entity field, rule, error code, permission or migration of CU changes.
+
+| Kind | Item | Delta | Source |
+|---|---|---|---|
+| NEW | `com.erp.cu.tenant.CuTenantExportContributor` (`moduleCode` `CU`) | writes `CU/CU_APP_CONFIGURATION`: the exported tenant's **overrides only** (`TENANT_ID = {id}`; the platform defaults with a NULL tenant are not the tenant's data), every column but `TENANT_ID` / `VERSION`, ordered by `ID`; plain SQL naming `TENANT_ID` (RULE-TENANT-011 — `AppConfiguration` is a global entity, so the predicate is the only scope) | `../../TENANT/P1/srs-tenant.md` 1.3.0 X5, X7 |
+| NEW (dependency) | tenant | + SPI implemented: `com.erp.tenant.TenantExportContributor` (root package) | TENANT XM-TENANT-004 |
+| NOTE | values | `CONFIG_VALUE` is exported as stored: CU has no secret marking (a tenant override is the tenant's own setting, readable by its administrators through `/api/v1/common/configurations`). An application that stores a secret as a CU setting should keep it out of CU (environment / vault) | TENANT RULE-TENANT-027 |

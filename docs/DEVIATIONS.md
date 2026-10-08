@@ -455,3 +455,60 @@ bind later steps.
   transaction and a timeout would need a new answer code; documented in ADR-TENANT-003 Consequences.
 - [TM-C4] Review round 1, ArchUnit → new rule: `com.erp.common..` depends on no module package and not on
   `com.erp.autoconfigure..` (`CoreLibraryRulesArchTest.common_depends_on_no_module_and_not_on_autoconfigure`).
+
+## [TM-C5] tenant-maturity C5 — tenant data export
+
+- [TM-C5] SPI (plan §5 C.5: `String moduleCode(); void export(TenantExport ctx)`) → + `long countRows(Long tenantId)`:
+  the plan asks to refuse more than N rows **before** exporting; each module counts its own rows (one `COUNT(*)` per
+  table naming `TENANT_ID`) in the same snapshot. The archive also caps the rows while writing (a contributor whose
+  count disagrees is refused the same way). `TenantExport.csv(fileName, columns, rows)` with a `Rows` sink
+  (`addRow(ResultSet)` usable as a `RowCallbackHandler`, `add(Object...)`) and `TenantExportJdbc` (fetch size 1 000,
+  one-table statement builders) are the SPI's helpers.
+- [TM-C5] Response (plan: `{ fileId, downloadToken }`) → `TenantExportResponse { tenantId, tenantCode, fileId, fileName,
+  sizeBytes, rowCount, downloadToken, downloadTokenExpiresAt }`, 200 `Status.SUCCESS` (additive fields; nothing of the
+  tenant changes).
+- [TM-C5] FILE cross-module API (plan: "existing FILE mechanism"; `FileImageStoreApi` stores PUBLIC images only) → NEW
+  `FilePrivateStoreApi` (XM-FILE-003, RULE-FILE-011): `storePrivateFile` (PRIVATE, uncategorised, type from the declared
+  content type, SHA-256, no upload limits — the producer bounds the file) and `issueDownloadToken` (API-FILE-002's token,
+  bound to the calling username, without `PERM_FILE_BROWSER_VIEW`: the consumer's permission covers it).
+  `FileService.tokenKey`, `safeFileName`, `deriveFileType` became package-visible (shared, not duplicated).
+- [TM-C5] Consistency (plan silent) → count and files in one read-only `REPEATABLE READ` transaction of the tenant (one
+  snapshot); the PLATFORM storage and audit in a second transaction; the token after it.
+- [TM-C5] Files and columns (plan: "never the password hash, never file bytes") → exact lists in `srs-tenant.md`
+  1.3.0 X7 (21 files); also excluded: token tables `SEC_PWD_RESET_TOKEN`, `SEC_CUSTOMER_VERIFY_TOKEN`,
+  `SEC_ACTIVE_SESSION.TOKEN_REF`, `NOTIF_CHANNEL_CONFIG.CONFIG_JSON`, `NOTIF_LOG.VARIABLES_JSON`,
+  `FILE_DOCUMENT.STORAGE_REF` / `PUBLIC_SLUG`, `CORE_TENANT.TOKENS_INVALID_BEFORE`, `CORE_IDEMPOTENCY_KEY`, platform-wide
+  rows (registries, CU defaults), every `TENANT_ID` / `VERSION`. Global registry references in the grant files are
+  resolved to codes. CU values are exported as stored (CU has no secret marking: documented in srs-cu.md 1.3.0).
+- [TM-C5] CSV (plan silent) → UTF-8 **with** BOM and the formula guard (the REPORT export precedent, step 11), NULL as
+  an empty field and an empty text as `""`; a binary column is refused by the writer.
+- [TM-C5] PLATFORM (plan silent) → exportable (its data is tenant data; one audit row). Suspended tenant → exportable.
+- [TM-C5] Guard (plan: in-memory) → per node; two nodes may export one tenant at once (two archives, harmless):
+  RULE-TENANT-028, ADR-TENANT-006. Not wrapped in C4's `IdempotentResponses` (its work commits in several
+  transactions, ADR-TENANT-003 Consequences).
+- [TM-C5] Archives are kept until a platform operator deletes them (no retention job in v1); FILE's upload limits do not
+  apply to them (the row limit bounds them); the `DB` storage provider holds one archive in memory while storing it.
+- [TM-C5] HTTP suite: the row limit (422) and the in-progress guard (409) are JUnit-only (the running app keeps the
+  default limit; a held export needs the test to take the slot) — `docs/test-api/core-test-plan.md` §9.
+- [TM-C5] No migration (the plan reserved none); no new permission, page code or screen (D5: `PLATFORM_TENANTS`).
+- [TM-C5] Review round 1 — archive access (the archive was an ordinary PRIVATE document: any PLATFORM user holding
+  `PERM_FILE_BROWSER_VIEW` could list, re-token and download it) → **restricted documents**: NEW nullable
+  `FILE_DOCUMENT.REQUIRED_AUTHORITY VARCHAR(100)` (`V22__file_document_required_authority.sql`, the reserved number),
+  set by the private store from `PrivateFileStoreRequest.requiredAuthority` (the export: `PLATFORM_TENANT_MANAGE`); FILE's
+  owner list filters such documents and metadata / access token / download / visibility / archive / delete answer **404**
+  `FILE_DOCUMENT_NOT_FOUND` (not 403: existence not revealed) to a caller without the authority; `isAvailable` is false for
+  them (FILE RULE-FILE-012). Alternative (TENANT-only re-download and delete endpoints, archive outside the FILE API)
+  rejected in ADR-TENANT-006 (duplicated FILE paths; the column protects every FILE endpoint and any producer).
+- [TM-C5] Review round 1 — RULE-FILE-006 (soft delete keeps the bytes) → except for a restricted document: its delete removes
+  the content (DB in the transaction, LOCAL / S3 after the commit) and keeps a `DELETED` tombstone. A retention purge
+  (`erp.core.tenant.export.retention`, the `AuditRetentionJob` pattern) is a **follow-up**, not done in 1.3.0.
+- [TM-C5] Review round 1 — `FileDocument` `@Audited` → `ignore = {"storageRef", "publicSlug"}`; the AUDIT contributor removes
+  both fields from older `FILE_DOCUMENT` rows' `CHANGES` when exporting (srs-tenant.md X14); the stored audit rows are not
+  rewritten.
+- [TM-C5] Review round 1 — the tenant's `TENANT_EXPORTED` row (was a nested, separately committed transaction) → written in the
+  PLATFORM storing transaction with an explicit `tenantId`, so a failed store leaves no row anywhere.
+- [TM-C5] Review round 1 — no global cap → `erp.core.tenant.export.max-concurrent` (2, per node) and 429 `TENANT_EXPORT_BUSY`
+  (`TOO_MANY_REQUESTS`, without `Retry-After`: a `LocalizedException` answer carries no headers — the
+  `CUSTOMER_LOGIN_RATE_LIMITED` precedent); the tenant's own running export is answered 409 first.
+- [TM-C5] Review round 1 — TC-CORE-TENANT-056 counts `TENANT_EXPORTED` rows of PLATFORM before and after (was "exactly one",
+  true only on a fresh database).

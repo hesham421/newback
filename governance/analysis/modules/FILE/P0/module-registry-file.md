@@ -148,3 +148,13 @@ EXPOSED SURFACE — deltas
 | `FileDocumentLookupApi.countDocuments()`, `sumBytes()` (XM-FILE-001) | NEW methods (package B): the current tenant's live documents and their bytes; consumed by TENANT (usage figures) | srs.md 1.3.0 §7 |
 
 Entities owned, permissions, dependencies: unchanged.
+
+Package C5 (tenant-maturity plan §5 C.5) — EXPOSED SURFACE delta
+| Surface | Delta | Source |
+|---|---|---|
+| `com.erp.file.crossmodule.FilePrivateStoreApi` (XM-FILE-003) | NEW: `storePrivateFile(PrivateFileStoreRequest)` → `StoredPrivateFile`, `issueDownloadToken(Long)` → `DownloadGrant`; consumed by TENANT (tenant export archive, PRIVATE in PLATFORM) | srs.md 1.3.0 §9 |
+| `com.erp.file.tenant.FileTenantExportContributor` | NEW: implements TENANT's export SPI (XM-TENANT-004) — the tenant's `FILE_CATEGORY` and `FILE_DOCUMENT` metadata, never the bytes | srs.md 1.3.0 §9.3 |
+Entities owned, permissions: unchanged. Dependencies: + TENANT root SPI `TenantExportContributor` (implemented).
+
+Package C5 review round 1 — `FILE_DOCUMENT.REQUIRED_AUTHORITY` (V22) and RULE-FILE-012 (restricted documents, purge on
+delete); `FilePrivateStoreApi` request + `requiredAuthority` (srs.md 1.3.0 §9.5).

@@ -7,12 +7,14 @@ import com.erp.tenant.dto.TenantAdminResetRequest;
 import com.erp.tenant.dto.TenantAdminResetResponse;
 import com.erp.tenant.dto.TenantBrandingUpdateRequest;
 import com.erp.tenant.dto.TenantCreateRequest;
+import com.erp.tenant.dto.TenantExportResponse;
 import com.erp.tenant.dto.TenantResponse;
 import com.erp.tenant.dto.TenantSearchRequest;
 import com.erp.tenant.dto.TenantStatusUpdateRequest;
 import com.erp.tenant.dto.TenantTokenRevocationResponse;
 import com.erp.tenant.dto.TenantUpdateRequest;
 import com.erp.tenant.dto.TenantUsageResponse;
+import com.erp.tenant.service.TenantExportService;
 import com.erp.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,7 +45,8 @@ import org.springframework.web.multipart.MultipartFile;
  * chain) and the service re-checks the authority. Tenants are never deleted (no DELETE) and their code
  * never changes; tenant-maturity B adds the names-and-profile PUT, the administrator recovery and the usage
  * figures, E the logo and the brand colour (D5), C4 the optional {@code Idempotency-Key} of the create (answered by the
- * common response helper {@link IdempotentResponses}). Status changes go through one PATCH. Pure delegation — zero logic.
+ * common response helper {@link IdempotentResponses}), C5 the data export. Status changes go through one PATCH. Pure
+ * delegation — zero logic.
  */
 @RestController
 @RequestMapping("/api/v1/platform/tenants")
@@ -55,6 +58,7 @@ public class PlatformTenantController {
     private static final String CREATE_ENDPOINT = "POST /api/v1/platform/tenants";
 
     private final TenantService service;
+    private final TenantExportService exportService;
     private final OperationCode operationCode;
     private final IdempotentResponses idempotentResponses;
 
@@ -136,6 +140,17 @@ public class PlatformTenantController {
             + " TENANT_REVOKE_TOKENS_PLATFORM - إبطال رموز المستأجر")
     public ResponseEntity<ApiResponse<TenantTokenRevocationResponse>> revokeTenantTokens(@PathVariable Long id) {
         return operationCode.craftResponse(service.revokeTokens(id));
+    }
+
+    @PostMapping("/{id}/export")
+    @Operation(summary = "Export a tenant's data (ZIP of CSV files, PRIVATE PLATFORM document, single-use download token)",
+        description = "Synchronous: every module writes the tenant's rows as CSV (UTF-8 with BOM) into a ZIP with manifest.json,"
+            + " never password or token hashes, credentials or file bytes; the ZIP is stored as a PRIVATE file document of"
+            + " the PLATFORM tenant and downloaded once with GET /api/v1/files/download?token={downloadToken} (10 minutes, same"
+            + " user). 422 TENANT_EXPORT_TOO_LARGE above erp.core.tenant.export.max-rows; 409 TENANT_EXPORT_IN_PROGRESS while"
+            + " an export of the same tenant runs - تصدير بيانات المستأجر")
+    public ResponseEntity<ApiResponse<TenantExportResponse>> exportTenant(@PathVariable Long id) {
+        return operationCode.craftResponse(exportService.export(id));
     }
 
     @GetMapping("/{id}/usage")

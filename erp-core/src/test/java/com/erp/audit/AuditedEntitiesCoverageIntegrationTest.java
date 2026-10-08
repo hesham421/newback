@@ -111,9 +111,11 @@ class AuditedEntitiesCoverageIntegrationTest extends AbstractIntegrationTest {
         List<Map<String, Object>> creates = AuditRows.of(jdbc, "FILE_DOCUMENT", documentId, "CREATE");
         assertThat(creates).hasSize(1);
         assertThat(AuditRows.changedFields(creates.get(0))).contains("fileName", "contentType", "fileSize")
-            .doesNotContain("contentHash");
+            .doesNotContain("contentHash", "storageRef");
+        // tenant-maturity C5 review round 1: @Audited(ignore = {"storageRef", "publicSlug"}) — the slug is a capability
         assertThat(AuditRows.of(jdbc, "FILE_DOCUMENT", documentId, "UPDATE"))
-            .anySatisfy(row -> assertThat(AuditRows.changedFields(row)).contains("visibility", "publicSlug"));
+            .anySatisfy(row -> assertThat(AuditRows.changedFields(row)).contains("visibility"))
+            .allSatisfy(row -> assertThat(AuditRows.changedFields(row)).doesNotContain("publicSlug", "storageRef"));
     }
 
     @Test

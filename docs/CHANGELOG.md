@@ -104,6 +104,26 @@ All notable changes to `com.erp:erp-core` (and the `erp-app-reference` consumer)
   `com.erp.common.idempotency` (`IdempotentResponses`, reusable by an application's own POST), table
   `CORE_IDEMPOTENCY_KEY` (`V21__core_idempotency_key.sql`, tenant-scoped), keys kept 24 h
   (`erp.core.idempotency.enabled` / `retention` / `retention-cron`; `IdempotencyKeyRetentionJob`). ADR-TENANT-003.
+- [TM-C5] TENANT / every core module / FILE: `POST /api/v1/platform/tenants/{id}/export` (`PLATFORM_TENANT_MANAGE`)
+  exports a tenant's data synchronously: inside the tenant, one read-only `REPEATABLE READ` snapshot, every module writes
+  its rows of the tenant as CSV (21 files, UTF-8 with BOM, RFC 4180, formula guard, ordered by primary key) into a ZIP
+  with `manifest.json`; never password or token hashes, session token references, channel credentials, notification
+  variables, file bytes or storage internals. The ZIP is stored as a PRIVATE `FILE_DOCUMENT` of the PLATFORM tenant
+  (`CORE_TENANT` / {id} / `TENANT`) and the answer carries FILE's single-use download token (10 minutes, bound to the
+  operator) for `GET /api/v1/files/download?token=`. More rows than `erp.core.tenant.export.max-rows` (default 200 000)
+  → 422 `TENANT_EXPORT_TOO_LARGE`; a second export of the same tenant while one runs on the node → 409
+  `TENANT_EXPORT_IN_PROGRESS`; `TENANT_EXPORTED` audited in PLATFORM and in the tenant. PLATFORM and suspended tenants
+  are exportable. New SPI `com.erp.tenant.TenantExportContributor` (`moduleCode`, `countRows`, `export`) with
+  `TenantExport` / `TenantExportJdbc` — an application adds its own tables with one bean; new FILE cross-module API
+  `FilePrivateStoreApi`. ADR-TENANT-006.
+- [TM-C5] FILE / TENANT (review round 1): a document can be **restricted** to an authority (`FILE_DOCUMENT.REQUIRED_AUTHORITY`,
+  `V22__file_document_required_authority.sql`, RULE-FILE-012): the FILE API hides it from the owner list and answers 404
+  `FILE_DOCUMENT_NOT_FOUND` on its metadata, token, download, visibility, archive and delete to anyone without that
+  authority; deleting it removes its bytes (a `DELETED` tombstone stays). The tenant export archive is restricted to
+  `PLATFORM_TENANT_MANAGE` (before, any PLATFORM user with `PERM_FILE_BROWSER_VIEW` could list and download it).
+  `FileDocument` no longer audits `storageRef` / `publicSlug`, and the export scrubs them from older audit rows. Both
+  `TENANT_EXPORTED` rows commit with the stored archive. New `erp.core.tenant.export.max-concurrent` (default 2): one export
+  more answers 429 `TENANT_EXPORT_BUSY`.
 
 ### Changed
 - [TM-C12] **Behaviour change** — TENANT/SEC: a token issued before a tenant's re-activation, or before a revoke-tokens

@@ -260,3 +260,24 @@ RESOLVED DECISIONS — delta
 | # | Question | Answer | Decided | ADR |
 |---|---|---|---|---|
 | 3 | Where idempotency keys live | a core table `CORE_IDEMPOTENCY_KEY` behind the common mechanism `com.erp.common.idempotency`, tenant-scoped, 24 h retention (expired rows ignored at lookup and purged by a job), only 2xx answers stored in the operation's transaction, replayed to the same user only; first consumer tenant create | plan §9 (recommendation), package C4 | ADR-TENANT-003 |
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export (plan §5 C.5)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Policy ids continue from POL-TENANT-016. Full behaviour in `../P1/srs-tenant.md` → "Implementation Addendum —
+erp-core 1.3.0", package C5 block.
+
+POL-TENANT-017 — تصدير بيانات المستأجر بلا أسرار / A tenant's data can be exported, never its secrets
+  Statement (ar) : يجب على النظام تمكين مشغّل المنصة من تصدير بيانات مستأجر كملف مضغوط واحد تكتب فيه كل وحدة جداولها بنفسها بصيغة CSV، دون كلمات المرور المجزّأة أو الرموز أو بيانات اعتماد القنوات أو محتوى الملفات، وبحدّ أقصى لعدد السجلات، ويُسلَّم الملف عبر رمز تنزيل يُستخدم مرة واحدة.
+  Statement (en) : The system shall let a platform operator export a tenant's data as one archive in which every module writes its own tables as CSV, never the password hashes, tokens, channel credentials or file bytes, within a configured row limit, handed out through a single-use download token.
+  Pattern   : event · `POST /api/v1/platform/tenants/{id}/export`
+  Trigger   : a platform operator's export request
+  Rationale : portability of a tenant's data is a platform duty; the shared schema makes it a `TENANT_ID`-filtered copy (ADR-TENANT-001 consequences); the archive must not become a way to carry credentials out (ADR-TENANT-006)
+  Source    : docs/plans/tenant-maturity-plan.md §5 C.5; REQ-TENANT-037; RULE-TENANT-027, -028; ADR-TENANT-006
+  Status    : CONFIRMED (erp-core 1.3.0, package C5)
+
+RESOLVED DECISIONS — delta
+| # | Question | Answer | Decided | ADR |
+|---|---|---|---|---|
+| 6 | How a tenant's data is exported | synchronously in v1, bounded by `erp.core.tenant.export.max-rows`, one snapshot, one CSV per table written by its module (SPI), ZIP + manifest stored as a PRIVATE PLATFORM document, single-use download token, one export per tenant at a time per node | plan §5 C.5, package C5 | ADR-TENANT-006 |

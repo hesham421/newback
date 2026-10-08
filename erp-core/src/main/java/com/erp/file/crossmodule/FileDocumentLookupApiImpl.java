@@ -30,7 +30,7 @@ public class FileDocumentLookupApiImpl implements FileDocumentLookupApi {
     @Transactional(readOnly = true)
     public boolean isAvailable(Long fileId) {
         return fileId != null
-            && repository.existsByIdAndFileStatusIdNot(fileId, FileDocumentDomain.STATUS_DELETED);
+            && repository.existsByIdAndFileStatusIdNotAndRequiredAuthorityIsNull(fileId, FileDocumentDomain.STATUS_DELETED);
     }
 
     @Override

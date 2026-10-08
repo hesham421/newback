@@ -41,6 +41,16 @@ class LocalStorageFileIntegrationTest extends AbstractFileStorageIntegrationTest
     }
 
     @Override
+    protected void assertContentRemoved(long documentId, String storageRef) {
+        assertThat(ROOT.resolve(storageRef)).as("deleted after the commit").doesNotExist();
+    }
+
+    @Override
+    protected void assertContentKept(long documentId, String storageRef) {
+        assertThat(ROOT.resolve(storageRef)).exists();
+    }
+
+    @Override
     protected void assertStoredByProvider(long documentId, byte[] content) {
         Map<String, Object> row = jdbcTemplate.queryForMap(
             "select storage_ref, file_content, tenant_id from file_document where id = ?", documentId);

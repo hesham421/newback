@@ -56,6 +56,31 @@ final class TenantHttp {
         return createOperator(jdbc, encoder);
     }
 
+    /**
+     * tenant-maturity C5 review round 1 — a PLATFORM account whose only authorities are the FILE browser's view and delete
+     * (a role of its own with those two action grants), so it does not hold {@code PLATFORM_TENANT_MANAGE}.
+     */
+    static String fileViewerOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
+        String username = "file-viewer-" + UUID.randomUUID().toString().substring(0, 8);
+        String role = "FV_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        jdbc.update("INSERT INTO SEC_ROLE (ROLE_PK, TENANT_ID, CODE, NAME_AR, NAME_EN, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
+            + " VALUES (nextval('SEQ_SEC_ROLE'), 1, ?, 'عارض الملفات', 'File viewer', TRUE, 'test', now())", role);
+        jdbc.update("INSERT INTO SEC_ROLE_ACTION_GRANT (ROLE_ACTION_GRANT_PK, TENANT_ID, ROLE_ID, ACTION_ID, GRANTED_BY, GRANTED_AT)"
+            + " SELECT nextval('SEQ_SEC_ROLE_ACTION_GRANT'), 1, r.ROLE_PK, a.ACTION_REG_PK, 'test', now()"
+            + " FROM SEC_ROLE r JOIN SEC_ACTION_REG a ON a.PERMISSION_CODE IN ('PERM_FILE_BROWSER_VIEW', 'PERM_FILE_BROWSER_DELETE')"
+            + " WHERE r.TENANT_ID = 1 AND r.CODE = ?", role);
+        jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
+                + " FULL_NAME_EN, STATUS_CODE, REALM, IS_ACTIVE_FL, CREATED_BY, CREATED_AT)"
+                + " VALUES (nextval('SEQ_SEC_USER'), 1, ?, ?, ?, 'عارض', 'File viewer', 'ACTIVE', 'STAFF', TRUE, 'test', now())",
+            username, username + "@platform.test", encoder.encode(PASSWORD));
+        jdbc.update("INSERT INTO SEC_USER_ROLE (USER_ROLE_PK, TENANT_ID, USER_ID, ROLE_ID, ASSIGNED_BY, ASSIGNED_AT)"
+                + " SELECT nextval('SEQ_SEC_USER_ROLE'), 1, u.USER_PK, r.ROLE_PK, 'test', now()"
+                + " FROM SEC_USER u JOIN SEC_ROLE r ON r.TENANT_ID = 1 AND r.CODE = ?"
+                + " WHERE u.TENANT_ID = 1 AND u.USERNAME = ?",
+            role, username);
+        return username;
+    }
+
     private static String createOperator(JdbcTemplate jdbc, PasswordEncoder encoder) {
         String username = "platform-op-" + UUID.randomUUID().toString().substring(0, 8);
         jdbc.update("INSERT INTO SEC_USER (USER_PK, TENANT_ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME_AR,"
@@ -198,6 +223,19 @@ final class TenantHttp {
         try {
             return http.send(HttpRequest.newBuilder(URI.create(baseUrl + path)).GET().build(),
                 HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** tenant-maturity C5 — a GET answered as bytes (a private download), with the caller's bearer token. */
+    HttpResponse<byte[]> getBytes(String token, String path) {
+        try {
+            return http.send(authorized(HttpRequest.newBuilder(URI.create(baseUrl + path)), token)
+                .header("Accept-Language", "en").GET().build(), HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException e) {
             throw new IllegalStateException(e);
         } catch (InterruptedException e) {

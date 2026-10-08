@@ -225,3 +225,17 @@ Statement      : Original analysis above is unchanged; this addendum records the
 
 Query change (no DDL): the public lookup (`FileDocumentRepository.findPublicMetadataTupleBySlug`) accepts
 `FILE_CATEGORY_FK IS NULL` besides a category with `ALLOW_PUBLIC = TRUE` (RULE-FILE-010).
+
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5, review round 1 — `FILE_DOCUMENT.REQUIRED_AUTHORITY` (restricted documents, RULE-FILE-012)
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Migration (written from this entry): `erp-core/src/main/resources/db/migration/core/V22__file_document_required_authority.sql`
+(the number reserved for this fix). Additive only: one nullable column, no default, no backfill (every existing
+document stays unrestricted). No DBF id (the 1.2.0 addendum's precedent for columns added after the original script).
+
+| Table | Column | Type | Null | Default | Entity field | Meaning |
+|---|---|---|---|---|---|---|
+| FILE_DOCUMENT | REQUIRED_AUTHORITY | VARCHAR(100) | NULL | — | `FileDocument.requiredAuthority` (`updatable = false`) | the authority a caller must hold, besides the FILE permission, to see or act on the document (RULE-FILE-012); NULL = an ordinary document. Width 100 = `SEC_ACTION_REG.PERMISSION_CODE`. Set only by the private store (TENANT export archives: `PLATFORM_TENANT_MANAGE`). |
+
+No index (the column is only read together with an owner or id lookup), no constraint.

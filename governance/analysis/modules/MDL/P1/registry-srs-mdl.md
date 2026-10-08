@@ -96,3 +96,17 @@ are assigned here.
 | Rules | tenant confinement, provisioning copy, optimistic lock, audit, report LOOKUP validation | REQ-MDL-001 key uniqueness, RULE-MDL-002, RULE-MDL-001 (code-defined registry) | — |
 | Error codes | — (common `CONCURRENT_MODIFICATION`, `NOT_FOUND`) | — | — |
 | Permissions | — | catalog code-defined (`MdlPermissions`) | — |
+
+
+## Implementation Addendum — erp-core 1.3.0
+Source version : erp-core 1.3.0 (unreleased, main)
+Change         : tenant-maturity plan package C5 — tenant data export contributor
+Statement      : Original analysis above is unchanged; this addendum records the implemented deltas.
+
+Registry deltas only; full text in `srs-mdl.md` → "Implementation Addendum — erp-core 1.3.0".
+
+### Consumed — delta
+| Owner | Kind | Consumes |
+|---|---|---|
+| tenant | SPI (implemented) | `TenantExportContributor` (XM-TENANT-004) — `MdlTenantExportContributor`: `MDL_LOOKUP_TYPE`, `MDL_LOOKUP_VALUE` of the exported tenant |
+No id minted; endpoints, rules, error codes, permissions, schema unchanged.

@@ -57,6 +57,9 @@ public interface FileMetadataView {
     /** erp-core step 07 — FILE_CATEGORY.ALLOW_PUBLIC of the document's category; null without a category. */
     Boolean getCategoryAllowPublic();
 
+    /** tenant-maturity C5 (RULE-FILE-012) — the authority a caller must hold to see the document; null = none. */
+    String getRequiredAuthority();
+
     /**
      * Builds a view from a {@link FileDocumentRepository#METADATA_SELECT} {@link Tuple} row. The
      * record's component names match this interface's getters exactly, so its auto-generated
@@ -69,7 +72,8 @@ public interface FileMetadataView {
             String getFileStatusId, Long getFileCategoryId, Instant getCreatedAt,
             String getCreatedBy, Instant getUpdatedAt, String getUpdatedBy, String getStorageProvider,
             String getStorageRef, String getVisibility, String getPublicSlug,
-            String getContentHash, Boolean getCategoryAllowPublic) implements FileMetadataView {
+            String getContentHash, Boolean getCategoryAllowPublic, String getRequiredAuthority)
+            implements FileMetadataView {
         }
         return new TupleFileMetadataView(
             tuple.get("id", Long.class), tuple.get("ownerId", Long.class),
@@ -81,6 +85,7 @@ public interface FileMetadataView {
             tuple.get("updatedAt", Instant.class), tuple.get("updatedBy", String.class),
             tuple.get("storageProvider", String.class), tuple.get("storageRef", String.class),
             tuple.get("visibility", String.class), tuple.get("publicSlug", String.class),
-            tuple.get("contentHash", String.class), tuple.get("categoryAllowPublic", Boolean.class));
+            tuple.get("contentHash", String.class), tuple.get("categoryAllowPublic", Boolean.class),
+            tuple.get("requiredAuthority", String.class));
     }
 }

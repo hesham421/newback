@@ -42,7 +42,7 @@ import lombok.experimental.SuperBuilder;
  * document may become PUBLIC is decided in FileDocumentDomain.
  */
 @Entity
-@Audited(entityType = "FILE_DOCUMENT")
+@Audited(entityType = "FILE_DOCUMENT", ignore = {"storageRef", "publicSlug"})
 @Table(name = "FILE_DOCUMENT",
     indexes = {
         @Index(name = "IDX_FILE_DOCUMENT_OWNER", columnList = "OWNER_ID, OWNER_TYPE, MODULE_CODE"),
@@ -136,6 +136,11 @@ public class FileDocument extends AuditableEntity implements FileMetadataView {
     @Size(max = 64, message = "{validation.size}")
     @Column(name = "CONTENT_HASH", length = 64)
     private String contentHash;
+
+    /** RULE-FILE-012 (tenant-maturity C5) — the authority a caller must hold besides the FILE permission; null = none. */
+    @Size(max = 100, message = "{validation.size}")
+    @Column(name = "REQUIRED_AUTHORITY", length = 100, updatable = false)
+    private String requiredAuthority;
 
     /** Makes the document PUBLIC under {@code slug} — pure mutation; FileDocumentDomain decides first. */
     public void publish(String slug) {
