@@ -23,9 +23,9 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXParseException;
 
 /**
- * RULE-FILE-009 (tenant-maturity D.4, review rounds 1–2) — an SVG is accepted only when a hardened,
- * namespace-aware parse succeeds, the document holds comments and one {@code <svg>} root only, and the tree
- * passes the allow-lists below (elements, attributes, local references, CSS) and the {@code <use>} limits.
+ * RULE-FILE-009 (tenant-maturity D.4, review rounds 1–2; unique ids since E) — an SVG is accepted only when a
+ * hardened, namespace-aware parse succeeds, the document holds comments and one {@code <svg>} root only, and the
+ * tree passes the allow-lists below (elements, attributes, local references, CSS), unique ids and the {@code <use>} limits.
  * The full rule is RULE-FILE-009 in {@code governance/analysis/modules/FILE/P1/srs.md} (1.3.0 addendum).
  */
 final class SvgAllowList {
@@ -147,8 +147,8 @@ final class SvgAllowList {
                     return false;
                 }
             }
-            if (element.hasAttribute("id")) {
-                byId.put(element.getAttribute("id"), element);
+            if (element.hasAttribute("id") && byId.putIfAbsent(element.getAttribute("id"), element) != null) {
+                return false;   // a duplicate id: browsers resolve the first, so usesAreFlat could check a decoy
             }
             if ("use".equals(element.getLocalName()) && uses.add(element) && uses.size() > MAX_USE_ELEMENTS) {
                 return false;
