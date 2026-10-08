@@ -1,19 +1,10 @@
 package com.erp.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import com.erp.events.DomainEvent;
-import com.erp.events.NotificationRequestedEvent;
 import com.erp.events.TenantActivatedEvent;
 import com.erp.events.TenantSuspendedEvent;
-import com.erp.notif.crossmodule.DispatchCommand;
-import com.erp.notif.crossmodule.NotificationDispatchApi;
-import com.erp.notif.service.NotificationRequeueJob;
 import com.erp.tenant.crossmodule.TenantLookupApi;
 import com.erp.tenant.dto.TenantStatusUpdateRequest;
 import com.erp.tenant.permission.TenantPermissions;
@@ -21,10 +12,8 @@ import com.erp.tenant.service.TenantService;
 import com.erp.testsupport.AbstractAsyncIntegrationTest;
 import com.erp.testsupport.DomainEventProbe;
 import com.jayway.jsonpath.JsonPath;
-import jakarta.mail.internet.MimeMessage;
 import java.net.http.HttpResponse;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,8 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * tenant-maturity C12 (REQ-TENANT-033) — the tenant lifecycle events and what reacts to them: {@code TenantSuspendedEvent}
  * / {@code TenantActivatedEvent} after commit on real transitions only; SEC ends the suspended tenant's sessions of both
- * realms (REQ-SEC-092); NOTIF holds a suspended tenant's queued notification and sends it after the activation
- * (RULE-NOTIF-024). The async context (mocked mail sender, event probe) of the NOTIF delivery tests.
+ * realms (REQ-SEC-092). NOTIF's side (RULE-NOTIF-024) is {@code NotificationSuspendedTenantIntegrationTest}. The async
+ * context (mocked mail sender, event probe) of the NOTIF delivery tests.
  */
 class TenantLifecycleEventsIntegrationTest extends AbstractAsyncIntegrationTest {
 
@@ -57,10 +46,6 @@ class TenantLifecycleEventsIntegrationTest extends AbstractAsyncIntegrationTest 
     private TenantService tenantService;
     @Autowired
     private PlatformTransactionManager transactionManager;
-    @Autowired
-    private NotificationDispatchApi dispatchApi;
-    @Autowired
-    private NotificationRequeueJob requeueJob;
     @Autowired
     private TenantLookupApi tenantLookup;
 
@@ -166,39 +151,6 @@ class TenantLifecycleEventsIntegrationTest extends AbstractAsyncIntegrationTest 
         }
     }
 
-    @Test
-    void aSuspendedTenantsQueuedNotification_isNeitherClaimedNorRequeued_andIsSentOnceTheTenantIsActive() throws Exception {
-        long recipient = jdbcTemplate.queryForObject("SELECT USER_PK FROM SEC_USER WHERE TENANT_ID = ? AND USERNAME = 'admin'"
-            + " AND REALM = 'STAFF'", Long.class, id);
-        assertThat(status("{\"statusCode\":\"SUSPENDED\",\"reason\":\"Hold the mail\"}")).isEqualTo(200);
-        SecurityContextHolder.getContext().setAuthentication(
-            new UsernamePasswordAuthenticationToken("notif-dispatcher", null, List.of()));
-
-        long logId = TenantContext.callAs(id, () -> dispatchApi.dispatch(new DispatchCommand(recipient,
-            "ACCOUNT_ACTIVATION", List.of("EMAIL"), "TEST", null, null, Map.of("email", "held@example.test",
-                "actionLink", "https://app.example.test/activate?token=t", "expiresAt", "soon")))).get(0);
-        awaitExecutorIdle();
-
-        Map<String, Object> held = row(logId);
-        assertThat(held.get("notification_status_id")).isEqualTo("QUEUED");
-        assertThat(((Number) held.get("attempts")).intValue()).as("not claimed").isZero();
-        assertThat(held.get("next_attempt_at")).isNull();
-        verify(mailSender, never()).send(any(MimeMessage.class));
-
-        jdbcTemplate.update("UPDATE NOTIF_LOG SET CREATED_AT = CREATED_AT - INTERVAL '1 hour' WHERE TENANT_ID = ? AND ID = ?",
-            id, logId);
-        requeueJob.requeueStale();
-        awaitExecutorIdle();
-        assertThat(requestedEvents(logId)).as("the requeue job skipped the suspended tenant").isEqualTo(1);
-        assertThat(((Number) row(logId).get("attempts")).intValue()).isZero();
-
-        assertThat(status("{\"statusCode\":\"ACTIVE\"}")).isEqualTo(200);
-        await().atMost(ASYNC_TIMEOUT).until(() -> "SENT".equals(row(logId).get("notification_status_id")));
-        assertThat(((Number) row(logId).get("attempts")).intValue()).isEqualTo(1);
-        verify(mailSender, times(1)).send(any(MimeMessage.class));
-        assertThat(requestedEvents(logId)).as("re-dispatched once on TenantActivatedEvent").isEqualTo(2);
-    }
-
     private int status(String body) {
         return http.patch(platformToken, TENANTS + "/" + id + "/status", body).statusCode();
     }
@@ -214,17 +166,6 @@ class TenantLifecycleEventsIntegrationTest extends AbstractAsyncIntegrationTest 
         assertThat(received).hasSize(1);
         assertThat(received.get(0).transactionActive()).as("delivered after commit").isFalse();
         return received.get(0);
-    }
-
-    private long requestedEvents(long logId) {
-        return probe.all().stream()
-            .filter(r -> r.event() instanceof NotificationRequestedEvent requested
-                && requested.getNotificationLogId() == logId)
-            .count();
-    }
-
-    private Map<String, Object> row(long logId) {
-        return jdbcTemplate.queryForMap("SELECT * FROM NOTIF_LOG WHERE TENANT_ID = ? AND ID = ?", id, logId);
     }
 
     private int openSessions(long tenantId) {
