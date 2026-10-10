@@ -51,7 +51,7 @@ python -m unittest discover -s governance/tools/api-doc-generator/tests -t gover
 Copy `.env.example` to `.env` and fill in values (`.env` is gitignored — never commit real
 secrets). `.mcp.json` wires one MCP server, `postgres` (read-only inspection of the local dev
 database); it expands `DB_*` from the shell, so `set -a && source .env && set +a` before
-launching Claude Code, or the defaults (`postgres`/`postgres`/`erp_db` on 5432) apply.
+launching Claude Code, or the defaults (`postgres`/`postgres`/`erp_newback` on 5432) apply.
 
 ## Repository structure
 

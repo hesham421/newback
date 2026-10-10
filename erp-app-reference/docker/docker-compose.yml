@@ -34,17 +34,17 @@ services:
     restart: unless-stopped
     environment:
       # Matches application-dev.properties' own fallbacks
-      # (DB_URL=jdbc:postgresql://localhost:5432/erp_db, DB_USERNAME/DB_PASSWORD
+      # (DB_URL=jdbc:postgresql://localhost:5432/erp_newback, DB_USERNAME/DB_PASSWORD
       # default to postgres/postgres) so this works with zero .env changes.
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-erp_db}
+      POSTGRES_DB: ${DB_NAME:-erp_newback}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-erp_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-erp_newback}"]
       interval: 10s
       timeout: 5s
       retries: 5
